@@ -23,6 +23,8 @@ class Location(models.Model):
     description = models.CharField(max_length=1024)
     website = models.URLField(null=True, blank=True)
     image = models.ImageField()
+    latitude = models.DecimalField(max_digits=8, decimal_places=6)
+    longitude = models.DecimalField(max_digits=8, decimal_places=6)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 

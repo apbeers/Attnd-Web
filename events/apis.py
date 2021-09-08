@@ -1,6 +1,7 @@
-from django.http import JsonResponse, HttpResponse
-from django.shortcuts import get_list_or_404
 from django.core.serializers import serialize
+from django.http import HttpResponse
+from django.shortcuts import get_list_or_404
+
 from events.models import Event, Location, Notification
 
 
