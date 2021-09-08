@@ -30,9 +30,10 @@ SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 LANGUAGE_COOKIE_SECURE = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-
-ALLOWED_HOSTS = []
+if not DEBUG:
+    ALLOWED_HOSTS = ['.herokuapp.com', '.attnd.app']
 
 
 # Application definition
