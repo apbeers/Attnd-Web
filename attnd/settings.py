@@ -27,7 +27,6 @@ SECRET_KEY = 'django-insecure-$ym39s+dkyp=1)6p^h%*fvqwou1$9h@6i)$r4w%=_i2sj0+35s
 DEBUG = not not os.getenv('DEBUG')
 
 SECURE_SSL_REDIRECT = not DEBUG
-SECURE_PROXY_SSL_HEADER = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 LANGUAGE_COOKIE_SECURE = not DEBUG
