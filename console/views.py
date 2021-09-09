@@ -1,7 +1,8 @@
-from django.shortcuts import render
+from django.contrib.auth import authenticate, login
+from django.shortcuts import render, redirect
 from events.models import Event, Location, Notification
 from django.contrib.auth.mixins import LoginRequiredMixin
-
+from console.forms.signup import SignUpForm
 
 # Create your views here.
 from django.views import View
@@ -23,3 +24,25 @@ class DashboardView(LoginRequiredMixin, View):
                    'notifications': notifications}
 
         return render(request, template_name='console/dashboard.html', context=context)
+
+
+class SignUpView(View):
+
+    def get(self, request):
+        context = {'form': SignUpForm()}
+        return render(request, template_name='console/signup.html', context=context)
+
+    def post(self, request):
+        form = SignUpForm(request.POST)
+        if form.is_valid():
+            form.save()
+            username = form.cleaned_data.get('username')
+            raw_password = form.cleaned_data.get('password1')
+            user = authenticate(username=username, password=raw_password)
+            user.is_staff = False
+            login(request, user)
+            return redirect('dashboard')
+        else:
+            context = {'form': form}
+            return render(request, template_name='console/signup.html', context=context)
+
