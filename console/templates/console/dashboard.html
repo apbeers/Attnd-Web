@@ -1,0 +1,7 @@
+{% extends 'console/base.html' %}
+
+{% block content %}
+    {% for event in events %}
+        <li>{{ event.name }}</li>
+    {% endfor %}
+{% endblock %}
