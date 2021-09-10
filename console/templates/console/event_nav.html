@@ -1,1 +1,12 @@
-event nav items
+<ul>
+    <li style="display: inline">
+        <a href="{% url 'event' event_id=selected_event.id %}">Details</a>
+    </li>
+    <li style="display: inline">
+        <a href="{% url 'locations' event_id=selected_event.id %}">Locations</a>
+    </li>
+    <li style="display: inline">
+        <a href="{% url 'notifications' event_id=selected_event.id %}">Notifications</a>
+    </li>
+
+</ul>

@@ -12,28 +12,13 @@ def home(request):
     return render(request, template_name='console/home.html')
 
 
-class ConsoleView(LoginRequiredMixin, View):
-
-    def get(self, request, event_id=None):
-        events = Event.objects.filter(user=request.user).order_by('-start_date')
-        locations = Location.objects.filter(user=request.user, event_id=event_id)
-        notifications = Notification.objects.filter(user=request.user, event_id=event_id)
-
-        if event_id:
-            selected_event = events.filter(id=event_id).first()
-        else:
-            selected_event = events.first()
-        context = {'events': events,
-                   'locations': locations,
-                   'notifications': notifications,
-                   'selected_event': selected_event}
-
-        return render(request, template_name='console/event.html', context=context)
-
-
 class EventView(LoginRequiredMixin, View):
 
-    def get(self, request, event_id):
+    def get(self, request, event_id=None):
+        if not event_id:
+            first_event = Event.objects.filter(user=request.user).order_by('-start_date').first()
+            return redirect('event', event_id=first_event.id)
+
         events = Event.objects.filter(user=request.user).order_by('-start_date')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
 
@@ -47,7 +32,7 @@ class LocationsView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_date')
-        selected_event = Event.objects.filter(user=request.user, event_id=event_id).first()
+        selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         locations = Location.objects.filter(user=request.user, event_id=event_id)
 
         context = {'events': events,
@@ -61,7 +46,7 @@ class NotificationsView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_date')
-        selected_event = Event.objects.filter(user=request.user, event_id=event_id).first()
+        selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         notifications = Notification.objects.filter(user=request.user, event_id=event_id)
 
         context = {'events': events,
