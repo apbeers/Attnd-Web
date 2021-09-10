@@ -35,7 +35,7 @@ class EventView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_date')
-        selected_event = events.filter(id=event_id)
+        selected_event = Event.objects.filter(user=request.user, id=event_id).first()
 
         context = {'events': events,
                    'selected_event': selected_event}
@@ -47,7 +47,7 @@ class LocationsView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_date')
-        selected_event = events.filter(id=event_id)
+        selected_event = Event.objects.filter(user=request.user, event_id=event_id).first()
         locations = Location.objects.filter(user=request.user, event_id=event_id)
 
         context = {'events': events,
@@ -61,7 +61,7 @@ class NotificationsView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_date')
-        selected_event = events.filter(id=event_id)
+        selected_event = Event.objects.filter(user=request.user, event_id=event_id).first()
         notifications = Notification.objects.filter(user=request.user, event_id=event_id)
 
         context = {'events': events,
