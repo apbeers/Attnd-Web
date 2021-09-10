@@ -1,0 +1,13 @@
+{% extends 'console/base.html' %}
+
+{% block sidebar %}
+    {% include 'console/sidebar.html' with selected_event=0 %}
+{% endblock %}
+
+{% block summary %}
+    {% include 'console/summary.html' with selected_event=0 %}
+{% endblock %}
+
+{% block content %}
+    edit event notifications here
+{% endblock %}

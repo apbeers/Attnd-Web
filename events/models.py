@@ -13,6 +13,11 @@ class Event(models.Model):
     flyer = models.FileField()
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['user'])
+        ]
+
     def __str__(self):
         return self.name
 
@@ -28,6 +33,11 @@ class Location(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['event', 'user'])
+        ]
+
     def __str__(self):
         return self.name
 
@@ -39,6 +49,11 @@ class Notification(models.Model):
     sent = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['event', 'user'])
+        ]
 
     def __str__(self):
         return self.title

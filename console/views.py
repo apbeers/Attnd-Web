@@ -12,25 +12,70 @@ def home(request):
     return render(request, template_name='console/home.html')
 
 
-class DashboardView(LoginRequiredMixin, View):
+class ConsoleView(LoginRequiredMixin, View):
 
-    def get(self, request):
-        events = Event.objects.filter(user=request.user)
-        locations = Location.objects.filter(user=request.user)
-        notifications = Notification.objects.filter(user=request.user)
+    def get(self, request, event_id=None):
+        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        locations = Location.objects.filter(user=request.user, event_id=event_id)
+        notifications = Notification.objects.filter(user=request.user, event_id=event_id)
 
+        if event_id:
+            selected_event = events.filter(id=event_id).first()
+        else:
+            selected_event = events.first()
         context = {'events': events,
                    'locations': locations,
+                   'notifications': notifications,
+                   'selected_event': selected_event}
+
+        return render(request, template_name='console/event.html', context=context)
+
+
+class EventView(LoginRequiredMixin, View):
+
+    def get(self, request, event_id):
+        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        selected_event = events.filter(id=event_id)
+
+        context = {'events': events,
+                   'selected_event': selected_event}
+
+        return render(request, template_name='console/details.html', context=context)
+
+
+class LocationsView(LoginRequiredMixin, View):
+
+    def get(self, request, event_id):
+        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        selected_event = events.filter(id=event_id)
+        locations = Location.objects.filter(user=request.user, event_id=event_id)
+
+        context = {'events': events,
+                   'selected_event': selected_event,
+                   'locations': locations}
+
+        return render(request, template_name='console/locations.html', context=context)
+
+
+class NotificationsView(LoginRequiredMixin, View):
+
+    def get(self, request, event_id):
+        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        selected_event = events.filter(id=event_id)
+        notifications = Notification.objects.filter(user=request.user, event_id=event_id)
+
+        context = {'events': events,
+                   'selected_event': selected_event,
                    'notifications': notifications}
 
-        return render(request, template_name='console/dashboard.html', context=context)
+        return render(request, template_name='console/notifications.html', context=context)
 
 
 class SignUpView(View):
 
     def get(self, request):
         context = {'form': SignUpForm()}
-        return render(request, template_name='console/signup.html', context=context)
+        return render(request, template_name='registration/signup.html', context=context)
 
     def post(self, request):
         form = SignUpForm(request.POST)
@@ -44,5 +89,5 @@ class SignUpView(View):
             return redirect('dashboard')
         else:
             context = {'form': form}
-            return render(request, template_name='console/signup.html', context=context)
+            return render(request, template_name='registration/signup.html', context=context)
 

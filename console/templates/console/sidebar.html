@@ -1,0 +1,12 @@
+<div style="height: 100px; background-color: purple">
+    Attnd logo name here
+</div>
+<div>
+    <ul class="list-group list-group-flush">
+        {% for event in events %}
+            <li class="list-group-item {% if event.id == selected_event.id %} active {% endif %}">
+                <a href="{% url 'event' event_id=event.id %}">{{ event.name }}</a>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
