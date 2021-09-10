@@ -1,11 +1,12 @@
 from django.contrib.auth import authenticate, login
-from django.shortcuts import render, redirect
-from events.models import Event, Location, Notification
 from django.contrib.auth.mixins import LoginRequiredMixin
-from console.forms.signup import SignUpForm
-
-# Create your views here.
+from django.forms import model_to_dict
+from django.shortcuts import render, redirect
 from django.views import View
+
+from console.forms.signup import SignUpForm
+from console.forms.event import EventForm
+from events.models import Event, Location, Notification
 
 
 def home(request):
@@ -21,11 +22,13 @@ class EventView(LoginRequiredMixin, View):
 
         events = Event.objects.filter(user=request.user).order_by('-start_date')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
+        form = EventForm(data=model_to_dict(selected_event))
 
         context = {'events': events,
-                   'selected_event': selected_event}
+                   'selected_event': selected_event,
+                   'form': form}
 
-        return render(request, template_name='console/details.html', context=context)
+        return render(request, template_name='console/event.html', context=context)
 
 
 class LocationsView(LoginRequiredMixin, View):
@@ -75,4 +78,3 @@ class SignUpView(View):
         else:
             context = {'form': form}
             return render(request, template_name='registration/signup.html', context=context)
-
