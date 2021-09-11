@@ -11,6 +11,7 @@ class Event(models.Model):
     start_date = models.DateTimeField()
     paid = models.BooleanField(default=False)
     flyer = models.FileField()
+    public = models.BooleanField(default=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     class Meta:
