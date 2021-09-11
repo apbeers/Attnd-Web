@@ -1,5 +1,4 @@
 from django.test import TestCase, RequestFactory
-from django.test.client import Client
 from django.urls import reverse
 
 from events.apis import NearbyEventsView, EventByCodeOrNameView
@@ -7,9 +6,6 @@ from events.apis import NearbyEventsView, EventByCodeOrNameView
 
 class EventsTestCase(TestCase):
     fixtures = ['dump.json']
-
-    def setUp(self) -> None:
-        self.client = Client()
 
     def test_get_nearby_events(self):
         user_latitude = 32.668224
