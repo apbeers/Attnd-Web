@@ -9,9 +9,9 @@
       <env name="DEBUG" value="1" />
       <env name="SECRET_KEY" value="asdfjh2783f2ifha@#%(*JF9wj9fj2f23fiah" />
     </envs>
-    <option name="SDK_HOME" value="" />
+    <option name="SDK_HOME" value="$PROJECT_DIR$/venv/bin/python" />
     <option name="WORKING_DIRECTORY" value="" />
-    <option name="IS_MODULE_SDK" value="true" />
+    <option name="IS_MODULE_SDK" value="false" />
     <option name="ADD_CONTENT_ROOTS" value="true" />
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <option name="launchJavascriptDebuger" value="false" />

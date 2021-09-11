@@ -19,11 +19,12 @@ class EventsTestCase(TestCase):
         response = NearbyEventsView.as_view()(request, user_latitude, user_longitude)
         self.assertEqual(response.status_code, 200)
         print(response.content)
-    #
-    # def test_event_by_code_or_name(self):
-    #     data = 'brewbash'
-    #
-    #     request = RequestFactory().get(reverse('get_event_by_code_or_name'))
-    #     request.GET = {'data': data}
-    #     response = EventByCodeOrNameView.as_view()(request)
-    #     self.assertEqual(response.status_code, 200)
+
+    def test_event_by_code_or_name(self):
+        data = 'my event'
+
+        request = RequestFactory().get(reverse('get_event_by_code_or_name'))
+        request.GET = {'data': data}
+        response = EventByCodeOrNameView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        print(response.content)
