@@ -1,0 +1,442 @@
+[
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$260000$6ADRf0VGsCaZudAhzQx0oC$Q89MFMmIo7tlqPlRrrxgUM1PAA1T896WDA5aBuwWgiA=",
+    "last_login": "2021-09-10T00:26:08.966Z",
+    "is_superuser": true,
+    "username": "andrew",
+    "first_name": "",
+    "last_name": "",
+    "email": "apbeers@gmail.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2021-09-08T02:44:14.403Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$260000$DVG2LOikqX5NUTYZIl67Ww$hRN2QzgPnDBA+mM1Cd0zzthG0UQkmYISkNORKAdxTEI=",
+    "last_login": "2021-09-09T23:03:28.934Z",
+    "is_superuser": false,
+    "username": "user1",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2021-09-09T23:03:28.684Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$260000$XdmALCBYUAaQmFJL5I5DTD$NWlnpJN6GYyNPvryv4kFpE/OBvKpKs11ErzcINeZoAc=",
+    "last_login": "2021-09-09T23:09:48.041Z",
+    "is_superuser": false,
+    "username": "user2",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2021-09-09T23:09:47.798Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$260000$WPeL91K4P8zN8LxKTa73Yy$JZVuVwna09iVz6mJmTrfbpyDeXfRXlaY86qMFgUocxY=",
+    "last_login": "2021-09-09T23:12:21.252Z",
+    "is_superuser": false,
+    "username": "user3",
+    "first_name": "user3name",
+    "last_name": "",
+    "email": "asdfgfdg@dfg.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2021-09-09T23:12:20.990Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "eemchn4xvp8n4mt65ufs576900j6wppj",
+  "fields": {
+    "session_data": ".eJxVjDsOwyAQBe9CHSHAfFOm9xnQwi7BSYQlY1dR7h5bcpG0b2bem0XY1hq3TkuckF2ZZJffLUF-UjsAPqDdZ57nti5T4ofCT9r5OCO9bqf7d1Ch173OBZIFmbMnr9D5odjgjbZBZ-GdcwUL2iAHTUIqY6QV5HQBtVNQhMg-X-ulN-U:1lV2bV:FXqOJERyeqfBT8NPxvY3VIL_R2SYgQfLcz-hf70uRt4",
+    "expire_date": "2021-04-24T01:40:05.084Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "ntj4c592dypt4pju2d85qe30j7g4tg9q",
+  "fields": {
+    "session_data": ".eJxVjMsOwiAQRf-FtSHDoy24dO83kGEGpGogKe3K-O_apAvd3nPOfYmA21rC1tMSZhZnYcTpd4tIj1R3wHestyap1XWZo9wVedAur43T83K4fwcFe_nWioE9mwQ6WVKAI1sGjFlryH5KaNToDJGzeiJAF4EjZWUGawZH2Vvx_gDxmDgY:1mOTDX:-m8XeAk1b2m4FMq1nP4fENdaTKDdnjNQ991xjN0Ifcw",
+    "expire_date": "2021-09-23T23:12:27.843Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "scscalt9rmwt4jqjsz8m9f6lnmcokjai",
+  "fields": {
+    "session_data": "e30:1mOBZT:48csiCFeKKZHBZQTLz6GcQM0wRJHEDLTcyyXcafkP6w",
+    "expire_date": "2021-09-23T04:21:55.045Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "zpfrnj1tk7vhh6mzz2ll4t0alkjqevkg",
+  "fields": {
+    "session_data": ".eJxVjMsOwiAQRf-FtSHDoy24dO83kGEGpGogKe3K-O_apAvd3nPOfYmA21rC1tMSZhZnYcTpd4tIj1R3wHestyap1XWZo9wVedAur43T83K4fwcFe_nWioE9mwQ6WVKAI1sGjFlryH5KaNToDJGzeiJAF4EjZWUGawZH2Vvx_gDxmDgY:1mOUMq:yG5MlFMn5aowQCnoShKe5iVu3sjIisTOP1vpizDlzZA",
+    "expire_date": "2021-09-24T00:26:08.968Z"
+  }
+},
+{
+  "model": "events.event",
+  "pk": 3,
+  "fields": {
+    "name": "My Event 1",
+    "event_code": "myevent",
+    "description": "This is the test event description",
+    "latitude": "32.753030",
+    "longitude": "-97.331078",
+    "start_date": "2021-09-11T16:31:09Z",
+    "paid": true,
+    "flyer": "HW6_AndrewBeers_UfDx5pZ.pdf",
+    "public": true,
+    "user": [
+      "andrew"
+    ]
+  }
+},
+{
+  "model": "events.event",
+  "pk": 4,
+  "fields": {
+    "name": "My Event 2",
+    "event_code": "asdfasdf",
+    "description": "asdfasdf",
+    "latitude": "32.718606",
+    "longitude": "-97.386449",
+    "start_date": "2021-09-11T16:31:03Z",
+    "paid": false,
+    "flyer": "HW1_AndrewBeers.pdf",
+    "public": true,
+    "user": [
+      "andrew"
+    ]
+  }
+},
+{
+  "model": "events.event",
+  "pk": 5,
+  "fields": {
+    "name": "Brew Bash",
+    "event_code": "brewbase",
+    "description": "check out breweries",
+    "latitude": "23.232323",
+    "longitude": "23.232323",
+    "start_date": "2021-09-11T16:54:10Z",
+    "paid": false,
+    "flyer": "Final_Exam_Review_QBA775__SP2021_Answer_key.pdf",
+    "public": true,
+    "user": [
+      "andrew"
+    ]
+  }
+},
+{
+  "model": "events.location",
+  "pk": 3,
+  "fields": {
+    "name": "Fort Brewery",
+    "snippet": "Fort Brewery Snippet",
+    "description": "this is the the fort brewery long description",
+    "website": null,
+    "image": "FortBreweryLogo2x.png.webp",
+    "latitude": "32.762259",
+    "longitude": "-97.324560",
+    "user": [
+      "andrew"
+    ],
+    "event": 3
+  }
+},
+{
+  "model": "events.location",
+  "pk": 4,
+  "fields": {
+    "name": "Cow Town Brewery",
+    "snippet": "Cow Town Snippet",
+    "description": "The cow town long description goes here. It could even have a couple sentences!",
+    "website": null,
+    "image": "CowtownBrewingCoFinalLogo_blk_6edfec4f-3237-4bf9-b9c8-021f49e39bdf.png",
+    "latitude": "32.762260",
+    "longitude": "-97.324560",
+    "user": [
+      "andrew"
+    ],
+    "event": 3
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 7,
+  "fields": {
+    "action_time": "2021-09-08T02:44:58.522Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "auth",
+      "user"
+    ],
+    "object_id": "2",
+    "object_repr": "user2",
+    "action_flag": 3,
+    "change_message": ""
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 8,
+  "fields": {
+    "action_time": "2021-09-08T03:42:28.455Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "event"
+    ],
+    "object_id": "3",
+    "object_repr": "My Event 1",
+    "action_flag": 1,
+    "change_message": "[{\"added\": {}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 9,
+  "fields": {
+    "action_time": "2021-09-08T03:44:11.073Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "location"
+    ],
+    "object_id": "3",
+    "object_repr": "Fort Brewery",
+    "action_flag": 1,
+    "change_message": "[{\"added\": {}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 10,
+  "fields": {
+    "action_time": "2021-09-08T03:45:24.105Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "location"
+    ],
+    "object_id": "4",
+    "object_repr": "Cow Town Brewery",
+    "action_flag": 1,
+    "change_message": "[{\"added\": {}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 11,
+  "fields": {
+    "action_time": "2021-09-08T22:09:33.551Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "event"
+    ],
+    "object_id": "3",
+    "object_repr": "My Event 1",
+    "action_flag": 2,
+    "change_message": "[{\"changed\": {\"fields\": [\"Flyer\"]}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 12,
+  "fields": {
+    "action_time": "2021-09-08T22:15:16.952Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "event"
+    ],
+    "object_id": "3",
+    "object_repr": "My Event 1",
+    "action_flag": 2,
+    "change_message": "[{\"changed\": {\"fields\": [\"Flyer\"]}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 13,
+  "fields": {
+    "action_time": "2021-09-09T03:58:56.173Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "location"
+    ],
+    "object_id": "4",
+    "object_repr": "Cow Town Brewery",
+    "action_flag": 2,
+    "change_message": "[{\"changed\": {\"fields\": [\"Image\"]}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 14,
+  "fields": {
+    "action_time": "2021-09-09T03:59:03.098Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "location"
+    ],
+    "object_id": "3",
+    "object_repr": "Fort Brewery",
+    "action_flag": 2,
+    "change_message": "[{\"changed\": {\"fields\": [\"Image\"]}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 15,
+  "fields": {
+    "action_time": "2021-09-09T04:28:44.421Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "location"
+    ],
+    "object_id": "4",
+    "object_repr": "Cow Town Brewery",
+    "action_flag": 2,
+    "change_message": "[{\"changed\": {\"fields\": [\"Latitude\"]}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 16,
+  "fields": {
+    "action_time": "2021-09-10T01:49:10.273Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "event"
+    ],
+    "object_id": "4",
+    "object_repr": "My Event 2",
+    "action_flag": 1,
+    "change_message": "[{\"added\": {}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 17,
+  "fields": {
+    "action_time": "2021-09-11T16:31:05.088Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "event"
+    ],
+    "object_id": "4",
+    "object_repr": "My Event 2",
+    "action_flag": 2,
+    "change_message": "[{\"changed\": {\"fields\": [\"Start date\"]}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 18,
+  "fields": {
+    "action_time": "2021-09-11T16:31:10.777Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "event"
+    ],
+    "object_id": "3",
+    "object_repr": "My Event 1",
+    "action_flag": 2,
+    "change_message": "[{\"changed\": {\"fields\": [\"Start date\"]}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 19,
+  "fields": {
+    "action_time": "2021-09-11T16:32:04.581Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "event"
+    ],
+    "object_id": "4",
+    "object_repr": "My Event 2",
+    "action_flag": 2,
+    "change_message": "[{\"changed\": {\"fields\": [\"Latitude\", \"Longitude\"]}}]"
+  }
+},
+{
+  "model": "admin.logentry",
+  "pk": 20,
+  "fields": {
+    "action_time": "2021-09-11T16:54:30.389Z",
+    "user": [
+      "andrew"
+    ],
+    "content_type": [
+      "events",
+      "event"
+    ],
+    "object_id": "5",
+    "object_repr": "Brew Bash",
+    "action_flag": 1,
+    "change_message": "[{\"added\": {}}]"
+  }
+}
+]
