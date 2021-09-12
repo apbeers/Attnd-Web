@@ -1,11 +1,19 @@
 from django.test import TestCase, RequestFactory
 from django.urls import reverse
 
-from events.apis import NearbyEventsView, EventByCodeOrNameView
+from events.apis import NearbyEventsView, EventByCodeOrNameView, AllLocationsView
 
 
 class EventsTestCase(TestCase):
     fixtures = ['dump.json']
+
+    def test_all_locations(self):
+        event_id = 3
+
+        request = RequestFactory().get(reverse('get_all_locations', args=[event_id]))
+        response = AllLocationsView.as_view()(request, event_id)
+        self.assertEqual(response.status_code, 200)
+        print(response.content)
 
     def test_get_nearby_events(self):
         user_latitude = 32.668224

@@ -5,7 +5,6 @@ from math import sqrt
 
 from django.core.serializers import serialize
 from django.http import HttpResponse, HttpResponseServerError
-from django.shortcuts import get_list_or_404
 from django.views import View
 
 from events.models import Event, Location, Notification
@@ -13,8 +12,8 @@ from events.models import Event, Location, Notification
 
 class SingleEventView(View):
 
-    def get(self, request, event_code):
-        event = get_list_or_404(klass=Event, event_code=event_code)
+    def get(self, request, event_id):
+        event = Event.objects.filter(id=event_id).first()
         serialized_event = serialize(format='json', queryset=event)
         return HttpResponse(content=serialized_event, content_type='application/json')
 
@@ -22,7 +21,7 @@ class SingleEventView(View):
 class SingleLocationView(View):
 
     def get(self, request, event_id, location_id):
-        location = get_list_or_404(klass=Location, id=location_id)
+        location = Location.objects.filter(id=location_id).first()
         serialized_location = serialize(format='json', queryset=location)
         return HttpResponse(content=serialized_location, content_type='application/json')
 
@@ -30,7 +29,7 @@ class SingleLocationView(View):
 class AllLocationsView(View):
 
     def get(self, request, event_id):
-        locations = get_list_or_404(klass=Location, event__id=event_id)
+        locations = Location.objects.filter(event__id=event_id).order_by('name')
         serialized_locations = serialize(format='json', queryset=locations)
         return HttpResponse(content=serialized_locations, content_type='application/json')
 
@@ -38,7 +37,7 @@ class AllLocationsView(View):
 class AllNotificationsView(View):
 
     def get(self, request, event_id):
-        notifications = get_list_or_404(klass=Notification, event__id=event_id)
+        notifications = Notification.objects.filter(sent=True, event__id=event_id).order_by('-send_time')
         serialized_notifications = serialize(format='json', queryset=notifications)
         return HttpResponse(content=serialized_notifications, content_type='application/json')
 
