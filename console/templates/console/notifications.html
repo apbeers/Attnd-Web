@@ -13,7 +13,6 @@
 {% endblock %}
 
 {% block content %}
-    notifications tab
 
     <form method="post">
         {% csrf_token %}
@@ -22,11 +21,28 @@
     </form>
 
     {% for notification_form in notification_forms %}
-        <form method="post">
+
+        <form method="post" class="row g-3">
             {% csrf_token %}
-            {{ notification_form.as_p }}
+                <div class="col-md-8">
+                    {{ notification_form.title.label }}
+                    {{ notification_form.title }}
+                </div>
+                <div class="col-md-4">
+                    {{ notification_form.send_time.label }}
+                    {{ notification_form.send_time }}
+                </div>
+                <div class="col-md-12">
+                    {{ notification_form.body.label }}
+                    {{ notification_form.body }}
+                </div>
+
             <input type="hidden", name="id", value="{{ notification_form.instance.id }}">
-            <button type="submit">Update</button>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Update</button>
+            </div>
         </form>
+        <br>
+
     {% endfor %}
 {% endblock %}
