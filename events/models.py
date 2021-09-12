@@ -31,8 +31,8 @@ class Location(models.Model):
     image = models.ImageField()
     latitude = models.DecimalField(max_digits=8, decimal_places=6)
     longitude = models.DecimalField(max_digits=8, decimal_places=6)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, editable=False)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, editable=False)
 
     class Meta:
         indexes = [
@@ -47,9 +47,9 @@ class Notification(models.Model):
     title = models.CharField(max_length=60)
     body = models.CharField(max_length=256)
     send_time = models.DateTimeField()
-    sent = models.BooleanField(default=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    sent = models.BooleanField(default=False, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, editable=False)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, editable=False)
 
     class Meta:
         indexes = [

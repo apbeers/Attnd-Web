@@ -1,11 +1,13 @@
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.forms import model_to_dict
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views import View
 
 from console.forms.event import EventForm
+from console.forms.notification import NotificationForm
 from console.forms.signup import SignUpForm
 from events.models import Event, Location, Notification
 
@@ -23,17 +25,17 @@ class EventView(LoginRequiredMixin, View):
 
         events = Event.objects.filter(user=request.user).order_by('-start_date')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
-        form = EventForm(data=model_to_dict(selected_event))
+        # file_data = {'flyer', SimpleUploadedFile(selected_event.flyer.name, content=selected_event.flyer)}
+        # form = EventForm(data=model_to_dict(selected_event), files=file_data)
 
         context = {'events': events,
-                   'selected_event': selected_event,
-                   'form': form}
+                   'selected_event': selected_event}
 
         return render(request, template_name='console/event.html', context=context)
 
     def post(self, request, event_id):
         event = Event.objects.filter(id=event_id).get()
-        form = EventForm(data=request.POST, instance=event)
+        form = EventForm(data=request.POST, files=request.FILES, instance=event)
         if form.is_valid():
             form.save()
             return redirect(reverse('event', args=[event_id]))
@@ -61,12 +63,30 @@ class NotificationsView(LoginRequiredMixin, View):
         events = Event.objects.filter(user=request.user).order_by('-start_date')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         notifications = Notification.objects.filter(user=request.user, event_id=event_id)
+        notification_forms = [NotificationForm(instance=notification) for notification in notifications]
+        new_notification_form = NotificationForm()
 
         context = {'events': events,
                    'selected_event': selected_event,
-                   'notifications': notifications}
+                   'notification_forms': notification_forms,
+                   'new_notification_form': new_notification_form}
 
         return render(request, template_name='console/notifications.html', context=context)
+
+    def post(self, request, event_id):
+        notification_id = request.POST.get('id')
+        if notification_id:
+            notification = Notification.objects.filter(id=notification_id, user=request.user, event_id=event_id).first()
+            NotificationForm(data=request.POST, instance=notification).save()
+        else:
+            event = Event.objects.filter(id=event_id, user=request.user).get()
+            user = request.user
+            title = request.POST.get('title')
+            body = request.POST.get('body')
+            send_time = request.POST.get('send_time')
+            Notification.objects.create(event=event, user=user, title=title, body=body, send_time=send_time)
+
+        return redirect(reverse('notifications', args=[event_id]))
 
 
 class AnalyticsView(LoginRequiredMixin, View):

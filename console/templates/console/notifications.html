@@ -14,5 +14,19 @@
 
 {% block content %}
     notifications tab
-    {{ selected_event }}
+
+    <form method="post">
+        {% csrf_token %}
+        {{ new_notification_form.as_p }}
+        <button type="submit">Create</button>
+    </form>
+
+    {% for notification_form in notification_forms %}
+        <form method="post">
+            {% csrf_token %}
+            {{ notification_form.as_p }}
+            <input type="hidden", name="id", value="{{ notification_form.instance.id }}">
+            <button type="submit">Update</button>
+        </form>
+    {% endfor %}
 {% endblock %}
