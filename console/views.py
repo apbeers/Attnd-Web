@@ -62,7 +62,7 @@ class NotificationsView(LoginRequiredMixin, View):
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_date')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
-        notifications = Notification.objects.filter(user=request.user, event_id=event_id)
+        notifications = Notification.objects.filter(user=request.user, event_id=event_id).order_by('-send_time')
         notification_forms = [NotificationForm(instance=notification) for notification in notifications]
         new_notification_form = NotificationForm()
 
