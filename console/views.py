@@ -2,10 +2,11 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.forms import model_to_dict
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from django.views import View
 
-from console.forms.signup import SignUpForm
 from console.forms.event import EventForm
+from console.forms.signup import SignUpForm
 from events.models import Event, Location, Notification
 
 
@@ -29,6 +30,15 @@ class EventView(LoginRequiredMixin, View):
                    'form': form}
 
         return render(request, template_name='console/event.html', context=context)
+
+    def post(self, request, event_id):
+        event = Event.objects.filter(id=event_id).get()
+        form = EventForm(data=request.POST, instance=event)
+        if form.is_valid():
+            form.save()
+            return redirect(reverse('event', args=[event_id]))
+        else:
+            print(form.errors)
 
 
 class LocationsView(LoginRequiredMixin, View):
@@ -57,6 +67,30 @@ class NotificationsView(LoginRequiredMixin, View):
                    'notifications': notifications}
 
         return render(request, template_name='console/notifications.html', context=context)
+
+
+class AnalyticsView(LoginRequiredMixin, View):
+
+    def get(self, request, event_id):
+        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        selected_event = Event.objects.filter(user=request.user, id=event_id).first()
+
+        context = {'events': events,
+                   'selected_event': selected_event}
+
+        return render(request, template_name='console/analytics.html', context=context)
+
+
+class BillingView(LoginRequiredMixin, View):
+
+    def get(self, request, event_id):
+        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        selected_event = Event.objects.filter(user=request.user, id=event_id).first()
+
+        context = {'events': events,
+                   'selected_event': selected_event}
+
+        return render(request, template_name='console/billing.html', context=context)
 
 
 class SignUpView(View):

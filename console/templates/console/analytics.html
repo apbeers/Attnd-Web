@@ -1,0 +1,18 @@
+{% extends 'console/base.html' %}
+
+{% block sidebar %}
+    {% include 'console/sidebar.html' with selected_event=selected_event %}
+{% endblock %}
+
+{% block event_nav %}
+    {% include 'console/event_nav.html' with selected_tab=0 %}
+{% endblock %}
+
+{% block summary %}
+    {% include 'console/summary.html' with selected_event=selected_event %}
+{% endblock %}
+
+{% block content %}
+    analytics tab
+    {{ selected_event }}
+{% endblock %}
