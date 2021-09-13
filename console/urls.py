@@ -7,13 +7,16 @@ urlpatterns = [
     path('signup/', views.SignUpView.as_view(), name='signup'),
 
     # Event Views
+    path('<int:event_id>/create/', views.EventCreateView.as_view(), name='event_create'),
     path('<int:event_id>/event/', views.EventView.as_view(), name='event'),
     path('<int:event_id>/update/', views.EventUpdateView.as_view(), name='event_update'),
     path('<int:event_id>/delete/', views.EventDeleteView.as_view(), name='event_delete'),
-    path('<int:event_id>/create/', views.EventCreateView.as_view(), name='event_create'),
 
     # Location Views
-    path('<int:event_id>/location/', views.LocationsView.as_view(), name='locations'),
+    path('<int:event_id>/locations/create/', views.LocationCreateView.as_view(), name='location_create'),
+    path('<int:event_id>/locations/list/', views.LocationsListView.as_view(), name='location_list'),
+    path('<int:event_id>/locations/update/<int:location_id>/', views.LocationUpdateView.as_view(), name='location_update'),
+    path('<int:event_id>/locations/delete/<int:location_id>/', views.LocationDeleteView.as_view(), name='location_delete'),
 
     # Notification Views
     path('<int:event_id>/notifications/create/', views.NotificationCreateView.as_view(), name='notification_create'),

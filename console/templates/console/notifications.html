@@ -22,23 +22,10 @@
 
     {% for notification_form in notification_forms %}
 
-        <form method="post" class="row g-3" action="{% url 'notification_update' event_id=selected_event.id notification_id=notification_form.instance.id %}">
+        <form method="post" action="{% url 'notification_update' event_id=selected_event.id notification_id=notification_form.instance.id %}">
             {% csrf_token %}
-                <div class="col-md-8">
-                    {{ notification_form.title.label }}
-                    {{ notification_form.title }}
-                </div>
-                <div class="col-md-4">
-                    {{ notification_form.send_time.label }}
-                    {{ notification_form.send_time }}
-                </div>
-                <div class="col-md-12">
-                    {{ notification_form.body.label }}
-                    {{ notification_form.body }}
-                </div>
-            <div class="col-12">
-                <button type="submit" class="btn btn-primary">Update</button>
-            </div>
+            {{ notification_form.as_p }}
+            <button type="submit">Update</button>
         </form>
         <br>
 

@@ -1,10 +1,12 @@
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views import View
 
 from console.forms.event import EventForm
+from console.forms.location import LocationForm
 from console.forms.notification import NotificationForm
 from console.forms.signup import SignUpForm
 from events.models import Event, Location, Notification
@@ -12,6 +14,13 @@ from events.models import Event, Location, Notification
 
 def home(request):
     return render(request, template_name='console/home.html')
+
+
+class EventCreateView(View):
+
+    def post(self, request):
+        event_id = 9
+        return redirect(reverse('event_list', args=[event_id]))
 
 
 class EventView(LoginRequiredMixin, View):
@@ -35,18 +44,11 @@ class EventView(LoginRequiredMixin, View):
 class EventUpdateView(View):
 
     def post(self, request, event_id):
-        event = Event.objects.filter(id=event_id).get()
+        event = Event.objects.filter(id=event_id).first()
         form = EventForm(data=request.POST, files=request.FILES, instance=event)
         if form.is_valid():
             form.save()
             return redirect(reverse('event', args=[event_id]))
-
-
-class EventCreateView(View):
-
-    def post(self, request):
-        event_id = 9
-        return redirect(reverse('event_list', args=[event_id]))
 
 
 class EventDeleteView(View):
@@ -56,21 +58,61 @@ class EventDeleteView(View):
         return redirect(reverse('event_list'))
 
 
-class LocationsView(LoginRequiredMixin, View):
+class LocationCreateView(View):
+
+    def post(self, request, event_id):
+        event = Event.objects.filter(id=event_id, user=request.user).get()
+        user = request.user
+        name = request.POST.get('name')
+        snippet = request.POST.get('snippet')
+        website = request.POST.get('website')
+
+
+
+class LocationsListView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         locations = Location.objects.filter(user=request.user, event_id=event_id)
+        location_forms = [LocationForm(instance=location) for location in locations]
+        new_location_form = LocationForm()
 
         context = {'events': events,
                    'selected_event': selected_event,
-                   'locations': locations}
+                   'location_forms': location_forms,
+                   'new_location_form': new_location_form}
 
         return render(request, template_name='console/locations.html', context=context)
 
 
-# Notification Views
+class LocationUpdateView(View):
+
+    def post(self, request, event_id, location_id):
+        location = Location.objects.filter(id=location_id, user=request.user).first()
+        LocationForm(data=request.POST, instance=location).save()
+        return redirect(reverse('notification_list', args=[event_id]))
+
+
+class LocationDeleteView(View):
+
+    def post(self, request, event_id, location_id):
+        Location.objects.filter(id=location_id, user=request.user).delete()
+        return redirect(reverse('notification_list', args=[event_id]))
+
+
+class NotificationCreateView(View):
+
+    def post(self, request, event_id):
+        event = Event.objects.filter(id=event_id, user=request.user).get()
+        user = request.user
+        title = request.POST.get('title')
+        body = request.POST.get('body')
+        send_time = request.POST.get('send_time')
+        Notification.objects.create(event=event, user=user, title=title, body=body, send_time=send_time)
+        return redirect(reverse('notification_list', args=[event_id]))
+
+
 class NotificationsListView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
@@ -86,18 +128,6 @@ class NotificationsListView(LoginRequiredMixin, View):
                    'new_notification_form': new_notification_form}
 
         return render(request, template_name='console/notifications.html', context=context)
-
-
-class NotificationCreateView(View):
-
-    def post(self, request, event_id):
-        event = Event.objects.filter(id=event_id, user=request.user).get()
-        user = request.user
-        title = request.POST.get('title')
-        body = request.POST.get('body')
-        send_time = request.POST.get('send_time')
-        Notification.objects.create(event=event, user=user, title=title, body=body, send_time=send_time)
-        return redirect(reverse('notification_list', args=[event_id]))
 
 
 class NotificationUpdateView(View):
