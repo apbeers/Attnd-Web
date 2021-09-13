@@ -18,18 +18,21 @@ class EventView(LoginRequiredMixin, View):
 
     def get(self, request, event_id=None):
         if not event_id:
-            first_event = Event.objects.filter(user=request.user).order_by('-start_date').first()
+            first_event = Event.objects.filter(user=request.user).order_by('-start_time').first()
             return redirect('event', event_id=first_event.id)
 
-        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
-        # file_data = {'flyer', SimpleUploadedFile(selected_event.flyer.name, content=selected_event.flyer)}
-        # form = EventForm(data=model_to_dict(selected_event), files=file_data)
+        selected_event_form = EventForm(instance=selected_event)
 
         context = {'events': events,
-                   'selected_event': selected_event}
+                   'selected_event': selected_event,
+                   'selected_event_form': selected_event_form}
 
         return render(request, template_name='console/event.html', context=context)
+
+
+class EventUpdateView(View):
 
     def post(self, request, event_id):
         event = Event.objects.filter(id=event_id).get()
@@ -37,14 +40,26 @@ class EventView(LoginRequiredMixin, View):
         if form.is_valid():
             form.save()
             return redirect(reverse('event', args=[event_id]))
-        else:
-            print(form.errors)
+
+
+class EventCreateView(View):
+
+    def post(self, request):
+        event_id = 9
+        return redirect(reverse('event_list', args=[event_id]))
+
+
+class EventDeleteView(View):
+
+    def post(self, request, event_id):
+        Event.objects.filter(id=event_id, user=request.user).delete()
+        return redirect(reverse('event_list'))
 
 
 class LocationsView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
-        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         locations = Location.objects.filter(user=request.user, event_id=event_id)
 
@@ -59,7 +74,7 @@ class LocationsView(LoginRequiredMixin, View):
 class NotificationsListView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
-        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         notifications = Notification.objects.filter(user=request.user, event_id=event_id).order_by('-send_time')
         notification_forms = [NotificationForm(instance=notification) for notification in notifications]
@@ -103,7 +118,7 @@ class NotificationDeleteView(View):
 class AnalyticsView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
-        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
 
         context = {'events': events,
@@ -115,7 +130,7 @@ class AnalyticsView(LoginRequiredMixin, View):
 class BillingView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
-        events = Event.objects.filter(user=request.user).order_by('-start_date')
+        events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
 
         context = {'events': events,

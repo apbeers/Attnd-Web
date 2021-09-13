@@ -16,7 +16,7 @@
 
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
-        {{ form.as_p }}
+        {{ selected_event_form.as_p }}
         <button type="submit">Update</button>
     </form>
 

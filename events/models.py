@@ -8,11 +8,10 @@ class Event(models.Model):
     description = models.CharField(max_length=2048)
     latitude = models.DecimalField(max_digits=8, decimal_places=6)
     longitude = models.DecimalField(max_digits=8, decimal_places=6)
-    start_date = models.DateTimeField()
+    start_time = models.DateTimeField()
     paid = models.BooleanField(default=False)
     flyer = models.FileField()
-    public = models.BooleanField(default=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, editable=False)
 
     class Meta:
         indexes = [
