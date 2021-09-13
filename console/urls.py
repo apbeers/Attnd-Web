@@ -2,12 +2,14 @@ from django.urls import path
 
 from console import views
 
+app_name = 'console'
 urlpatterns = [
     # Registration Views
     path('signup/', views.SignUpView.as_view(), name='signup'),
 
     # Event Views
-    path('<int:event_id>/create/', views.EventCreateView.as_view(), name='event_create'),
+    path('create_first_event', views.EventCreateView.as_view(), name='create_first_event'),
+    path('create/', views.EventCreateView.as_view(), name='event_create'),
     path('<int:event_id>/event/', views.EventView.as_view(), name='event'),
     path('<int:event_id>/update/', views.EventUpdateView.as_view(), name='event_update'),
     path('<int:event_id>/delete/', views.EventDeleteView.as_view(), name='event_delete'),

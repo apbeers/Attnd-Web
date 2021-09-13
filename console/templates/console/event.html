@@ -14,7 +14,7 @@
 
 {% block content %}
 
-    <form method="post" enctype="multipart/form-data" action="{% url 'event_update' event_id=selected_event.id%}">
+    <form method="post" enctype="multipart/form-data" action="{% url 'console:event_update' event_id=selected_event.id%}">
         {% csrf_token %}
         {{ selected_event_form.as_p }}
         <button type="submit">Update</button>

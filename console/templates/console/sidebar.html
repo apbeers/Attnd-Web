@@ -5,7 +5,7 @@
     <ul class="list-group list-group-flush">
         {% for event in events %}
             <li class="list-group-item {% if event.id == selected_event.id %} active {% endif %}">
-                <a href="{% url 'event' event_id=event.id %}">{{ event.name}}</a>
+                <a href="{% url 'console:event' event_id=event.id %}">{{ event.name}}</a>
             </li>
         {% endfor %}
     </ul>

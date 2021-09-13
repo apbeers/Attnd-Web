@@ -13,7 +13,7 @@
 {% endblock %}
 
 {% block content %}
-    <form method="post" enctype="multipart/form-data" action="{% url 'location_create' event_id=selected_event.id %}">
+    <form method="post" enctype="multipart/form-data" action="{% url 'console:location_create' event_id=selected_event.id %}">
         {% csrf_token %}
         {{ new_location_form.as_p }}
 
@@ -21,7 +21,7 @@
     </form>
 
     {% for location_form in location_forms %}
-        <form method="post" enctype="multipart/form-data" action="{% url 'location_update' event_id=selected_event.id location_id=location_form.instance.id %}">
+        <form method="post" enctype="multipart/form-data" action="{% url 'console:location_update' event_id=selected_event.id location_id=location_form.instance.id %}">
             {% csrf_token %}
             {{ location_form.as_p }}
             <button type="submit">Update</button>

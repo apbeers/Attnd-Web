@@ -1,17 +1,17 @@
 <ul>
     <li style="display: inline">
-        <a href="{% url 'event' event_id=selected_event.id %}">Event</a>
+        <a href="{% url 'console:event' event_id=selected_event.id %}">Event</a>
     </li>
     <li style="display: inline">
-        <a href="{% url 'location_list' event_id=selected_event.id %}">Locations</a>
+        <a href="{% url 'console:location_list' event_id=selected_event.id %}">Locations</a>
     </li>
     <li style="display: inline">
-        <a href="{% url 'notification_list' event_id=selected_event.id %}">Notifications</a>
+        <a href="{% url 'console:notification_list' event_id=selected_event.id %}">Notifications</a>
     </li>
     <li style="display: inline">
-        <a href="{% url 'analytics' event_id=selected_event.id %}">Analytics</a>
+        <a href="{% url 'console:analytics' event_id=selected_event.id %}">Analytics</a>
     </li>
     <li style="display: inline">
-        <a href="{% url 'billing' event_id=selected_event.id %}">Billing</a>
+        <a href="{% url 'console:billing' event_id=selected_event.id %}">Billing</a>
     </li>
 </ul>
