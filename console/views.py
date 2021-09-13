@@ -1,6 +1,5 @@
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views import View
@@ -61,12 +60,12 @@ class EventDeleteView(View):
 class LocationCreateView(View):
 
     def post(self, request, event_id):
-        event = Event.objects.filter(id=event_id, user=request.user).get()
-        user = request.user
-        name = request.POST.get('name')
-        snippet = request.POST.get('snippet')
-        website = request.POST.get('website')
+        form = LocationForm(data=request.POST, files=request.FILES)
+        form.instance.user = request.user
+        form.instance.event = Event.objects.filter(id=event_id, user=request.user).get()
+        form.save()
 
+        return redirect(reverse('location_list', args=[event_id]))
 
 
 class LocationsListView(LoginRequiredMixin, View):
@@ -104,12 +103,11 @@ class LocationDeleteView(View):
 class NotificationCreateView(View):
 
     def post(self, request, event_id):
-        event = Event.objects.filter(id=event_id, user=request.user).get()
-        user = request.user
-        title = request.POST.get('title')
-        body = request.POST.get('body')
-        send_time = request.POST.get('send_time')
-        Notification.objects.create(event=event, user=user, title=title, body=body, send_time=send_time)
+        form = NotificationForm(data=request.POST)
+        form.instance.event = Event.objects.filter(id=event_id, user=request.user).get()
+        form.instance.user = request.user
+        form.save()
+
         return redirect(reverse('notification_list', args=[event_id]))
 
 
