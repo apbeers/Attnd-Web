@@ -9,4 +9,4 @@ class NotificationForm(ModelForm):
         fields = '__all__'
         widgets = {'title': TextInput(attrs={'class': 'form-control'}),
                    'body': TextInput(attrs={'class': 'form-control'}),
-                   'send_time': DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M:%s')}
+                   'send_time': DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M:%S')}

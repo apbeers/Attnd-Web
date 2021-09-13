@@ -1,7 +1,5 @@
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.forms import model_to_dict
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views import View
@@ -57,7 +55,8 @@ class LocationsView(LoginRequiredMixin, View):
         return render(request, template_name='console/locations.html', context=context)
 
 
-class NotificationsView(LoginRequiredMixin, View):
+# Notification Views
+class NotificationsListView(LoginRequiredMixin, View):
 
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_date')
@@ -73,20 +72,32 @@ class NotificationsView(LoginRequiredMixin, View):
 
         return render(request, template_name='console/notifications.html', context=context)
 
-    def post(self, request, event_id):
-        notification_id = request.POST.get('id')
-        if notification_id:
-            notification = Notification.objects.filter(id=notification_id, user=request.user, event_id=event_id).first()
-            NotificationForm(data=request.POST, instance=notification).save()
-        else:
-            event = Event.objects.filter(id=event_id, user=request.user).get()
-            user = request.user
-            title = request.POST.get('title')
-            body = request.POST.get('body')
-            send_time = request.POST.get('send_time')
-            Notification.objects.create(event=event, user=user, title=title, body=body, send_time=send_time)
 
-        return redirect(reverse('notifications', args=[event_id]))
+class NotificationCreateView(View):
+
+    def post(self, request, event_id):
+        event = Event.objects.filter(id=event_id, user=request.user).get()
+        user = request.user
+        title = request.POST.get('title')
+        body = request.POST.get('body')
+        send_time = request.POST.get('send_time')
+        Notification.objects.create(event=event, user=user, title=title, body=body, send_time=send_time)
+        return redirect(reverse('notification_list', args=[event_id]))
+
+
+class NotificationUpdateView(View):
+
+    def post(self, request, event_id, notification_id):
+        notification = Notification.objects.filter(id=notification_id, user=request.user, event_id=event_id).first()
+        NotificationForm(data=request.POST, instance=notification).save()
+        return redirect(reverse('notification_list', args=[event_id]))
+
+
+class NotificationDeleteView(View):
+
+    def post(self, request, event_id, notification_id):
+        Notification.objects.filter(id=notification_id, event_id=event_id, user=request.user).delete()
+        return redirect(reverse('notification_list', args=[event_id]))
 
 
 class AnalyticsView(LoginRequiredMixin, View):
