@@ -34,6 +34,14 @@ class AllLocationsView(View):
         return HttpResponse(content=serialized_locations, content_type='application/json')
 
 
+class SingleNotificationView(View):
+
+    def get(self, request, event_id, notification_id):
+        notification = Notification.objects.filter(event__id=event_id, id=notification_id).first()
+        serialized_notification = serialize(format='json', queryset=notification)
+        return HttpResponse(content=serialized_notification, content_type='application/json')
+
+
 class AllNotificationsView(View):
 
     def get(self, request, event_id):

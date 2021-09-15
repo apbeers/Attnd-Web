@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.urls import reverse
 
 
 class Event(models.Model):
@@ -17,6 +18,9 @@ class Event(models.Model):
         indexes = [
             models.Index(fields=['user'])
         ]
+
+    def get_absolute_url(self):
+        return reverse('events:get_single_event', args=[self.id])
 
     def __str__(self):
         return self.name
@@ -38,6 +42,9 @@ class Location(models.Model):
             models.Index(fields=['event', 'user'])
         ]
 
+    def get_absolute_url(self):
+        return reverse('events:get_single_location', args=[self.event.id, self.id])
+
     def __str__(self):
         return self.name
 
@@ -54,6 +61,9 @@ class Notification(models.Model):
         indexes = [
             models.Index(fields=['event', 'user'])
         ]
+
+    def get_absolute_url(self):
+        return reverse('events:get_single_notification', args=[self.event.id, self.id])
 
     def __str__(self):
         return self.title
