@@ -16,16 +16,16 @@
 
     <form method="post" action="{% url 'console:notification_create' event_id=selected_event.id %}">
         {% csrf_token %}
-        {{ new_notification_form.as_p }}
-        <button type="submit">Create</button>
+        {% include 'console/form.html' with form=new_notification_form %}
+        <button type="submit" class="btn btn-primary">Create</button>
     </form>
 
     {% for notification_form in notification_forms %}
 
         <form method="post" action="{% url 'console:notification_update' event_id=selected_event.id notification_id=notification_form.instance.id %}">
             {% csrf_token %}
-            {{ notification_form.as_p }}
-            <button type="submit">Update</button>
+            {% include 'console/form.html' with form=notification_form %}
+            <button type="submit" class="btn btn-primary">Update</button>
         </form>
         <br>
 
