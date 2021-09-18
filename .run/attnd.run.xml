@@ -8,6 +8,8 @@
       <env name="DJANGO_SETTINGS_MODULE" value="attnd.settings" />
       <env name="DEBUG" value="1" />
       <env name="SECRET_KEY" value="asdfjh2783f2ifha@#%(*JF9wj9fj2f23fiah" />
+      <env name="MAILGUN_SMTP_PASSWORD" value="5e25967c56c67b5ea473628f6859f781-90346a2d-5565029d" />
+      <env name="MAILGUN_SMTP_LOGIN" value="postmaster@sandbox1ccc6d854b674df284ac16aaf9e507c4.mailgun.org" />
     </envs>
     <option name="SDK_HOME" value="$PROJECT_DIR$/venv/bin/python" />
     <option name="WORKING_DIRECTORY" value="" />
