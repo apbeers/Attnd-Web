@@ -15,7 +15,7 @@ def home(request):
     return render(request, template_name='console/home.html')
 
 
-class EventCreateView(View):
+class EventCreateView(LoginRequiredMixin, View):
 
     def post(self, request):
         event_id = 9
@@ -40,7 +40,7 @@ class EventView(LoginRequiredMixin, View):
         return render(request, template_name='console/event.html', context=context)
 
 
-class EventUpdateView(View):
+class EventUpdateView(LoginRequiredMixin, View):
 
     def post(self, request, event_id):
         event = Event.objects.filter(id=event_id).first()
@@ -50,14 +50,14 @@ class EventUpdateView(View):
             return redirect(reverse('console:event', args=[event_id]))
 
 
-class EventDeleteView(View):
+class EventDeleteView(LoginRequiredMixin, View):
 
     def post(self, request, event_id):
         Event.objects.filter(id=event_id, user=request.user).delete()
         return redirect(reverse('console:event_list'))
 
 
-class LocationCreateView(View):
+class LocationCreateView(LoginRequiredMixin, View):
 
     def post(self, request, event_id):
         form = LocationForm(data=request.POST, files=request.FILES)
@@ -85,22 +85,22 @@ class LocationsListView(LoginRequiredMixin, View):
         return render(request, template_name='console/locations.html', context=context)
 
 
-class LocationUpdateView(View):
+class LocationUpdateView(LoginRequiredMixin, View):
 
     def post(self, request, event_id, location_id):
         location = Location.objects.filter(id=location_id, user=request.user).first()
         LocationForm(data=request.POST, instance=location).save()
-        return redirect(reverse('console:notification_list', args=[event_id]))
+        return redirect(reverse('console:location_list', args=[event_id]))
 
 
-class LocationDeleteView(View):
+class LocationDeleteView(LoginRequiredMixin, View):
 
-    def post(self, request, event_id, location_id):
+    def get(self, request, event_id, location_id):
         Location.objects.filter(id=location_id, user=request.user).delete()
-        return redirect(reverse('console:notification_list', args=[event_id]))
+        return redirect(reverse('console:location_list', args=[event_id]))
 
 
-class NotificationCreateView(View):
+class NotificationCreateView(LoginRequiredMixin, View):
 
     def post(self, request, event_id):
         form = NotificationForm(data=request.POST)
@@ -128,7 +128,7 @@ class NotificationsListView(LoginRequiredMixin, View):
         return render(request, template_name='console/notifications.html', context=context)
 
 
-class NotificationUpdateView(View):
+class NotificationUpdateView(LoginRequiredMixin, View):
 
     def post(self, request, event_id, notification_id):
         notification = Notification.objects.filter(id=notification_id, user=request.user, event_id=event_id).first()
@@ -136,7 +136,7 @@ class NotificationUpdateView(View):
         return redirect(reverse('console:notification_list', args=[event_id]))
 
 
-class NotificationDeleteView(View):
+class NotificationDeleteView(LoginRequiredMixin, View):
 
     def post(self, request, event_id, notification_id):
         Notification.objects.filter(id=notification_id, event_id=event_id, user=request.user).delete()

@@ -14,8 +14,13 @@
 
 {% block content %}
 
-    <form method="post" enctype="multipart/form-data" action="{% url 'console:event_update' event_id=selected_event.id %}">
+    <form method="post" class="row g-3" enctype="multipart/form-data" action="{% url 'console:event_update' event_id=selected_event.id %}">
         {% csrf_token %}
+{#        <div class="col-md-6">#}
+{#            {% include 'console/field.html' with form=selected_event_form%}#}
+{#        </div>#}
+
+
         {% include 'console/form.html' with form=selected_event_form %}
         <button type="submit" class="btn btn-primary">Update</button>
     </form>
