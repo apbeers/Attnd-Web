@@ -1,5 +1,5 @@
 from django.contrib import admin
-from events.models import Event, Location, Notification
+from events.models import Event, Location, Notification, Device
 
 
 class LocationInline(admin.TabularInline):
@@ -25,6 +25,11 @@ class NotificationAdmin(admin.ModelAdmin):
     list_filter = ['user', 'event']
 
 
+class DeviceAdmin(admin.ModelAdmin):
+    list_filter = ['event', 'subscribed']
+
+
 admin.site.register(Event, EventAdmin)
 admin.site.register(Location, LocationAdmin)
 admin.site.register(Notification)
+admin.site.register(Device, DeviceAdmin)

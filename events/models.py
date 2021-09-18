@@ -67,3 +67,12 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Device(models.Model):
+    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    device_id = models.CharField(max_length=128)
+    subscribed = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f'{self.event} - {self.device_id} - {self.subscribed}'

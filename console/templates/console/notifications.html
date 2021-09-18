@@ -13,21 +13,103 @@
 {% endblock %}
 
 {% block content %}
+    <br>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#notificationNewModal">
+        + Schedule Notification
+    </button>
 
-    <form method="post" action="{% url 'console:notification_create' event_id=selected_event.id %}">
-        {% csrf_token %}
-        {% include 'console/form.html' with form=new_notification_form %}
-        <button type="submit" class="btn btn-primary">Create</button>
-    </form>
+    <!-- Modal -->
+    <div class="modal fade" id="notificationNewModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exampleModalLabel">Schedule Notification</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
 
-    {% for notification_form in notification_forms %}
+                        <form id="notification-create-form" method="post" enctype="multipart/form-data" action="{% url 'console:notification_create' event_id=selected_event.id %}">
+                            {% csrf_token %}
+                            {{ new_notification_form.as_p }}
+                        </form>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="notification-create-form" class="btn btn-primary">Schedule</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <hr>
+    <br>
+    <div class="container-fluid">
+        <div class="row row-cols-md-1 g-4">
+            {% for notification_form in notification_forms %}
 
-        <form method="post" action="{% url 'console:notification_update' event_id=selected_event.id notification_id=notification_form.instance.id %}">
-            {% csrf_token %}
-            {% include 'console/form.html' with form=notification_form %}
-            <button type="submit" class="btn btn-primary">Update</button>
-        </form>
-        <br>
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ notification_form.instance.title }}</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">{{ notification_form.instance.send_time }}</h6>
+                        <div class="row g-0">
+                            <div class="col-11">
+                                <p class="card-text">{{ notification_form.instance.body }}</p>
+                            </div>
+                            <div class="col-1 text-end">
+                                {% if not notification_form.instance.sent %}
+                                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#notificationEditModal-{{ notification_form.instance.id }}">Edit</button>
+                                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#notificationDeleteModal-{{ notification_form.instance.id }}">Delete</button>
+                                {% endif %}
+                            </div>
+                        </div>
 
-    {% endfor %}
+                    </div>
+                </div>
+
+                <div class="modal fade" id="notificationEditModal-{{ notification_form.instance.id }}" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="exampleModalLabel">Edit {{ notification_form.instance.title }}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row g-3">
+                                    <form id="notificationEditForm-{{ notification_form.instance.id }}" method="post" enctype="multipart/form-data"
+                                          action="{% url 'console:notification_update' event_id=selected_event.id notification_id=notification_form.instance.id %}">
+                                        {% csrf_token %}
+                                        {{ notification_form.as_p }}
+                                    </form>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" form="notificationEditForm-{{ notification_form.instance.id }}" class="btn btn-primary">Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal fade" id="notificationDeleteModal-{{ notification_form.instance.id }}" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="exampleModalLabel">Delete {{ notification_form.instance.title }}?</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                Are you sure you want to delete {{ notification_form.instance.title }}?
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <a class="btn btn-danger" href="{% url 'console:notification_delete' event_id=selected_event.id notification_id=notification_form.instance.id %}" role="button">Delete</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            {% endfor %}
+        </div>
+    </div>
 {% endblock %}

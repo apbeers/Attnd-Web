@@ -138,7 +138,7 @@ class NotificationUpdateView(LoginRequiredMixin, View):
 
 class NotificationDeleteView(LoginRequiredMixin, View):
 
-    def post(self, request, event_id, notification_id):
+    def get(self, request, event_id, notification_id):
         Notification.objects.filter(id=notification_id, event_id=event_id, user=request.user).delete()
         return redirect(reverse('console:notification_list', args=[event_id]))
 
