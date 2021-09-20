@@ -4,14 +4,15 @@ from django.urls import reverse
 
 
 class Event(models.Model):
-    name = models.CharField(max_length=256)
+    name = models.CharField(max_length=256, unique=True)
     event_code = models.CharField(max_length=16, unique=True)
     description = models.CharField(max_length=2048)
-    latitude = models.DecimalField(max_digits=8, decimal_places=6)
-    longitude = models.DecimalField(max_digits=8, decimal_places=6)
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
     start_time = models.DateTimeField()
     paid = models.BooleanField(default=False)
     flyer = models.FileField()
+    address = models.CharField(max_length=512)
     user = models.ForeignKey(User, on_delete=models.CASCADE, editable=False)
 
     class Meta:
