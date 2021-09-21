@@ -8,7 +8,7 @@ attrs = {'class': 'form-control'}
 class LocationForm(ModelForm):
     class Meta:
         model = Location
-        fields = ['name', 'snippet', 'description', 'address', 'image', 'website']
+        fields = ['name', 'snippet', 'description', 'address', 'image', 'website', 'latitude', 'longitude']
         widgets = {
             'name': TextInput(attrs),
             'snippet': TextInput(attrs),

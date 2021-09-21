@@ -74,7 +74,7 @@ class LocationsListView(LoginRequiredMixin, View):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         locations = Location.objects.filter(user=request.user, event_id=event_id)
-        location_forms = [LocationForm(instance=location) for location in locations]
+        location_forms = [LocationForm(instance=location, auto_id=f'id_%s_{location.id}') for location in locations]
         new_location_form = LocationForm()
 
         context = {'events': events,

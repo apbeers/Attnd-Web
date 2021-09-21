@@ -13,36 +13,18 @@
 {% endblock %}
 
 {% block content %}
-
-
-    <script>
-
-        function initialize() {
-            var input = document.getElementById('id_address');
-            var autocomplete = new google.maps.places.Autocomplete(input);
-            autocomplete.addListener('place_changed', function () {
-                var place = autocomplete.getPlace();
-                document.getElementById('id_latitude').value = place.geometry.location.lat();
-                document.getElementById('id_longitude').value = place.geometry.location.lng();
-            })
-
-            google.maps.event.addDomListener(input, 'keydown', function (e) {
-                if (e.keyCode === 13) {
-                    e.preventDefault();
-                }
-            });
+    <style>
+        .pac-container {
+            z-index: 100000;
         }
+    </style>
 
-        google.maps.event.addDomListener(window, 'load', initialize);
-    </script>
 
     <br>
     <!-- Button trigger modal -->
     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newLocationModal">
         + New Location
     </button>
-
-
 
     <!-- Modal -->
     <div class="modal fade" id="newLocationModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
@@ -54,6 +36,27 @@
                 </div>
                 <div class="modal-body">
                     <div class="row g-3">
+
+                        <script>
+                            function initialize() {
+                                var input = document.getElementById('id_address');
+                                var autocomplete = new google.maps.places.Autocomplete(input);
+                                autocomplete.addListener('place_changed', function () {
+                                    var place = autocomplete.getPlace();
+                                    document.getElementById('id_latitude').value = place.geometry.location.lat();
+                                    document.getElementById('id_longitude').value = place.geometry.location.lng();
+                                })
+
+                                const selectedItem = document.getElementsByClassName('pac-item-selected');
+                                google.maps.event.addDomListener(input, 'keydown', function (e) {
+                                    if (e.keyCode === 13 && selectedItem.length !== 0) {
+                                        e.preventDefault();
+                                    }
+                                });
+                            }
+
+                            google.maps.event.addDomListener(window, 'load', initialize);
+                        </script>
 
                         <form id="location_create_form" method="post" enctype="multipart/form-data" action="{% url 'console:location_create' event_id=selected_event.id %}">
                             {% csrf_token %}
@@ -87,7 +90,7 @@
                                     <p class="card-text">{{ location_form.initial.description }}</p>
                                     <div class="row g-0" style="margin-top: auto">
                                         <div class="col-8">
-                                            <p class="card-text"><small class="text-muted">Address goes here</small></p>
+                                            <p class="card-text"><small class="text-muted">{{ location_form.instance.address }}</small></p>
                                         </div>
                                         <div class="col-4 text-end">
                                             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#locationEditModal-{{ location_form.instance.id }}">Edit</button>
@@ -110,6 +113,28 @@
                             </div>
                             <div class="modal-body">
                                 <div class="row g-3">
+
+                                    <script>
+                                        function initialize() {
+                                            var input = document.getElementById('id_address_{{ location_form.instance.id }}');
+                                            var autocomplete = new google.maps.places.Autocomplete(input);
+                                            autocomplete.addListener('place_changed', function () {
+                                                var place = autocomplete.getPlace();
+                                                document.getElementById('id_latitude_{{ location_form.instance.id }}').value = place.geometry.location.lat();
+                                                document.getElementById('id_longitude_{{ location_form.instance.id }}').value = place.geometry.location.lng();
+                                            })
+
+                                            const selectedItem = document.getElementsByClassName('pac-item-selected');
+                                            google.maps.event.addDomListener(input, 'keydown', function (e) {
+                                                if (e.keyCode === 13 && selectedItem.length !== 0) {
+                                                    e.preventDefault();
+                                                }
+                                            });
+                                        }
+
+                                        google.maps.event.addDomListener(window, 'load', initialize);
+                                    </script>
+
                                     <form id="locationEditForm-{{ location_form.instance.id }}" method="post" enctype="multipart/form-data"
                                           action="{% url 'console:location_update' event_id=selected_event.id location_id=location_form.instance.id %}">
                                         {% csrf_token %}
