@@ -13,7 +13,7 @@ class LocationForm(ModelForm):
             'name': TextInput(attrs),
             'snippet': TextInput(attrs),
             'description': Textarea(attrs={'class': 'form-control', 'rows': 5, 'cols': 20}),
-            'address': TextInput(attrs),
+            'address': TextInput(attrs={'class': 'form-control'}),
             'image': ClearableFileInput(attrs),
             'website': URLInput(attrs),
             'latitude': HiddenInput(),
