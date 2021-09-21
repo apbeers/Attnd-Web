@@ -18,8 +18,10 @@ def home(request):
 class EventCreateView(LoginRequiredMixin, View):
 
     def post(self, request):
-        event_id = 9
-        return redirect(reverse('console:event_list', args=[event_id]))
+        form = EventForm(request.POST, request.FILES)
+        form.instance.user = request.user
+        event = form.save()
+        return redirect(reverse('console:event', args=[event.id]))
 
 
 class EventView(LoginRequiredMixin, View):
@@ -32,10 +34,12 @@ class EventView(LoginRequiredMixin, View):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         selected_event_form = EventForm(instance=selected_event)
+        new_event_form = EventForm(auto_id='id_%s_new')
 
         context = {'events': events,
                    'selected_event': selected_event,
-                   'selected_event_form': selected_event_form}
+                   'selected_event_form': selected_event_form,
+                   'new_event_form': new_event_form}
 
         return render(request, template_name='console/event.html', context=context)
 
@@ -76,11 +80,13 @@ class LocationsListView(LoginRequiredMixin, View):
         locations = Location.objects.filter(user=request.user, event_id=event_id)
         location_forms = [LocationForm(instance=location, auto_id=f'id_%s_{location.id}') for location in locations]
         new_location_form = LocationForm()
+        new_event_form = EventForm(auto_id='id_%s_new')
 
         context = {'events': events,
                    'selected_event': selected_event,
                    'location_forms': location_forms,
-                   'new_location_form': new_location_form}
+                   'new_location_form': new_location_form,
+                   'new_event_form': new_event_form}
 
         return render(request, template_name='console/locations.html', context=context)
 
@@ -119,11 +125,13 @@ class NotificationsListView(LoginRequiredMixin, View):
         notifications = Notification.objects.filter(user=request.user, event_id=event_id).order_by('-send_time')
         notification_forms = [NotificationForm(instance=notification) for notification in notifications]
         new_notification_form = NotificationForm()
+        new_event_form = EventForm(auto_id='id_%s_new')
 
         context = {'events': events,
                    'selected_event': selected_event,
                    'notification_forms': notification_forms,
-                   'new_notification_form': new_notification_form}
+                   'new_notification_form': new_notification_form,
+                   'new_event_form': new_event_form}
 
         return render(request, template_name='console/notifications.html', context=context)
 
@@ -148,9 +156,11 @@ class AnalyticsView(LoginRequiredMixin, View):
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
+        new_event_form = EventForm(auto_id='id_%s_new')
 
         context = {'events': events,
-                   'selected_event': selected_event}
+                   'selected_event': selected_event,
+                   'new_event_form': new_event_form}
 
         return render(request, template_name='console/analytics.html', context=context)
 
@@ -160,9 +170,11 @@ class BillingView(LoginRequiredMixin, View):
     def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
+        new_event_form = EventForm(auto_id='id_%s_new')
 
         context = {'events': events,
-                   'selected_event': selected_event}
+                   'selected_event': selected_event,
+                   'new_event_form': new_event_form}
 
         return render(request, template_name='console/billing.html', context=context)
 
