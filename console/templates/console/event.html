@@ -26,22 +26,15 @@
                 document.getElementById('id_longitude').value = place.geometry.location.lng();
             })
 
+            const selectedItem = document.getElementsByClassName('pac-item-selected');
             google.maps.event.addDomListener(input, 'keydown', function (e) {
-                if (e.keyCode === 13) {
+                if (e.keyCode === 13 && selectedItem.length !== 0) {
                     e.preventDefault();
                 }
             });
         }
 
         google.maps.event.addDomListener(window, 'load', initialize);
-
-
-        function updateLatitudeAndLongituded() {
-            alert('asdfasdf')
-            {#var place = autocomplete.getPlace();#}
-            {#document.getElementById('id_latitude').value = place.geometry.location.lat();#}
-            {#document.getElementById('id_longitude').value = place.geometry.location.lng();#}
-        }
     </script>
 
     <form method="post" class="row g-3" enctype="multipart/form-data" action="{% url 'console:event_update' event_id=selected_event.id %}">
