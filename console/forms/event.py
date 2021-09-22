@@ -12,7 +12,7 @@ class EventForm(ModelForm):
             'event_code': TextInput(attrs={'class': 'form-control'}),
             'description': Textarea(attrs={'class': 'form-control', 'rows': 5, 'cols': 20}),
             'address': TextInput(attrs={'class': 'form-control'}),
-            'start_time': DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M:%S'),
+            'start_time': DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local', 'step': '1'}, format='%Y-%m-%dT%H:%M:%S'),
             'flyer': ClearableFileInput(attrs={'class': 'form-control'}),
             'latitude': HiddenInput(),
             'longitude': HiddenInput()
