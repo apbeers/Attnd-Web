@@ -10,7 +10,7 @@ class EventsTestCase(TestCase):
     def test_all_locations(self):
         event_id = 3
 
-        request = RequestFactory().get(reverse('get_all_locations', args=[event_id]))
+        request = RequestFactory().get(reverse('events:get_all_locations', args=[event_id]))
         response = AllLocationsView.as_view()(request, event_id)
         self.assertEqual(response.status_code, 200)
         print(response.content)
@@ -19,7 +19,7 @@ class EventsTestCase(TestCase):
         user_latitude = 32.668224
         user_longitude = -97.419591
 
-        request = RequestFactory().get(reverse('get_nearby_events', args=[user_latitude, user_longitude]))
+        request = RequestFactory().get(reverse('events:get_nearby_events', args=[user_latitude, user_longitude]))
         response = NearbyEventsView.as_view()(request, user_latitude, user_longitude)
         self.assertEqual(response.status_code, 200)
         print(response.content)
@@ -27,7 +27,7 @@ class EventsTestCase(TestCase):
     def test_event_by_code_or_name(self):
         data = 'my event'
 
-        request = RequestFactory().get(reverse('get_event_by_code_or_name'))
+        request = RequestFactory().get(reverse('events:get_event_by_code_or_name'))
         request.GET = {'data': data}
         response = EventByCodeOrNameView.as_view()(request)
         self.assertEqual(response.status_code, 200)

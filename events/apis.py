@@ -60,13 +60,12 @@ class NearbyEventsView(View):
             return HttpResponseServerError()
 
         radius = decimal.Decimal(0.5)  # 35 miles
-        events = Event.objects.filter(public=True,
-                                      latitude__lte=latitude + radius,
+        events = Event.objects.filter(latitude__lte=latitude + radius,
                                       latitude__gte=latitude - radius,
                                       longitude__lte=longitude + radius,
                                       longitude__gte=longitude - radius,
-                                      start_date__lte=date.today() + timedelta(days=7),
-                                      start_date__gte=date.today() - timedelta(days=3))
+                                      start_time__lte=date.today() + timedelta(days=7),
+                                      start_time__gte=date.today() - timedelta(days=3))
 
         events_with_distance_from_user = []
         for event in events:

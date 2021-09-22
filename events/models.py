@@ -13,7 +13,7 @@ class Event(models.Model):
     paid = models.BooleanField(default=False)
     flyer = models.FileField()
     address = models.CharField(max_length=512)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     class Meta:
         indexes = [
@@ -36,8 +36,8 @@ class Location(models.Model):
     latitude = models.DecimalField(max_digits=24, decimal_places=20)
     longitude = models.DecimalField(max_digits=24, decimal_places=20)
     address = models.CharField(max_length=512)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, editable=False)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
     class Meta:
         indexes = [
@@ -56,8 +56,8 @@ class Notification(models.Model):
     body = models.CharField(max_length=256)
     send_time = models.DateTimeField()
     sent = models.BooleanField(default=False, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, editable=False)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
     class Meta:
         indexes = [
