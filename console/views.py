@@ -95,7 +95,7 @@ class LocationUpdateView(LoginRequiredMixin, View):
 
     def post(self, request, event_id, location_id):
         location = Location.objects.filter(id=location_id, user=request.user).first()
-        LocationForm(data=request.POST, instance=location).save()
+        LocationForm(data=request.POST, files=request.FILES, instance=location).save()
         return redirect(reverse('console:location_list', args=[event_id]))
 
 
