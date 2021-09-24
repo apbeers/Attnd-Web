@@ -72,9 +72,15 @@ class Notification(models.Model):
 
 
 class Device(models.Model):
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
-    device_id = models.CharField(max_length=128)
+    id = models.CharField(max_length=128, primary_key=True)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True)
     subscribed = models.BooleanField(default=True)
+    platform = models.CharField(max_length=12)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['event'])
+        ]
 
     def __str__(self):
-        return f'{self.event} - {self.device_id} - {self.subscribed}'
+        return f'{self.event} - {self.id} - {self.subscribed}'

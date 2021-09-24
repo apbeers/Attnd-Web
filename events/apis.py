@@ -1,5 +1,5 @@
 import decimal
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from difflib import get_close_matches
 from math import sqrt
 
@@ -7,7 +7,25 @@ from django.core.serializers import serialize
 from django.http import HttpResponse, HttpResponseServerError
 from django.views import View
 
-from events.models import Event, Location, Notification
+from events.models import Event, Location, Notification, Device
+
+
+class JoinEventView(View):
+
+    def post(self, request, event_id, device_id):
+        event = Event.objects.filter(id=event_id).get()
+        device, created = Device.objects.get_or_create(id=device_id, defaults={'event': event})
+        if not created:
+            device.event = event
+            device.save()
+        return HttpResponse()
+
+
+class LeaveEventView(View):
+
+    def post(self, request, device_id, event_id):
+        Device.objects.filter(id=device_id).update(event=None)
+        return HttpResponse
 
 
 class SingleEventView(View):
@@ -105,3 +123,43 @@ class EventByCodeOrNameView(View):
                 return HttpResponse(content=serialized_event, content_type='application/json')
         else:
             return HttpResponseServerError()
+
+
+class PushNotificationsSubscribe(View):
+
+    def post(self, request, device_id):
+        Device.objects.filter(id=device_id).update(subscribed=True)
+        return HttpResponse()
+
+
+class PushNotificationsUnSubscribe(View):
+
+    def post(self, request, device_id):
+        Device.objects.filter(id=device_id).update(subscribed=False)
+        return HttpResponse()
+
+
+class SendNotifications(View):
+
+    def post(self):
+        events = Event.objects.filter(start_time__lte=date.today() + timedelta(days=7),
+                                      start_time__gte=date.today() - timedelta(days=3))
+
+        for event in events:
+            notifications = Notification.objects.filter(event=event, sent=False, send_time__lte=datetime.now())
+            devices = Device.objects.filter(event=event, subscribed=True)
+            for notification in notifications:
+                for device in devices:
+                    if device.platform == 'android':
+                        self.send_android_notification(notification)
+                    elif device.platform == 'ios':
+                        self.send_ios_notification(notification)
+
+                notification.sent = True
+                notification.save()
+
+    def send_ios_notification(self, notification):
+        pass
+
+    def send_android_notification(self, notification):
+        pass
