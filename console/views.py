@@ -1,3 +1,5 @@
+import os.path
+
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, redirect
@@ -9,6 +11,8 @@ from console.forms.location import LocationForm
 from console.forms.notification import NotificationForm
 from console.forms.signup import SignUpForm
 from events.models import Event, Location, Notification
+import qrcode
+from django.conf import settings
 
 
 def home(request):
@@ -21,6 +25,16 @@ class EventCreateView(LoginRequiredMixin, View):
         form = EventForm(request.POST, request.FILES)
         form.instance.user = request.user
         event = form.save()
+
+        url = 'https://www.google.com/?client=safari'
+        qr = qrcode.QRCode(border=1)
+        qr.add_data(url)
+        qr.make(fit=True)
+
+        image = qr.make_image()
+        path = os.path.join(settings.MEDIA_ROOT, f'qr_{event.id}.png')
+        image.save(path)
+
         return redirect(reverse('console:event', args=[event.id]))
 
 
