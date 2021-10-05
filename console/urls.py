@@ -4,6 +4,9 @@ from console import views
 
 app_name = 'console'
 urlpatterns = [
+    # Home Page
+    path('', views.home, name='home'),
+
     # Registration Views
     path('signup/', views.SignUpView.as_view(), name='signup'),
 
