@@ -1,9 +1,12 @@
+import datetime
 import os.path
+from shutil import copyfile
 
 import qrcode
 from django.conf import settings
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views import View
@@ -17,6 +20,10 @@ from events.models import Event, Location, Notification
 
 
 class EventCreateView(LoginRequiredMixin, View):
+
+    def get(self, request):
+        first_event = Event.objects.filter(user=request.user).order_by('-start_time').first()
+        return redirect('console:event', event_id=first_event.id)
 
     def post(self, request):
         form = EventForm(request.POST, request.FILES)
@@ -37,11 +44,7 @@ class EventCreateView(LoginRequiredMixin, View):
 
 class EventView(LoginRequiredMixin, View):
 
-    def get(self, request, event_id=None):
-        if not event_id:
-            first_event = Event.objects.filter(user=request.user).order_by('-start_time').first()
-            return redirect('event', event_id=first_event.id)
-
+    def get(self, request, event_id):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         selected_event_form = EventForm(instance=selected_event)
@@ -205,10 +208,24 @@ class SignUpView(View):
             user = authenticate(username=username, password=raw_password)
             user.is_staff = False
             login(request, user)
-            return redirect('console:dashboard')
+            self.create_demo_event(user=user)
+            return redirect('console:create_first_event')
         else:
             context = {'form': form}
             return render(request, template_name='registration/signup.html', context=context)
+
+    def create_demo_event(self, user: User):
+        event_name = f'Demo Event - {user.username}'
+        event_code = f'{user.username}-demo-event'
+        event_description = 'The local art fair is back! Artists will be teaching classes and selling paintings'
+        event_latitude = 32.754695
+        event_longitude = -97.331605
+        event_start_time = datetime.datetime.now() + datetime.timedelta(weeks=1)
+        copyfile(os.path.join(settings.BASE_DIR, 'console', 'static', 'console', 'demo_art_fair_flyer.pdf'), os.path.join(settings.MEDIA_ROOT, f'{user.username}_demo_art_fair_flyer.pdf'))
+        event_flyer = f'{user.username}_demo_art_fair_flyer.pdf'
+        event_address = '420 Main St, Fort Worth, TX 76102, USA'
+        event_user = user
+        Event.objects.create(name=event_name, event_code=event_code, description=event_description, latitude=event_latitude, longitude=event_longitude, start_time=event_start_time, flyer=event_flyer, address=event_address, user=event_user)
 
 
 class LoginView(View):
