@@ -1,23 +1,19 @@
 import os.path
 
+import qrcode
+from django.conf import settings
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, redirect
-from django.urls import reverse, resolve
+from django.urls import reverse
 from django.views import View
 
 from console.forms.event import EventForm
 from console.forms.location import LocationForm
+from console.forms.login import LoginForm
 from console.forms.notification import NotificationForm
 from console.forms.signup import SignUpForm
-from console.forms.login import LoginForm
 from events.models import Event, Location, Notification
-import qrcode
-from django.conf import settings
-
-
-def home(request):
-    return render(request, template_name='console/home.html')
 
 
 class EventCreateView(LoginRequiredMixin, View):
