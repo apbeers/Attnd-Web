@@ -3,13 +3,14 @@ import os.path
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, redirect
-from django.urls import reverse
+from django.urls import reverse, resolve
 from django.views import View
 
 from console.forms.event import EventForm
 from console.forms.location import LocationForm
 from console.forms.notification import NotificationForm
 from console.forms.signup import SignUpForm
+from console.forms.login import LoginForm
 from events.models import Event, Location, Notification
 import qrcode
 from django.conf import settings
@@ -212,3 +213,23 @@ class SignUpView(View):
         else:
             context = {'form': form}
             return render(request, template_name='registration/signup.html', context=context)
+
+
+class LoginView(View):
+
+    def get(self, request):
+        context = {'form': LoginForm()}
+        return render(request, template_name='registration/login.html', context=context)
+
+    def post(self, request):
+        form = LoginForm(request=request, data=request.POST)
+        if form.is_valid():
+            username = form.cleaned_data.get('username')
+            password = form.cleaned_data.get('password')
+            user = authenticate(username=username, password=password)
+            if user and user.is_active:
+                login(request, user)
+                return redirect(settings.LOGIN_REDIRECT_URL)
+        else:
+            context = {'form': form}
+            return render(request, template_name='registration/login.html', context=context)

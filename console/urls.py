@@ -9,6 +9,7 @@ urlpatterns = [
 
     # Registration Views
     path('signup/', views.SignUpView.as_view(), name='signup'),
+    path('login/', views.LoginView.as_view(), name='login'),
 
     # Event Views
     path('create_first_event', views.EventCreateView.as_view(), name='create_first_event'),
