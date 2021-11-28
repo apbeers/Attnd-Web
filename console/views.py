@@ -257,8 +257,8 @@ class ValidatePayPalTransactionView(View):
     def post(self, request):
         form = ValidatePayPalTransactionForm(request.POST)
         if form.is_valid():
-            event_id = form.cleaned_data['event_id']
-            order_id = form.cleaned_data['order_id']
+            event_id = form.cleaned_data.get('event_id')
+            order_id = form.cleaned_data.get('order_id')
             Event.objects.filter(id=event_id).update(paid=True, order_id=order_id)
             return redirect(reverse('console:billing', args=[event_id]))
         else:
