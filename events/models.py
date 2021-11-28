@@ -1,6 +1,12 @@
+import uuid
+
 from django.contrib.auth.models import User
 from django.db import models
 from django.urls import reverse
+
+
+def get_file_path(instance, filename):
+    return f'{str(uuid.uuid4())[:5]}_{filename}'
 
 
 class Event(models.Model):
@@ -11,7 +17,7 @@ class Event(models.Model):
     longitude = models.DecimalField(max_digits=24, decimal_places=20)
     start_time = models.DateTimeField()
     paid = models.BooleanField(default=False)
-    flyer = models.FileField()
+    flyer = models.FileField(upload_to=get_file_path)
     address = models.CharField(max_length=512)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
@@ -32,7 +38,7 @@ class Location(models.Model):
     snippet = models.CharField(max_length=200)
     description = models.CharField(max_length=1024)
     website = models.URLField(null=True, blank=True)
-    image = models.ImageField()
+    image = models.ImageField(upload_to=get_file_path)
     latitude = models.DecimalField(max_digits=24, decimal_places=20)
     longitude = models.DecimalField(max_digits=24, decimal_places=20)
     address = models.CharField(max_length=512)
