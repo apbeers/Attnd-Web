@@ -14,6 +14,7 @@
 
 
 {% block content %}
+    <script src="https://www.paypal.com/sdk/js?client-id=AX90HgCyVCUJagYA54E_fJoPNgsCVoYfND5iXHy_1SwCXMFOYeMoKcqFRP33RVayi19tiHt9-0WnYS-U"></script>
     {% if selected_event.paid %}
         <div class="alert alert-success" role="alert" style="margin-top: 20px">
             Payment Received (ID: {{ selected_event.order_id }}) - Leave and re-join the event in your app to remove the warning banners. New users will not see any warning banners when they join.
@@ -22,6 +23,7 @@
         <div class="alert alert-danger" role="alert" style="margin-top: 20px">
             Trial Mode - This event is in trial mode. Make sure to pay before your event date to remove warning banners on the iPhone and Android apps!
         </div>
+
         <div class="row" style="margin-top: 20px">
             <div class="col-5">
                 <div class="card">
@@ -35,6 +37,16 @@
                 <div class="card">
                     <h5 class="card-header">Order Information</h5>
                     <div class="card-body">
+
+                        <div class="btn-group" role="group" aria-label="Basic radio toggle button group">
+                            <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" checked>
+                            <label class="btn btn-outline-primary" for="btnradio1">Single Event</label>
+
+                            <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="btnradio2">One Year Subscription</label>
+                        </div>
+                        <br>
+                        <br>
                         Single Event - {{ selected_event.name }}: <b>299.99$</b>
                         <br>
                         <br>
