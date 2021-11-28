@@ -6,7 +6,9 @@ from django.urls import reverse
 
 
 def get_file_path(instance, filename):
-    return f'{str(uuid.uuid4())[:5]}_{filename}'
+    file, ext = filename.split('.')
+    simple_uuid = str(uuid.uuid4())[:5]
+    return f'{file}_{simple_uuid}.{ext}'
 
 
 class Event(models.Model):
