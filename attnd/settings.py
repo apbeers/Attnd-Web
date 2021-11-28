@@ -146,7 +146,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if '/app' in os.environ['HOME']:
     DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
     STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-    GOOGLE_APPLICATION_CREDENTIALS = os.path.join(BASE_DIR, 'attnd-df28e-73dbb44096c2.json')
     if DEBUG:
         GS_BUCKET_NAME = 'attnd-test'
     else:
