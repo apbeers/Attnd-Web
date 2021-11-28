@@ -55,7 +55,7 @@
                     <a class="nav-link js-scroll-trigger" href="#contact">Contact</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link js-scroll-trigger" href="{% url 'console:login' %}">Login</a>
+                    <a class="nav-link js-scroll-trigger" href="{% url 'console:create_first_event' %}">Login</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link js-scroll-trigger" href="{% url 'console:signup' %}">Sign Up</a>
@@ -187,7 +187,7 @@
         <h2>Create an account for free!</h2>
         <h1>Pay only when your event goes live</h1>
         <br>
-        <a href="https://www.attnd.app/events/signup/" class="btn btn-outline btn-xl">Create an Account!</a>
+        <a href="{% url 'console:signup' %}" class="btn btn-outline btn-xl">Create an Account!</a>
         <br>
     </div>
 </section>
