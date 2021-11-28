@@ -34,13 +34,19 @@
 
         google.maps.event.addDomListener(window, 'load', initialize);
     </script>
-    <div style="max-width: 900px">
-    <form method="post" enctype="multipart/form-data" action="{% url 'console:event_update' event_id=selected_event.id %}">
-        {% csrf_token %}
-
-        {{ selected_event_form.as_p }}
-        <button type="submit" class="btn btn-primary">Update</button>
-    </form>
+    <div class="row g-0">
+        <div class="col-6">
+            <form method="post" enctype="multipart/form-data" action="{% url 'console:event_update' event_id=selected_event.id %}">
+                {% csrf_token %}
+                {{ selected_event_form.as_p }}
+                <button type="submit" class="btn btn-primary">Update</button>
+            </form>
+        </div>
+{#        <div class="col-6 g-3">#}
+{#            <div style="margin: auto; width: 90%; padding-left: 10px">#}
+{#                <img src="{{ selected_event.flyer.url }}" style="max-width: 40%">#}
+{#            </div>#}
+{#        </div>#}
     </div>
 
 {% endblock %}
