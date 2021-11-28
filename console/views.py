@@ -3,13 +3,16 @@ import os.path
 from shutil import copyfile
 
 import qrcode
+import requests
 from django.conf import settings
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
+from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views import View
+from requests.auth import HTTPBasicAuth
 
 from console.forms.event import EventForm
 from console.forms.location import LocationForm
@@ -246,3 +249,43 @@ class LoginView(View):
         else:
             context = {'form': form}
             return render(request, template_name='registration/login.html', context=context)
+
+
+class ValidatePayPalTransactionView(View):
+
+    @staticmethod
+    def get_access_token() -> str:
+        client_id = 'AX90HgCyVCUJagYA54E_fJoPNgsCVoYfND5iXHy_1SwCXMFOYeMoKcqFRP33RVayi19tiHt9-0WnYS-U'
+        secret = 'EBWcvkVc_7rYcBcEEgRlIKu-Vv_R8rRAFnKl96KqKOJDxm_61QPE-kH0iwrzY7eRhZD3Fx-olaeZydhU'
+
+        url = "https://api-m.sandbox.paypal.com/v1/oauth2/token"
+
+        payload = 'grant_type=client_credentials'
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+
+        response = requests.post(url=url, headers=headers, data=payload, auth=HTTPBasicAuth(client_id, secret))
+        return response.json()['access_token']
+
+    def get(self, request, event_id, order_id):
+
+        base_url = 'https://api-m.sandbox.paypal.com/v1/reporting/transactions'
+
+        start_date = datetime.datetime.now() - datetime.timedelta(minutes=30)
+        end_date = datetime.datetime.now() + datetime.timedelta(minutes=30)
+        access_token = self.get_access_token()
+
+        url = f'{base_url}?start_date={start_date}&end_date={end_date}'
+        headers = {'Content-Type': 'application/json',
+                   'Authorization': f'Bearer {access_token}'}
+
+        response = requests.get(url=url, headers=headers)
+        print(response)
+        if response.status_code == 200:
+            data = response.json()
+            print(data)
+            return HttpResponse(data)
+        else:
+            print(response)
+        # return redirect('console:billing', event_id=event_id)

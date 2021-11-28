@@ -21,6 +21,7 @@ class Event(models.Model):
     paid = models.BooleanField(default=False)
     flyer = models.FileField(upload_to=get_file_path)
     address = models.CharField(max_length=512)
+    order_id = models.CharField(max_length=512)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     class Meta:
