@@ -3,21 +3,20 @@ import os.path
 from shutil import copyfile
 
 import qrcode
-import requests
 from django.conf import settings
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
-from django.http import HttpResponse
+from django.http import HttpResponseServerError
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views import View
-from requests.auth import HTTPBasicAuth
 
 from console.forms.event import EventForm
 from console.forms.location import LocationForm
 from console.forms.login import LoginForm
 from console.forms.notification import NotificationForm
+from console.forms.paypal import ValidatePayPalTransactionForm
 from console.forms.signup import SignUpForm
 from events.models import Event, Location, Notification
 
@@ -188,8 +187,10 @@ class BillingView(LoginRequiredMixin, View):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         new_event_form = EventForm(auto_id='id_%s_new')
+        form = ValidatePayPalTransactionForm()
 
-        context = {'events': events,
+        context = {'form': form,
+                   'events': events,
                    'selected_event': selected_event,
                    'new_event_form': new_event_form}
 
@@ -253,39 +254,12 @@ class LoginView(View):
 
 class ValidatePayPalTransactionView(View):
 
-    @staticmethod
-    def get_access_token() -> str:
-        client_id = 'AX90HgCyVCUJagYA54E_fJoPNgsCVoYfND5iXHy_1SwCXMFOYeMoKcqFRP33RVayi19tiHt9-0WnYS-U'
-        secret = 'EBWcvkVc_7rYcBcEEgRlIKu-Vv_R8rRAFnKl96KqKOJDxm_61QPE-kH0iwrzY7eRhZD3Fx-olaeZydhU'
-
-        url = "https://api-m.sandbox.paypal.com/v1/oauth2/token"
-
-        payload = 'grant_type=client_credentials'
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-
-        response = requests.post(url=url, headers=headers, data=payload, auth=HTTPBasicAuth(client_id, secret))
-        return response.json()['access_token']
-
-    def get(self, request, event_id, order_id):
-
-        base_url = 'https://api-m.sandbox.paypal.com/v1/reporting/transactions'
-
-        start_date = datetime.datetime.now() - datetime.timedelta(minutes=30)
-        end_date = datetime.datetime.now() + datetime.timedelta(minutes=30)
-        access_token = self.get_access_token()
-
-        url = f'{base_url}?start_date={start_date}&end_date={end_date}'
-        headers = {'Content-Type': 'application/json',
-                   'Authorization': f'Bearer {access_token}'}
-
-        response = requests.get(url=url, headers=headers)
-        print(response)
-        if response.status_code == 200:
-            data = response.json()
-            print(data)
-            return HttpResponse(data)
+    def post(self, request):
+        form = ValidatePayPalTransactionForm(request.POST)
+        if form.is_valid():
+            event_id = form.cleaned_data['event_id']
+            order_id = form.cleaned_data['order_id']
+            Event.objects.filter(id=event_id).update(paid=True, order_id=order_id)
+            return redirect(reverse('console:billing', args=[event_id]))
         else:
-            print(response)
-        # return redirect('console:billing', event_id=event_id)
+            return HttpResponseServerError('error processing payment')

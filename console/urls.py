@@ -32,5 +32,5 @@ urlpatterns = [
 
     # Billing Views
     path('<int:event_id>/billing/', views.BillingView.as_view(), name='billing'),
-    path('<int:event_id>/<str:order_id>', views.ValidatePayPalTransactionView.as_view(), name='validate_paypal_transaction')
+    path('validatepaypaltransaction/', views.ValidatePayPalTransactionView.as_view(), name='validate_paypal_transaction')
 ]
