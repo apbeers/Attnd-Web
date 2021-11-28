@@ -148,14 +148,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if '/app' in os.environ['HOME']:
     DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
     STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-    if DEBUG:
-        GS_BUCKET_NAME = 'attnd-test'
-    else:
-        GS_BUCKET_NAME = 'attnd-prod'
-
-    google_service_account = os.environ['GOOGLE_SERVICE_ACCOUNT']
-    with open(os.path.join(BASE_DIR, 'gcs-service-account.json'), 'w') as f:
-        json.dump(google_service_account, f)
+    GS_BUCKET_NAME = os.environ.get('GS_BUCKET_NAME')
 
     import django_heroku
     django_heroku.settings(locals())
