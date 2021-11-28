@@ -9,7 +9,9 @@ https://docs.djangoproject.com/en/3.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
+import json
 import os
+import shutil
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -150,6 +152,10 @@ if '/app' in os.environ['HOME']:
         GS_BUCKET_NAME = 'attnd-test'
     else:
         GS_BUCKET_NAME = 'attnd-prod'
+
+    google_service_account = os.environ['GOOGLE_SERVICE_ACCOUNT']
+    with open(os.path.join(BASE_DIR, 'gcs-service-account.json'), 'w') as f:
+        json.dump(google_service_account, f)
 
     import django_heroku
     django_heroku.settings(locals())
