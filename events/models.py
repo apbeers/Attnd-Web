@@ -25,7 +25,7 @@ class Event(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['user'])
+            models.Index(fields=['user', 'name', 'event_code', 'latitude', 'longitude'])
         ]
 
     def get_absolute_url(self):
