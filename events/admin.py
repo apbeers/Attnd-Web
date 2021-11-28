@@ -32,5 +32,5 @@ class DeviceAdmin(admin.ModelAdmin):
 
 admin.site.register(Event, EventAdmin)
 admin.site.register(Location, LocationAdmin)
-admin.site.register(Notification)
+admin.site.register(Notification, NotificationAdmin)
 admin.site.register(Device, DeviceAdmin)

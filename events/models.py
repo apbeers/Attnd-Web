@@ -63,7 +63,7 @@ class Notification(models.Model):
     title = models.CharField(max_length=60)
     body = models.CharField(max_length=256)
     send_time = models.DateTimeField()
-    sent = models.BooleanField(default=False, editable=False)
+    sent = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
