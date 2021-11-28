@@ -47,6 +47,13 @@
         </div>
     </div>
 
+    <div style="display: none">
+        <form id="validate-paypal-transaction-form" action="{% url 'console:validate_paypal_transaction' %}" method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+        </form>
+    </div>
+
     <script>
         paypal.Buttons({
             createOrder: function (data, actions) {
@@ -62,8 +69,10 @@
             onApprove: function (data, actions) {
                 // This function captures the funds from the transaction.
                 return actions.order.capture().then(function (details) {
-                    // This function shows a transaction success message to your buyer.
-                    console.log(JSON.stringify(details))
+
+                        document.getElementById('id_event_id').value = {{ selected_event.id }}
+                        document.getElementById('id_order_id').value = details['id']
+                        document.getElementById('validate-paypal-transaction-form').submit()
                     alert(JSON.stringify(details))
                     alert('Transaction completed by ' + details.payer.name.given_name);
                 });
