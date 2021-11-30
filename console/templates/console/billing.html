@@ -15,6 +15,16 @@
 
 {% block content %}
     <script src="https://www.paypal.com/sdk/js?client-id=AX90HgCyVCUJagYA54E_fJoPNgsCVoYfND5iXHy_1SwCXMFOYeMoKcqFRP33RVayi19tiHt9-0WnYS-U"></script>
+{#    <script>#}
+{#        $(document).ready(function () {#}
+{#            $('input[type="radio"]').click(function () {#}
+{#                let inputValue = $(this).attr("value");#}
+{#                let targetBox = $("." + inputValue);#}
+{#                $(".box").not(targetBox).hide();#}
+{#                $(targetBox).show();#}
+{#            });#}
+{#        });#}
+{#    </script>#}
     {% if selected_event.paid %}
         <div class="alert alert-success" role="alert" style="margin-top: 20px">
             Payment Received (ID: {{ selected_event.order_id }}) - Leave and re-join the event in your app to remove the warning banners. New users will not see any warning banners when they join.
@@ -37,21 +47,29 @@
                 <div class="card">
                     <h5 class="card-header">Order Information</h5>
                     <div class="card-body">
-
-                        <div class="btn-group" role="group" aria-label="Basic radio toggle button group">
-                            <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" checked>
-                            <label class="btn btn-outline-primary" for="btnradio1">Single Event</label>
-
-                            <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off">
-                            <label class="btn btn-outline-primary" for="btnradio2">One Year Subscription</label>
+{##}
+{#                        <div class="btn-group" role="group" aria-label="Basic radio toggle button group">#}
+{#                            <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" checked value="single">#}
+{#                            <label class="btn btn-outline-primary" for="btnradio1">Single Event</label>#}
+{#                            <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off" value="subscription">#}
+{#                            <label class="btn btn-outline-primary" for="btnradio2">One Year Subscription</label>#}
+{#                        </div>#}
+{#                        <br>#}
+{#                        <br>#}
+                        <div class="single box">
+                            Single Event - {{ selected_event.name }}: <b>$299.99</b>
+                            <br>
+                            <br>
+                            After paying for this event, you will be able to make changes from now until 1 week after the event occurs, including while the event is taking place. If for any reason you're not satisfied, <a
+                                href="mailto:andrew@attnd.app">contact us</a> for a full refund.
                         </div>
-                        <br>
-                        <br>
-                        Single Event - {{ selected_event.name }}: <b>299.99$</b>
-                        <br>
-                        <br>
-                        After paying for this event, you will be able to make changes from now until 1 week after the event occurs, including while the event is taking place. If for any reason you're not satisfied, <a
-                            href="mailto:andrew@attnd.app">contact us</a> for a full refund.
+{#                        <div class="subscription box" style="display:none;">#}
+{#                            One Year Subscription : <b>$999.99</b>#}
+{#                            <br>#}
+{#                            <br>#}
+{##}
+{#                        </div>#}
+
                     </div>
                 </div>
             </div>
@@ -71,9 +89,12 @@
                     return actions.order.create({
                         purchase_units: [{
                             amount: {
-                                value: '0.01'
+                                value: 299.99
                             }
-                        }]
+                        }],
+                        application_context: {
+                            shipping_preference: 'NO_SHIPPING'
+                        }
                     });
                 },
                 onApprove: function (data, actions) {
