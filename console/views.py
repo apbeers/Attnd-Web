@@ -18,6 +18,7 @@ from console.forms.login import LoginForm
 from console.forms.notification import NotificationForm
 from console.forms.paypal import ValidatePayPalTransactionForm
 from console.forms.signup import SignUpForm
+from console.models import Order
 from events.models import Event, Location, Notification
 
 
@@ -51,11 +52,13 @@ class EventView(LoginRequiredMixin, View):
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         selected_event_form = EventForm(instance=selected_event)
         new_event_form = EventForm(auto_id='id_%s_new')
+        orders = Order.objects.all()
 
         context = {'events': events,
                    'selected_event': selected_event,
                    'selected_event_form': selected_event_form,
-                   'new_event_form': new_event_form}
+                   'new_event_form': new_event_form,
+                   'orders': orders}
 
         return render(request, template_name='console/event.html', context=context)
 
@@ -97,12 +100,14 @@ class LocationsListView(LoginRequiredMixin, View):
         location_forms = [LocationForm(instance=location, auto_id=f'id_%s_{location.id}') for location in locations]
         new_location_form = LocationForm()
         new_event_form = EventForm(auto_id='id_%s_new')
+        orders = Order.objects.all()
 
         context = {'events': events,
                    'selected_event': selected_event,
                    'location_forms': location_forms,
                    'new_location_form': new_location_form,
-                   'new_event_form': new_event_form}
+                   'new_event_form': new_event_form,
+                   'orders': orders}
 
         return render(request, template_name='console/locations.html', context=context)
 
@@ -142,12 +147,14 @@ class NotificationsListView(LoginRequiredMixin, View):
         notification_forms = [NotificationForm(instance=notification) for notification in notifications]
         new_notification_form = NotificationForm()
         new_event_form = EventForm(auto_id='id_%s_new')
+        orders = Order.objects.all()
 
         context = {'events': events,
                    'selected_event': selected_event,
                    'notification_forms': notification_forms,
                    'new_notification_form': new_notification_form,
-                   'new_event_form': new_event_form}
+                   'new_event_form': new_event_form,
+                   'orders': orders}
 
         return render(request, template_name='console/notifications.html', context=context)
 
@@ -173,10 +180,12 @@ class AnalyticsView(LoginRequiredMixin, View):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         new_event_form = EventForm(auto_id='id_%s_new')
+        orders = Order.objects.all()
 
         context = {'events': events,
                    'selected_event': selected_event,
-                   'new_event_form': new_event_form}
+                   'new_event_form': new_event_form,
+                   'orders': orders}
 
         return render(request, template_name='console/analytics.html', context=context)
 
@@ -187,12 +196,14 @@ class BillingView(LoginRequiredMixin, View):
         events = Event.objects.filter(user=request.user).order_by('-start_time')
         selected_event = Event.objects.filter(user=request.user, id=event_id).first()
         new_event_form = EventForm(auto_id='id_%s_new')
+        orders = Order.objects.all()
         form = ValidatePayPalTransactionForm()
 
         context = {'form': form,
                    'events': events,
                    'selected_event': selected_event,
-                   'new_event_form': new_event_form}
+                   'new_event_form': new_event_form,
+                   'orders': orders}
 
         return render(request, template_name='console/billing.html', context=context)
 
@@ -218,7 +229,8 @@ class SignUpView(View):
             context = {'form': form}
             return render(request, template_name='registration/signup.html', context=context)
 
-    def create_demo_event(self, user: User):
+    @staticmethod
+    def create_demo_event(user: User):
         event_name = f'Demo Event - {user.username}'
         event_code = f'{user.username}-demo-event'
         event_description = 'The local art fair is back! Artists will be teaching classes and selling paintings'
@@ -260,6 +272,8 @@ class ValidatePayPalTransactionView(View):
             event_id = form.cleaned_data.get('event_id')
             order_id = form.cleaned_data.get('order_id')
             Event.objects.filter(id=event_id).update(paid=True, order_id=order_id)
+            event = Event.objects.filter(id=event_id).get()
+            Order.objects.create(event=event, order_id=order_id, user=request.user)
             return redirect(reverse('console:billing', args=[event_id]))
         else:
-            return HttpResponseServerError('error processing payment')
+            return HttpResponseServerError('error marking event as paid')
