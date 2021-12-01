@@ -1,9 +1,10 @@
 from rest_framework import serializers
 
-from events.models import Location
+from events.models import Location, Event, Notification
 
 
 class LocationSerializer(serializers.ModelSerializer):
+    # this will override the image in the model with an image that has the full url
     image = serializers.SerializerMethodField()
 
     def get_image(self, location):
@@ -12,4 +13,24 @@ class LocationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Location
+        fields = '__all__'
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'
+
+
+class EventSerializer(serializers.ModelSerializer):
+    locations = LocationSerializer(many=True, read_only=True)
+    notifications = NotificationSerializer(many=True, read_only=True)
+    flyer = serializers.SerializerMethodField()
+
+    def get_flyer(self, event):
+        request = self.context.get('request')
+        return request.build_absolute_uri(event.flyer.url)
+
+    class Meta:
+        model = Event
         fields = '__all__'

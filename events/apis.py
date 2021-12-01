@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from events.models import Event, Location, Notification, Device
-from events.serializers import LocationSerializer
+from events.serializers import LocationSerializer, NotificationSerializer, EventSerializer
 
 
 class JoinEventView(View):
@@ -31,20 +31,12 @@ class LeaveEventView(View):
         return HttpResponse
 
 
-# class SingleEventView(View):
-#
-#     def get(self, request, event_id):
-#         event = Event.objects.filter(id=event_id).first()
-#         serialized_event = serialize(format='json', queryset=event)
-#         return HttpResponse(content=serialized_event, content_type='application/json')
+class SingleEventView(APIView):
 
-
-# class SingleLocationView(View):
-#
-#     def get(self, request, event_id, location_id):
-#         location = Location.objects.filter(id=location_id).first()
-#         serialized_location = serialize(format='json', queryset=location)
-#         return HttpResponse(content=serialized_location, content_type='application/json')
+    def get(self, request, event_id):
+        event = Event.objects.filter(id=event_id).first()
+        serializer = EventSerializer([event], many=True, context={'request': request})
+        return Response(serializer.data)
 
 
 class AllLocationsView(APIView):
@@ -53,26 +45,14 @@ class AllLocationsView(APIView):
         locations = Location.objects.filter(event__id=event_id).order_by('name')
         serializer = LocationSerializer(locations, many=True, context={"request": request})
         return Response(serializer.data)
-        # for location in locations:
-        #     print(location.image.url)
-        # serialized_locations = serialize(format='json', queryset=locations)
-        # return HttpResponse(content=serialized_locations, content_type='application/json')
 
 
-# class SingleNotificationView(View):
-#
-#     def get(self, request, event_id, notification_id):
-#         notification = Notification.objects.filter(event__id=event_id, id=notification_id).first()
-#         serialized_notification = serialize(format='json', queryset=notification)
-#         return HttpResponse(content=serialized_notification, content_type='application/json')
-
-
-class AllNotificationsView(View):
+class AllNotificationsView(APIView):
 
     def get(self, request, event_id):
         notifications = Notification.objects.filter(sent=True, event__id=event_id).order_by('-send_time')
-        serialized_notifications = serialize(format='json', queryset=notifications)
-        return HttpResponse(content=serialized_notifications, content_type='application/json')
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data)
 
 
 class NearbyEventsView(View):

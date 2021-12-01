@@ -46,7 +46,7 @@ class Location(models.Model):
     longitude = models.DecimalField(max_digits=24, decimal_places=20)
     address = models.CharField(max_length=512)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='locations')
 
     class Meta:
         indexes = [
@@ -66,7 +66,7 @@ class Notification(models.Model):
     send_time = models.DateTimeField()
     sent = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='notifications')
 
     class Meta:
         indexes = [
