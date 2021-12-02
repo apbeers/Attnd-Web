@@ -1,7 +1,6 @@
 import decimal
 from datetime import date, timedelta, datetime
 from difflib import get_close_matches
-from math import sqrt
 
 from django.core.serializers import serialize
 from django.http import HttpResponse, HttpResponseServerError
@@ -10,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from events.models import Event, Location, Notification, Device
-from events.serializers import LocationSerializer, NotificationSerializer, EventSerializer
+from events.serializers import LocationSerializer, NotificationSerializer, EventSerializer, NearbyEventSerializer
 
 
 class JoinEventView(View):
@@ -55,7 +54,7 @@ class AllNotificationsView(APIView):
         return Response(serializer.data)
 
 
-class NearbyEventsView(View):
+class NearbyEventsView(APIView):
 
     def get(self, request, latitude, longitude):
         try:
@@ -64,7 +63,7 @@ class NearbyEventsView(View):
         except Exception:
             return HttpResponseServerError()
 
-        radius = decimal.Decimal(0.5)  # 35 miles
+        radius = decimal.Decimal(0.5)  # ~35 miles
         events = Event.objects.filter(latitude__lte=latitude + radius,
                                       latitude__gte=latitude - radius,
                                       longitude__lte=longitude + radius,
@@ -72,18 +71,9 @@ class NearbyEventsView(View):
                                       start_time__lte=date.today() + timedelta(days=7),
                                       start_time__gte=date.today() - timedelta(days=3))
 
-        events_with_distance_from_user = []
-        for event in events:
-            latitude_distance_from_user = latitude - event.latitude
-            longitude_distance_from_user = longitude - event.longitude
-            distance = sqrt((latitude_distance_from_user * latitude_distance_from_user) + (longitude_distance_from_user * longitude_distance_from_user))
-            distance_in_miles = round(distance * 69, 1)
-            serialized_event = serialize('json', [event])
-            events_with_distance_from_user.append({'event': serialized_event,
-                                                   'distance': distance_in_miles})
-
-        sorted_events_by_distance_to_user = sorted(events_with_distance_from_user, key=lambda i: i['distance'])
-        return HttpResponse(content=sorted_events_by_distance_to_user, content_type='application/json')
+        serializer = NearbyEventSerializer(events, many=True, context={'latitude': latitude, 'longitude': longitude})
+        sorted_events_by_distance_to_user = sorted(serializer.data, key=lambda i: i['distance'])
+        return Response(sorted_events_by_distance_to_user)
 
 
 class EventByCodeOrNameView(View):
