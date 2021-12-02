@@ -92,8 +92,16 @@ class EventByCodeOrNameView(APIView):
             event = Event.objects.filter(name=match).get() or Event.objects.filter(event_code=match).get()
             event_matches.append(event)
 
+        event_ids_of_unique_events = []
+        unique_events = []
         if event_matches:
-            serializer = EventByNameOrCodeSerializer(event_matches, many=True)
+            for event in event_matches:
+                event_id = event.id
+                if event_id not in event_ids_of_unique_events:
+                    unique_events.append(event)
+                    event_ids_of_unique_events.append(event_id)
+
+            serializer = EventByNameOrCodeSerializer(unique_events, many=True)
             return Response(serializer.data)
 
         return HttpResponseServerError()
