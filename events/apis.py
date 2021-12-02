@@ -92,8 +92,11 @@ class EventByCodeOrNameView(APIView):
             event = Event.objects.filter(name=match).get() or Event.objects.filter(event_code=match).get()
             event_matches.append(event)
 
-        serializer = EventByNameOrCodeSerializer(event_matches, many=True)
-        return Response(serializer.data)
+        if event_matches:
+            serializer = EventByNameOrCodeSerializer(event_matches, many=True)
+            return Response(serializer.data)
+
+        return HttpResponseServerError()
 
 
 class PushNotificationsSubscribe(View):

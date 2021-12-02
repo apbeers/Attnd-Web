@@ -19,6 +19,11 @@ class LocationSerializer(serializers.ModelSerializer):
 
 
 class NotificationSerializer(serializers.ModelSerializer):
+    send_time = serializers.SerializerMethodField()
+
+    def get_send_time(self, instance):
+        return instance.send_time.strftime('%m/%d %H:%M %p')
+
     class Meta:
         model = Notification
         fields = '__all__'
@@ -57,7 +62,6 @@ class NearbyEventSerializer(serializers.ModelSerializer):
 
 
 class EventByNameOrCodeSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Event
         fields = '__all__'
