@@ -24,7 +24,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class EventSerializer(serializers.ModelSerializer):
+class EntireEventSerializer(serializers.ModelSerializer):
     locations = LocationSerializer(many=True, read_only=True)
     notifications = NotificationSerializer(many=True, read_only=True)
     flyer = serializers.SerializerMethodField()
@@ -54,3 +54,10 @@ class NearbyEventSerializer(serializers.ModelSerializer):
         model = Event
         fields = '__all__'
         asdf = ''
+
+
+class EventByNameOrCodeSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Event
+        fields = '__all__'

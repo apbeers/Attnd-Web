@@ -2,14 +2,13 @@ import decimal
 from datetime import date, timedelta, datetime
 from difflib import get_close_matches
 
-from django.core.serializers import serialize
 from django.http import HttpResponse, HttpResponseServerError
 from django.views import View
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from events.models import Event, Location, Notification, Device
-from events.serializers import LocationSerializer, NotificationSerializer, EventSerializer, NearbyEventSerializer
+from events.serializers import LocationSerializer, NotificationSerializer, EntireEventSerializer, NearbyEventSerializer, EventByNameOrCodeSerializer
 
 
 class JoinEventView(View):
@@ -34,7 +33,7 @@ class SingleEventView(APIView):
 
     def get(self, request, event_id):
         event = Event.objects.filter(id=event_id).first()
-        serializer = EventSerializer([event], many=True, context={'request': request})
+        serializer = EntireEventSerializer([event], many=True, context={'request': request})
         return Response(serializer.data)
 
 
@@ -76,30 +75,25 @@ class NearbyEventsView(APIView):
         return Response(sorted_events_by_distance_to_user)
 
 
-class EventByCodeOrNameView(View):
+class EventByCodeOrNameView(APIView):
 
-    def get(self, request):
-        name_or_code = request.GET.get('data')
+    def get(self, request, code_or_name):
         events = Event.objects.values_list('name', 'event_code')
+
         event_names_and_codes = []
         for event in events:
             event_names_and_codes.append(event[0])
             event_names_and_codes.append(event[1])
 
-        matches = get_close_matches(word=name_or_code, possibilities=event_names_and_codes, n=1)
+        matches = get_close_matches(word=code_or_name, possibilities=event_names_and_codes, n=3)
 
-        if matches:
-            event_by_name = Event.objects.filter(name=matches[0]).first()
-            event_by_code = Event.objects.filter(event_code=matches[0]).first()
+        event_matches = []
+        for match in matches:
+            event = Event.objects.filter(name=match).get() or Event.objects.filter(event_code=match).get()
+            event_matches.append(event)
 
-            if event_by_name:
-                serialized_event = serialize('json', [event_by_name])
-                return HttpResponse(content=serialized_event, content_type='application/json')
-            elif event_by_code:
-                serialized_event = serialize('json', [event_by_code])
-                return HttpResponse(content=serialized_event, content_type='application/json')
-        else:
-            return HttpResponseServerError()
+        serializer = EventByNameOrCodeSerializer(event_matches, many=True)
+        return Response(serializer.data)
 
 
 class PushNotificationsSubscribe(View):
