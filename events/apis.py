@@ -121,7 +121,7 @@ class PushNotificationsUnSubscribe(View):
         return HttpResponse()
 
 
-class SendNotifications(View):
+class SendNotifications(APIView):
 
     def post(self):
         events = Event.objects.filter(start_time__lte=date.today() + timedelta(days=7),
