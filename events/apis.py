@@ -25,7 +25,7 @@ class LeaveEventView(View):
 
     def post(self, request, device_id, event_id):
         Device.objects.filter(id=device_id).update(event=None)
-        return HttpResponse
+        return HttpResponse()
 
 
 class SingleEventView(View):
