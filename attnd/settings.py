@@ -9,9 +9,7 @@ https://docs.djangoproject.com/en/3.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
-import json
 import os
-import shutil
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -51,6 +49,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -129,6 +128,15 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
 LOGIN_URL = '/console/login/'
 LOGIN_REDIRECT_URL = '/console/'
 LOGOUT_REDIRECT_URL = '/'
@@ -146,15 +154,4 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if os.getenv('DATABASE_URL'):
     import dj_database_url
     DATABASES['default'].update(dj_database_url.config(conn_max_age=600))
-
-if os.getenv('GS_BUCKET_NAME'):
-    STORAGES = {
-        'default': {
-            'BACKEND': 'storages.backends.gcs.GoogleCloudStorage',
-        },
-        'staticfiles': {
-            'BACKEND': 'storages.backends.gcs.GoogleCloudStorage',
-        },
-    }
-    GS_BUCKET_NAME = os.environ['GS_BUCKET_NAME']
 

@@ -1,10 +1,11 @@
 import decimal
-from datetime import date, timedelta, datetime
+from datetime import timedelta
 from difflib import get_close_matches
 from math import sqrt
 
 from django.core.serializers import serialize
 from django.http import HttpResponse, HttpResponseServerError
+from django.utils import timezone
 from django.views import View
 
 from events.models import Event, Location, Notification, Device
@@ -78,12 +79,13 @@ class NearbyEventsView(View):
             return HttpResponseServerError()
 
         radius = decimal.Decimal(0.5)  # 35 miles
+        now = timezone.now()
         events = Event.objects.filter(latitude__lte=latitude + radius,
                                       latitude__gte=latitude - radius,
                                       longitude__lte=longitude + radius,
                                       longitude__gte=longitude - radius,
-                                      start_time__lte=date.today() + timedelta(days=7),
-                                      start_time__gte=date.today() - timedelta(days=3))
+                                      start_time__lte=now + timedelta(days=7),
+                                      start_time__gte=now - timedelta(days=3))
 
         events_with_distance_from_user = []
         for event in events:
@@ -142,11 +144,12 @@ class PushNotificationsUnSubscribe(View):
 class SendNotifications(View):
 
     def post(self):
-        events = Event.objects.filter(start_time__lte=date.today() + timedelta(days=7),
-                                      start_time__gte=date.today() - timedelta(days=3))
+        now = timezone.now()
+        events = Event.objects.filter(start_time__lte=now + timedelta(days=7),
+                                      start_time__gte=now - timedelta(days=3))
 
         for event in events:
-            notifications = Notification.objects.filter(event=event, sent=False, send_time__lte=datetime.now())
+            notifications = Notification.objects.filter(event=event, sent=False, send_time__lte=now)
             devices = Device.objects.filter(event=event, subscribed=True)
             for notification in notifications:
                 for device in devices:
