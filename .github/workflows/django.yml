@@ -2,9 +2,9 @@ name: Django CI
 
 on:
   push:
-    branches: [ V3 ]
+    branches: [ main ]
   pull_request:
-    branches: [ V3 ]
+    branches: [ main ]
 
 jobs:
   test:
@@ -29,3 +29,18 @@ jobs:
         DEBUG: '1'
       run: |
         python manage.py test --verbosity=2
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Deploy to Heroku
+      env:
+        HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      run: |
+        git remote add heroku https://heroku:$HEROKU_API_KEY@git.heroku.com/attnd-web.git
+        git push heroku main --force
