@@ -117,8 +117,6 @@ TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
-USE_L10N = True
-
 USE_TZ = True
 
 DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
@@ -127,6 +125,7 @@ DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S'
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
@@ -146,10 +145,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # check if we're running in heroku
 if '/app' in os.environ['HOME']:
-    DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-    STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.gcs.GoogleCloudStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'storages.backends.gcs.GoogleCloudStorage',
+        },
+    }
     GS_BUCKET_NAME = os.environ.get('GS_BUCKET_NAME')
 
-    import django_heroku
-    django_heroku.settings(locals())
+    import dj_database_url
+    DATABASES['default'].update(dj_database_url.config(conn_max_age=600))
 
