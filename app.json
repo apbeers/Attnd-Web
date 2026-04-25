@@ -1,0 +1,30 @@
+{
+  "name": "Attnd",
+  "description": "Event management web app",
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0"
+    }
+  ],
+  "env": {
+    "SECRET_KEY": {
+      "description": "Django secret key",
+      "generator": "secret"
+    },
+    "GS_BUCKET_NAME": {
+      "description": "Google Cloud Storage bucket for media and static files",
+      "required": false
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}

@@ -143,8 +143,11 @@ EMAIL_HOST_PASSWORD = os.getenv('MAILGUN_SMTP_PASSWORD')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# check if we're running in heroku
-if '/app' in os.environ['HOME']:
+if os.getenv('DATABASE_URL'):
+    import dj_database_url
+    DATABASES['default'].update(dj_database_url.config(conn_max_age=600))
+
+if os.getenv('GS_BUCKET_NAME'):
     STORAGES = {
         'default': {
             'BACKEND': 'storages.backends.gcs.GoogleCloudStorage',
@@ -153,8 +156,5 @@ if '/app' in os.environ['HOME']:
             'BACKEND': 'storages.backends.gcs.GoogleCloudStorage',
         },
     }
-    GS_BUCKET_NAME = os.environ.get('GS_BUCKET_NAME')
-
-    import dj_database_url
-    DATABASES['default'].update(dj_database_url.config(conn_max_age=600))
+    GS_BUCKET_NAME = os.environ['GS_BUCKET_NAME']
 
