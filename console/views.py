@@ -1,6 +1,7 @@
 import datetime
 
 from django.contrib.auth import authenticate, login
+from django.utils import timezone
 from django.contrib.auth.models import User
 from django.shortcuts import render, redirect
 from django.views import View
@@ -39,7 +40,7 @@ class SignUpView(View):
             description='The local art fair is back! Artists will be teaching classes and selling paintings.',
             latitude=32.754695,
             longitude=-97.331605,
-            start_time=datetime.datetime.now() + datetime.timedelta(weeks=1),
+            start_time=timezone.now() + datetime.timedelta(weeks=1),
             flyer='',
             address='420 Main St, Fort Worth, TX 76102, USA',
             order_id='',
