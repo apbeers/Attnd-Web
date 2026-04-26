@@ -19,6 +19,7 @@ class Event(models.Model):
     longitude = models.DecimalField(max_digits=24, decimal_places=20)
     start_time = models.DateTimeField()
     paid = models.BooleanField(default=False)
+    public = models.BooleanField(default=False)
     flyer = models.FileField(upload_to=get_file_path, blank=True)
     address = models.CharField(max_length=512)
     order_id = models.CharField(max_length=512, blank=True)

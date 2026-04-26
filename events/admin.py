@@ -1,12 +1,20 @@
+import base64
+import io
+
+import qrcode
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
+from django.utils.html import format_html
 
 from events.models import Event, Location, Notification, Device
 
 
 class UserScopedAdminMixin:
     """Filters all querysets and permissions to the logged-in user. Superusers see everything."""
+
+    def has_module_permission(self, request):
+        return True
 
     def has_add_permission(self, request):
         return True
@@ -61,6 +69,27 @@ class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     list_filter = ['paid', 'user']
     search_fields = ['name', 'event_code', 'address']
     date_hierarchy = 'start_time'
+    fields = [
+        'name', 'event_code', 'description', 'latitude', 'longitude',
+        'start_time', 'paid', 'public', 'flyer', 'address', 'order_id',
+        'user', 'admin_qr_code',
+    ]
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = ['admin_qr_code']
+        if not request.user.is_superuser:
+            ro.append('user')
+        return ro
+
+    def admin_qr_code(self, obj):
+        url = f'https://attnd.app/join/{obj.event_code}/'
+        img = qrcode.make(url)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return format_html('<img src="data:image/png;base64,{}" width="200">', b64)
+
+    admin_qr_code.short_description = 'QR Code'
 
     def save_formset(self, request, form, formset, change):
         instances = formset.save(commit=False)
@@ -105,12 +134,12 @@ class DeviceAdmin(admin.ModelAdmin):
     list_filter = ['platform', 'subscribed', 'event']
     search_fields = ['id']
 
-    def has_module_perms(self, request):
+    def has_module_permission(self, request):
         return request.user.is_superuser
 
 
 class RestrictedUserAdmin(BaseUserAdmin):
-    def has_module_perms(self, request):
+    def has_module_permission(self, request):
         return request.user.is_superuser
 
 

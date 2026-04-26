@@ -10,6 +10,7 @@ urlpatterns = [
     path('<int:event_id>/notifications/<int:notification_id>/', apis.SingleNotificationView.as_view(), name='get_single_notification'),
     path('nearby_events/<str:latitude>/<str:longitude>/', apis.NearbyEventsView.as_view(), name='get_nearby_events'),
     path('event_by_code_or_name/', apis.EventByCodeOrNameView.as_view(), name='get_event_by_code_or_name'),
+    path('lookup/', apis.EventLookupView.as_view(), name='event_lookup'),
     path('<int:event_id>/join/<str:device_id>/', apis.JoinEventView.as_view(), name='join_event'),
     path('<int:event_id>/leave/<str:device_id>/', apis.LeaveEventView.as_view(), name='leave_event'),
     path('pushnotifications/subscribe/<str:device_id>/', apis.PushNotificationsSubscribe.as_view(), name='push_notifications_subscribe'),

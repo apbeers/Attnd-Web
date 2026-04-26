@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'events.apps.EventsConfig',
     'console.apps.ConsoleConfig',
     'home.apps.HomeConfig',
+    'join.apps.JoinConfig',
 ]
 
 MIDDLEWARE = [

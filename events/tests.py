@@ -1,4 +1,5 @@
 import io
+import json
 from datetime import datetime, timezone as dt_timezone
 
 from django.contrib.auth.models import User
@@ -10,7 +11,7 @@ from PIL import Image
 from events.apis import (
     NearbyEventsView, EventByCodeOrNameView, AllLocationsView,
     PushNotificationsUnSubscribe, PushNotificationsSubscribe,
-    JoinEventView, LeaveEventView,
+    JoinEventView, LeaveEventView, EventLookupView,
 )
 from events.models import Device, Event, Location
 
@@ -27,7 +28,7 @@ def make_image():
 
 
 # ---------------------------------------------------------------------------
-# Existing API-view tests
+# API view tests
 # ---------------------------------------------------------------------------
 
 @override_settings(API_KEY=TEST_API_KEY)
@@ -40,7 +41,9 @@ class EventsTestCase(TestCase):
         request = RequestFactory().get(reverse('events:get_all_locations', args=[event_id]), **AUTH_HEADER)
         response = AllLocationsView.as_view()(request, event_id)
         self.assertEqual(response.status_code, 200)
-        print(response.content)
+        data = json.loads(response.content)
+        self.assertIn('results', data)
+        self.assertIn('count', data)
 
     def test_get_nearby_events(self):
         user_latitude = 32.668224
@@ -49,7 +52,9 @@ class EventsTestCase(TestCase):
         request = RequestFactory().get(reverse('events:get_nearby_events', args=[user_latitude, user_longitude]), **AUTH_HEADER)
         response = NearbyEventsView.as_view()(request, user_latitude, user_longitude)
         self.assertEqual(response.status_code, 200)
-        print(response.content)
+        data = json.loads(response.content)
+        self.assertIn('results', data)
+        self.assertIn('count', data)
 
     def test_event_by_code_or_name(self):
         data = 'my event'
@@ -58,7 +63,53 @@ class EventsTestCase(TestCase):
         request.GET = {'data': data}
         response = EventByCodeOrNameView.as_view()(request)
         self.assertEqual(response.status_code, 200)
-        print(response.content)
+
+
+@override_settings(API_KEY=TEST_API_KEY)
+class EventLookupTestCase(TestCase):
+    fixtures = ['dump.json']
+
+    def test_lookup_by_exact_name(self):
+        request = RequestFactory().get(reverse('events:event_lookup'), **AUTH_HEADER)
+        request.GET = {'q': 'event 1'}
+        response = EventLookupView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual(data['name'], 'event 1')
+
+    def test_lookup_by_exact_code(self):
+        request = RequestFactory().get(reverse('events:event_lookup'), **AUTH_HEADER)
+        request.GET = {'q': 'event1code'}
+        response = EventLookupView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual(data['event_code'], 'event1code')
+
+    def test_lookup_case_insensitive(self):
+        request = RequestFactory().get(reverse('events:event_lookup'), **AUTH_HEADER)
+        request.GET = {'q': 'EVENT1CODE'}
+        response = EventLookupView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+
+    def test_lookup_missing_q(self):
+        request = RequestFactory().get(reverse('events:event_lookup'), **AUTH_HEADER)
+        request.GET = {}
+        response = EventLookupView.as_view()(request)
+        self.assertEqual(response.status_code, 400)
+
+    def test_lookup_not_found(self):
+        request = RequestFactory().get(reverse('events:event_lookup'), **AUTH_HEADER)
+        request.GET = {'q': 'does-not-exist'}
+        response = EventLookupView.as_view()(request)
+        self.assertEqual(response.status_code, 404)
+
+    def test_response_includes_flyer_url_key(self):
+        request = RequestFactory().get(reverse('events:event_lookup'), **AUTH_HEADER)
+        request.GET = {'q': 'event 1'}
+        response = EventLookupView.as_view()(request)
+        data = json.loads(response.content)
+        self.assertIn('flyer_url', data)
+        self.assertNotIn('flyer', data)
 
 
 @override_settings(API_KEY=TEST_API_KEY)
@@ -89,6 +140,19 @@ class JoinEventTestCase(TestCase):
         event = Event.objects.filter(id=self.event_id).get()
         device = Device.objects.filter(id=self.device_id).get()
         self.assertEqual(device.event, event)
+
+    def test_join_sets_platform_from_json_body(self):
+        body = json.dumps({'platform': 'ios'}).encode()
+        request = RequestFactory().post(
+            reverse('events:join_event', args=[self.event_id, self.device_id]),
+            data=body,
+            content_type='application/json',
+            **AUTH_HEADER,
+        )
+        response = JoinEventView.as_view()(request, self.event_id, self.device_id)
+        self.assertEqual(response.status_code, 200)
+        device = Device.objects.get(id=self.device_id)
+        self.assertEqual(device.platform, 'ios')
 
 
 @override_settings(API_KEY=TEST_API_KEY)
@@ -155,7 +219,7 @@ _IN_MEMORY_STORAGES = {
 }
 
 
-@override_settings(STORAGES=_IN_MEMORY_STORAGES)
+@override_settings(STORAGES=_IN_MEMORY_STORAGES, SECURE_SSL_REDIRECT=False)
 class MultiTenantAdminTests(TestCase):
 
     @classmethod
@@ -226,6 +290,27 @@ class MultiTenantAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     # ------------------------------------------------------------------
+    # Sidebar visibility — has_module_perms
+    # ------------------------------------------------------------------
+
+    def test_customer1_can_see_events_section_in_sidebar(self):
+        self.client.force_login(self.customer1)
+        response = self.client.get('/admin/')
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # The Events app section should be visible (has_module_permission returns True)
+        self.assertIn('/admin/events/event/', content)
+        self.assertIn('/admin/events/location/', content)
+        self.assertIn('/admin/events/notification/', content)
+
+    def test_customer1_cannot_see_devices_or_users_in_sidebar(self):
+        self.client.force_login(self.customer1)
+        response = self.client.get('/admin/')
+        content = response.content.decode()
+        self.assertNotIn('/admin/events/device/', content)
+        self.assertNotIn('/admin/auth/user/', content)
+
+    # ------------------------------------------------------------------
     # Event changelist visibility
     # ------------------------------------------------------------------
 
@@ -287,7 +372,6 @@ class MultiTenantAdminTests(TestCase):
     def test_customer1_blocked_from_customer2_event_change_form(self):
         self.client.force_login(self.customer1)
         response = self.client.get(reverse('admin:events_event_change', args=[self.event2.pk]))
-        # Admin redirects (302) when the object is absent from the filtered queryset
         self.assertIn(response.status_code, [302, 403])
 
     def test_superuser_can_open_customer2_event_change_form(self):
@@ -316,7 +400,6 @@ class MultiTenantAdminTests(TestCase):
             {'post': 'yes'},
         )
         self.assertIn(response.status_code, [302, 403])
-        # event2 must still exist
         self.assertTrue(Event.objects.filter(pk=self.event2.pk).exists())
 
     def test_superuser_can_delete_customer1_event(self):

@@ -28,6 +28,7 @@
       "longitude": "-97.35289990000000000000",
       "start_time": "2021-09-22T01:07:46Z",
       "paid": false,
+      "public": true,
       "flyer": "HW6_AndrewBeers_qnLCz0B.pdf",
       "address": "Montgomery Plaza, West 7th Street, Fort Worth, TX, USA",
       "user": 1
