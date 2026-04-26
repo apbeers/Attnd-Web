@@ -8,6 +8,14 @@ from events.models import Event, Location, Notification, Device
 class UserScopedAdminMixin:
     """Filters all querysets and permissions to the logged-in user. Superusers see everything."""
 
+    def has_add_permission(self, request):
+        return True
+
+    def has_view_permission(self, request, obj=None):
+        if obj is None:
+            return True
+        return request.user.is_superuser or obj.user == request.user
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser:
