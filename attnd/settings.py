@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'cloudinary_storage',
+    'cloudinary',
     'events.apps.EventsConfig',
     'console.apps.ConsoleConfig',
     'home.apps.HomeConfig',
@@ -154,4 +156,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if os.getenv('DATABASE_URL'):
     import dj_database_url
     DATABASES['default'].update(dj_database_url.config(conn_max_age=600))
+
+if os.getenv('CLOUDINARY_URL'):
+    STORAGES['default']['BACKEND'] = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
