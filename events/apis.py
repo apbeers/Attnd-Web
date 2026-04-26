@@ -13,15 +13,15 @@ from django.views import View
 from events.models import Event, Location, Notification, Device
 
 
-class ApiKeyMixin:
+class ApiKeyRequired:
     def dispatch(self, request, *args, **kwargs):
-        api_key = settings.API_KEY
-        if api_key and request.META.get('HTTP_AUTHORIZATION') != f'Bearer {api_key}':
+        key = request.headers.get('Authorization', '').removeprefix('Bearer ')
+        if not key or key != settings.API_KEY:
             return JsonResponse({'error': 'Unauthorized'}, status=401)
         return super().dispatch(request, *args, **kwargs)
 
 
-class JoinEventView(ApiKeyMixin, View):
+class JoinEventView(ApiKeyRequired, View):
 
     def post(self, request, event_id, device_id):
         event = Event.objects.filter(id=event_id).get()
@@ -32,14 +32,14 @@ class JoinEventView(ApiKeyMixin, View):
         return HttpResponse()
 
 
-class LeaveEventView(ApiKeyMixin, View):
+class LeaveEventView(ApiKeyRequired, View):
 
     def post(self, request, device_id, event_id):
         Device.objects.filter(id=device_id).update(event=None)
         return HttpResponse()
 
 
-class SingleEventView(ApiKeyMixin, View):
+class SingleEventView(ApiKeyRequired, View):
 
     def get(self, request, event_id):
         event = Event.objects.filter(id=event_id).first()
@@ -47,7 +47,7 @@ class SingleEventView(ApiKeyMixin, View):
         return HttpResponse(content=serialized_event, content_type='application/json')
 
 
-class SingleLocationView(ApiKeyMixin, View):
+class SingleLocationView(ApiKeyRequired, View):
 
     def get(self, request, event_id, location_id):
         location = Location.objects.filter(id=location_id).first()
@@ -55,7 +55,7 @@ class SingleLocationView(ApiKeyMixin, View):
         return HttpResponse(content=serialized_location, content_type='application/json')
 
 
-class AllLocationsView(ApiKeyMixin, View):
+class AllLocationsView(ApiKeyRequired, View):
 
     def get(self, request, event_id):
         locations = Location.objects.filter(event__id=event_id).order_by('name')
@@ -63,7 +63,7 @@ class AllLocationsView(ApiKeyMixin, View):
         return HttpResponse(content=serialized_locations, content_type='application/json')
 
 
-class SingleNotificationView(ApiKeyMixin, View):
+class SingleNotificationView(ApiKeyRequired, View):
 
     def get(self, request, event_id, notification_id):
         notification = Notification.objects.filter(event__id=event_id, id=notification_id).first()
@@ -71,7 +71,7 @@ class SingleNotificationView(ApiKeyMixin, View):
         return HttpResponse(content=serialized_notification, content_type='application/json')
 
 
-class AllNotificationsView(ApiKeyMixin, View):
+class AllNotificationsView(ApiKeyRequired, View):
 
     def get(self, request, event_id):
         notifications = Notification.objects.filter(sent=True, event__id=event_id).order_by('-send_time')
@@ -79,7 +79,7 @@ class AllNotificationsView(ApiKeyMixin, View):
         return HttpResponse(content=serialized_notifications, content_type='application/json')
 
 
-class NearbyEventsView(ApiKeyMixin, View):
+class NearbyEventsView(ApiKeyRequired, View):
 
     def get(self, request, latitude, longitude):
         try:
@@ -110,7 +110,7 @@ class NearbyEventsView(ApiKeyMixin, View):
         return HttpResponse(content=json.dumps(sorted_events), content_type='application/json')
 
 
-class EventByCodeOrNameView(ApiKeyMixin, View):
+class EventByCodeOrNameView(ApiKeyRequired, View):
 
     def get(self, request):
         name_or_code = request.GET.get('data')
@@ -136,21 +136,21 @@ class EventByCodeOrNameView(ApiKeyMixin, View):
         return JsonResponse({'error': 'Not found'}, status=404)
 
 
-class PushNotificationsSubscribe(ApiKeyMixin, View):
+class PushNotificationsSubscribe(ApiKeyRequired, View):
 
     def post(self, request, device_id):
         Device.objects.filter(id=device_id).update(subscribed=True)
         return HttpResponse()
 
 
-class PushNotificationsUnSubscribe(ApiKeyMixin, View):
+class PushNotificationsUnSubscribe(ApiKeyRequired, View):
 
     def post(self, request, device_id):
         Device.objects.filter(id=device_id).update(subscribed=False)
         return HttpResponse()
 
 
-class SendNotifications(ApiKeyMixin, View):
+class SendNotifications(View):
 
     def post(self, request):
         now = timezone.now()
