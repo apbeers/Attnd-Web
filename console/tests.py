@@ -12,9 +12,7 @@ class SignUpViewTests(TestCase):
         self.url = reverse('console:signup')
         self.valid_data = {
             'email': 'new@example.com',
-            'username': 'newuser',
-            'password1': 'Str0ng!Pass99',
-            'password2': 'Str0ng!Pass99',
+            'password': 'Str0ng!Pass99',
         }
 
     def test_get_returns_200(self):
@@ -27,27 +25,30 @@ class SignUpViewTests(TestCase):
 
     def test_valid_post_creates_staff_user(self):
         self.client.post(self.url, self.valid_data)
-        user = User.objects.get(username='newuser')
+        user = User.objects.get(username='new@example.com')
         self.assertTrue(user.is_staff)
         self.assertFalse(user.is_superuser)
+        self.assertEqual(user.email, 'new@example.com')
 
     def test_valid_post_creates_demo_event_linked_to_user(self):
         self.client.post(self.url, self.valid_data)
-        user = User.objects.get(username='newuser')
+        user = User.objects.get(username='new@example.com')
         events = Event.objects.filter(user=user)
         self.assertEqual(events.count(), 1)
-        self.assertIn('newuser', events.first().name)
 
-    def test_mismatched_passwords_returns_200_with_form_errors(self):
-        data = {**self.valid_data, 'password2': 'DifferentPass99!'}
-        response = self.client.post(self.url, data)
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(User.objects.filter(username='newuser').exists())
-        self.assertFormError(response.context['form'], 'password2', "The two password fields didn’t match.")
-
-    def test_duplicate_username_returns_200_with_form_errors(self):
-        User.objects.create_user(username='newuser', password='irrelevant')
+    def test_duplicate_email_returns_200_with_form_error(self):
+        User.objects.create_user(username='new@example.com', email='new@example.com', password='x')
         response = self.client.post(self.url, self.valid_data)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(User.objects.filter(username='newuser').count(), 1)
-        self.assertFormError(response.context['form'], 'username', 'A user with that username already exists.')
+        self.assertEqual(User.objects.filter(username='new@example.com').count(), 1)
+        self.assertFormError(response.context['form'], 'email', 'An account with this email already exists.')
+
+    def test_invalid_email_returns_200_with_form_errors(self):
+        response = self.client.post(self.url, {'email': 'not-an-email', 'password': 'Str0ng!Pass99'})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(email='not-an-email').exists())
+
+    def test_missing_password_returns_200_with_form_errors(self):
+        response = self.client.post(self.url, {'email': 'new@example.com', 'password': ''})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(email='new@example.com').exists())
