@@ -1,0 +1,698 @@
+[
+  {
+    "model": "auth.user",
+    "pk": 2,
+    "fields": {
+      "password": "pbkdf2_sha256$1200000$fTtaQR83HocEFd2UEh0akD$06A1iqzgt/CopboFcdFIlXbiu6tN01odNk+ONnORwHE=",
+      "last_login": null,
+      "is_superuser": false,
+      "username": "fixtureuser",
+      "first_name": "",
+      "last_name": "",
+      "email": "fixture@attnd.app",
+      "is_staff": true,
+      "is_active": true,
+      "date_joined": "2026-01-01T00:00:00Z",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "events.event",
+    "pk": 1,
+    "fields": {
+      "name": "Fort Worth Food & Music Festival",
+      "event_code": "FWFM2026",
+      "description": "Join us for a two-day celebration of local food vendors, live music, and community fun in the heart of Fort Worth. Featuring over 40 local restaurants, 20 musical acts, and activities for the whole family.",
+      "latitude": "32.75550000000000000000",
+      "longitude": "-97.33080000000000000000",
+      "start_time": "2026-04-28T19:00:00Z",
+      "paid": false,
+      "public": true,
+      "flyer": "",
+      "address": "Sundance Square, 420 Main St, Fort Worth, TX 76102",
+      "order_id": "",
+      "user": 2
+    }
+  },
+  {
+    "model": "events.event",
+    "pk": 2,
+    "fields": {
+      "name": "Austin Tech & Innovation Summit",
+      "event_code": "ATIS2026",
+      "description": "Austin's premier technology conference bringing together founders, engineers, and investors for a full day of talks, workshops, and networking. Topics include AI, Web3, climate tech, and the future of work.",
+      "latitude": "30.26720000000000000000",
+      "longitude": "-97.74310000000000000000",
+      "start_time": "2026-05-01T19:00:00Z",
+      "paid": false,
+      "public": true,
+      "flyer": "",
+      "address": "Palmer Events Center, 900 Barton Springs Rd, Austin, TX 78704",
+      "order_id": "",
+      "user": 2
+    }
+  },
+  {
+    "model": "events.event",
+    "pk": 3,
+    "fields": {
+      "name": "Dallas Arts & Culture Night",
+      "event_code": "DACN2026",
+      "description": "An evening celebrating Dallas's vibrant arts scene with gallery openings, live performances, and interactive installations spread across the Arts District. Free admission to all venues from 6 PM to midnight.",
+      "latitude": "32.77670000000000000000",
+      "longitude": "-96.79700000000000000000",
+      "start_time": "2026-05-02T22:00:00Z",
+      "paid": false,
+      "public": true,
+      "flyer": "",
+      "address": "Dallas Arts District, 2403 Flora St, Dallas, TX 75201",
+      "order_id": "",
+      "user": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 1,
+    "fields": {
+      "name": "Cattlemen's Steakhouse",
+      "snippet": "Award-winning steakhouse since 1947.",
+      "description": "A Fort Worth institution serving hand-cut steaks and classic Texas sides. Located just steps from Sundance Square, it's the ideal spot for a hearty pre-festival meal with authentic Fort Worth atmosphere.",
+      "website": null,
+      "image": null,
+      "latitude": "32.75500000000000000000",
+      "longitude": "-97.33200000000000000000",
+      "address": "2458 N Main St, Fort Worth, TX 76106",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 2,
+    "fields": {
+      "name": "Sundance Square Plaza",
+      "snippet": "The beating heart of downtown Fort Worth.",
+      "description": "A beautifully designed open-air plaza surrounded by shops, restaurants, and entertainment venues. The main stage for the festival's evening musical acts, with a retractable canopy for all weather conditions.",
+      "website": null,
+      "image": null,
+      "latitude": "32.75420000000000000000",
+      "longitude": "-97.33150000000000000000",
+      "address": "Sundance Square, Fort Worth, TX 76102",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 3,
+    "fields": {
+      "name": "The Usual",
+      "snippet": "Craft cocktails and small plates in a lively setting.",
+      "description": "A neighborhood bar and kitchen known for creative cocktails and an eclectic menu of shareable plates. Festival wristband holders receive 10% off all food orders throughout the weekend.",
+      "website": null,
+      "image": null,
+      "latitude": "32.75600000000000000000",
+      "longitude": "-97.33100000000000000000",
+      "address": "1408 W Magnolia Ave, Fort Worth, TX 76104",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 4,
+    "fields": {
+      "name": "Fort Worth Water Gardens",
+      "snippet": "Iconic modernist water feature and park.",
+      "description": "Designed by Philip Johnson, these stunning water gardens offer a tranquil escape during the festival. Visit the active pool, the aerating pool, and the quiet pool spread across nearly five acres of downtown.",
+      "website": null,
+      "image": null,
+      "latitude": "32.74890000000000000000",
+      "longitude": "-97.33620000000000000000",
+      "address": "1502 Commerce St, Fort Worth, TX 76102",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 5,
+    "fields": {
+      "name": "Kimbell Art Museum",
+      "snippet": "World-class art in a stunning Louis Kahn building.",
+      "description": "One of America's finest art museums, housing a collection spanning 5,000 years. Open during the festival with extended evening hours and a special exhibition on Texas contemporary artists.",
+      "website": null,
+      "image": null,
+      "latitude": "32.74620000000000000000",
+      "longitude": "-97.36460000000000000000",
+      "address": "3333 Camp Bowie Blvd, Fort Worth, TX 76107",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 6,
+    "fields": {
+      "name": "Billy Bob's Texas",
+      "snippet": "The world's largest honky-tonk.",
+      "description": "Spanning 127,000 square feet, Billy Bob's Texas is a Fort Worth landmark featuring live music every Friday and Saturday night. Festival attendees get priority entry with their wristband.",
+      "website": null,
+      "image": null,
+      "latitude": "32.75760000000000000000",
+      "longitude": "-97.34810000000000000000",
+      "address": "2520 Rodeo Plaza, Fort Worth, TX 76164",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 7,
+    "fields": {
+      "name": "Joe T. Garcia's",
+      "snippet": "A beloved Fort Worth Mexican food institution.",
+      "description": "Family-owned since 1935, Joe T. Garcia's serves enchiladas, fajitas, and margaritas in a gorgeous courtyard setting. One of the most iconic dining experiences in all of Texas.",
+      "website": null,
+      "image": null,
+      "latitude": "32.75840000000000000000",
+      "longitude": "-97.34720000000000000000",
+      "address": "2201 N Commerce St, Fort Worth, TX 76164",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 8,
+    "fields": {
+      "name": "Fort Worth Convention Center",
+      "snippet": "Main indoor venue for workshops and panels.",
+      "description": "The city's primary convention facility hosts the festival's indoor programming including cooking demonstrations, artisan vendor markets, and the award ceremony on Sunday evening.",
+      "website": null,
+      "image": null,
+      "latitude": "32.74840000000000000000",
+      "longitude": "-97.33280000000000000000",
+      "address": "1201 Houston St, Fort Worth, TX 76102",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 9,
+    "fields": {
+      "name": "Magnolia Avenue Food Truck Row",
+      "snippet": "Over a dozen food trucks parked side-by-side.",
+      "description": "A curated lineup of Fort Worth's best food trucks serving everything from tacos and barbecue to Thai street food and artisan ice cream. Open from 11 AM both festival days.",
+      "website": null,
+      "image": null,
+      "latitude": "32.75350000000000000000",
+      "longitude": "-97.33780000000000000000",
+      "address": "W Magnolia Ave, Fort Worth, TX 76104",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 10,
+    "fields": {
+      "name": "West 7th Entertainment District",
+      "snippet": "Bars, restaurants, and live venues.",
+      "description": "A vibrant strip of bars and restaurants hosting late-night festival afterparties. Multiple venues will feature local DJs and live acts from 10 PM until 2 AM on both festival nights.",
+      "website": null,
+      "image": null,
+      "latitude": "32.74740000000000000000",
+      "longitude": "-97.35100000000000000000",
+      "address": "West 7th St, Fort Worth, TX 76107",
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 11,
+    "fields": {
+      "name": "Palmer Events Center",
+      "snippet": "Premier conference venue on Lady Bird Lake.",
+      "description": "The summit's main venue offering stunning views of Lady Bird Lake and downtown Austin. All keynotes, general sessions, and the opening reception take place in this state-of-the-art facility.",
+      "website": null,
+      "image": null,
+      "latitude": "30.26800000000000000000",
+      "longitude": "-97.74200000000000000000",
+      "address": "900 Barton Springs Rd, Austin, TX 78704",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 12,
+    "fields": {
+      "name": "The Domain Northside",
+      "snippet": "Austin's tech hub with hotels and dining.",
+      "description": "Home to major tech company offices, The Domain hosts the summit's satellite networking events and speaker dinners. A dedicated shuttle service runs between The Domain and Palmer all day.",
+      "website": null,
+      "image": null,
+      "latitude": "30.40220000000000000000",
+      "longitude": "-97.72430000000000000000",
+      "address": "11410 Century Oaks Terrace, Austin, TX 78758",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 13,
+    "fields": {
+      "name": "Capital Factory",
+      "snippet": "Austin's top startup accelerator and co-working space.",
+      "description": "The hub of Austin's startup ecosystem hosts a special venture showcase track where 20 selected startups present to a curated audience of 300+ investors over a three-hour session.",
+      "website": null,
+      "image": null,
+      "latitude": "30.27190000000000000000",
+      "longitude": "-97.74040000000000000000",
+      "address": "701 Brazos St, Austin, TX 78701",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 14,
+    "fields": {
+      "name": "Rainey Street Historic District",
+      "snippet": "Bungalow bars and food trucks on a tree-lined street.",
+      "description": "The official after-hours networking district for summit attendees. Badge holders unlock exclusive back-patio access at six participating venues from 7 PM onward.",
+      "website": null,
+      "image": null,
+      "latitude": "30.25870000000000000000",
+      "longitude": "-97.74100000000000000000",
+      "address": "Rainey St, Austin, TX 78701",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 15,
+    "fields": {
+      "name": "University of Texas at Austin",
+      "snippet": "Research university hosting the AI track.",
+      "description": "UT Austin's computer science department partners with the summit to host a full-day AI research track featuring academic presentations and live demos from leading AI labs.",
+      "website": null,
+      "image": null,
+      "latitude": "30.28620000000000000000",
+      "longitude": "-97.73930000000000000000",
+      "address": "2317 Speedway, Austin, TX 78712",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 16,
+    "fields": {
+      "name": "Zilker Park",
+      "snippet": "Iconic greenspace along Barton Creek.",
+      "description": "The outdoor wellness and sustainability track takes place in Zilker Park, featuring morning yoga sessions, panel discussions on climate tech, and a solar-powered demo showcase.",
+      "website": null,
+      "image": null,
+      "latitude": "30.26750000000000000000",
+      "longitude": "-97.77310000000000000000",
+      "address": "2100 Barton Springs Rd, Austin, TX 78746",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 17,
+    "fields": {
+      "name": "6th Street Live Music Corridor",
+      "snippet": "World-famous live music strip.",
+      "description": "Summit attendees receive wristband access to a curated selection of 6th Street venues for the closing night celebration, featuring live performances from Austin-based artists across multiple genres.",
+      "website": null,
+      "image": null,
+      "latitude": "30.26980000000000000000",
+      "longitude": "-97.73930000000000000000",
+      "address": "East 6th St, Austin, TX 78701",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 18,
+    "fields": {
+      "name": "Austin Convention Center",
+      "snippet": "Full-service convention facility downtown.",
+      "description": "Hosts the summit's largest workshop rooms, the exhibitor hall with 80+ company booths, and the fully catered lunch for all registered attendees on the main event day.",
+      "website": null,
+      "image": null,
+      "latitude": "30.26350000000000000000",
+      "longitude": "-97.74000000000000000000",
+      "address": "500 E Cesar Chavez St, Austin, TX 78701",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 19,
+    "fields": {
+      "name": "Hotel Van Zandt",
+      "snippet": "Boutique hotel with rooftop pool and bar.",
+      "description": "Official summit hotel partner offering special room rates for attendees. The rooftop bar hosts an exclusive speaker reception on the evening before the main event.",
+      "website": null,
+      "image": null,
+      "latitude": "30.25930000000000000000",
+      "longitude": "-97.74050000000000000000",
+      "address": "605 Davis St, Austin, TX 78701",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 20,
+    "fields": {
+      "name": "Stubb's Amphitheater",
+      "snippet": "Legendary outdoor music venue.",
+      "description": "Stubb's hosts the summit's closing keynote and concert under the stars. Gates open at 7 PM with the keynote at 8 PM followed by a ticketed live performance from 10 PM.",
+      "website": null,
+      "image": null,
+      "latitude": "30.27130000000000000000",
+      "longitude": "-97.73660000000000000000",
+      "address": "801 Red River St, Austin, TX 78701",
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 21,
+    "fields": {
+      "name": "Dallas Museum of Art",
+      "snippet": "One of the largest art museums in the country.",
+      "description": "The DMA anchors the Arts District celebrations with free admission all evening, a special late-night gallery tour, and a pop-up performance installation in the sculpture garden.",
+      "website": null,
+      "image": null,
+      "latitude": "32.78790000000000000000",
+      "longitude": "-96.80100000000000000000",
+      "address": "1717 N Harwood St, Dallas, TX 75201",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 22,
+    "fields": {
+      "name": "Nasher Sculpture Center",
+      "snippet": "World-class sculpture in a stunning garden setting.",
+      "description": "The Nasher opens its iconic garden for a special evening of live performance, featuring site-specific dance and music pieces commissioned for Arts & Culture Night.",
+      "website": null,
+      "image": null,
+      "latitude": "32.78600000000000000000",
+      "longitude": "-96.79870000000000000000",
+      "address": "2001 Flora St, Dallas, TX 75201",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 23,
+    "fields": {
+      "name": "Crow Museum of Asian Art",
+      "snippet": "Stunning collection of Asian art and architecture.",
+      "description": "Free entry during Arts & Culture Night. The museum hosts a traditional tea ceremony and a contemporary dance performance in its outdoor courtyard from 7 to 10 PM.",
+      "website": null,
+      "image": null,
+      "latitude": "32.78720000000000000000",
+      "longitude": "-96.80010000000000000000",
+      "address": "2010 Flora St, Dallas, TX 75201",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 24,
+    "fields": {
+      "name": "AT&T Performing Arts Center",
+      "snippet": "World-class performing arts campus.",
+      "description": "The Winspear Opera House and Wyly Theatre open their lobbies and outdoor plazas for free performances by Dallas Black Dance Theatre and the Dallas Symphony Orchestra chamber ensemble.",
+      "website": null,
+      "image": null,
+      "latitude": "32.78900000000000000000",
+      "longitude": "-96.80280000000000000000",
+      "address": "2403 Flora St, Dallas, TX 75201",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 25,
+    "fields": {
+      "name": "Deep Ellum",
+      "snippet": "Dallas's historic arts and music district.",
+      "description": "Deep Ellum's galleries and music clubs participate in a self-guided arts walk throughout Arts & Culture Night, with over 15 venues showcasing local artists and live music until 2 AM.",
+      "website": null,
+      "image": null,
+      "latitude": "32.78150000000000000000",
+      "longitude": "-96.78500000000000000000",
+      "address": "Deep Ellum, Dallas, TX 75226",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 26,
+    "fields": {
+      "name": "Klyde Warren Park",
+      "snippet": "Green space deck park over the Woodall Rodgers Freeway.",
+      "description": "The park hosts the outdoor art installation showcase and a food truck row with 12 vendors. Live acoustic performances run from 6 PM on the main lawn stage.",
+      "website": null,
+      "image": null,
+      "latitude": "32.78980000000000000000",
+      "longitude": "-96.80460000000000000000",
+      "address": "2012 Woodall Rodgers Fwy, Dallas, TX 75201",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 27,
+    "fields": {
+      "name": "Perot Museum of Nature and Science",
+      "snippet": "Award-winning science museum with evening programming.",
+      "description": "Special after-hours access for Arts Night attendees includes a digital art installation in the main atrium, a planetarium show on the cosmos, and hands-on science stations.",
+      "website": null,
+      "image": null,
+      "latitude": "32.79250000000000000000",
+      "longitude": "-96.80680000000000000000",
+      "address": "2201 N Field St, Dallas, TX 75201",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 28,
+    "fields": {
+      "name": "Uptown Dallas",
+      "snippet": "Vibrant neighborhood with galleries and restaurants.",
+      "description": "Uptown's McKinney Avenue galleries host a coordinated open-reception evening with complimentary wine and the opportunity to meet the artists. Trolley service connects venues throughout the night.",
+      "website": null,
+      "image": null,
+      "latitude": "32.79840000000000000000",
+      "longitude": "-96.80340000000000000000",
+      "address": "McKinney Ave, Dallas, TX 75204",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 29,
+    "fields": {
+      "name": "Cathedral Shrine of the Virgin of Guadalupe",
+      "snippet": "Historic Spanish colonial revival cathedral.",
+      "description": "A remarkable historic landmark open for evening tours during Arts & Culture Night, featuring original stained glass, sacred art, and a special acoustic concert by the Dallas Bach Society.",
+      "website": null,
+      "image": null,
+      "latitude": "32.78300000000000000000",
+      "longitude": "-96.80560000000000000000",
+      "address": "2215 Ross Ave, Dallas, TX 75201",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 30,
+    "fields": {
+      "name": "The Bomb Factory",
+      "snippet": "Iconic music venue in Deep Ellum.",
+      "description": "One of Dallas's most beloved live music venues hosts the Arts Night closing concert featuring three local headline acts. Doors open at 9 PM with the final act closing at midnight.",
+      "website": null,
+      "image": null,
+      "latitude": "32.78200000000000000000",
+      "longitude": "-96.78380000000000000000",
+      "address": "2713 Canton St, Dallas, TX 75226",
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 1,
+    "fields": {
+      "title": "Festival kicks off tomorrow!",
+      "body": "We can't wait to see you at Sundance Square tomorrow evening. Doors open at 5 PM. Come hungry and ready to dance!",
+      "send_time": "2026-04-27T12:00:00Z",
+      "sent": true,
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 2,
+    "fields": {
+      "title": "Lineup announced for Saturday night",
+      "body": "We just announced our Saturday night headliners! Check the app for the full schedule of 20 musical acts performing across three stages.",
+      "send_time": "2026-04-25T15:00:00Z",
+      "sent": true,
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 3,
+    "fields": {
+      "title": "VIP add-ons still available",
+      "body": "Upgrade to VIP for early entry, reserved seating at the main stage, and access to the exclusive chef's tasting experience. Limited spots remain!",
+      "send_time": "2026-04-29T14:00:00Z",
+      "sent": false,
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 4,
+    "fields": {
+      "title": "Thank you for joining us!",
+      "body": "What an incredible weekend. Thank you to all 8,000 attendees, 40 vendors, and 20 bands who made the 2026 Fort Worth Food & Music Festival unforgettable. See you next year!",
+      "send_time": "2026-04-30T20:00:00Z",
+      "sent": false,
+      "user": 2,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 5,
+    "fields": {
+      "title": "Early bird registration closes tonight",
+      "body": "Save 30% on summit registration — early bird pricing ends tonight at midnight. Use code EARLYATX at checkout.",
+      "send_time": "2026-04-20T18:00:00Z",
+      "sent": true,
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 6,
+    "fields": {
+      "title": "Speaker spotlight: keynote revealed",
+      "body": "We're thrilled to announce our opening keynote speaker. Check the app for the full announcement and a preview of their session topics.",
+      "send_time": "2026-04-22T14:00:00Z",
+      "sent": true,
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 7,
+    "fields": {
+      "title": "Schedule builder now live",
+      "body": "Plan your perfect summit day with our interactive schedule builder. Browse all 60 sessions and build your personal agenda before you arrive.",
+      "send_time": "2026-04-28T10:00:00Z",
+      "sent": false,
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 8,
+    "fields": {
+      "title": "Shuttle service reminder",
+      "body": "Free shuttle buses run every 30 minutes between Palmer Events Center and The Domain from 7 AM to 9 PM on summit day. No parking passes required!",
+      "send_time": "2026-04-30T08:00:00Z",
+      "sent": false,
+      "user": 2,
+      "event": 2
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 9,
+    "fields": {
+      "title": "Venue map now available",
+      "body": "Download the full venue map for Arts & Culture Night. All 15 participating locations are marked with descriptions, hours, and public transit directions.",
+      "send_time": "2026-04-23T10:00:00Z",
+      "sent": true,
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 10,
+    "fields": {
+      "title": "Free parking at Klyde Warren Park",
+      "body": "Good news! Klyde Warren Park has reserved 400 free parking spaces for Arts Night attendees in the adjacent garage. Show your event confirmation at the booth.",
+      "send_time": "2026-04-24T12:00:00Z",
+      "sent": true,
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 11,
+    "fields": {
+      "title": "Deep Ellum late-night bonus venues",
+      "body": "Three more Deep Ellum venues have joined Arts Night! Black Lodge, The Nines, and Dallas Vinyl are now on the map with exclusive attendee specials running until 2 AM.",
+      "send_time": "2026-05-01T16:00:00Z",
+      "sent": false,
+      "user": 2,
+      "event": 3
+    }
+  },
+  {
+    "model": "events.notification",
+    "pk": 12,
+    "fields": {
+      "title": "Last call for Bomb Factory tickets",
+      "body": "Closing concert at The Bomb Factory is almost sold out. Grab your tickets before they're gone — attendees with event badges get priority at the door if any walk-up spots remain.",
+      "send_time": "2026-05-02T10:00:00Z",
+      "sent": false,
+      "user": 2,
+      "event": 3
+    }
+  }
+]
