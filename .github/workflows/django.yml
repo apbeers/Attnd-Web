@@ -27,6 +27,7 @@ jobs:
     - name: Run tests
       env:
         DEBUG: '1'
+        API_KEY: ${{ secrets.API_KEY }}
       run: |
         python manage.py test --verbosity=2
 
