@@ -124,8 +124,8 @@ STORAGES = {
     },
 }
 
-LOGIN_URL = '/console/login/'
-LOGIN_REDIRECT_URL = '/console/'
+LOGIN_URL = '/admin/login/'
+LOGIN_REDIRECT_URL = '/admin/'
 LOGOUT_REDIRECT_URL = '/'
 
 API_KEY = os.getenv('API_KEY', '')
