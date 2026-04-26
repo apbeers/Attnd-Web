@@ -221,7 +221,8 @@ class SignUpView(View):
             username = form.cleaned_data.get('username')
             raw_password = form.cleaned_data.get('password1')
             user = authenticate(username=username, password=raw_password)
-            user.is_staff = False
+            user.is_staff = True
+            user.save()
             login(request, user)
             self.create_demo_event(user=user)
             return redirect('console:create_first_event')
