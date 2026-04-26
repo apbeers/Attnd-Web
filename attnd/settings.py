@@ -128,6 +128,8 @@ LOGIN_URL = '/console/login/'
 LOGIN_REDIRECT_URL = '/console/'
 LOGOUT_REDIRECT_URL = '/'
 
+API_KEY = os.getenv('API_KEY')
+
 EMAIL_HOST = 'smtp.mailgun.org'
 EMAIL_PORT = 587
 EMAIL_HOST_USER = os.getenv('MAILGUN_SMTP_LOGIN')

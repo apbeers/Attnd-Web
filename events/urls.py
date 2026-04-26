@@ -4,7 +4,7 @@ from events import apis
 app_name = 'events'
 urlpatterns = [
     path('<int:event_id>/locations/', apis.AllLocationsView.as_view(), name='get_all_locations'),
-    path('<int:event_id>/notifications/', apis.AllLocationsView.as_view(), name='get_all_notifications'),
+    path('<int:event_id>/notifications/', apis.AllNotificationsView.as_view(), name='get_all_notifications'),
     path('<int:event_id>/locations/<int:location_id>/', apis.SingleLocationView.as_view(), name='get_single_location'),
     path('<str:event_id>/', apis.SingleEventView.as_view(), name='get_single_event'),
     path('<int:event_id>/notifications/<int:notification_id>/', apis.SingleNotificationView.as_view(), name='get_single_notification'),

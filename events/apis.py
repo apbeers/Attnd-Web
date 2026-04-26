@@ -1,17 +1,27 @@
 import decimal
+import json
 from datetime import timedelta
 from difflib import get_close_matches
 from math import sqrt
 
+from django.conf import settings
 from django.core.serializers import serialize
-from django.http import HttpResponse, HttpResponseServerError
+from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views import View
 
 from events.models import Event, Location, Notification, Device
 
 
-class JoinEventView(View):
+class ApiKeyMixin:
+    def dispatch(self, request, *args, **kwargs):
+        api_key = settings.API_KEY
+        if api_key and request.META.get('HTTP_AUTHORIZATION') != f'Bearer {api_key}':
+            return JsonResponse({'error': 'Unauthorized'}, status=401)
+        return super().dispatch(request, *args, **kwargs)
+
+
+class JoinEventView(ApiKeyMixin, View):
 
     def post(self, request, event_id, device_id):
         event = Event.objects.filter(id=event_id).get()
@@ -22,63 +32,63 @@ class JoinEventView(View):
         return HttpResponse()
 
 
-class LeaveEventView(View):
+class LeaveEventView(ApiKeyMixin, View):
 
     def post(self, request, device_id, event_id):
         Device.objects.filter(id=device_id).update(event=None)
         return HttpResponse()
 
 
-class SingleEventView(View):
+class SingleEventView(ApiKeyMixin, View):
 
     def get(self, request, event_id):
         event = Event.objects.filter(id=event_id).first()
-        serialized_event = serialize(format='json', queryset=event)
+        serialized_event = serialize('json', [event])
         return HttpResponse(content=serialized_event, content_type='application/json')
 
 
-class SingleLocationView(View):
+class SingleLocationView(ApiKeyMixin, View):
 
     def get(self, request, event_id, location_id):
         location = Location.objects.filter(id=location_id).first()
-        serialized_location = serialize(format='json', queryset=location)
+        serialized_location = serialize('json', [location])
         return HttpResponse(content=serialized_location, content_type='application/json')
 
 
-class AllLocationsView(View):
+class AllLocationsView(ApiKeyMixin, View):
 
     def get(self, request, event_id):
         locations = Location.objects.filter(event__id=event_id).order_by('name')
-        serialized_locations = serialize(format='json', queryset=locations)
+        serialized_locations = serialize('json', locations)
         return HttpResponse(content=serialized_locations, content_type='application/json')
 
 
-class SingleNotificationView(View):
+class SingleNotificationView(ApiKeyMixin, View):
 
     def get(self, request, event_id, notification_id):
         notification = Notification.objects.filter(event__id=event_id, id=notification_id).first()
-        serialized_notification = serialize(format='json', queryset=notification)
+        serialized_notification = serialize('json', [notification])
         return HttpResponse(content=serialized_notification, content_type='application/json')
 
 
-class AllNotificationsView(View):
+class AllNotificationsView(ApiKeyMixin, View):
 
     def get(self, request, event_id):
         notifications = Notification.objects.filter(sent=True, event__id=event_id).order_by('-send_time')
-        serialized_notifications = serialize(format='json', queryset=notifications)
+        serialized_notifications = serialize('json', notifications)
         return HttpResponse(content=serialized_notifications, content_type='application/json')
 
 
-class NearbyEventsView(View):
+class NearbyEventsView(ApiKeyMixin, View):
 
     def get(self, request, latitude, longitude):
         try:
             latitude = decimal.Decimal(latitude)
             longitude = decimal.Decimal(longitude)
         except Exception:
-            return HttpResponseServerError()
+            return JsonResponse({'error': 'Invalid coordinates'}, status=400)
 
-        radius = decimal.Decimal(0.5)  # 35 miles
+        radius = decimal.Decimal(0.5)
         now = timezone.now()
         events = Event.objects.filter(latitude__lte=latitude + radius,
                                       latitude__gte=latitude - radius,
@@ -91,17 +101,16 @@ class NearbyEventsView(View):
         for event in events:
             latitude_distance_from_user = latitude - event.latitude
             longitude_distance_from_user = longitude - event.longitude
-            distance = sqrt((latitude_distance_from_user * latitude_distance_from_user) + (longitude_distance_from_user * longitude_distance_from_user))
+            distance = sqrt(float(latitude_distance_from_user ** 2 + longitude_distance_from_user ** 2))
             distance_in_miles = round(distance * 69, 1)
             serialized_event = serialize('json', [event])
-            events_with_distance_from_user.append({'event': serialized_event,
-                                                   'distance': distance_in_miles})
+            events_with_distance_from_user.append({'event': serialized_event, 'distance': distance_in_miles})
 
-        sorted_events_by_distance_to_user = sorted(events_with_distance_from_user, key=lambda i: i['distance'])
-        return HttpResponse(content=sorted_events_by_distance_to_user, content_type='application/json')
+        sorted_events = sorted(events_with_distance_from_user, key=lambda i: i['distance'])
+        return HttpResponse(content=json.dumps(sorted_events), content_type='application/json')
 
 
-class EventByCodeOrNameView(View):
+class EventByCodeOrNameView(ApiKeyMixin, View):
 
     def get(self, request):
         name_or_code = request.GET.get('data')
@@ -123,27 +132,27 @@ class EventByCodeOrNameView(View):
             elif event_by_code:
                 serialized_event = serialize('json', [event_by_code])
                 return HttpResponse(content=serialized_event, content_type='application/json')
-        else:
-            return HttpResponseServerError()
+
+        return JsonResponse({'error': 'Not found'}, status=404)
 
 
-class PushNotificationsSubscribe(View):
+class PushNotificationsSubscribe(ApiKeyMixin, View):
 
     def post(self, request, device_id):
         Device.objects.filter(id=device_id).update(subscribed=True)
         return HttpResponse()
 
 
-class PushNotificationsUnSubscribe(View):
+class PushNotificationsUnSubscribe(ApiKeyMixin, View):
 
     def post(self, request, device_id):
         Device.objects.filter(id=device_id).update(subscribed=False)
         return HttpResponse()
 
 
-class SendNotifications(View):
+class SendNotifications(ApiKeyMixin, View):
 
-    def post(self):
+    def post(self, request):
         now = timezone.now()
         events = Event.objects.filter(start_time__lte=now + timedelta(days=7),
                                       start_time__gte=now - timedelta(days=3))
@@ -160,6 +169,8 @@ class SendNotifications(View):
 
                 notification.sent = True
                 notification.save()
+
+        return HttpResponse()
 
     def send_ios_notification(self, notification):
         pass
