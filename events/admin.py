@@ -5,8 +5,8 @@ from django.contrib.auth.models import User
 from events.models import Event, Location, Notification, Device
 
 
-class TenantModelAdmin(admin.ModelAdmin):
-    """Shared multi-tenant behaviour for Event, Location, and Notification."""
+class UserScopedAdminMixin:
+    """Filters all querysets and permissions to the logged-in user. Superusers see everything."""
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -55,12 +55,12 @@ class NotificationInline(admin.TabularInline):
         super().save_model(request, obj, form, change)
 
 
-class EventAdmin(TenantModelAdmin):
+class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     inlines = [LocationInline, NotificationInline]
     list_filter = ['user']
 
 
-class LocationAdmin(TenantModelAdmin):
+class LocationAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     list_filter = ['user', 'event']
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
@@ -71,7 +71,7 @@ class LocationAdmin(TenantModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
-class NotificationAdmin(TenantModelAdmin):
+class NotificationAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     list_filter = ['user', 'event']
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
