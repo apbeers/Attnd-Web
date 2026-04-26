@@ -1,17 +1,62 @@
 import decimal
-import json
 from datetime import timedelta
 from difflib import get_close_matches
 from math import sqrt
 
 from django.conf import settings
-from django.core.serializers import serialize
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.utils import timezone
 from django.views import View
 
 from events.models import Event, Location, Notification, Device
 
+
+# ---------------------------------------------------------------------------
+# Serialization helpers — return clean flat dicts, no Django wrapper
+# ---------------------------------------------------------------------------
+
+def _event_dict(event):
+    return {
+        'id': event.id,
+        'name': event.name,
+        'event_code': event.event_code,
+        'description': event.description,
+        'latitude': float(event.latitude),
+        'longitude': float(event.longitude),
+        'start_time': event.start_time.isoformat(),
+        'paid': event.paid,
+        'flyer': str(event.flyer) if event.flyer else None,
+        'address': event.address,
+    }
+
+
+def _location_dict(location):
+    return {
+        'id': location.id,
+        'name': location.name,
+        'snippet': location.snippet,
+        'description': location.description,
+        'website': location.website,
+        'image': str(location.image) if location.image else None,
+        'latitude': float(location.latitude),
+        'longitude': float(location.longitude),
+        'address': location.address,
+    }
+
+
+def _notification_dict(notification):
+    return {
+        'id': notification.id,
+        'title': notification.title,
+        'body': notification.body,
+        'send_time': notification.send_time.isoformat(),
+        'sent': notification.sent,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Auth mixin
+# ---------------------------------------------------------------------------
 
 class ApiKeyRequired:
     def dispatch(self, request, *args, **kwargs):
@@ -21,62 +66,17 @@ class ApiKeyRequired:
         return super().dispatch(request, *args, **kwargs)
 
 
-class JoinEventView(ApiKeyRequired, View):
-
-    def post(self, request, event_id, device_id):
-        event = Event.objects.filter(id=event_id).get()
-        device, created = Device.objects.get_or_create(id=device_id, defaults={'event': event})
-        if not created:
-            device.event = event
-            device.save()
-        return HttpResponse()
-
-
-class LeaveEventView(ApiKeyRequired, View):
-
-    def post(self, request, device_id, event_id):
-        Device.objects.filter(id=device_id).update(event=None)
-        return HttpResponse()
-
+# ---------------------------------------------------------------------------
+# Event endpoints
+# ---------------------------------------------------------------------------
 
 class SingleEventView(ApiKeyRequired, View):
 
     def get(self, request, event_id):
         event = Event.objects.filter(id=event_id).first()
-        serialized_event = serialize('json', [event])
-        return HttpResponse(content=serialized_event, content_type='application/json')
-
-
-class SingleLocationView(ApiKeyRequired, View):
-
-    def get(self, request, event_id, location_id):
-        location = Location.objects.filter(id=location_id).first()
-        serialized_location = serialize('json', [location])
-        return HttpResponse(content=serialized_location, content_type='application/json')
-
-
-class AllLocationsView(ApiKeyRequired, View):
-
-    def get(self, request, event_id):
-        locations = Location.objects.filter(event__id=event_id).order_by('name')
-        serialized_locations = serialize('json', locations)
-        return HttpResponse(content=serialized_locations, content_type='application/json')
-
-
-class SingleNotificationView(ApiKeyRequired, View):
-
-    def get(self, request, event_id, notification_id):
-        notification = Notification.objects.filter(event__id=event_id, id=notification_id).first()
-        serialized_notification = serialize('json', [notification])
-        return HttpResponse(content=serialized_notification, content_type='application/json')
-
-
-class AllNotificationsView(ApiKeyRequired, View):
-
-    def get(self, request, event_id):
-        notifications = Notification.objects.filter(sent=True, event__id=event_id).order_by('-send_time')
-        serialized_notifications = serialize('json', notifications)
-        return HttpResponse(content=serialized_notifications, content_type='application/json')
+        if event is None:
+            return JsonResponse({'error': 'Not found'}, status=404)
+        return JsonResponse(_event_dict(event))
 
 
 class NearbyEventsView(ApiKeyRequired, View):
@@ -90,87 +90,148 @@ class NearbyEventsView(ApiKeyRequired, View):
 
         radius = decimal.Decimal(0.5)
         now = timezone.now()
-        events = Event.objects.filter(latitude__lte=latitude + radius,
-                                      latitude__gte=latitude - radius,
-                                      longitude__lte=longitude + radius,
-                                      longitude__gte=longitude - radius,
-                                      start_time__lte=now + timedelta(days=7),
-                                      start_time__gte=now - timedelta(days=3))
+        events = Event.objects.filter(
+            latitude__lte=latitude + radius,
+            latitude__gte=latitude - radius,
+            longitude__lte=longitude + radius,
+            longitude__gte=longitude - radius,
+            start_time__lte=now + timedelta(days=7),
+            start_time__gte=now - timedelta(days=3),
+        )
 
-        events_with_distance_from_user = []
+        results = []
         for event in events:
-            latitude_distance_from_user = latitude - event.latitude
-            longitude_distance_from_user = longitude - event.longitude
-            distance = sqrt(float(latitude_distance_from_user ** 2 + longitude_distance_from_user ** 2))
-            distance_in_miles = round(distance * 69, 1)
-            serialized_event = serialize('json', [event])
-            events_with_distance_from_user.append({'event': serialized_event, 'distance': distance_in_miles})
+            lat_diff = float(latitude - event.latitude)
+            lon_diff = float(longitude - event.longitude)
+            distance_miles = round(sqrt(lat_diff ** 2 + lon_diff ** 2) * 69, 1)
+            results.append({'event': _event_dict(event), 'distance': distance_miles})
 
-        sorted_events = sorted(events_with_distance_from_user, key=lambda i: i['distance'])
-        return HttpResponse(content=json.dumps(sorted_events), content_type='application/json')
+        results.sort(key=lambda r: r['distance'])
+        return JsonResponse(results, safe=False)
 
 
 class EventByCodeOrNameView(ApiKeyRequired, View):
 
     def get(self, request):
-        name_or_code = request.GET.get('data')
-        events = Event.objects.values_list('name', 'event_code')
-        event_names_and_codes = []
-        for event in events:
-            event_names_and_codes.append(event[0])
-            event_names_and_codes.append(event[1])
+        name_or_code = request.GET.get('data', '')
+        candidates = []
+        for name, code in Event.objects.values_list('name', 'event_code'):
+            candidates.append(name)
+            candidates.append(code)
 
-        matches = get_close_matches(word=name_or_code, possibilities=event_names_and_codes, n=1)
+        matches = get_close_matches(word=name_or_code, possibilities=candidates, n=1)
+        if not matches:
+            return JsonResponse({'error': 'Not found'}, status=404)
 
-        if matches:
-            event_by_name = Event.objects.filter(name=matches[0]).first()
-            event_by_code = Event.objects.filter(event_code=matches[0]).first()
+        match = matches[0]
+        event = Event.objects.filter(name=match).first() or Event.objects.filter(event_code=match).first()
+        if event is None:
+            return JsonResponse({'error': 'Not found'}, status=404)
+        return JsonResponse(_event_dict(event))
 
-            if event_by_name:
-                serialized_event = serialize('json', [event_by_name])
-                return HttpResponse(content=serialized_event, content_type='application/json')
-            elif event_by_code:
-                serialized_event = serialize('json', [event_by_code])
-                return HttpResponse(content=serialized_event, content_type='application/json')
 
-        return JsonResponse({'error': 'Not found'}, status=404)
+# ---------------------------------------------------------------------------
+# Location endpoints
+# ---------------------------------------------------------------------------
+
+class SingleLocationView(ApiKeyRequired, View):
+
+    def get(self, request, event_id, location_id):
+        location = Location.objects.filter(event__id=event_id, id=location_id).first()
+        if location is None:
+            return JsonResponse({'error': 'Not found'}, status=404)
+        return JsonResponse(_location_dict(location))
+
+
+class AllLocationsView(ApiKeyRequired, View):
+
+    def get(self, request, event_id):
+        locations = Location.objects.filter(event__id=event_id).order_by('name')
+        return JsonResponse([_location_dict(loc) for loc in locations], safe=False)
+
+
+# ---------------------------------------------------------------------------
+# Notification endpoints
+# ---------------------------------------------------------------------------
+
+class SingleNotificationView(ApiKeyRequired, View):
+
+    def get(self, request, event_id, notification_id):
+        notification = Notification.objects.filter(event__id=event_id, id=notification_id).first()
+        if notification is None:
+            return JsonResponse({'error': 'Not found'}, status=404)
+        return JsonResponse(_notification_dict(notification))
+
+
+class AllNotificationsView(ApiKeyRequired, View):
+
+    def get(self, request, event_id):
+        notifications = Notification.objects.filter(sent=True, event__id=event_id).order_by('-send_time')
+        return JsonResponse([_notification_dict(n) for n in notifications], safe=False)
+
+
+# ---------------------------------------------------------------------------
+# Device / membership endpoints
+# ---------------------------------------------------------------------------
+
+class JoinEventView(ApiKeyRequired, View):
+
+    def post(self, request, event_id, device_id):
+        event = Event.objects.filter(id=event_id).first()
+        if event is None:
+            return JsonResponse({'error': 'Event not found'}, status=404)
+        device, created = Device.objects.get_or_create(id=device_id, defaults={'event': event})
+        if not created:
+            device.event = event
+            device.save()
+        return JsonResponse({'status': 'ok'})
+
+
+class LeaveEventView(ApiKeyRequired, View):
+
+    def post(self, request, device_id, event_id):
+        Device.objects.filter(id=device_id).update(event=None)
+        return JsonResponse({'status': 'ok'})
 
 
 class PushNotificationsSubscribe(ApiKeyRequired, View):
 
     def post(self, request, device_id):
         Device.objects.filter(id=device_id).update(subscribed=True)
-        return HttpResponse()
+        return JsonResponse({'status': 'ok'})
 
 
 class PushNotificationsUnSubscribe(ApiKeyRequired, View):
 
     def post(self, request, device_id):
         Device.objects.filter(id=device_id).update(subscribed=False)
-        return HttpResponse()
+        return JsonResponse({'status': 'ok'})
 
+
+# ---------------------------------------------------------------------------
+# Internal: send queued notifications (no auth — called by scheduler)
+# ---------------------------------------------------------------------------
 
 class SendNotifications(View):
 
     def post(self, request):
         now = timezone.now()
-        events = Event.objects.filter(start_time__lte=now + timedelta(days=7),
-                                      start_time__gte=now - timedelta(days=3))
-
+        events = Event.objects.filter(
+            start_time__lte=now + timedelta(days=7),
+            start_time__gte=now - timedelta(days=3),
+        )
         for event in events:
             notifications = Notification.objects.filter(event=event, sent=False, send_time__lte=now)
             devices = Device.objects.filter(event=event, subscribed=True)
             for notification in notifications:
                 for device in devices:
-                    if device.platform == 'android':
-                        self.send_android_notification(notification)
-                    elif device.platform == 'ios':
+                    if device.platform == 'ios':
                         self.send_ios_notification(notification)
-
+                    elif device.platform == 'android':
+                        self.send_android_notification(notification)
                 notification.sent = True
                 notification.save()
-
-        return HttpResponse()
+        return JsonResponse({'status': 'ok'})
 
     def send_ios_notification(self, notification):
         pass
