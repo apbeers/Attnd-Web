@@ -4,3 +4,5 @@ venv
 media
 staticfiles
 db.sqlite3
+gcs-prod-service-account.json
+gcs-test-service-account.json
