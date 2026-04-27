@@ -47,7 +47,7 @@ class UserScopedAdminMixin:
 
     def get_readonly_fields(self, request, obj=None):
         if not request.user.is_superuser:
-            return ['user', 'paid']
+            return ['user']
         return []
 
 
@@ -78,7 +78,7 @@ class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         ro = ['admin_qr_code']
         if not request.user.is_superuser:
-            ro.append('user')
+            ro += ['user', 'paid']
         return ro
 
     def admin_qr_code(self, obj):
