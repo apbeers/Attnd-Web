@@ -47,7 +47,7 @@ class UserScopedAdminMixin:
 
     def get_readonly_fields(self, request, obj=None):
         if not request.user.is_superuser:
-            return ['user']
+            return ['user', 'paid']
         return []
 
 
