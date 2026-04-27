@@ -7,6 +7,8 @@ from math import sqrt
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from django.views import View
 
 from events.models import Event, Location, Notification, Device
@@ -86,6 +88,7 @@ class ApiKeyRequired:
 # Event endpoints
 # ---------------------------------------------------------------------------
 
+@method_decorator(csrf_exempt, name='dispatch')
 class SingleEventView(ApiKeyRequired, View):
 
     def get(self, request, event_id):
@@ -95,6 +98,7 @@ class SingleEventView(ApiKeyRequired, View):
         return JsonResponse(_event_dict(event, request))
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class NearbyEventsView(ApiKeyRequired, View):
 
     def get(self, request, latitude, longitude):
@@ -134,6 +138,7 @@ class NearbyEventsView(ApiKeyRequired, View):
         return JsonResponse({'results': results, 'count': len(results)})
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class EventByCodeOrNameView(ApiKeyRequired, View):
 
     def get(self, request):
@@ -157,6 +162,7 @@ class EventByCodeOrNameView(ApiKeyRequired, View):
         return JsonResponse(_event_dict(event, request))
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class EventLookupView(ApiKeyRequired, View):
     """Exact match by name or event_code. Does not filter by public — for organizer use."""
 
@@ -177,6 +183,7 @@ class EventLookupView(ApiKeyRequired, View):
 # Location endpoints
 # ---------------------------------------------------------------------------
 
+@method_decorator(csrf_exempt, name='dispatch')
 class SingleLocationView(ApiKeyRequired, View):
 
     def get(self, request, event_id, location_id):
@@ -186,6 +193,7 @@ class SingleLocationView(ApiKeyRequired, View):
         return JsonResponse(_location_dict(location, request))
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class AllLocationsView(ApiKeyRequired, View):
 
     def get(self, request, event_id):
@@ -198,6 +206,7 @@ class AllLocationsView(ApiKeyRequired, View):
 # Notification endpoints
 # ---------------------------------------------------------------------------
 
+@method_decorator(csrf_exempt, name='dispatch')
 class SingleNotificationView(ApiKeyRequired, View):
 
     def get(self, request, event_id, notification_id):
@@ -207,6 +216,7 @@ class SingleNotificationView(ApiKeyRequired, View):
         return JsonResponse(_notification_dict(notification))
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class AllNotificationsView(ApiKeyRequired, View):
 
     def get(self, request, event_id):
@@ -219,6 +229,7 @@ class AllNotificationsView(ApiKeyRequired, View):
 # Device / membership endpoints
 # ---------------------------------------------------------------------------
 
+@method_decorator(csrf_exempt, name='dispatch')
 class JoinEventView(ApiKeyRequired, View):
 
     def post(self, request, event_id, device_id):
@@ -244,6 +255,7 @@ class JoinEventView(ApiKeyRequired, View):
         return JsonResponse({'status': 'ok'})
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LeaveEventView(ApiKeyRequired, View):
 
     def post(self, request, device_id, event_id):
@@ -251,6 +263,7 @@ class LeaveEventView(ApiKeyRequired, View):
         return JsonResponse({'status': 'ok'})
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PushNotificationsSubscribe(ApiKeyRequired, View):
 
     def post(self, request, device_id):
@@ -258,6 +271,7 @@ class PushNotificationsSubscribe(ApiKeyRequired, View):
         return JsonResponse({'status': 'ok'})
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PushNotificationsUnSubscribe(ApiKeyRequired, View):
 
     def post(self, request, device_id):
@@ -269,6 +283,7 @@ class PushNotificationsUnSubscribe(ApiKeyRequired, View):
 # Internal: send queued notifications (no auth — called by scheduler)
 # ---------------------------------------------------------------------------
 
+@method_decorator(csrf_exempt, name='dispatch')
 class SendNotifications(View):
 
     def post(self, request):
