@@ -8,4 +8,4 @@ cloudinary==1.44.0
 django-cloudinary-storage==0.3.0
 qrcode[pil]==8.1
 crawl4ai==0.8.6
-openai==1.82.0
+openai>=2.8.0,<3.0.0

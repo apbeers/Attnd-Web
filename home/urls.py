@@ -6,4 +6,5 @@ app_name = 'home'
 urlpatterns = [
     # Home Page
     path('', views.home, name='homepage'),
+    path('privacy/', views.privacy, name='privacy'),
 ]
