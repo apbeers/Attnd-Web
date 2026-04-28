@@ -18,6 +18,9 @@ jobs:
       with:
         python-version: '3.13'
 
+    - name: Print build number
+      run: echo "Build $(cat version.txt)"
+
     - name: Install uv
       uses: astral-sh/setup-uv@v6
 

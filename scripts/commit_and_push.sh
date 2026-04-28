@@ -10,5 +10,6 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
+bash "$REPO/scripts/increment_version.sh"
 bash "$REPO/scripts/commit.sh" "$1"
 bash "$REPO/scripts/push.sh" "${2:-}"
