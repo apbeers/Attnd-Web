@@ -3,6 +3,7 @@ import uuid
 from django.contrib.auth.models import User
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 
 
 def get_file_path(instance, filename):
@@ -23,6 +24,7 @@ class Event(models.Model):
     flyer = models.FileField(upload_to=get_file_path, blank=True)
     address = models.CharField(max_length=512)
     order_id = models.CharField(max_length=512, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     class Meta:

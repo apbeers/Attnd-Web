@@ -110,7 +110,7 @@ def scrape_view(request):
         longitude=data.get("longitude") or 0,
         start_time=start_time,
         paid=False,
-        public=False,
+        public=True,
         address=data.get("address", "")[:512],
         user=trial_user,
     )
