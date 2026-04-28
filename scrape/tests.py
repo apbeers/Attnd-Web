@@ -4,44 +4,50 @@ Tests for the scrape app.
 crawl4ai and openai are mocked — no real network calls.
 """
 
+import copy
 import json
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from django.core.cache import cache
 from django.test import TestCase, Client
 
 from events.models import Event, Location
 from django.contrib.auth.models import User
 
 
-SAMPLE_EXTRACTED = {
-    "name": "Test County Fair",
-    "description": "The best fair in the county.",
-    "address": "123 Fair Ln, Testville, TX 75001",
-    "latitude": 32.7767,
-    "longitude": -96.7970,
-    "start_time": "2026-07-04T18:00:00+00:00",
-    "locations": [
-        {
-            "name": "Main Stage",
-            "snippet": "Live music all day long.",
-            "description": "The main performance area with seating for 500.",
-            "website": "https://example.com/stage",
-            "address": "123 Fair Ln, Testville, TX 75001",
-            "latitude": 32.7768,
-            "longitude": -96.7971,
-        },
-        {
-            "name": "Food Court",
-            "snippet": "All your favourite fair foods.",
-            "description": "Over 30 food vendors serving local favourites.",
-            "website": None,
-            "address": "124 Fair Ln, Testville, TX 75001",
-            "latitude": 32.7769,
-            "longitude": -96.7972,
-        },
-    ],
-}
+def _sample_data(**overrides):
+    """Return a fresh deep copy of sample extracted data, with optional overrides."""
+    base = {
+        "name": "Test County Fair",
+        "description": "The best fair in the county.",
+        "address": "123 Fair Ln, Testville, TX 75001",
+        "latitude": 32.7767,
+        "longitude": -96.7970,
+        "start_time": "2026-07-04T18:00:00+00:00",
+        "locations": [
+            {
+                "name": "Main Stage",
+                "snippet": "Live music all day long.",
+                "description": "The main performance area with seating for 500.",
+                "website": "https://example.com/stage",
+                "address": "123 Fair Ln, Testville, TX 75001",
+                "latitude": 32.7768,
+                "longitude": -96.7971,
+            },
+            {
+                "name": "Food Court",
+                "snippet": "All your favourite fair foods.",
+                "description": "Over 30 food vendors serving local favourites.",
+                "website": None,
+                "address": "124 Fair Ln, Testville, TX 75001",
+                "latitude": 32.7769,
+                "longitude": -96.7972,
+            },
+        ],
+    }
+    base.update(overrides)
+    return base
 
 
 def _make_crawl_result(url="https://example.com", markdown="# Test Event\n\nSome content."):
@@ -65,6 +71,8 @@ class ScrapeViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = "/scrape/"
+        # Rate limit uses Django's cache — clear it so tests don't bleed into each other.
+        cache.clear()
 
     def _post(self, payload):
         return self.client.post(
@@ -73,15 +81,13 @@ class ScrapeViewTests(TestCase):
             content_type="application/json",
         )
 
-    # ------------------------------------------------------------------ helpers
-
     def _patch_service(self, return_value=None, side_effect=None):
         """Patch scrape_event at the view import level."""
         kwargs = {}
         if side_effect:
             kwargs["side_effect"] = side_effect
         else:
-            kwargs["return_value"] = return_value or SAMPLE_EXTRACTED
+            kwargs["return_value"] = return_value if return_value is not None else _sample_data()
         return patch("scrape.views.scrape_event", **kwargs)
 
     # ------------------------------------------------------------------ tests
@@ -112,7 +118,7 @@ class ScrapeViewTests(TestCase):
         self.assertEqual(event.name, "Test County Fair")
         self.assertEqual(event.user.username, "trialuser")
         self.assertFalse(event.paid)
-        self.assertFalse(event.public)
+        self.assertTrue(event.public)  # trial events are public so users can test the app
         self.assertEqual(Location.objects.filter(event=event).count(), 2)
 
     def test_trialuser_created_with_unusable_password(self):
@@ -137,19 +143,18 @@ class ScrapeViewTests(TestCase):
 
     def test_event_code_is_unique(self):
         """Two requests produce two different event codes."""
-        with self._patch_service():
+        with self._patch_service(return_value=_sample_data(name="Fair One")):
             r1 = self._post({"url": "https://example.com"})
 
-        # Change name so Event.name unique constraint doesn't collide
-        alt = {**SAMPLE_EXTRACTED, "name": "Another Fair"}
-        with self._patch_service(return_value=alt):
+        with self._patch_service(return_value=_sample_data(name="Fair Two")):
             r2 = self._post({"url": "https://other.com"})
 
+        self.assertEqual(r1.status_code, 201)
+        self.assertEqual(r2.status_code, 201)
         self.assertNotEqual(r1.json()["event_code"], r2.json()["event_code"])
 
     def test_null_start_time_uses_default(self):
-        data = {**SAMPLE_EXTRACTED, "start_time": None}
-        with self._patch_service(return_value=data):
+        with self._patch_service(return_value=_sample_data(start_time=None)):
             resp = self._post({"url": "https://example.com"})
 
         self.assertEqual(resp.status_code, 201)
@@ -160,15 +165,14 @@ class ScrapeViewTests(TestCase):
 
     def test_rate_limit(self):
         """After 5 requests from the same IP, the 6th is rejected."""
-        with self._patch_service():
-            for _ in range(5):
+        # Use distinct names to avoid the Event.name unique constraint.
+        for i in range(5):
+            with self._patch_service(return_value=_sample_data(name=f"Rate Limit Fair {i}")):
                 resp = self._post({"url": "https://example.com"})
-                # Give each a unique name to avoid unique constraint issues
-                SAMPLE_EXTRACTED["name"] = f"Fair {_}"
+            self.assertNotEqual(resp.status_code, 429, f"Request {i+1} was unexpectedly rate-limited")
 
-            # 6th request (still patched but rate limiter fires first)
-            resp = self._post({"url": "https://example.com"})
-
+        # 6th request — rate limiter fires before scrape_event is even called
+        resp = self._post({"url": "https://example.com"})
         self.assertEqual(resp.status_code, 429)
 
 
@@ -178,7 +182,8 @@ class ScrapeServiceTests(TestCase):
     @patch("scrape.service.AsyncWebCrawler")
     @patch("scrape.service.OpenAI")
     def test_scrape_event_returns_dict(self, mock_openai_cls, mock_crawler_cls):
-        # Setup crawler mock
+        data = _sample_data()
+
         mock_result = _make_crawl_result()
         mock_crawler = AsyncMock()
         mock_crawler.arun = AsyncMock(return_value=[mock_result])
@@ -186,9 +191,8 @@ class ScrapeServiceTests(TestCase):
         mock_crawler.__aexit__ = AsyncMock(return_value=False)
         mock_crawler_cls.return_value = mock_crawler
 
-        # Setup OpenAI mock
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(SAMPLE_EXTRACTED)
+        mock_client.chat.completions.create.return_value = _mock_openai_response(data)
         mock_openai_cls.return_value = mock_client
 
         from scrape.service import scrape_event
