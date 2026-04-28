@@ -1,13 +1,12 @@
 """
 Tests for the scrape app.
 
-crawl4ai and openai are mocked — no real network calls.
+httpx and openai are mocked — no real network calls.
 """
 
-import copy
 import json
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
 from django.test import TestCase, Client
@@ -48,14 +47,6 @@ def _sample_data(**overrides):
     }
     base.update(overrides)
     return base
-
-
-def _make_crawl_result(url="https://example.com", markdown="# Test Event\n\nSome content."):
-    r = MagicMock()
-    r.success = True
-    r.url = url
-    r.markdown = markdown
-    return r
 
 
 def _mock_openai_response(data: dict):
@@ -179,18 +170,10 @@ class ScrapeViewTests(TestCase):
 class ScrapeServiceTests(TestCase):
     """Unit tests for service.py internals (crawl + extract)."""
 
-    @patch("scrape.service.AsyncWebCrawler")
+    @patch("scrape.service._crawl", return_value="## Source: https://example.com\n\n# Test Event\n\nSome content.")
     @patch("scrape.service.OpenAI")
-    def test_scrape_event_returns_dict(self, mock_openai_cls, mock_crawler_cls):
+    def test_scrape_event_returns_dict(self, mock_openai_cls, mock_crawl):
         data = _sample_data()
-
-        mock_result = _make_crawl_result()
-        mock_crawler = AsyncMock()
-        mock_crawler.arun = AsyncMock(return_value=[mock_result])
-        mock_crawler.__aenter__ = AsyncMock(return_value=mock_crawler)
-        mock_crawler.__aexit__ = AsyncMock(return_value=False)
-        mock_crawler_cls.return_value = mock_crawler
-
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = _mock_openai_response(data)
         mock_openai_cls.return_value = mock_client
@@ -201,30 +184,15 @@ class ScrapeServiceTests(TestCase):
         self.assertEqual(result["name"], "Test County Fair")
         self.assertEqual(len(result["locations"]), 2)
 
-    @patch("scrape.service.AsyncWebCrawler")
-    def test_empty_crawl_raises_value_error(self, mock_crawler_cls):
-        mock_result = _make_crawl_result(markdown="")
-        mock_result.success = True
-        mock_crawler = AsyncMock()
-        mock_crawler.arun = AsyncMock(return_value=[mock_result])
-        mock_crawler.__aenter__ = AsyncMock(return_value=mock_crawler)
-        mock_crawler.__aexit__ = AsyncMock(return_value=False)
-        mock_crawler_cls.return_value = mock_crawler
-
+    @patch("scrape.service._crawl", return_value="")
+    def test_empty_crawl_raises_value_error(self, mock_crawl):
         from scrape.service import scrape_event
         with self.assertRaises(ValueError):
             scrape_event("https://empty.com")
 
-    @patch("scrape.service.AsyncWebCrawler")
+    @patch("scrape.service._crawl", return_value="## Source: https://example.com\n\nSome content.")
     @patch("scrape.service.OpenAI")
-    def test_bad_openai_json_raises_value_error(self, mock_openai_cls, mock_crawler_cls):
-        mock_result = _make_crawl_result()
-        mock_crawler = AsyncMock()
-        mock_crawler.arun = AsyncMock(return_value=[mock_result])
-        mock_crawler.__aenter__ = AsyncMock(return_value=mock_crawler)
-        mock_crawler.__aexit__ = AsyncMock(return_value=False)
-        mock_crawler_cls.return_value = mock_crawler
-
+    def test_bad_openai_json_raises_value_error(self, mock_openai_cls, mock_crawl):
         mock_client = MagicMock()
         bad_choice = MagicMock()
         bad_choice.message.content = "not valid json {{{"

@@ -1,18 +1,19 @@
 """
 Event scraping service.
 
-Crawls a URL with crawl4ai (BFS, max 2 deep / 10 pages), then sends the
-combined markdown to OpenAI to extract a structured Event + Locations payload.
+Crawls a URL with httpx + BeautifulSoup (BFS, max 2 deep / 10 pages), then
+sends the combined text to OpenAI to extract a structured Event + Locations
+payload.  No browser required — works on Heroku and any plain Python env.
 """
 
-import asyncio
 import json
-import os
 import textwrap
+from collections import deque
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urljoin, urlparse
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
-from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
+import httpx
+from bs4 import BeautifulSoup
 
 from openai import OpenAI
 
@@ -66,42 +67,81 @@ SYSTEM_PROMPT = textwrap.dedent("""
     - Return only valid JSON matching the schema — no commentary.
 """).strip()
 
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; AttndBot/1.0; +https://attnd.app)",
+}
 
-async def _crawl(url: str) -> str:
+
+def _page_text(html: str) -> str:
+    """Extract visible text from HTML, stripping scripts/styles."""
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript", "meta", "head"]):
+        tag.decompose()
+    return " ".join(soup.get_text(separator=" ").split())
+
+
+def _same_origin_links(html: str, base_url: str) -> list[str]:
+    """Return same-origin href links found in the page."""
+    soup = BeautifulSoup(html, "html.parser")
+    base = urlparse(base_url)
+    links = []
+    for tag in soup.find_all("a", href=True):
+        href = urljoin(base_url, tag["href"])
+        parsed = urlparse(href)
+        if parsed.scheme in ("http", "https") and parsed.netloc == base.netloc:
+            # Drop fragment; normalise
+            links.append(parsed._replace(fragment="").geturl())
+    return links
+
+
+def _crawl(url: str, max_depth: int = 2, max_pages: int = 10) -> str:
     """
-    Crawl the given URL (BFS depth 2, max 10 pages) and return combined markdown.
+    BFS crawl starting at url.  Stays on the same origin, visits at most
+    max_pages pages up to max_depth levels deep, returns combined text.
     """
-    strategy = BFSDeepCrawlStrategy(max_depth=2, max_pages=10)
-    browser_cfg = BrowserConfig(headless=True, verbose=False)
-    run_cfg = CrawlerRunConfig(deep_crawl_strategy=strategy)
+    visited: set[str] = set()
+    queue: deque[tuple[str, int]] = deque([(url, 0)])
+    parts: list[str] = []
 
-    async with AsyncWebCrawler(config=browser_cfg) as crawler:
-        results = await crawler.arun(url, config=run_cfg)
+    with httpx.Client(headers=_HEADERS, timeout=15, follow_redirects=True) as client:
+        while queue and len(visited) < max_pages:
+            current_url, depth = queue.popleft()
+            if current_url in visited:
+                continue
+            visited.add(current_url)
 
-    if isinstance(results, list):
-        pages = results
-    else:
-        pages = [results]
+            try:
+                resp = client.get(current_url)
+                resp.raise_for_status()
+            except Exception:
+                continue
 
-    parts = []
-    for r in pages:
-        if r.success and r.markdown:
-            md = r.markdown.strip()
-            if md:
-                parts.append(f"## Source: {r.url}\n\n{md}")
+            content_type = resp.headers.get("content-type", "")
+            if "html" not in content_type:
+                continue
+
+            html = resp.text
+            text = _page_text(html)
+            if text:
+                parts.append(f"## Source: {current_url}\n\n{text}")
+
+            if depth < max_depth:
+                for link in _same_origin_links(html, current_url):
+                    if link not in visited:
+                        queue.append((link, depth + 1))
 
     return "\n\n---\n\n".join(parts)
 
 
-def _extract(markdown: str) -> dict:
+def _extract(content: str) -> dict:
     """
-    Send the crawled markdown to OpenAI and return parsed event dict.
+    Send the crawled text to OpenAI and return parsed event dict.
     Raises ValueError if the response cannot be parsed.
     """
     client = OpenAI()  # reads OPENAI_API_KEY from environment automatically
 
     # Trim to ~120k chars to stay within context limits
-    content = markdown[:120_000]
+    trimmed = content[:120_000]
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -115,7 +155,7 @@ def _extract(markdown: str) -> dict:
         },
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Extract event data from the following scraped content:\n\n{content}"},
+            {"role": "user", "content": f"Extract event data from the following scraped content:\n\n{trimmed}"},
         ],
         temperature=0,
     )
@@ -142,11 +182,11 @@ def scrape_event(url: str) -> dict:
     Each location has: name, snippet, description, website, address, latitude, longitude
     Raises ValueError on extraction failure.
     """
-    markdown = asyncio.run(_crawl(url))
-    if not markdown.strip():
+    content = _crawl(url)
+    if not content.strip():
         raise ValueError("No content could be retrieved from that URL.")
 
-    data = _extract(markdown)
+    data = _extract(content)
 
     # Fill in start_time default if missing or null
     if not data.get("start_time"):
