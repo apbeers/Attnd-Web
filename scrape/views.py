@@ -88,15 +88,18 @@ def scrape_view(request):
     except Exception as exc:
         return JsonResponse({"error": f"Scraping failed: {exc}"}, status=500)
 
-    # Parse start_time
-    start_time = parse_datetime(data["start_time"])
-    if start_time is None:
-        # Fallback: just use the raw string forced through strptime best-effort
-        try:
-            start_time = datetime.fromisoformat(data["start_time"])
-        except ValueError:
-            from datetime import timezone, timedelta
-            start_time = datetime.now(timezone.utc) + timedelta(days=30)
+    # Parse start_time — guard against None before calling parse_datetime
+    from datetime import timezone, timedelta
+    raw_time = data.get("start_time")
+    if not raw_time:
+        start_time = datetime.now(timezone.utc) + timedelta(days=30)
+    else:
+        start_time = parse_datetime(raw_time)
+        if start_time is None:
+            try:
+                start_time = datetime.fromisoformat(raw_time)
+            except ValueError:
+                start_time = datetime.now(timezone.utc) + timedelta(days=30)
 
     # Write to DB
     trial_user = _get_or_create_trial_user()
