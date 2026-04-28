@@ -98,7 +98,7 @@ def _extract(markdown: str) -> dict:
     Send the crawled markdown to OpenAI and return parsed event dict.
     Raises ValueError if the response cannot be parsed.
     """
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = OpenAI()  # reads OPENAI_API_KEY from environment automatically
 
     # Trim to ~120k chars to stay within context limits
     content = markdown[:120_000]
