@@ -11,5 +11,6 @@ if [ -z "$1" ]; then
 fi
 
 bash "$REPO/scripts/increment_version.sh"
+uv lock --quiet
 bash "$REPO/scripts/commit.sh" "$1"
 bash "$REPO/scripts/push.sh" "${2:-}"
