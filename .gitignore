@@ -7,3 +7,6 @@ db.sqlite3
 gcs-prod-service-account.json
 gcs-test-service-account.json
 .claude/
+
+# GitHub PAT for agent push — never commit
+.push-token
