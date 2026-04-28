@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -eo pipefail
+echo "-----> Installing Playwright Chromium browser into slug"
+playwright install chromium
