@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'console.apps.ConsoleConfig',
     'home.apps.HomeConfig',
     'join.apps.JoinConfig',
+    'scrape.apps.ScrapeConfig',
 ]
 
 MIDDLEWARE = [

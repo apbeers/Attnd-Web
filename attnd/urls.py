@@ -11,6 +11,7 @@ urlpatterns = [
     path('console/', include('console.urls'), name='console'),
     path('api/v1/events/', include('events.urls'), name='events'),
     path('join/', include('join.urls')),
+    path('scrape/', include('scrape.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
     path('.well-known/apple-app-site-association', join_views.AppleAppSiteAssociation.as_view(), name='aasa'),
     path('.well-known/assetlinks.json', join_views.AndroidAssetLinks.as_view(), name='android_asset_links'),

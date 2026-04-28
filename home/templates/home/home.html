@@ -60,6 +60,9 @@
                     <a class="nav-link" href="#features">Features</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" href="#try-it">Try It Free</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link" href="#contact">Contact</a>
                 </li>
                 <li class="nav-item">
@@ -177,6 +180,148 @@
         </div>
     </div>
 </section>
+
+<!-- Try It Free Section -->
+<section class="features" id="try-it" style="background-color: #f8f9fa;">
+    <div class="container">
+        <div class="section-heading text-center">
+            <h2>Already Have an Event? Let Us Set It Up.</h2>
+            <p class="text-muted">Paste your event website URL and we'll automatically pull in all the details — locations, times, descriptions — ready for the app.</p>
+            <hr>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-lg-7">
+                <div class="card shadow-sm border-0 p-4">
+                    <div id="scrape-form-area">
+                        <label for="event-url" class="form-label fw-semibold">Your event website URL</label>
+                        <div class="input-group mb-3">
+                            <input
+                                type="url"
+                                id="event-url"
+                                class="form-control form-control-lg"
+                                placeholder="https://yourevent.com"
+                                autocomplete="off"
+                            >
+                            <button class="btn btn-primary btn-lg" id="scrape-btn" type="button">
+                                Build My Event
+                            </button>
+                        </div>
+                        <p class="text-muted small mb-0">We'll crawl your site, extract event info, and give you a code to try in the app — no account needed.</p>
+                    </div>
+
+                    <!-- Spinner (hidden by default) -->
+                    <div id="scrape-loading" class="text-center py-4" style="display:none !important;">
+                        <div class="spinner-border text-primary mb-3" role="status" style="width:3rem;height:3rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted">Scanning your event site… this takes about 15–30 seconds.</p>
+                    </div>
+
+                    <!-- Success card (hidden by default) -->
+                    <div id="scrape-success" style="display:none !important;">
+                        <div class="text-center mb-3">
+                            <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                            <h4 class="fw-bold">Your event is ready!</h4>
+                        </div>
+                        <p class="text-muted text-center">Open the Attnd app, tap <strong>Join Event</strong>, and enter this code:</p>
+                        <div class="text-center my-3">
+                            <span id="result-code" class="display-6 fw-bold text-primary font-monospace"></span>
+                        </div>
+                        <p id="result-summary" class="text-muted text-center small"></p>
+                        <div class="text-center mt-3">
+                            <button class="btn btn-outline-secondary btn-sm" id="scrape-again-btn">Try another URL</button>
+                        </div>
+                    </div>
+
+                    <!-- Error card (hidden by default) -->
+                    <div id="scrape-error" class="alert alert-danger mb-0" style="display:none !important;" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <span id="error-message"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+(function () {
+    const btn = document.getElementById('scrape-btn');
+    const againBtn = document.getElementById('scrape-again-btn');
+    const formArea = document.getElementById('scrape-form-area');
+    const loading = document.getElementById('scrape-loading');
+    const success = document.getElementById('scrape-success');
+    const errorDiv = document.getElementById('scrape-error');
+    const errorMsg = document.getElementById('error-message');
+    const resultCode = document.getElementById('result-code');
+    const resultSummary = document.getElementById('result-summary');
+
+    function show(el) { el.style.removeProperty('display'); el.style.display = 'block'; }
+    function hide(el) { el.style.setProperty('display', 'none', 'important'); }
+
+    function reset() {
+        show(formArea);
+        hide(loading);
+        hide(success);
+        hide(errorDiv);
+    }
+
+    btn.addEventListener('click', async function () {
+        const url = document.getElementById('event-url').value.trim();
+        if (!url) {
+            document.getElementById('event-url').focus();
+            return;
+        }
+
+        hide(formArea);
+        hide(success);
+        hide(errorDiv);
+        show(loading);
+        btn.disabled = true;
+
+        try {
+            const resp = await fetch('/scrape/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            });
+            const data = await resp.json();
+
+            hide(loading);
+
+            if (resp.ok) {
+                resultCode.textContent = data.event_code;
+                const locText = data.location_count === 1
+                    ? '1 location'
+                    : `${data.location_count} locations`;
+                resultSummary.textContent = `"${data.event_name}" — ${locText} imported.`;
+                show(success);
+            } else {
+                errorMsg.textContent = data.error || 'Something went wrong. Please try again.';
+                show(formArea);
+                show(errorDiv);
+            }
+        } catch (e) {
+            hide(loading);
+            errorMsg.textContent = 'Network error — please check your connection and try again.';
+            show(formArea);
+            show(errorDiv);
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    againBtn.addEventListener('click', function () {
+        document.getElementById('event-url').value = '';
+        reset();
+    });
+
+    // Allow Enter key in the input
+    document.getElementById('event-url').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') btn.click();
+    });
+}());
+</script>
 
 <section class="cta">
     <div class="cta-content">

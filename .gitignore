@@ -10,3 +10,6 @@ gcs-test-service-account.json
 
 # GitHub PAT for agent push — never commit
 .push-token
+
+# Local env secrets — never commit
+.env
