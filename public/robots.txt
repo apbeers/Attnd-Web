@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Allow: /join/
+Allow: /privacy/
+
+Disallow: /admin/
+Disallow: /console/
+Disallow: /api/
+Disallow: /accounts/
+Disallow: /scrape/
+Disallow: /.well-known/
+
+Sitemap: https://attnd.app/sitemap.xml
