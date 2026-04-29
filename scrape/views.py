@@ -1,4 +1,5 @@
 import json
+import logging
 import secrets
 import string
 from datetime import datetime
@@ -12,6 +13,8 @@ from django.views.decorators.http import require_POST
 
 from events.models import Event, Location
 from scrape.service import scrape_event
+
+logger = logging.getLogger(__name__)
 
 TRIAL_USERNAME = "trialuser"
 RATE_LIMIT_PER_IP = 5       # max requests per window
@@ -81,11 +84,14 @@ def scrape_view(request):
         return JsonResponse({"error": "URL must start with http:// or https://"}, status=400)
 
     # Scrape
+    logger.info("Scrape request from %s for URL: %s", ip, url)
     try:
         data = scrape_event(url)
     except ValueError as exc:
+        logger.warning("Scrape ValueError for %s: %s", url, exc)
         return JsonResponse({"error": str(exc)}, status=422)
     except Exception as exc:
+        logger.exception("Scrape unexpected error for %s", url)
         return JsonResponse({"error": f"Scraping failed: {exc}"}, status=500)
 
     # Parse start_time — guard against None before calling parse_datetime
