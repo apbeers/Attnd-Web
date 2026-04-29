@@ -297,18 +297,29 @@
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutes
 
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
             const resp = await fetch('/scrape/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
+                body: JSON.stringify({ url, timezone }),
                 signal: controller.signal,
             });
             clearTimeout(timeoutId);
-            const data = await resp.json();
+
+            // Response is streamed — read full text then parse.
+            // Leading newlines are keepalive bytes sent to prevent proxy timeouts.
+            const text = await resp.text();
+            let data;
+            try {
+                data = JSON.parse(text.trim());
+            } catch (_) {
+                throw new Error('Unexpected response from server.');
+            }
 
             hide(loading);
 
-            if (resp.ok) {
+            if (!data.error) {
                 resultCode.textContent = data.event_code;
                 resultQr.src = data.qr_code;
                 const locText = data.location_count === 1
@@ -326,7 +337,7 @@
             hide(loading);
             errorMsg.textContent = e.name === 'AbortError'
                 ? 'This is taking longer than expected. Your event may still be processing — please try again in a moment.'
-                : 'Network error — please check your connection and try again.';
+                : (e.message || 'Network error — please check your connection and try again.');
             show(formArea);
             show(errorDiv);
         } finally {

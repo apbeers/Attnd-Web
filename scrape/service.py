@@ -210,10 +210,11 @@ _GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 _PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 
 
-def _geocode(query: str, api_key: str) -> tuple[float, float, str] | None:
+def _geocode(query: str, api_key: str) -> tuple[float, float, str, None] | None:
     """
     Geocode a free-text address or place name.
-    Returns (lat, lng, formatted_address) or None on failure.
+    Returns (lat, lng, formatted_address, None) or None on failure.
+    The trailing None keeps the shape consistent with _places_text_search.
     """
     try:
         resp = httpx.get(
@@ -222,12 +223,19 @@ def _geocode(query: str, api_key: str) -> tuple[float, float, str] | None:
             timeout=8,
         )
         resp.raise_for_status()
-        results = resp.json().get("results", [])
+        body = resp.json()
+        status = body.get("status", "UNKNOWN")
+        results = body.get("results", [])
         if not results:
+            error_msg = body.get("error_message", "")
+            logger.warning(
+                "Geocode zero results for %r (status=%s%s)",
+                query, status, f": {error_msg}" if error_msg else "",
+            )
             return None
         loc = results[0]["geometry"]["location"]
         address = results[0].get("formatted_address", "")
-        return loc["lat"], loc["lng"], address
+        return loc["lat"], loc["lng"], address, None
     except Exception as exc:
         logger.warning("Geocode failed for %r: %s", query, exc)
         return None
@@ -328,17 +336,23 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
         logger.warning("Could not geocode event %r", geocode_query)
 
     # ---- Location-level enrichment ----
+    bias_lat = float(event_lat) if event_lat else None
+    bias_lng = float(event_lng) if event_lng else None
+
     for loc in data.get("locations", []):
         loc_name = loc.get("name", "")
         loc_address = loc.get("address", "")
 
-        # Build a targeted query: "Main Stage Lost N Sound Festival" or just the address
+        result = None
+
+        # Primary: geocode by address if we have one
         if loc_address and len(loc_address) > 5:
-            query = loc_address
-            result = _geocode(query, api_key)
-        else:
-            query = f"{loc_name} {event_name}".strip()
-            result = _places_text_search(query, api_key, event_lat or None, event_lng or None)
+            result = _geocode(loc_address, api_key)
+
+        # Fallback: Places text search (works even when Geocoding API is restricted)
+        if result is None:
+            places_query = f"{loc_name} {event_name}".strip() if event_name else loc_name
+            result = _places_text_search(places_query, api_key, bias_lat, bias_lng)
 
         if result:
             lat, lng, address, photo_url = result
@@ -351,10 +365,10 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
                 logger.info("  Location %r photo from Places: %s", loc_name, photo_url[:80])
             logger.info("  Location %r geocoded: %.5f, %.5f", loc_name, lat, lng)
         else:
-            # Fall back to the event coordinates so the pin at least appears on the map
+            # Last resort: inherit event coordinates so the pin appears somewhere sensible
             if event_lat and event_lng:
-                loc["latitude"] = loc.get("latitude") or event_lat
-                loc["longitude"] = loc.get("longitude") or event_lng
+                loc["latitude"] = loc.get("latitude") or float(event_lat)
+                loc["longitude"] = loc.get("longitude") or float(event_lng)
             logger.warning("  Could not geocode location %r", loc_name)
 
     return data

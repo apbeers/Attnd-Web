@@ -79,12 +79,21 @@ class ScrapeViewTests(TestCase):
         cache.clear()
 
     def _post(self, payload):
-        return self.client.post(
+        resp = self.client.post(
             self.url,
             data=json.dumps(payload),
             content_type="application/json",
             secure=True,
         )
+        # StreamingHttpResponse has no .content — consume the generator so DB writes
+        # happen synchronously and resp.json() works in tests.
+        if hasattr(resp, 'streaming_content'):
+            raw = b"".join(resp.streaming_content)
+            resp._streamed_body = raw
+            resp.status_code = resp.status_code  # already set
+            # Provide .json() compatible with how tests use it
+            resp.json = lambda: json.loads(raw.strip())
+        return resp
 
     def _patch_service(self, return_value=None, side_effect=None):
         """Patch scrape_event at the view import level."""
@@ -114,7 +123,7 @@ class ScrapeViewTests(TestCase):
         with self._patch_service():
             resp = self._post({"url": "https://example.com"})
 
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertIn("event_code", data)
         self.assertEqual(data["location_count"], 2)
@@ -133,18 +142,19 @@ class ScrapeViewTests(TestCase):
         user = User.objects.get(username="trialuser")
         self.assertFalse(user.has_usable_password())
 
-    def test_scrape_value_error_returns_422(self):
+    def test_scrape_value_error_returns_error_body(self):
         with self._patch_service(side_effect=ValueError("No content found.")):
             resp = self._post({"url": "https://example.com"})
 
-        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.status_code, 200)
         self.assertIn("No content found", resp.json()["error"])
 
-    def test_scrape_unexpected_error_returns_500(self):
+    def test_scrape_unexpected_error_returns_error_body(self):
         with self._patch_service(side_effect=RuntimeError("boom")):
             resp = self._post({"url": "https://example.com"})
 
-        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("error", resp.json())
 
     def test_event_code_is_unique(self):
         """Two requests produce two different event codes."""
@@ -154,19 +164,31 @@ class ScrapeViewTests(TestCase):
         with self._patch_service(return_value=_sample_data(name="Fair Two")):
             r2 = self._post({"url": "https://other.com"})
 
-        self.assertEqual(r1.status_code, 201)
-        self.assertEqual(r2.status_code, 201)
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
         self.assertNotEqual(r1.json()["event_code"], r2.json()["event_code"])
 
     def test_null_start_time_uses_default(self):
         with self._patch_service(return_value=_sample_data(start_time=None)):
             resp = self._post({"url": "https://example.com"})
 
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status_code, 200)
         event = Event.objects.get(event_code=resp.json()["event_code"])
         # Should be roughly 30 days in the future
         delta = event.start_time - datetime.now(timezone.utc)
         self.assertGreater(delta.days, 25)
+
+    def test_naive_start_time_made_aware_with_user_timezone(self):
+        """A naive start_time string is interpreted in the user's local timezone."""
+        data = _sample_data(start_time="2026-07-04T18:00:00")  # no tz offset
+        with self._patch_service(return_value=data):
+            resp = self._post({"url": "https://example.com", "timezone": "America/Chicago"})
+
+        self.assertEqual(resp.status_code, 200)
+        event = Event.objects.get(event_code=resp.json()["event_code"])
+        # America/Chicago is UTC-5 in July (CDT), so 18:00 local = 23:00 UTC
+        self.assertIsNotNone(event.start_time.tzinfo)
+        self.assertEqual(event.start_time.hour, 23)  # 18:00 CDT = 23:00 UTC
 
     def test_rate_limit(self):
         """After 5 requests from the same IP, the 6th is rejected."""
@@ -181,11 +203,11 @@ class ScrapeViewTests(TestCase):
         self.assertEqual(resp.status_code, 429)
 
     def test_happy_path_response_fields(self):
-        """201 response must include event_code, event_name, location_count, qr_code, join_url."""
+        """Response must include event_code, event_name, location_count, qr_code, join_url."""
         with self._patch_service():
             resp = self._post({"url": "https://example.com"})
 
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status_code, 200)
         data = resp.json()
         for field in ("event_code", "event_name", "location_count", "qr_code", "join_url"):
             self.assertIn(field, data, f"Missing field: {field}")
@@ -197,7 +219,7 @@ class ScrapeViewTests(TestCase):
         with self._patch_service():
             resp = self._post({"url": "https://example.com"})
 
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status_code, 200)
         event = Event.objects.get(event_code=resp.json()["event_code"])
         # Sample data has 1 scheduled item on Main Stage
         self.assertEqual(ScheduledItem.objects.filter(event=event).count(), 1)
