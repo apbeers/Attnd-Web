@@ -187,7 +187,133 @@ def _default_start_time() -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
 
-def scrape_event(url: str) -> dict:
+# ---------------------------------------------------------------------------
+# Google Places enrichment
+# ---------------------------------------------------------------------------
+
+_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+_PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
+
+
+def _geocode(query: str, api_key: str) -> tuple[float, float, str] | None:
+    """
+    Geocode a free-text address or place name.
+    Returns (lat, lng, formatted_address) or None on failure.
+    """
+    try:
+        resp = httpx.get(
+            _GEOCODE_URL,
+            params={"address": query, "key": api_key},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+        if not results:
+            return None
+        loc = results[0]["geometry"]["location"]
+        address = results[0].get("formatted_address", "")
+        return loc["lat"], loc["lng"], address
+    except Exception as exc:
+        logger.warning("Geocode failed for %r: %s", query, exc)
+        return None
+
+
+def _places_text_search(
+    query: str,
+    api_key: str,
+    bias_lat: float | None = None,
+    bias_lng: float | None = None,
+) -> tuple[float, float, str] | None:
+    """
+    Use the Places API Text Search to find a place.
+    Returns (lat, lng, formatted_address) or None on failure.
+    """
+    body: dict = {"textQuery": query, "pageSize": 1}
+    if bias_lat and bias_lng:
+        body["locationBias"] = {
+            "circle": {
+                "center": {"latitude": bias_lat, "longitude": bias_lng},
+                "radius": 50_000,  # 50 km
+            }
+        }
+    try:
+        resp = httpx.post(
+            _PLACES_SEARCH_URL,
+            json=body,
+            headers={
+                "X-Goog-Api-Key": api_key,
+                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location",
+            },
+            timeout=8,
+        )
+        resp.raise_for_status()
+        places = resp.json().get("places", [])
+        if not places:
+            return None
+        place = places[0]
+        loc = place.get("location", {})
+        address = place.get("formattedAddress", "")
+        return loc.get("latitude", 0), loc.get("longitude", 0), address
+    except Exception as exc:
+        logger.warning("Places text search failed for %r: %s", query, exc)
+        return None
+
+
+def _enrich_with_places(data: dict, api_key: str) -> dict:
+    """
+    Enrich the OpenAI-extracted event dict with accurate coordinates and
+    addresses from Google Places / Geocoding API.
+    """
+    event_name = data.get("name", "")
+    event_address = data.get("address", "")
+
+    # ---- Event-level geocoding ----
+    event_lat = data.get("latitude") or 0
+    event_lng = data.get("longitude") or 0
+
+    geocode_query = f"{event_name} {event_address}".strip() or event_name
+    result = _geocode(geocode_query, api_key)
+    if result:
+        event_lat, event_lng, resolved_address = result
+        data["latitude"] = event_lat
+        data["longitude"] = event_lng
+        if resolved_address:
+            data["address"] = resolved_address
+        logger.info("Event geocoded: %.5f, %.5f — %s", event_lat, event_lng, resolved_address)
+    else:
+        logger.warning("Could not geocode event %r", geocode_query)
+
+    # ---- Location-level enrichment ----
+    for loc in data.get("locations", []):
+        loc_name = loc.get("name", "")
+        loc_address = loc.get("address", "")
+
+        # Build a targeted query: "Main Stage Lost N Sound Festival" or just the address
+        if loc_address and len(loc_address) > 5:
+            query = loc_address
+            result = _geocode(query, api_key)
+        else:
+            query = f"{loc_name} {event_name}".strip()
+            result = _places_text_search(query, api_key, event_lat or None, event_lng or None)
+
+        if result:
+            lat, lng, address = result
+            loc["latitude"] = lat
+            loc["longitude"] = lng
+            if address:
+                loc["address"] = address
+            logger.info("  Location %r geocoded: %.5f, %.5f", loc_name, lat, lng)
+        else:
+            # Fall back to the event coordinates so the pin at least appears on the map
+            if event_lat and event_lng:
+                loc["latitude"] = loc.get("latitude") or event_lat
+                loc["longitude"] = loc.get("longitude") or event_lng
+            logger.warning("  Could not geocode location %r", loc_name)
+
+    return data
+
+
+def scrape_event(url: str, google_api_key: str = "") -> dict:
     """
     Public entry point (sync). Crawls url and returns a dict with keys:
         name, description, address, latitude, longitude, start_time, locations[]
@@ -204,5 +330,11 @@ def scrape_event(url: str) -> dict:
 
     if not data.get("start_time"):
         data["start_time"] = _default_start_time()
+
+    if google_api_key:
+        logger.info("Enriching with Google Places API")
+        data = _enrich_with_places(data, google_api_key)
+    else:
+        logger.info("No Google Places API key — skipping coordinate enrichment")
 
     return data

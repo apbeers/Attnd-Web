@@ -16,6 +16,8 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from django.conf import settings
+
 from events.models import Event, Location
 from scrape.service import scrape_event
 
@@ -91,7 +93,7 @@ def scrape_view(request):
     # Scrape
     logger.info("Scrape request from %s for URL: %s", ip, url)
     try:
-        data = scrape_event(url)
+        data = scrape_event(url, google_api_key=getattr(settings, "GOOGLE_PLACES_API_KEY", ""))
     except ValueError as exc:
         logger.warning("Scrape ValueError for %s: %s", url, exc)
         return JsonResponse({"error": str(exc)}, status=422)
