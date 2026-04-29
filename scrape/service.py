@@ -49,8 +49,22 @@ EVENT_SCHEMA = {
                     "address": {"type": "string", "description": "Street address (max 512 chars)"},
                     "latitude": {"type": "number", "description": "Decimal latitude; 0 if unknown"},
                     "longitude": {"type": "number", "description": "Decimal longitude; 0 if unknown"},
+                    "scheduled_items": {
+                        "type": "array",
+                        "description": "Activities, sessions, or performances scheduled at this location during the event",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Activity name (max 256 chars)"},
+                                "description": {"type": "string", "description": "Activity description (max 1024 chars)"},
+                                "start_time": {"type": "string", "description": "ISO 8601 datetime; empty string if unknown"},
+                            },
+                            "required": ["name", "description", "start_time"],
+                            "additionalProperties": False,
+                        },
+                    },
                 },
-                "required": ["name", "snippet", "description", "website", "image_url", "address", "latitude", "longitude"],
+                "required": ["name", "snippet", "description", "website", "image_url", "address", "latitude", "longitude", "scheduled_items"],
                 "additionalProperties": False,
             },
         },

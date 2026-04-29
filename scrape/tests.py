@@ -34,6 +34,13 @@ def _sample_data(**overrides):
                 "address": "123 Fair Ln, Testville, TX 75001",
                 "latitude": 32.7768,
                 "longitude": -96.7971,
+                "scheduled_items": [
+                    {
+                        "name": "Opening Act",
+                        "description": "Kick off the fair with live music.",
+                        "start_time": "2026-07-04T18:00:00+00:00",
+                    }
+                ],
             },
             {
                 "name": "Food Court",
@@ -44,6 +51,7 @@ def _sample_data(**overrides):
                 "address": "124 Fair Ln, Testville, TX 75001",
                 "latitude": 32.7769,
                 "longitude": -96.7972,
+                "scheduled_items": [],
             },
         ],
     }

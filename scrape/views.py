@@ -18,7 +18,7 @@ from django.views.decorators.http import require_POST
 
 from django.conf import settings
 
-from events.models import Event, Location
+from events.models import Event, Location, ScheduledItem
 from scrape.service import scrape_event
 
 logger = logging.getLogger(__name__)
@@ -132,9 +132,10 @@ def scrape_view(request):
     )
 
     locations_created = 0
+    scheduled_created = 0
     for loc in data.get("locations", []):
         try:
-            Location.objects.create(
+            location_obj = Location.objects.create(
                 name=loc["name"][:256],
                 snippet=loc["snippet"][:200],
                 description=loc["description"][:1024],
@@ -147,6 +148,31 @@ def scrape_view(request):
                 event=event,
             )
             locations_created += 1
+
+            for item in loc.get("scheduled_items", []):
+                try:
+                    raw_time = item.get("start_time", "")
+                    if raw_time:
+                        item_start = parse_datetime(raw_time)
+                        if item_start is None:
+                            try:
+                                item_start = datetime.fromisoformat(raw_time)
+                            except ValueError:
+                                item_start = start_time
+                    else:
+                        item_start = start_time
+                    ScheduledItem.objects.create(
+                        name=item["name"][:256],
+                        description=item["description"][:1024],
+                        start_time=item_start,
+                        location=location_obj,
+                        event=event,
+                        user=trial_user,
+                    )
+                    scheduled_created += 1
+                except Exception:
+                    pass
+
         except Exception:
             pass  # Don't fail the whole request over a single bad location
 
@@ -157,7 +183,7 @@ def scrape_view(request):
     qr_img.save(buf, format="PNG")
     qr_b64 = base64.b64encode(buf.getvalue()).decode()
 
-    logger.info("Event created: %s (code=%s, locations=%d)", event.name, event_code, locations_created)
+    logger.info("Event created: %s (code=%s, locations=%d, scheduled_items=%d)", event.name, event_code, locations_created, scheduled_created)
 
     return JsonResponse({
         "event_code": event_code,

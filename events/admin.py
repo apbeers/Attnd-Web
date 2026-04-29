@@ -10,7 +10,7 @@ from django.http import HttpResponse
 from django.urls import path
 from django.utils.html import format_html
 
-from events.models import Event, Location, Notification, Device
+from events.models import Event, Location, Notification, Device, ScheduledItem
 
 
 class UserScopedAdminMixin:
@@ -135,7 +135,15 @@ class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
             obj.delete()
 
 
+class ScheduledItemInline(admin.TabularInline):
+    model = ScheduledItem
+    extra = 1
+    exclude = ['user', 'event']
+    ordering = ['start_time']
+
+
 class LocationAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    inlines = [ScheduledItemInline]
     list_display = ['name', 'event', 'address', 'user']
     list_filter = ['user', 'event']
     search_fields = ['name', 'address', 'event__name']
@@ -143,6 +151,34 @@ class LocationAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'event' and not request.user.is_superuser:
             kwargs['queryset'] = Event.objects.filter(user=request.user)
+        if db_field.name == 'user':
+            kwargs['queryset'] = User.objects.filter(pk=request.user.pk)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        for instance in instances:
+            if not instance.pk:
+                instance.user = form.instance.user
+                instance.event = form.instance.event
+            instance.save()
+        formset.save_m2m()
+        for obj in formset.deleted_objects:
+            obj.delete()
+
+
+class ScheduledItemAdmin(UserScopedAdminMixin, admin.ModelAdmin):
+    list_display = ['name', 'start_time', 'location', 'event', 'user']
+    list_filter = ['event', 'location', 'user']
+    search_fields = ['name', 'description']
+    date_hierarchy = 'start_time'
+    ordering = ['start_time']
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'event' and not request.user.is_superuser:
+            kwargs['queryset'] = Event.objects.filter(user=request.user)
+        if db_field.name == 'location' and not request.user.is_superuser:
+            kwargs['queryset'] = Location.objects.filter(user=request.user)
         if db_field.name == 'user':
             kwargs['queryset'] = User.objects.filter(pk=request.user.pk)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
@@ -178,6 +214,7 @@ class RestrictedUserAdmin(BaseUserAdmin):
 
 admin.site.register(Event, EventAdmin)
 admin.site.register(Location, LocationAdmin)
+admin.site.register(ScheduledItem, ScheduledItemAdmin)
 admin.site.register(Notification, NotificationAdmin)
 admin.site.register(Device, DeviceAdmin)
 

@@ -64,6 +64,25 @@ class Location(models.Model):
         return self.name
 
 
+class ScheduledItem(models.Model):
+    name = models.CharField(max_length=256)
+    description = models.CharField(max_length=1024)
+    start_time = models.DateTimeField()
+    location = models.ForeignKey(Location, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['event', 'start_time']),
+            models.Index(fields=['location', 'start_time']),
+        ]
+        ordering = ['start_time']
+
+    def __str__(self):
+        return f'{self.name} @ {self.location.name}'
+
+
 class Notification(models.Model):
     title = models.CharField(max_length=60)
     body = models.CharField(max_length=256)

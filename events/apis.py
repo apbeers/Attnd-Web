@@ -11,7 +11,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views import View
 
-from events.models import Event, Location, Notification, Device
+from events.models import Event, Location, Notification, Device, ScheduledItem
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +37,17 @@ def _event_dict(event, request=None):
     }
 
 
+def _scheduled_item_dict(item):
+    return {
+        'id': item.id,
+        'name': item.name,
+        'description': item.description,
+        'start_time': item.start_time.isoformat(),
+        'location_id': item.location_id,
+        'location_name': item.location.name,
+    }
+
+
 def _location_dict(location, request=None):
     if location.image:
         image_url = request.build_absolute_uri(location.image.url) if request else location.image.url
@@ -44,6 +55,10 @@ def _location_dict(location, request=None):
         image_url = location.image_url
     else:
         image_url = None
+    scheduled_items = [
+        _scheduled_item_dict(item)
+        for item in location.scheduleditem_set.order_by('start_time')
+    ]
     return {
         'id': location.id,
         'name': location.name,
@@ -54,6 +69,7 @@ def _location_dict(location, request=None):
         'latitude': float(location.latitude),
         'longitude': float(location.longitude),
         'address': location.address,
+        'scheduled_items': scheduled_items,
     }
 
 
@@ -202,6 +218,34 @@ class AllLocationsView(ApiKeyRequired, View):
         locations = Location.objects.filter(event__id=event_id).order_by('name')
         results = [_location_dict(loc, request) for loc in locations]
         return JsonResponse({'results': results, 'count': len(results)})
+
+
+# ---------------------------------------------------------------------------
+# Schedule endpoints
+# ---------------------------------------------------------------------------
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AllScheduledItemsView(ApiKeyRequired, View):
+
+    def get(self, request, event_id):
+        items = (
+            ScheduledItem.objects
+            .filter(event_id=event_id)
+            .select_related('location')
+            .order_by('start_time')
+        )
+        results = [_scheduled_item_dict(item) for item in items]
+        return JsonResponse({'results': results, 'count': len(results)})
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class SingleScheduledItemView(ApiKeyRequired, View):
+
+    def get(self, request, event_id, item_id):
+        item = ScheduledItem.objects.filter(event_id=event_id, id=item_id).select_related('location').first()
+        if item is None:
+            return JsonResponse({'error': 'Not found'}, status=404)
+        return JsonResponse(_scheduled_item_dict(item))
 
 
 # ---------------------------------------------------------------------------
