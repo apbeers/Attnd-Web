@@ -49,7 +49,7 @@ EVENT_SCHEMA = {
                     "latitude": {"type": "number", "description": "Decimal latitude; 0 if unknown"},
                     "longitude": {"type": "number", "description": "Decimal longitude; 0 if unknown"},
                 },
-                "required": ["name", "snippet", "description", "address", "latitude", "longitude"],
+                "required": ["name", "snippet", "description", "website", "address", "latitude", "longitude"],
                 "additionalProperties": False,
             },
         },
