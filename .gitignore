@@ -13,3 +13,4 @@ gcs-test-service-account.json
 
 # Local env secrets — never commit
 .env
+requirements.txt.bak
