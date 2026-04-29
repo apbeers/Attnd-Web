@@ -235,6 +235,14 @@
                         <div class="text-center mt-3">
                             <button class="btn btn-outline-secondary btn-sm" id="scrape-again-btn">Try another URL</button>
                         </div>
+
+                        <!-- Claim CTA -->
+                        <hr class="my-4">
+                        <div class="text-center">
+                            <p class="fw-semibold mb-1">Like what you see?</p>
+                            <p class="text-muted small mb-3">Create a free account to customize your event, upload a flyer, manage locations, and send push notifications to attendees.</p>
+                            <a id="claim-account-btn" href="{% url 'console:signup' %}" class="btn btn-primary btn-lg px-4">Create a Free Account →</a>
+                        </div>
                     </div>
 
                     <!-- Error card (hidden by default) -->
@@ -260,6 +268,7 @@
     const resultCode = document.getElementById('result-code');
     const resultQr = document.getElementById('result-qr');
     const resultSummary = document.getElementById('result-summary');
+    const claimBtn = document.getElementById('claim-account-btn');
 
     function show(el) { el.style.removeProperty('display'); el.style.display = 'block'; }
     function hide(el) { el.style.setProperty('display', 'none', 'important'); }
@@ -301,6 +310,7 @@
                     ? '1 location'
                     : `${data.location_count} locations`;
                 resultSummary.textContent = `"${data.event_name}" — ${locText} imported.`;
+                claimBtn.href = `{% url 'console:signup' %}?claim=${encodeURIComponent(data.event_code)}`;
                 show(success);
             } else {
                 errorMsg.textContent = data.error || 'Something went wrong. Please try again.';

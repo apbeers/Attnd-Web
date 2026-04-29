@@ -12,8 +12,14 @@
     <div class="card shadow-sm" style="width: 100%; max-width: 420px;">
         <div class="card-body p-4">
             <h2 class="card-title mb-4 text-center">Create an account</h2>
+            {% if claim_code %}
+            <div class="alert alert-success py-2 text-center small mb-3">
+                <strong>✓ Event found.</strong> Sign up to claim it as yours.
+            </div>
+            {% endif %}
             <form method="post" autocomplete="on">
                 {% csrf_token %}
+                {% if claim_code %}<input type="hidden" name="claim" value="{{ claim_code }}">{% endif %}
                 {% for field in form %}
                     <div class="mb-3">
                         <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
