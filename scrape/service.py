@@ -45,11 +45,12 @@ EVENT_SCHEMA = {
                     "snippet": {"type": "string", "description": "One-sentence description (max 200 chars)"},
                     "description": {"type": "string", "description": "Longer description (max 1024 chars)"},
                     "website": {"type": ["string", "null"], "description": "URL if available"},
+                    "image_url": {"type": ["string", "null"], "description": "Absolute URL of an image for this location found on the page; null if none found"},
                     "address": {"type": "string", "description": "Street address (max 512 chars)"},
                     "latitude": {"type": "number", "description": "Decimal latitude; 0 if unknown"},
                     "longitude": {"type": "number", "description": "Decimal longitude; 0 if unknown"},
                 },
-                "required": ["name", "snippet", "description", "website", "address", "latitude", "longitude"],
+                "required": ["name", "snippet", "description", "website", "image_url", "address", "latitude", "longitude"],
                 "additionalProperties": False,
             },
         },
@@ -218,15 +219,39 @@ def _geocode(query: str, api_key: str) -> tuple[float, float, str] | None:
         return None
 
 
+_PLACES_PHOTO_URL = "https://places.googleapis.com/v1/{name}/media"
+
+
+def _places_photo_uri(photo_name: str, api_key: str) -> str | None:
+    """
+    Resolve a Places API photo resource name to a public image URL.
+    Uses skipHttpRedirect=true so we get JSON back instead of a redirect.
+    """
+    try:
+        resp = httpx.get(
+            _PLACES_PHOTO_URL.format(name=photo_name),
+            params={"key": api_key, "maxHeightPx": 600, "skipHttpRedirect": "true"},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        uri = resp.json().get("photoUri")
+        if uri:
+            logger.debug("Places photo resolved: %s", uri[:80])
+        return uri
+    except Exception as exc:
+        logger.warning("Places photo fetch failed for %r: %s", photo_name, exc)
+        return None
+
+
 def _places_text_search(
     query: str,
     api_key: str,
     bias_lat: float | None = None,
     bias_lng: float | None = None,
-) -> tuple[float, float, str] | None:
+) -> tuple[float, float, str, str | None] | None:
     """
     Use the Places API Text Search to find a place.
-    Returns (lat, lng, formatted_address) or None on failure.
+    Returns (lat, lng, formatted_address, photo_url_or_None) or None on failure.
     """
     body: dict = {"textQuery": query, "pageSize": 1}
     if bias_lat and bias_lng:
@@ -242,7 +267,7 @@ def _places_text_search(
             json=body,
             headers={
                 "X-Goog-Api-Key": api_key,
-                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location",
+                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.photos",
             },
             timeout=8,
         )
@@ -253,7 +278,12 @@ def _places_text_search(
         place = places[0]
         loc = place.get("location", {})
         address = place.get("formattedAddress", "")
-        return loc.get("latitude", 0), loc.get("longitude", 0), address
+        # Attempt to fetch first photo
+        photo_url = None
+        photos = place.get("photos", [])
+        if photos:
+            photo_url = _places_photo_uri(photos[0]["name"], api_key)
+        return loc.get("latitude", 0), loc.get("longitude", 0), address, photo_url
     except Exception as exc:
         logger.warning("Places text search failed for %r: %s", query, exc)
         return None
@@ -297,11 +327,14 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
             result = _places_text_search(query, api_key, event_lat or None, event_lng or None)
 
         if result:
-            lat, lng, address = result
+            lat, lng, address, photo_url = result
             loc["latitude"] = lat
             loc["longitude"] = lng
             if address:
                 loc["address"] = address
+            if photo_url and not loc.get("image_url"):
+                loc["image_url"] = photo_url
+                logger.info("  Location %r photo from Places: %s", loc_name, photo_url[:80])
             logger.info("  Location %r geocoded: %.5f, %.5f", loc_name, lat, lng)
         else:
             # Fall back to the event coordinates so the pin at least appears on the map

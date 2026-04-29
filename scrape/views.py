@@ -139,6 +139,7 @@ def scrape_view(request):
                 snippet=loc["snippet"][:200],
                 description=loc["description"][:1024],
                 website=loc.get("website") or None,
+                image_url=loc.get("image_url") or None,
                 address=loc.get("address", "")[:512],
                 latitude=loc.get("latitude") or 0,
                 longitude=loc.get("longitude") or 0,

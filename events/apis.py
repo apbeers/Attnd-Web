@@ -40,6 +40,8 @@ def _event_dict(event, request=None):
 def _location_dict(location, request=None):
     if location.image:
         image_url = request.build_absolute_uri(location.image.url) if request else location.image.url
+    elif location.image_url:
+        image_url = location.image_url
     else:
         image_url = None
     return {

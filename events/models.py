@@ -45,6 +45,7 @@ class Location(models.Model):
     description = models.CharField(max_length=1024)
     website = models.URLField(null=True, blank=True)
     image = models.ImageField(upload_to=get_file_path, blank=True, null=True)
+    image_url = models.URLField(max_length=1024, blank=True, null=True)
     latitude = models.DecimalField(max_digits=24, decimal_places=20)
     longitude = models.DecimalField(max_digits=24, decimal_places=20)
     address = models.CharField(max_length=512)

@@ -30,6 +30,7 @@ def _sample_data(**overrides):
                 "snippet": "Live music all day long.",
                 "description": "The main performance area with seating for 500.",
                 "website": "https://example.com/stage",
+                "image_url": "https://example.com/stage.jpg",
                 "address": "123 Fair Ln, Testville, TX 75001",
                 "latitude": 32.7768,
                 "longitude": -96.7971,
@@ -39,6 +40,7 @@ def _sample_data(**overrides):
                 "snippet": "All your favourite fair foods.",
                 "description": "Over 30 food vendors serving local favourites.",
                 "website": None,
+                "image_url": None,
                 "address": "124 Fair Ln, Testville, TX 75001",
                 "latitude": 32.7769,
                 "longitude": -96.7972,
@@ -70,6 +72,7 @@ class ScrapeViewTests(TestCase):
             self.url,
             data=json.dumps(payload),
             content_type="application/json",
+            secure=True,
         )
 
     def _patch_service(self, return_value=None, side_effect=None):
@@ -93,7 +96,7 @@ class ScrapeViewTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_invalid_json_body_returns_400(self):
-        resp = self.client.post(self.url, data="not json", content_type="application/json")
+        resp = self.client.post(self.url, data="not json", content_type="application/json", secure=True)
         self.assertEqual(resp.status_code, 400)
 
     def test_happy_path_creates_event_and_locations(self):
