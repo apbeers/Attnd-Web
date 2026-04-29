@@ -11,7 +11,10 @@ from unittest.mock import MagicMock, patch
 from django.core.cache import cache
 from django.test import TestCase, Client
 
-from events.models import Event, Location
+from django.core.management import call_command
+from django.utils import timezone as django_timezone
+
+from events.models import Event, Location, ScheduledItem
 from django.contrib.auth.models import User
 
 
@@ -177,6 +180,48 @@ class ScrapeViewTests(TestCase):
         resp = self._post({"url": "https://example.com"})
         self.assertEqual(resp.status_code, 429)
 
+    def test_happy_path_response_fields(self):
+        """201 response must include event_code, event_name, location_count, qr_code, join_url."""
+        with self._patch_service():
+            resp = self._post({"url": "https://example.com"})
+
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        for field in ("event_code", "event_name", "location_count", "qr_code", "join_url"):
+            self.assertIn(field, data, f"Missing field: {field}")
+        self.assertTrue(data["qr_code"].startswith("data:image/png;base64,"))
+        self.assertIn("/join/", data["join_url"])
+
+    def test_happy_path_creates_scheduled_items(self):
+        """Scheduled items nested inside a location are created in the DB."""
+        with self._patch_service():
+            resp = self._post({"url": "https://example.com"})
+
+        self.assertEqual(resp.status_code, 201)
+        event = Event.objects.get(event_code=resp.json()["event_code"])
+        # Sample data has 1 scheduled item on Main Stage
+        self.assertEqual(ScheduledItem.objects.filter(event=event).count(), 1)
+        item = ScheduledItem.objects.filter(event=event).first()
+        self.assertEqual(item.name, "Opening Act")
+
+    def test_location_image_url_stored(self):
+        """image_url from scraped data is persisted on the Location record."""
+        with self._patch_service():
+            resp = self._post({"url": "https://example.com"})
+
+        event = Event.objects.get(event_code=resp.json()["event_code"])
+        stage = Location.objects.get(event=event, name="Main Stage")
+        self.assertEqual(stage.image_url, "https://example.com/stage.jpg")
+
+    def test_location_with_null_image_url(self):
+        """A location without an image_url stores None gracefully."""
+        with self._patch_service():
+            resp = self._post({"url": "https://example.com"})
+
+        event = Event.objects.get(event_code=resp.json()["event_code"])
+        court = Location.objects.get(event=event, name="Food Court")
+        self.assertIsNone(court.image_url)
+
 
 class ScrapeServiceTests(TestCase):
     """Unit tests for service.py internals (crawl + extract)."""
@@ -215,3 +260,65 @@ class ScrapeServiceTests(TestCase):
         from scrape.service import scrape_event
         with self.assertRaises(ValueError):
             scrape_event("https://example.com")
+
+
+# ---------------------------------------------------------------------------
+# expire_trial_events management command
+# ---------------------------------------------------------------------------
+
+class ExpireTrialEventsCommandTests(TestCase):
+
+    def _make_trial_user(self):
+        user, _ = User.objects.get_or_create(
+            username="trialuser",
+            defaults={"email": "trial@attnd.app"},
+        )
+        user.set_unusable_password()
+        user.save()
+        return user
+
+    def _make_event(self, user, name, days_old):
+        event = Event.objects.create(
+            name=name,
+            event_code=f"CODE{name[:8].upper().replace(' ', '')}",
+            description="desc",
+            latitude=0, longitude=0,
+            start_time=django_timezone.now(),
+            address="123 Main St",
+            user=user,
+        )
+        # Back-date created_at to simulate age
+        Event.objects.filter(pk=event.pk).update(
+            created_at=django_timezone.now() - timedelta(days=days_old)
+        )
+        return event
+
+    def test_deletes_expired_trial_events(self):
+        trial_user = self._make_trial_user()
+        old_event = self._make_event(trial_user, "Old Fair", days_old=8)
+        call_command("expire_trial_events", verbosity=0)
+        self.assertFalse(Event.objects.filter(pk=old_event.pk).exists())
+
+    def test_keeps_recent_trial_events(self):
+        trial_user = self._make_trial_user()
+        new_event = self._make_event(trial_user, "New Fair", days_old=3)
+        call_command("expire_trial_events", verbosity=0)
+        self.assertTrue(Event.objects.filter(pk=new_event.pk).exists())
+
+    def test_does_not_delete_non_trial_events(self):
+        other_user = User.objects.create_user("organizer2", "org2@test.com", "pass")
+        event = self._make_event(other_user, "Organizer Old Fair", days_old=10)
+        call_command("expire_trial_events", verbosity=0)
+        self.assertTrue(Event.objects.filter(pk=event.pk).exists())
+
+    def test_no_trialuser_exits_gracefully(self):
+        # Should not raise even if trialuser doesn't exist
+        call_command("expire_trial_events", verbosity=0)
+
+    def test_outputs_success_message(self):
+        import io
+        trial_user = self._make_trial_user()
+        self._make_event(trial_user, "Old Output Fair", days_old=8)
+        out = io.StringIO()
+        call_command("expire_trial_events", stdout=out)
+        self.assertIn("Deleted", out.getvalue())

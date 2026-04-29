@@ -13,6 +13,7 @@ from events.apis import (
     PushNotificationsUnSubscribe, PushNotificationsSubscribe,
     JoinEventView, LeaveEventView, EventLookupView,
     AllScheduledItemsView, SingleScheduledItemView,
+    SingleLocationView,
 )
 from events.models import Device, Event, Location, ScheduledItem
 
@@ -610,3 +611,167 @@ class LocationScheduledItemsEmbedTests(TestCase):
         item = json.loads(response.content)['results'][0]['scheduled_items'][0]
         for field in ('id', 'name', 'description', 'start_time', 'location_id', 'location_name'):
             self.assertIn(field, item)
+
+
+# ---------------------------------------------------------------------------
+# SingleLocationView unit tests
+# ---------------------------------------------------------------------------
+
+@override_settings(API_KEY=TEST_API_KEY)
+class SingleLocationViewTests(TestCase):
+    fixtures = ['dump.json']
+
+    def test_returns_200_with_correct_location(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_location', args=[1, 1]),
+            **AUTH_HEADER,
+        )
+        response = SingleLocationView.as_view()(request, event_id=1, location_id=1)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual(data['name'], 'Pizza Place')
+
+    def test_returns_all_expected_fields(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_location', args=[1, 1]),
+            **AUTH_HEADER,
+        )
+        response = SingleLocationView.as_view()(request, event_id=1, location_id=1)
+        data = json.loads(response.content)
+        for field in ('id', 'name', 'snippet', 'description', 'website',
+                      'image_url', 'latitude', 'longitude', 'address', 'scheduled_items'):
+            self.assertIn(field, data)
+
+    def test_scheduled_items_embedded_in_single_location(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_location', args=[1, 1]),
+            **AUTH_HEADER,
+        )
+        response = SingleLocationView.as_view()(request, event_id=1, location_id=1)
+        data = json.loads(response.content)
+        self.assertIsInstance(data['scheduled_items'], list)
+        self.assertEqual(len(data['scheduled_items']), 2)
+
+    def test_returns_404_for_missing_location(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_location', args=[1, 999]),
+            **AUTH_HEADER,
+        )
+        response = SingleLocationView.as_view()(request, event_id=1, location_id=999)
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_404_when_location_belongs_to_different_event(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_location', args=[2, 1]),
+            **AUTH_HEADER,
+        )
+        response = SingleLocationView.as_view()(request, event_id=2, location_id=1)
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_401_without_auth(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_location', args=[1, 1]),
+        )
+        response = SingleLocationView.as_view()(request, event_id=1, location_id=1)
+        self.assertEqual(response.status_code, 401)
+
+
+# ---------------------------------------------------------------------------
+# Admin QR code download + ScheduledItemAdmin scoping
+# ---------------------------------------------------------------------------
+
+@override_settings(STORAGES=_IN_MEMORY_STORAGES, SECURE_SSL_REDIRECT=False)
+class AdminQrDownloadTests(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = User.objects.create_superuser('qradmin', 'qr@test.com', 'qrpass')
+        cls.customer = User.objects.create_user('qrcustomer', 'qrc@test.com', 'pass', is_staff=True)
+        cls.event = Event.objects.create(
+            name='QR Test Event', event_code='qrtestevt', user=cls.customer, **_EVENT_BASE
+        )
+
+    def setUp(self):
+        self.client = Client()
+
+    def test_superuser_can_download_qr_png(self):
+        self.client.force_login(self.superuser)
+        url = f'/admin/events/event/{self.event.pk}/qr.png/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'image/png')
+
+    def test_qr_download_content_disposition_filename(self):
+        self.client.force_login(self.superuser)
+        url = f'/admin/events/event/{self.event.pk}/qr.png/'
+        response = self.client.get(url)
+        self.assertIn('attachment', response['Content-Disposition'])
+        self.assertIn('QR_Test_Event.png', response['Content-Disposition'])
+
+    def test_customer_can_download_own_event_qr(self):
+        self.client.force_login(self.customer)
+        url = f'/admin/events/event/{self.event.pk}/qr.png/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+
+@override_settings(STORAGES=_IN_MEMORY_STORAGES, SECURE_SSL_REDIRECT=False)
+class ScheduledItemAdminTests(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = User.objects.create_superuser('siadmin', 'si@test.com', 'pass')
+        cls.customer1 = User.objects.create_user('sicustomer1', 'sic1@test.com', 'pass', is_staff=True)
+        cls.customer2 = User.objects.create_user('sicustomer2', 'sic2@test.com', 'pass', is_staff=True)
+        cls.event1 = Event.objects.create(
+            name='SI Event 1', event_code='sievt1', user=cls.customer1, **_EVENT_BASE
+        )
+        cls.event2 = Event.objects.create(
+            name='SI Event 2', event_code='sievt2', user=cls.customer2, **_EVENT_BASE
+        )
+        cls.location1 = Location.objects.create(
+            name='SI Location 1', snippet='s', description='d',
+            latitude=32.75, longitude=-97.35, address='123 Main St',
+            user=cls.customer1, event=cls.event1,
+        )
+        cls.location2 = Location.objects.create(
+            name='SI Location 2', snippet='s', description='d',
+            latitude=32.75, longitude=-97.35, address='456 Other St',
+            user=cls.customer2, event=cls.event2,
+        )
+        from datetime import datetime, timezone as dt_tz
+        start = datetime(2025, 6, 1, 18, 0, tzinfo=dt_tz.utc)
+        cls.item1 = ScheduledItem.objects.create(
+            name='C1 Act', description='desc', start_time=start,
+            location=cls.location1, event=cls.event1, user=cls.customer1,
+        )
+        cls.item2 = ScheduledItem.objects.create(
+            name='C2 Act', description='desc', start_time=start,
+            location=cls.location2, event=cls.event2, user=cls.customer2,
+        )
+
+    def setUp(self):
+        self.client = Client()
+
+    def test_customer1_changelist_shows_own_item(self):
+        self.client.force_login(self.customer1)
+        response = self.client.get(reverse('admin:events_scheduleditem_changelist'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'C1 Act')
+
+    def test_customer1_changelist_excludes_customer2_item(self):
+        self.client.force_login(self.customer1)
+        response = self.client.get(reverse('admin:events_scheduleditem_changelist'))
+        self.assertNotContains(response, 'C2 Act')
+
+    def test_superuser_changelist_shows_all_items(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get(reverse('admin:events_scheduleditem_changelist'))
+        self.assertContains(response, 'C1 Act')
+        self.assertContains(response, 'C2 Act')
+
+    def test_scheduled_item_appears_in_location_admin_sidebar(self):
+        """ScheduledItemAdmin should be visible in admin sidebar for staff."""
+        self.client.force_login(self.customer1)
+        response = self.client.get('/admin/')
+        self.assertIn('/admin/events/scheduleditem/', response.content.decode())

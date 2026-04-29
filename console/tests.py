@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 import datetime
 
-from events.models import Event, Location
+from events.models import Event, Location, Notification
 
 TRIAL_USERNAME = "trialuser"
 
@@ -66,6 +66,11 @@ class SignUpViewTests(TestCase):
             name="Main Stage", snippet="s", description="d",
             latitude=0, longitude=0, address="", user=trial_user, event=event,
         )
+        Notification.objects.create(
+            title="Welcome!", body="Thanks for joining.",
+            send_time=timezone.now() + datetime.timedelta(hours=1),
+            user=trial_user, event=event,
+        )
 
         data = {**self.valid_data, 'claim': 'TESTCODE'}
         self._post(data)
@@ -74,6 +79,7 @@ class SignUpViewTests(TestCase):
         event.refresh_from_db()
         self.assertEqual(event.user, new_user)
         self.assertEqual(event.location_set.filter(user=new_user).count(), 1)
+        self.assertEqual(event.notification_set.filter(user=new_user).count(), 1)
         # No extra demo event should be created
         self.assertEqual(Event.objects.filter(user=new_user).count(), 1)
 

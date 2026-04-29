@@ -84,7 +84,8 @@
       "longitude": "-97.33200000000000000000",
       "address": "2458 N Main St, Fort Worth, TX 76106",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -100,7 +101,8 @@
       "longitude": "-97.33150000000000000000",
       "address": "Sundance Square, Fort Worth, TX 76102",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -116,7 +118,8 @@
       "longitude": "-97.33100000000000000000",
       "address": "1408 W Magnolia Ave, Fort Worth, TX 76104",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -132,7 +135,8 @@
       "longitude": "-97.33620000000000000000",
       "address": "1502 Commerce St, Fort Worth, TX 76102",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -148,7 +152,8 @@
       "longitude": "-97.36460000000000000000",
       "address": "3333 Camp Bowie Blvd, Fort Worth, TX 76107",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -164,7 +169,8 @@
       "longitude": "-97.34810000000000000000",
       "address": "2520 Rodeo Plaza, Fort Worth, TX 76164",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -180,7 +186,8 @@
       "longitude": "-97.34720000000000000000",
       "address": "2201 N Commerce St, Fort Worth, TX 76164",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -196,7 +203,8 @@
       "longitude": "-97.33280000000000000000",
       "address": "1201 Houston St, Fort Worth, TX 76102",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -212,7 +220,8 @@
       "longitude": "-97.33780000000000000000",
       "address": "W Magnolia Ave, Fort Worth, TX 76104",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -228,7 +237,8 @@
       "longitude": "-97.35100000000000000000",
       "address": "West 7th St, Fort Worth, TX 76107",
       "user": 2,
-      "event": 1
+      "event": 1,
+      "image_url": null
     }
   },
   {
@@ -244,7 +254,8 @@
       "longitude": "-97.74200000000000000000",
       "address": "900 Barton Springs Rd, Austin, TX 78704",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -260,7 +271,8 @@
       "longitude": "-97.72430000000000000000",
       "address": "11410 Century Oaks Terrace, Austin, TX 78758",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -276,7 +288,8 @@
       "longitude": "-97.74040000000000000000",
       "address": "701 Brazos St, Austin, TX 78701",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -292,7 +305,8 @@
       "longitude": "-97.74100000000000000000",
       "address": "Rainey St, Austin, TX 78701",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -308,7 +322,8 @@
       "longitude": "-97.73930000000000000000",
       "address": "2317 Speedway, Austin, TX 78712",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -324,7 +339,8 @@
       "longitude": "-97.77310000000000000000",
       "address": "2100 Barton Springs Rd, Austin, TX 78746",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -340,7 +356,8 @@
       "longitude": "-97.73930000000000000000",
       "address": "East 6th St, Austin, TX 78701",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -356,7 +373,8 @@
       "longitude": "-97.74000000000000000000",
       "address": "500 E Cesar Chavez St, Austin, TX 78701",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -372,7 +390,8 @@
       "longitude": "-97.74050000000000000000",
       "address": "605 Davis St, Austin, TX 78701",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -388,7 +407,8 @@
       "longitude": "-97.73660000000000000000",
       "address": "801 Red River St, Austin, TX 78701",
       "user": 2,
-      "event": 2
+      "event": 2,
+      "image_url": null
     }
   },
   {
@@ -404,7 +424,8 @@
       "longitude": "-96.80100000000000000000",
       "address": "1717 N Harwood St, Dallas, TX 75201",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -420,7 +441,8 @@
       "longitude": "-96.79870000000000000000",
       "address": "2001 Flora St, Dallas, TX 75201",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -436,7 +458,8 @@
       "longitude": "-96.80010000000000000000",
       "address": "2010 Flora St, Dallas, TX 75201",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -452,7 +475,8 @@
       "longitude": "-96.80280000000000000000",
       "address": "2403 Flora St, Dallas, TX 75201",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -468,7 +492,8 @@
       "longitude": "-96.78500000000000000000",
       "address": "Deep Ellum, Dallas, TX 75226",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -484,7 +509,8 @@
       "longitude": "-96.80460000000000000000",
       "address": "2012 Woodall Rodgers Fwy, Dallas, TX 75201",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -500,7 +526,8 @@
       "longitude": "-96.80680000000000000000",
       "address": "2201 N Field St, Dallas, TX 75201",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -516,7 +543,8 @@
       "longitude": "-96.80340000000000000000",
       "address": "McKinney Ave, Dallas, TX 75204",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -532,7 +560,8 @@
       "longitude": "-96.80560000000000000000",
       "address": "2215 Ross Ave, Dallas, TX 75201",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -548,7 +577,8 @@
       "longitude": "-96.78380000000000000000",
       "address": "2713 Canton St, Dallas, TX 75226",
       "user": 2,
-      "event": 3
+      "event": 3,
+      "image_url": null
     }
   },
   {
@@ -604,7 +634,7 @@
     "pk": 5,
     "fields": {
       "title": "Early bird registration closes tonight",
-      "body": "Save 30% on summit registration — early bird pricing ends tonight at midnight. Use code EARLYATX at checkout.",
+      "body": "Save 30% on summit registration \u2014 early bird pricing ends tonight at midnight. Use code EARLYATX at checkout.",
       "send_time": "2026-04-20T18:00:00Z",
       "sent": true,
       "user": 2,
@@ -688,11 +718,47 @@
     "pk": 12,
     "fields": {
       "title": "Last call for Bomb Factory tickets",
-      "body": "Closing concert at The Bomb Factory is almost sold out. Grab your tickets before they're gone — attendees with event badges get priority at the door if any walk-up spots remain.",
+      "body": "Closing concert at The Bomb Factory is almost sold out. Grab your tickets before they're gone \u2014 attendees with event badges get priority at the door if any walk-up spots remain.",
       "send_time": "2026-05-02T10:00:00Z",
       "sent": false,
       "user": 2,
       "event": 3
+    }
+  },
+  {
+    "model": "events.scheduleditem",
+    "pk": 1,
+    "fields": {
+      "name": "Opening Ceremony",
+      "description": "Welcome to the festival.",
+      "start_time": "2026-04-26T17:00:00Z",
+      "location": 1,
+      "event": 1,
+      "user": 2
+    }
+  },
+  {
+    "model": "events.scheduleditem",
+    "pk": 2,
+    "fields": {
+      "name": "Headliner Performance",
+      "description": "Main stage headline act.",
+      "start_time": "2026-04-26T21:00:00Z",
+      "location": 1,
+      "event": 1,
+      "user": 2
+    }
+  },
+  {
+    "model": "events.scheduleditem",
+    "pk": 3,
+    "fields": {
+      "name": "Food Tasting",
+      "description": "Sample local cuisine.",
+      "start_time": "2026-04-26T12:00:00Z",
+      "location": 11,
+      "event": 2,
+      "user": 2
     }
   }
 ]

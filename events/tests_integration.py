@@ -453,3 +453,126 @@ class JoinLeaveTests(TestCase):
         url = reverse('events:leave_event', args=[1, self.device_id])
         resp = self._post(url)
         self.assertIn('application/json', resp['Content-Type'])
+
+
+@override_settings(**_SETTINGS)
+class ScheduleIntegrationTests(TestCase):
+    """Integration tests for the schedule endpoints via the full Django test client."""
+    fixtures = ['sample_data']
+
+    def setUp(self):
+        self.client = Client()
+
+    def _get(self, url):
+        return self.client.get(url, **_AUTH)
+
+    def test_all_scheduled_items_returns_envelope(self):
+        url = reverse('events:get_all_scheduled_items', args=[1])
+        resp = self._get(url)
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.content)
+        self.assertIn('count', data)
+        self.assertIn('results', data)
+
+    def test_all_scheduled_items_count_matches_fixture(self):
+        # Event 1 has 2 scheduled items in sample_data fixture
+        url = reverse('events:get_all_scheduled_items', args=[1])
+        resp = self._get(url)
+        data = json.loads(resp.content)
+        self.assertEqual(data['count'], 2)
+
+    def test_all_scheduled_items_sorted_by_start_time(self):
+        url = reverse('events:get_all_scheduled_items', args=[1])
+        resp = self._get(url)
+        data = json.loads(resp.content)
+        times = [r['start_time'] for r in data['results']]
+        self.assertEqual(times, sorted(times))
+
+    def test_all_scheduled_items_correct_fields(self):
+        url = reverse('events:get_all_scheduled_items', args=[1])
+        resp = self._get(url)
+        item = json.loads(resp.content)['results'][0]
+        for field in ('id', 'name', 'description', 'start_time', 'location_id', 'location_name'):
+            self.assertIn(field, item)
+
+    def test_all_scheduled_items_filters_by_event(self):
+        # Event 2 has 1 item; event 3 has 0
+        url_e2 = reverse('events:get_all_scheduled_items', args=[2])
+        url_e3 = reverse('events:get_all_scheduled_items', args=[3])
+        self.assertEqual(json.loads(self._get(url_e2).content)['count'], 1)
+        self.assertEqual(json.loads(self._get(url_e3).content)['count'], 0)
+
+    def test_all_scheduled_items_empty_for_unknown_event(self):
+        url = reverse('events:get_all_scheduled_items', args=[9999])
+        resp = self._get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json.loads(resp.content)['count'], 0)
+
+    def test_all_scheduled_items_requires_auth(self):
+        url = reverse('events:get_all_scheduled_items', args=[1])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 401)
+
+    def test_all_scheduled_items_returns_json_content_type(self):
+        url = reverse('events:get_all_scheduled_items', args=[1])
+        resp = self._get(url)
+        self.assertIn('application/json', resp['Content-Type'])
+
+    def test_single_scheduled_item_returns_200(self):
+        url = reverse('events:get_single_scheduled_item', args=[1, 1])
+        resp = self._get(url)
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.content)
+        self.assertEqual(data['id'], 1)
+        self.assertEqual(data['name'], 'Opening Ceremony')
+
+    def test_single_scheduled_item_not_found(self):
+        url = reverse('events:get_single_scheduled_item', args=[1, 9999])
+        resp = self._get(url)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_single_scheduled_item_wrong_event_returns_404(self):
+        # item pk=1 belongs to event 1; looking it up under event 2 should 404
+        url = reverse('events:get_single_scheduled_item', args=[2, 1])
+        resp = self._get(url)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_single_scheduled_item_requires_auth(self):
+        url = reverse('events:get_single_scheduled_item', args=[1, 1])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 401)
+
+
+@override_settings(**_SETTINGS)
+class LocationScheduledItemsIntegrationTests(TestCase):
+    """Verify that location responses embed scheduled_items."""
+    fixtures = ['sample_data']
+
+    def setUp(self):
+        self.client = Client()
+
+    def _get(self, url):
+        return self.client.get(url, **_AUTH)
+
+    def test_location_list_embeds_scheduled_items(self):
+        url = reverse('events:get_all_locations', args=[1])
+        resp = self._get(url)
+        data = json.loads(resp.content)
+        # All locations have a scheduled_items key
+        for loc in data['results']:
+            self.assertIn('scheduled_items', loc)
+
+    def test_location_with_items_has_correct_count(self):
+        # Location pk=1 (event 1) has 2 items
+        url = reverse('events:get_single_location', args=[1, 1])
+        resp = self._get(url)
+        data = json.loads(resp.content)
+        self.assertIn('scheduled_items', data)
+        self.assertEqual(len(data['scheduled_items']), 2)
+
+    def test_location_without_items_returns_empty_list(self):
+        # Location pk=2 (event 1, no items) should have empty scheduled_items
+        url = reverse('events:get_single_location', args=[1, 2])
+        resp = self._get(url)
+        data = json.loads(resp.content)
+        self.assertEqual(data['scheduled_items'], [])
