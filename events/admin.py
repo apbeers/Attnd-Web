@@ -1,10 +1,13 @@
 import base64
 import io
+import re
 
 import qrcode
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
+from django.http import HttpResponse
+from django.urls import path
 from django.utils.html import format_html
 
 from events.models import Event, Location, Notification, Device
@@ -75,6 +78,28 @@ class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
         'user', 'admin_qr_code',
     ]
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                '<int:event_id>/qr.png/',
+                self.admin_site.admin_view(self.qr_png_view),
+                name='events_event_qr_png',
+            ),
+        ]
+        return custom + urls
+
+    def qr_png_view(self, request, event_id):
+        event = Event.objects.get(pk=event_id)
+        join_url = f'https://attnd.app/join/{event.event_code}/'
+        img = qrcode.make(join_url)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        safe_name = re.sub(r'[^a-zA-Z0-9]+', '_', event.name).strip('_')
+        response = HttpResponse(buf.getvalue(), content_type='image/png')
+        response['Content-Disposition'] = f'attachment; filename="{safe_name}.png"'
+        return response
+
     def get_readonly_fields(self, request, obj=None):
         ro = ['admin_qr_code']
         if not request.user.is_superuser:
@@ -82,12 +107,20 @@ class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
         return ro
 
     def admin_qr_code(self, obj):
-        url = f'https://attnd.app/join/{obj.event_code}/'
-        img = qrcode.make(url)
+        if not obj.pk:
+            return '—'
+        join_url = f'https://attnd.app/join/{obj.event_code}/'
+        img = qrcode.make(join_url)
         buf = io.BytesIO()
         img.save(buf, format='PNG')
         b64 = base64.b64encode(buf.getvalue()).decode()
-        return format_html('<img src="data:image/png;base64,{}" width="200">', b64)
+        download_url = f'/admin/events/event/{obj.pk}/qr.png/'
+        safe_name = re.sub(r'[^a-zA-Z0-9]+', '_', obj.name).strip('_')
+        return format_html(
+            '<img src="data:image/png;base64,{}" width="200" style="display:block;margin-bottom:8px">'
+            '<a href="{}" download="{}.png">⬇ Download {}.png</a>',
+            b64, download_url, safe_name, safe_name,
+        )
 
     admin_qr_code.short_description = 'QR Code'
 
