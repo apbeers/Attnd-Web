@@ -9,6 +9,7 @@ payload.  No browser required — works on Heroku and any plain Python env.
 import json
 import logging
 import textwrap
+import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin, urlparse
@@ -111,18 +112,23 @@ def _same_origin_links(html: str, base_url: str) -> list[str]:
     return links
 
 
-def _crawl(url: str, max_depth: int = 2, max_pages: int = 10) -> str:
+def _crawl(url: str, max_depth: int = 2, max_pages: int = 10, max_seconds: int = 45) -> str:
     """
     BFS crawl starting at url.  Stays on the same origin, visits at most
     max_pages pages up to max_depth levels deep, returns combined text.
+    Stops early if max_seconds wall-clock time is exceeded.
     """
-    logger.info("Crawl starting: %s (max_depth=%d, max_pages=%d)", url, max_depth, max_pages)
+    logger.info("Crawl starting: %s (max_depth=%d, max_pages=%d, max_seconds=%d)", url, max_depth, max_pages, max_seconds)
     visited: set[str] = set()
     queue: deque[tuple[str, int]] = deque([(url, 0)])
     parts: list[str] = []
+    deadline = time.monotonic() + max_seconds
 
     with httpx.Client(headers=_HEADERS, timeout=15, follow_redirects=True) as client:
         while queue and len(visited) < max_pages:
+            if time.monotonic() > deadline:
+                logger.warning("Crawl deadline reached after %ds — stopping early (%d pages visited)", max_seconds, len(visited))
+                break
             current_url, depth = queue.popleft()
             if current_url in visited:
                 continue
