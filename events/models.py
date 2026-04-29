@@ -1,3 +1,5 @@
+import secrets
+import string
 import uuid
 
 from django.contrib.auth.models import User
@@ -12,8 +14,18 @@ def get_file_path(instance, filename):
     return f'{file}_{simple_uuid}.{ext}'
 
 
+def generate_event_code(length: int = 8) -> str:
+    """Return a random uppercase alphanumeric code that doesn't already exist."""
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(20):
+        code = ''.join(secrets.choice(alphabet) for _ in range(length))
+        if not Event.objects.filter(event_code=code).exists():
+            return code
+    raise RuntimeError('Could not generate a unique event code after 20 attempts.')
+
+
 class Event(models.Model):
-    name = models.CharField(max_length=256, unique=True)
+    name = models.CharField(max_length=256)
     event_code = models.CharField(max_length=16, unique=True)
     description = models.CharField(max_length=2048)
     latitude = models.DecimalField(max_digits=24, decimal_places=20)

@@ -2,8 +2,6 @@ import base64
 import io
 import json
 import logging
-import secrets
-import string
 from datetime import datetime
 
 import qrcode
@@ -18,7 +16,7 @@ from django.views.decorators.http import require_POST
 
 from django.conf import settings
 
-from events.models import Event, Location, ScheduledItem
+from events.models import Event, Location, ScheduledItem, generate_event_code
 from scrape.service import scrape_event
 
 logger = logging.getLogger(__name__)
@@ -38,15 +36,6 @@ def _get_or_create_trial_user() -> User:
         user.save()
     return user
 
-
-def _unique_event_code(length: int = 8) -> str:
-    """Generate a random alphanumeric event_code that doesn't already exist."""
-    alphabet = string.ascii_uppercase + string.digits
-    for _ in range(10):
-        code = "".join(secrets.choice(alphabet) for _ in range(length))
-        if not Event.objects.filter(event_code=code).exists():
-            return code
-    raise RuntimeError("Could not generate a unique event code after 10 attempts.")
 
 
 def _check_rate_limit(ip: str) -> bool:
@@ -116,7 +105,7 @@ def scrape_view(request):
 
     # Write to DB
     trial_user = _get_or_create_trial_user()
-    event_code = _unique_event_code()
+    event_code = generate_event_code()
 
     event = Event.objects.create(
         name=data["name"][:256],

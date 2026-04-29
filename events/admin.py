@@ -10,7 +10,7 @@ from django.http import HttpResponse
 from django.urls import path
 from django.utils.html import format_html
 
-from events.models import Event, Location, Notification, Device, ScheduledItem
+from events.models import Event, Location, Notification, Device, ScheduledItem, generate_event_code
 
 
 class UserScopedAdminMixin:
@@ -72,11 +72,22 @@ class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     list_filter = ['paid', 'user']
     search_fields = ['name', 'event_code', 'address']
     date_hierarchy = 'start_time'
-    fields = [
+
+    # Base fields shown on the change form (event_code is read-only there).
+    # On the add form get_fields() removes event_code — it's auto-generated on save.
+    _change_fields = [
         'name', 'event_code', 'description', 'latitude', 'longitude',
         'start_time', 'paid', 'public', 'flyer', 'address', 'order_id',
         'user', 'admin_qr_code',
     ]
+    _add_fields = [
+        'name', 'description', 'latitude', 'longitude',
+        'start_time', 'paid', 'public', 'flyer', 'address', 'order_id',
+        'user',
+    ]
+
+    def get_fields(self, request, obj=None):
+        return self._add_fields if obj is None else self._change_fields
 
     def get_urls(self):
         urls = super().get_urls()
@@ -101,10 +112,16 @@ class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
         return response
 
     def get_readonly_fields(self, request, obj=None):
-        ro = ['admin_qr_code']
+        # event_code is always read-only on the change form (never editable after creation)
+        ro = ['admin_qr_code'] + (['event_code'] if obj is not None else [])
         if not request.user.is_superuser:
             ro += ['user', 'paid']
         return ro
+
+    def save_model(self, request, obj, form, change):
+        if not obj.pk and not obj.event_code:
+            obj.event_code = generate_event_code()
+        super().save_model(request, obj, form, change)
 
     def admin_qr_code(self, obj):
         if not obj.pk:

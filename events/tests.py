@@ -241,10 +241,10 @@ class MultiTenantAdminTests(TestCase):
     # ------------------------------------------------------------------
 
     def _event_post_data(self, **overrides):
-        """Minimal valid POST data for the Event admin add/change form."""
+        """Minimal valid POST data for the Event admin add form.
+        event_code is no longer a form field — it's auto-generated on save."""
         data = {
             'name': 'New Event',
-            'event_code': 'newevt',
             'description': 'A description',
             'latitude': '32.75',
             'longitude': '-97.35',
@@ -341,11 +341,34 @@ class MultiTenantAdminTests(TestCase):
         self.client.force_login(self.customer1)
         response = self.client.post(
             reverse('admin:events_event_add'),
-            self._event_post_data(name='C1 New Event', event_code='c1new'),
+            self._event_post_data(name='C1 New Event'),
         )
         self.assertEqual(response.status_code, 302)
         event = Event.objects.get(name='C1 New Event')
         self.assertEqual(event.user, self.customer1)
+
+    def test_event_code_auto_generated_on_admin_add(self):
+        self.client.force_login(self.customer1)
+        self.client.post(
+            reverse('admin:events_event_add'),
+            self._event_post_data(name='Auto Code Event'),
+        )
+        event = Event.objects.get(name='Auto Code Event')
+        self.assertTrue(event.event_code, 'event_code should not be empty')
+        self.assertEqual(len(event.event_code), 8)
+
+    def test_two_events_can_share_the_same_name(self):
+        self.client.force_login(self.customer1)
+        self.client.post(
+            reverse('admin:events_event_add'),
+            self._event_post_data(name='Duplicate Name Event'),
+        )
+        self.client.post(
+            reverse('admin:events_event_add'),
+            self._event_post_data(name='Duplicate Name Event'),
+        )
+        # Both should be created (name uniqueness is gone)
+        self.assertEqual(Event.objects.filter(name='Duplicate Name Event').count(), 2)
 
     # ------------------------------------------------------------------
     # Adding locations
