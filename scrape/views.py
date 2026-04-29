@@ -1,8 +1,13 @@
+import base64
+import io
 import json
 import logging
 import secrets
 import string
 from datetime import datetime
+
+import qrcode
+import qrcode.image.svg
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
@@ -142,8 +147,19 @@ def scrape_view(request):
         except Exception:
             pass  # Don't fail the whole request over a single bad location
 
+    # Generate QR code for the join URL
+    join_url = request.build_absolute_uri(f"/join/{event_code}/")
+    qr_img = qrcode.make(join_url, box_size=8, border=2)
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    qr_b64 = base64.b64encode(buf.getvalue()).decode()
+
+    logger.info("Event created: %s (code=%s, locations=%d)", event.name, event_code, locations_created)
+
     return JsonResponse({
         "event_code": event_code,
         "event_name": event.name,
         "location_count": locations_created,
+        "qr_code": f"data:image/png;base64,{qr_b64}",
+        "join_url": join_url,
     }, status=201)
