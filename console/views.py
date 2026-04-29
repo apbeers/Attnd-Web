@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views import View
 
 from console.forms.signup import SignUpForm
-from events.models import Event, Location, Notification
+from events.models import Event, Location, Notification, generate_event_code
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ class SignUpView(View):
     def create_demo_event(user: User):
         Event.objects.create(
             name=f'Demo Event - {user.email}',
-            event_code=f'{user.username[:140]}-demo',
+            event_code=generate_event_code(),
             description='The local art fair is back! Artists will be teaching classes and selling paintings.',
             latitude=32.754695,
             longitude=-97.331605,
