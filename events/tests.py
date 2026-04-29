@@ -113,6 +113,15 @@ class EventLookupTestCase(TestCase):
         self.assertIn('flyer_url', data)
         self.assertNotIn('flyer', data)
 
+    def test_response_includes_created_at(self):
+        request = RequestFactory().get(reverse('events:event_lookup'), **AUTH_HEADER)
+        request.GET = {'q': 'event 1'}
+        response = EventLookupView.as_view()(request)
+        data = json.loads(response.content)
+        self.assertIn('created_at', data)
+        self.assertIsInstance(data['created_at'], str)
+        self.assertGreater(len(data['created_at']), 0)
+
 
 @override_settings(API_KEY=TEST_API_KEY)
 class JoinEventTestCase(TestCase):

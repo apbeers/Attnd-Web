@@ -31,6 +31,7 @@ def _event_dict(event, request=None):
         'latitude': float(event.latitude),
         'longitude': float(event.longitude),
         'start_time': event.start_time.isoformat(),
+        'created_at': event.created_at.isoformat(),
         'paid': event.paid,
         'flyer_url': flyer_url,
         'address': event.address,
