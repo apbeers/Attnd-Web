@@ -43,6 +43,7 @@
       "description": "pizza place description",
       "website": null,
       "image": "IMG_1708.JPG",
+      "image_url": null,
       "latitude": "32.89631620000000000000",
       "longitude": "-96.96098170000000000000",
       "address": "Pizza Twist Irving, TX, West Royal Lane, Irving, TX, USA",
@@ -60,6 +61,30 @@
       "sent": false,
       "user": 1,
       "event": 1
+    }
+  },
+  {
+    "model": "events.scheduleditem",
+    "pk": 1,
+    "fields": {
+      "name": "Opening Act",
+      "description": "Kick things off with live music.",
+      "start_time": "2021-09-22T18:00:00Z",
+      "location": 1,
+      "event": 1,
+      "user": 1
+    }
+  },
+  {
+    "model": "events.scheduleditem",
+    "pk": 2,
+    "fields": {
+      "name": "Headliner",
+      "description": "Main performance of the evening.",
+      "start_time": "2021-09-22T20:30:00Z",
+      "location": 1,
+      "event": 1,
+      "user": 1
     }
   }
 ]

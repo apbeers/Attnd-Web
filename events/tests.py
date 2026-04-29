@@ -12,8 +12,9 @@ from events.apis import (
     NearbyEventsView, EventByCodeOrNameView, AllLocationsView,
     PushNotificationsUnSubscribe, PushNotificationsSubscribe,
     JoinEventView, LeaveEventView, EventLookupView,
+    AllScheduledItemsView, SingleScheduledItemView,
 )
-from events.models import Device, Event, Location
+from events.models import Device, Event, Location, ScheduledItem
 
 TEST_API_KEY = 'test-key'
 AUTH_HEADER = {'HTTP_AUTHORIZATION': f'Bearer {TEST_API_KEY}'}
@@ -423,3 +424,189 @@ class MultiTenantAdminTests(TestCase):
         content = response.content.decode()
         self.assertIn('Customer1 Event', content)
         self.assertNotIn('Customer2 Event', content)
+
+
+# ---------------------------------------------------------------------------
+# ScheduledItem model tests
+# ---------------------------------------------------------------------------
+
+class ScheduledItemModelTests(TestCase):
+    fixtures = ['dump.json']
+
+    def test_str(self):
+        item = ScheduledItem.objects.get(pk=1)
+        self.assertEqual(str(item), 'Opening Act @ Pizza Place')
+
+    def test_default_ordering_by_start_time(self):
+        items = list(ScheduledItem.objects.filter(event_id=1))
+        self.assertEqual(items[0].pk, 1)   # 18:00
+        self.assertEqual(items[1].pk, 2)   # 20:30
+
+    def test_cascade_delete_with_location(self):
+        """Deleting a location removes its scheduled items."""
+        loc = Location.objects.get(pk=1)
+        self.assertEqual(ScheduledItem.objects.filter(location=loc).count(), 2)
+        loc.delete()
+        self.assertEqual(ScheduledItem.objects.filter(location_id=1).count(), 0)
+
+    def test_cascade_delete_with_event(self):
+        """Deleting an event removes its scheduled items."""
+        event = Event.objects.get(pk=1)
+        self.assertEqual(ScheduledItem.objects.filter(event=event).count(), 2)
+        event.delete()
+        self.assertEqual(ScheduledItem.objects.filter(event_id=1).count(), 0)
+
+
+# ---------------------------------------------------------------------------
+# AllScheduledItemsView tests
+# ---------------------------------------------------------------------------
+
+@override_settings(API_KEY=TEST_API_KEY)
+class AllScheduledItemsViewTests(TestCase):
+    fixtures = ['dump.json']
+
+    def test_returns_200_with_results_and_count(self):
+        request = RequestFactory().get(
+            reverse('events:get_all_scheduled_items', args=[1]),
+            **AUTH_HEADER,
+        )
+        response = AllScheduledItemsView.as_view()(request, event_id=1)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertIn('results', data)
+        self.assertIn('count', data)
+        self.assertEqual(data['count'], 2)
+
+    def test_items_sorted_by_start_time(self):
+        request = RequestFactory().get(
+            reverse('events:get_all_scheduled_items', args=[1]),
+            **AUTH_HEADER,
+        )
+        response = AllScheduledItemsView.as_view()(request, event_id=1)
+        data = json.loads(response.content)
+        times = [r['start_time'] for r in data['results']]
+        self.assertEqual(times, sorted(times))
+
+    def test_result_fields(self):
+        request = RequestFactory().get(
+            reverse('events:get_all_scheduled_items', args=[1]),
+            **AUTH_HEADER,
+        )
+        response = AllScheduledItemsView.as_view()(request, event_id=1)
+        item = json.loads(response.content)['results'][0]
+        for field in ('id', 'name', 'description', 'start_time', 'location_id', 'location_name'):
+            self.assertIn(field, item)
+
+    def test_returns_401_without_auth(self):
+        request = RequestFactory().get(
+            reverse('events:get_all_scheduled_items', args=[1]),
+        )
+        response = AllScheduledItemsView.as_view()(request, event_id=1)
+        self.assertEqual(response.status_code, 401)
+
+    def test_returns_empty_list_for_event_with_no_items(self):
+        # event_id 999 doesn't exist — should still return an empty list, not 404
+        request = RequestFactory().get(
+            reverse('events:get_all_scheduled_items', args=[999]),
+            **AUTH_HEADER,
+        )
+        response = AllScheduledItemsView.as_view()(request, event_id=999)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual(data['count'], 0)
+        self.assertEqual(data['results'], [])
+
+    def test_filters_to_correct_event(self):
+        """Items from event 1 should not appear under a different event_id."""
+        request = RequestFactory().get(
+            reverse('events:get_all_scheduled_items', args=[2]),
+            **AUTH_HEADER,
+        )
+        response = AllScheduledItemsView.as_view()(request, event_id=2)
+        data = json.loads(response.content)
+        self.assertEqual(data['count'], 0)
+
+
+# ---------------------------------------------------------------------------
+# SingleScheduledItemView tests
+# ---------------------------------------------------------------------------
+
+@override_settings(API_KEY=TEST_API_KEY)
+class SingleScheduledItemViewTests(TestCase):
+    fixtures = ['dump.json']
+
+    def test_returns_200_with_correct_item(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_scheduled_item', args=[1, 1]),
+            **AUTH_HEADER,
+        )
+        response = SingleScheduledItemView.as_view()(request, event_id=1, item_id=1)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual(data['name'], 'Opening Act')
+        self.assertEqual(data['location_name'], 'Pizza Place')
+
+    def test_returns_404_for_missing_item(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_scheduled_item', args=[1, 999]),
+            **AUTH_HEADER,
+        )
+        response = SingleScheduledItemView.as_view()(request, event_id=1, item_id=999)
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_404_when_item_belongs_to_different_event(self):
+        """item_id=1 exists but under event_id=1; looking it up under event_id=2 should 404."""
+        request = RequestFactory().get(
+            reverse('events:get_single_scheduled_item', args=[2, 1]),
+            **AUTH_HEADER,
+        )
+        response = SingleScheduledItemView.as_view()(request, event_id=2, item_id=1)
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_401_without_auth(self):
+        request = RequestFactory().get(
+            reverse('events:get_single_scheduled_item', args=[1, 1]),
+        )
+        response = SingleScheduledItemView.as_view()(request, event_id=1, item_id=1)
+        self.assertEqual(response.status_code, 401)
+
+
+# ---------------------------------------------------------------------------
+# Location list includes scheduled_items
+# ---------------------------------------------------------------------------
+
+@override_settings(API_KEY=TEST_API_KEY)
+class LocationScheduledItemsEmbedTests(TestCase):
+    fixtures = ['dump.json']
+
+    def test_location_response_includes_scheduled_items(self):
+        request = RequestFactory().get(
+            reverse('events:get_all_locations', args=[1]),
+            **AUTH_HEADER,
+        )
+        response = AllLocationsView.as_view()(request, event_id=1)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        location = data['results'][0]
+        self.assertIn('scheduled_items', location)
+        self.assertEqual(len(location['scheduled_items']), 2)
+
+    def test_embedded_items_sorted_by_start_time(self):
+        request = RequestFactory().get(
+            reverse('events:get_all_locations', args=[1]),
+            **AUTH_HEADER,
+        )
+        response = AllLocationsView.as_view()(request, event_id=1)
+        location = json.loads(response.content)['results'][0]
+        times = [i['start_time'] for i in location['scheduled_items']]
+        self.assertEqual(times, sorted(times))
+
+    def test_embedded_item_fields(self):
+        request = RequestFactory().get(
+            reverse('events:get_all_locations', args=[1]),
+            **AUTH_HEADER,
+        )
+        response = AllLocationsView.as_view()(request, event_id=1)
+        item = json.loads(response.content)['results'][0]['scheduled_items'][0]
+        for field in ('id', 'name', 'description', 'start_time', 'location_id', 'location_name'):
+            self.assertIn(field, item)
