@@ -112,7 +112,7 @@ def _same_origin_links(html: str, base_url: str) -> list[str]:
     return links
 
 
-def _crawl(url: str, max_depth: int = 2, max_pages: int = 10, max_seconds: int = 45) -> str:
+def _crawl(url: str, max_depth: int = 1, max_pages: int = 5, max_seconds: int = 30) -> str:
     """
     BFS crawl starting at url.  Stays on the same origin, visits at most
     max_pages pages up to max_depth levels deep, returns combined text.
@@ -124,7 +124,7 @@ def _crawl(url: str, max_depth: int = 2, max_pages: int = 10, max_seconds: int =
     parts: list[str] = []
     deadline = time.monotonic() + max_seconds
 
-    with httpx.Client(headers=_HEADERS, timeout=15, follow_redirects=True) as client:
+    with httpx.Client(headers=_HEADERS, timeout=10, follow_redirects=True) as client:
         while queue and len(visited) < max_pages:
             if time.monotonic() > deadline:
                 logger.warning("Crawl deadline reached after %ds — stopping early (%d pages visited)", max_seconds, len(visited))
