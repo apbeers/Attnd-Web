@@ -92,11 +92,31 @@ _HEADERS = {
 
 
 def _page_text(html: str) -> str:
-    """Extract visible text from HTML, stripping scripts/styles."""
+    """
+    Extract visible text from HTML.
+    Keeps application/ld+json script blocks (structured event data).
+    Strips all other scripts, styles, and boilerplate.
+    """
     soup = BeautifulSoup(html, "html.parser")
+
+    # Preserve JSON-LD blocks — many event/festival sites embed their full
+    # schedule, lineup, and location data here.
+    jsonld_blocks = []
+    for tag in soup.find_all("script", type="application/ld+json"):
+        try:
+            jsonld_blocks.append(tag.get_text())
+        except Exception:
+            pass
+
+    # Strip everything we don't want
     for tag in soup(["script", "style", "noscript", "meta", "head"]):
         tag.decompose()
-    return " ".join(soup.get_text(separator=" ").split())
+
+    visible = " ".join(soup.get_text(separator=" ").split())
+
+    if jsonld_blocks:
+        return visible + "\n\n[JSON-LD structured data]\n" + "\n".join(jsonld_blocks)
+    return visible
 
 
 def _same_origin_links(html: str, base_url: str) -> list[str]:
@@ -112,7 +132,7 @@ def _same_origin_links(html: str, base_url: str) -> list[str]:
     return links
 
 
-def _crawl(url: str, max_depth: int = 1, max_pages: int = 5, max_seconds: int = 30) -> str:
+def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int = 60) -> str:
     """
     BFS crawl starting at url.  Stays on the same origin, visits at most
     max_pages pages up to max_depth levels deep, returns combined text.
@@ -124,7 +144,7 @@ def _crawl(url: str, max_depth: int = 1, max_pages: int = 5, max_seconds: int = 
     parts: list[str] = []
     deadline = time.monotonic() + max_seconds
 
-    with httpx.Client(headers=_HEADERS, timeout=10, follow_redirects=True) as client:
+    with httpx.Client(headers=_HEADERS, timeout=12, follow_redirects=True) as client:
         while queue and len(visited) < max_pages:
             if time.monotonic() > deadline:
                 logger.warning("Crawl deadline reached after %ds — stopping early (%d pages visited)", max_seconds, len(visited))
@@ -170,7 +190,13 @@ def _extract(content: str) -> dict:
     Send the crawled text to OpenAI and return parsed event dict.
     Raises ValueError if the response cannot be parsed.
     """
-    trimmed = content[:120_000]
+    MAX_CHARS = 200_000
+    if len(content) > MAX_CHARS:
+        logger.warning(
+            "Content truncated: %d → %d chars (%.0f%% dropped) — some pages may be missed",
+            len(content), MAX_CHARS, (1 - MAX_CHARS / len(content)) * 100,
+        )
+    trimmed = content[:MAX_CHARS]
     logger.info("Sending %d chars to OpenAI (gpt-4o-mini)", len(trimmed))
 
     client = OpenAI()
