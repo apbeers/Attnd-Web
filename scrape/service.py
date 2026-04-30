@@ -358,7 +358,7 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
     geocode_query = f"{event_name} {event_address}".strip() or event_name
     result = _geocode(geocode_query, api_key)
     if result:
-        event_lat, event_lng, resolved_address = result
+        event_lat, event_lng, resolved_address, _ = result
         data["latitude"] = event_lat
         data["longitude"] = event_lng
         if resolved_address:
