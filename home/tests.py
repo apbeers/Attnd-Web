@@ -10,6 +10,13 @@ class HomePageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'home/home.html')
 
+    @patch('home.views._build_number', return_value='123')
+    @patch('django.contrib.staticfiles.storage.staticfiles_storage.url', return_value='/static/home/img/favicon.png')
+    def test_home_page_includes_build_number_in_context(self, mock_static_url, mock_build_number):
+        response = self.client.get(reverse('home:homepage'), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['build'], '123')
+
 
 class PrivacyPageTests(TestCase):
     @patch('django.contrib.staticfiles.storage.staticfiles_storage.url', return_value='/static/home/img/favicon.png')
