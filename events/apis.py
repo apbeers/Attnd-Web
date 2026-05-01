@@ -12,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views import View
 
 from events.models import Event, Location, Notification, Device, ScheduledItem
+from attestation import tokens as attest_tokens
 
 
 # ---------------------------------------------------------------------------
@@ -96,11 +97,31 @@ def _relevance_score(distance_miles, start_time, now):
 # ---------------------------------------------------------------------------
 
 class ApiKeyRequired:
+    """
+    Accept either:
+      - A static API key (Authorization: Bearer <API_KEY>) for backward compat
+        with CI, dev environments, and the existing console.
+      - A short-lived attestation JWT issued by /api/v1/attest/ios/ or
+        /api/v1/attest/android/ for production mobile clients.
+    """
+
     def dispatch(self, request, *args, **kwargs):
-        key = request.headers.get('Authorization', '').removeprefix('Bearer ')
-        if not key or key != settings.API_KEY:
+        bearer = request.headers.get('Authorization', '').removeprefix('Bearer ').strip()
+        if not bearer:
             return JsonResponse({'error': 'Unauthorized'}, status=401)
-        return super().dispatch(request, *args, **kwargs)
+
+        # Static API key check (backward compat)
+        if bearer == settings.API_KEY and settings.API_KEY:
+            return super().dispatch(request, *args, **kwargs)
+
+        # Attestation JWT check
+        payload = attest_tokens.verify(bearer)
+        if payload is not None:
+            request.attested_device_key = payload.get('sub')
+            request.attested_platform = payload.get('platform')
+            return super().dispatch(request, *args, **kwargs)
+
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
 
 
 # ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'home.apps.HomeConfig',
     'join.apps.JoinConfig',
     'scrape.apps.ScrapeConfig',
+    'attestation.apps.AttestationConfig',
 ]
 
 MIDDLEWARE = [
@@ -150,3 +151,30 @@ LOGGING = {
 }
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
+
+# ---------------------------------------------------------------------------
+# Apple App Attest
+# ---------------------------------------------------------------------------
+# The bundle ID and team ID are embedded in the attestation object's rpIdHash.
+# Set APPLE_ATTEST_ENVIRONMENT = 'development' in your local .env to allow
+# sandbox attestations from Xcode simulators / TestFlight builds.
+APPLE_APP_BUNDLE_ID = os.getenv('APPLE_APP_BUNDLE_ID', '')
+APPLE_TEAM_ID = os.getenv('APPLE_TEAM_ID', '')
+APPLE_ATTEST_ENVIRONMENT = os.getenv('APPLE_ATTEST_ENVIRONMENT', 'production')
+
+# ---------------------------------------------------------------------------
+# Google Play Integrity
+# ---------------------------------------------------------------------------
+# Set to the full contents of your Google service account JSON key file.
+# If running on GCP/Cloud Run, leave empty and application default credentials
+# will be used automatically.
+ANDROID_PACKAGE_NAME = os.getenv('ANDROID_PACKAGE_NAME', '')
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON', '')
+
+# ---------------------------------------------------------------------------
+# Attestation JWT
+# ---------------------------------------------------------------------------
+# Dedicated secret for signing attestation tokens.
+# Falls back to SECRET_KEY if not set.
+ATTESTATION_JWT_SECRET = os.getenv('ATTESTATION_JWT_SECRET', '')
+ATTESTATION_JWT_TTL_HOURS = int(os.getenv('ATTESTATION_JWT_TTL_HOURS', '24'))

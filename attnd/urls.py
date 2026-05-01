@@ -17,6 +17,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('console/', include('console.urls'), name='console'),
     path('api/v1/events/', include('events.urls'), name='events'),
+    path('api/v1/attest/', include('attestation.urls'), name='attestation'),
     path('join/', include('join.urls')),
     path('scrape/', include('scrape.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
