@@ -42,20 +42,25 @@ class AppleAppSiteAssociation(View):
 
     def get(self, request):
         team_id = os.getenv('APPLE_TEAM_ID', '<TEAM_ID>')
-        bundle_id = os.getenv('APPLE_BUNDLE_ID', '<BUNDLE_ID>')
+        bundle_id = os.getenv('APPLE_APP_BUNDLE_ID', '<BUNDLE_ID>')
+        app_id = f'{team_id}.{bundle_id}'
+        clip_id = f'{app_id}.Clip'
         data = {
             'appclips': {
-                'apps': [f'{team_id}.{bundle_id}.Clip'],
+                'apps': [clip_id],
             },
             'applinks': {
-                'apps': [],
                 'details': [{
-                    'appID': f'{team_id}.{bundle_id}',
-                    'paths': ['/join/*'],
+                    'appIDs': [app_id, clip_id],
+                    'components': [
+                        {'/' : '/join/*', 'comment': 'Join event links'},
+                        {'/' : '/*'},
+                    ],
                 }],
             },
         }
         response = JsonResponse(data)
+        response['Content-Type'] = 'application/json'
         response['Cache-Control'] = 'no-cache'
         return response
 
