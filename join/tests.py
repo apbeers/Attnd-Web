@@ -128,7 +128,12 @@ class WellKnownTests(TestCase):
         data = json.loads(response.content)
         self.assertIn('appclips', data)
         self.assertIn('applinks', data)
-        self.assertIn('/join/*', data['applinks']['details'][0]['paths'])
+        detail = data['applinks']['details'][0]
+        self.assertIn('appIDs', detail)
+        # Modern format uses 'components' (list of path dicts) not 'paths'
+        components = detail.get('components', [])
+        paths = [c.get('/') for c in components]
+        self.assertIn('/join/*', paths)
 
     def test_assetlinks_returns_200(self):
         response = self.client.get('/.well-known/assetlinks.json')
