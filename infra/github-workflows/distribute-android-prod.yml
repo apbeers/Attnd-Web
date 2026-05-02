@@ -1,0 +1,127 @@
+name: Distribute — Android Prod (Play Store production)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/distribute-android-prod.yml'
+
+permissions:
+  contents: write   # needed to commit the bumped version code back to main
+
+jobs:
+  test:
+    name: Android Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+      - name: Write local.properties
+        working-directory: android
+        run: |
+          echo "ATTND_API_KEY=ci-test-key" >> local.properties
+          echo "MAPS_API_KEY=ci-test-key"  >> local.properties
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew test --no-daemon
+
+  distribute:
+    name: Build AAB & Upload to Play Store (production)
+    runs-on: ubuntu-latest
+    needs: test
+    environment: android-prod   # ← manual approval gate
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need a token that can push back to main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Read current version code
+        id: version
+        working-directory: android
+        run: |
+          CODE=$(grep VERSION_CODE version.properties | cut -d= -f2 | tr -d '[:space:]')
+          echo "current=$CODE" >> $GITHUB_OUTPUT
+          echo "next=$((CODE + 1))" >> $GITHUB_OUTPUT
+          echo "Building version code $CODE"
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/keystore.jks
+
+      - name: Write signing.properties
+        run: |
+          cat > android/signing.properties << EOF
+          STORE_FILE=keystore.jks
+          STORE_PASSWORD=${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Write local.properties
+        run: |
+          cat > android/local.properties << EOF
+          ATTND_API_KEY=${{ secrets.ANDROID_ATTND_API_KEY }}
+          MAPS_API_KEY=${{ secrets.ANDROID_MAPS_API_KEY }}
+          EOF
+
+      - name: Build release AAB
+        working-directory: android
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Upload to Play Store production (10% rollout)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.arcu.attnd
+          releaseFiles: android/app/build/outputs/bundle/release/*.aab
+          track: production
+          status: inProgress
+          userFraction: 0.10
+
+      - name: Bump version code and commit to main
+        run: |
+          echo "VERSION_CODE=${{ steps.version.outputs.next }}" > android/version.properties
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add android/version.properties
+          git commit -m "chore: bump Android version code to ${{ steps.version.outputs.next }} [skip ci]"
+          git push origin main
+
+      - name: Clean up secrets
+        if: always()
+        run: |
+          rm -f android/keystore.jks
+          rm -f android/signing.properties
+          rm -f android/local.properties
