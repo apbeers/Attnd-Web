@@ -1,0 +1,14 @@
+Changes to apply to pyproject.toml
+===================================
+
+Add the following dependency to the [project] dependencies list:
+
+    "python-json-logger>=2.0.7",
+
+Then run:
+
+    uv lock
+
+This package provides the JSON formatter used by the LOGGING config
+in settings_changes.py. CloudWatch Insights parses the structured
+JSON fields (levelname, name, message) for metric filters and queries.

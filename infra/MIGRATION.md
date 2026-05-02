@@ -72,7 +72,60 @@ alert_email = "you@example.com"   # receives CloudWatch alarm emails
 
 ---
 
-## Step 5 — Activate the GitHub Actions workflows
+## Step 5 — Apply Django code changes
+
+These changes are needed before the first deploy. All source files are in
+`infra/app-changes/` — see each file for the exact lines to change.
+
+### 5a — Add the health check view
+
+Copy `infra/app-changes/attnd_views.py` into `attnd/views.py`:
+
+```bash
+cp infra/app-changes/attnd_views.py attnd/views.py
+```
+
+### 5b — Add the health URL
+
+Open `attnd/urls.py` and apply the changes in `infra/app-changes/urls_changes.py`:
+
+1. Add the import at the top:
+   ```python
+   from attnd import views as attnd_views
+   ```
+2. Add this path as the first entry in `urlpatterns`:
+   ```python
+   path('health/', attnd_views.health, name='health'),
+   ```
+
+### 5c — Update settings
+
+Open `attnd/settings.py` and apply the two changes in
+`infra/app-changes/settings_changes.py`:
+
+1. Replace the `ALLOWED_HOSTS` block (the `if DEBUG / else` block)
+2. Replace the entire `LOGGING` dict
+
+### 5d — Add python-json-logger
+
+Follow the instructions in `infra/app-changes/pyproject_changes.txt`:
+
+```bash
+# Add "python-json-logger>=2.0.7" to the dependencies list in pyproject.toml
+uv lock
+```
+
+### 5e — Commit everything
+
+```bash
+git add attnd/views.py attnd/urls.py attnd/settings.py pyproject.toml uv.lock
+git commit -m "chore: apply AWS migration Django changes (health endpoint, logging, allowed hosts)"
+git push
+```
+
+---
+
+## Step 6 — Activate the GitHub Actions workflows
 
 Move the three workflow files into `.github/workflows/`:
 
@@ -97,7 +150,7 @@ Commit and push to `develop`. This triggers the first dev deploy:
 
 ---
 
-## Step 6 — Point DNS
+## Step 7 — Point DNS
 
 After the first dev deploy, Terraform prints the ALB DNS name. Add a CNAME:
 
@@ -111,17 +164,6 @@ too — the HTTPS listener won't work until the cert is validated (~1-2 min).
 For prod, do the same after merging to `main`:
 ```
 attnd.app  →  attnd-prod-alb-XXXX.us-east-1.elb.amazonaws.com
-```
-
----
-
-## Step 7 — Run `uv lock` after adding python-json-logger
-
-Before the first deploy, update the lockfile locally:
-
-```bash
-uv lock
-git add uv.lock && git commit -m "chore: add python-json-logger to lockfile"
 ```
 
 ---
@@ -144,6 +186,11 @@ Once prod traffic is stable on AWS:
 
 ```
 infra/
+├── app-changes/            Django code changes to apply before first deploy
+│   ├── attnd_views.py      Health check view → copy to attnd/views.py
+│   ├── urls_changes.py     URL changes → apply to attnd/urls.py
+│   ├── settings_changes.py Settings changes → apply to attnd/settings.py
+│   └── pyproject_changes.txt  Dependency to add → apply to pyproject.toml
 ├── bootstrap/              One-time setup: state bucket, OIDC, IAM roles
 │   ├── main.tf
 │   ├── variables.tf
