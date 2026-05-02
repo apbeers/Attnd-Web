@@ -15,8 +15,11 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 if DEBUG:
     ALLOWED_HOSTS = ['*']
+elif os.getenv('ALLOWED_HOSTS'):
+    # In AWS the ECS task injects this as a comma-separated env var
+    ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS').split(',')
 else:
-    ALLOWED_HOSTS = ['.herokuapp.com', '.attnd.app']
+    ALLOWED_HOSTS = ['.attnd.app']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -126,25 +129,39 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
+        # Plain text for local dev (easy to read)
         "verbose": {
             "format": "[{levelname}] {name}: {message}",
             "style": "{",
+        },
+        # JSON for production — CloudWatch Insights can filter/aggregate by field
+        "json": {
+            "()": "pythonjsonlogger.json.JsonFormatter",
+            "fmt": "%(asctime)s %(levelname)s %(name)s %(message)s",
         },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            # ECS ships all stdout to CloudWatch via the awslogs driver.
+            # Use JSON in prod so CloudWatch Insights can parse structured fields.
+            "formatter": "json" if not DEBUG else "verbose",
         },
     },
     "root": {
         "handlers": ["console"],
-        "level": "INFO",
+        "level": "DEBUG" if DEBUG else "INFO",
     },
     "loggers": {
         "scrape": {
             "handlers": ["console"],
             "level": "DEBUG",
+            "propagate": False,
+        },
+        # Quiet down noisy Django internals in production
+        "django.security.DisallowedHost": {
+            "handlers": ["console"],
+            "level": "ERROR",
             "propagate": False,
         },
     },

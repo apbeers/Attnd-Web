@@ -6,10 +6,7 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "app" {
-  name              = "/ecs/${local.prefix}"
-  retention_in_days = var.environment == "prod" ? 90 : 14
-}
+# Log group defined in cloudwatch.tf — referenced here by name
 
 resource "aws_ecs_task_definition" "app" {
   family                   = local.prefix
@@ -52,7 +49,7 @@ resource "aws_ecs_task_definition" "app" {
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        awslogs-group         = aws_cloudwatch_log_group.app.name
+        awslogs-group         = "/ecs/${local.prefix}"
         awslogs-region        = var.aws_region
         awslogs-stream-prefix = "ecs"
       }
