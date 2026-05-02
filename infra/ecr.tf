@@ -1,5 +1,5 @@
 resource "aws_ecr_repository" "app" {
-  name                 = var.app_name
+  name                 = local.prefix
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
@@ -7,7 +7,6 @@ resource "aws_ecr_repository" "app" {
   }
 }
 
-# Keep only the 10 most recent images to control storage cost
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
 

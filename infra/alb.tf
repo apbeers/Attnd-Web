@@ -1,17 +1,12 @@
-# ── ACM Certificate ───────────────────────────────────────────────────────────
 resource "aws_acm_certificate" "main" {
   domain_name               = var.domain_name
   subject_alternative_names = ["*.${var.domain_name}"]
   validation_method         = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
+  lifecycle { create_before_destroy = true }
 }
 
-# ── Application Load Balancer ─────────────────────────────────────────────────
 resource "aws_lb" "main" {
-  name               = "${var.app_name}-alb"
+  name               = "${local.prefix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -19,11 +14,11 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name        = "${var.app_name}-app"
+  name        = "${local.prefix}-app"
   port        = var.app_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
-  target_type = "ip" # required for Fargate
+  target_type = "ip"
 
   health_check {
     path                = "/health/"
@@ -35,12 +30,10 @@ resource "aws_lb_target_group" "app" {
   }
 }
 
-# HTTP → HTTPS redirect
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
-
   default_action {
     type = "redirect"
     redirect {
@@ -57,11 +50,9 @@ resource "aws_lb_listener" "https" {
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
   certificate_arn   = aws_acm_certificate.main.arn
-
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
-
   depends_on = [aws_acm_certificate.main]
 }

@@ -1,6 +1,5 @@
-# DB password stored in Secrets Manager — see secrets.tf
 resource "aws_db_instance" "main" {
-  identifier        = "${var.app_name}-db"
+  identifier        = "${local.prefix}-db"
   engine            = "postgres"
   engine_version    = "16"
   instance_class    = var.db_instance_class
@@ -13,20 +12,18 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  # Heroku Postgres essential-0 equivalent: single-AZ, no Multi-AZ
-  multi_az               = false
+  multi_az               = var.environment == "prod"
   publicly_accessible    = false
   storage_encrypted      = true
   deletion_protection    = true
   skip_final_snapshot    = false
-  final_snapshot_identifier = "${var.app_name}-db-final"
+  final_snapshot_identifier = "${local.prefix}-db-final"
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "Mon:04:00-Mon:05:00"
 
   lifecycle {
-    # Prevent accidental destruction
     prevent_destroy = true
   }
 }

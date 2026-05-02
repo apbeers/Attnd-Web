@@ -17,7 +17,9 @@ requirements.txt.bak
 
 # Terraform — state and secrets never committed; use S3 backend for state
 infra/terraform.tfvars
-infra/.terraform/
-infra/.terraform.lock.hcl
-infra/terraform.tfstate
-infra/terraform.tfstate.backup
+infra/**/.terraform/
+infra/**/.terraform.lock.hcl
+infra/**/terraform.tfstate
+infra/**/terraform.tfstate.backup
+infra/**/bootstrap.tfplan
+infra/**/tfplan

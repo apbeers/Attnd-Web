@@ -1,89 +1,116 @@
 variable "aws_region" {
-  description = "AWS region to deploy into"
-  type        = string
-  default     = "us-east-1"
+  type    = string
+  default = "us-east-1"
 }
 
 variable "environment" {
-  description = "Deployment environment (production, staging)"
+  description = "dev or prod"
   type        = string
-  default     = "production"
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "environment must be 'dev' or 'prod'."
+  }
 }
 
 variable "app_name" {
-  description = "Short application name used to prefix resource names"
-  type        = string
-  default     = "attnd"
+  type    = string
+  default = "attnd"
 }
 
 variable "domain_name" {
-  description = "Primary domain for the app (e.g. attnd.app)"
+  description = "Full domain for this environment (e.g. dev.attnd.app or attnd.app)"
   type        = string
-  default     = "attnd.app"
 }
 
-# ── Networking ────────────────────────────────────────────────────────────────
-
 variable "vpc_cidr" {
-  description = "CIDR block for the VPC"
-  type        = string
-  default     = "10.0.0.0/16"
+  type    = string
+  default = "10.0.0.0/16"
 }
 
 variable "availability_zones" {
-  description = "AZs to spread resources across"
-  type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
-}
-
-# ── ECS / App ─────────────────────────────────────────────────────────────────
-
-variable "app_cpu" {
-  description = "Fargate task CPU units (256 = 0.25 vCPU)"
-  type        = number
-  default     = 256
-}
-
-variable "app_memory" {
-  description = "Fargate task memory in MB"
-  type        = number
-  default     = 512
-}
-
-variable "app_desired_count" {
-  description = "Number of running ECS tasks"
-  type        = number
-  default     = 1
+  type    = list(string)
+  default = ["us-east-1a", "us-east-1b"]
 }
 
 variable "app_port" {
-  description = "Port the Django/gunicorn process listens on inside the container"
-  type        = number
-  default     = 8000
+  type    = number
+  default = 8000
 }
 
-# ── Database ──────────────────────────────────────────────────────────────────
+variable "app_cpu" {
+  type    = number
+  default = 256
+}
+
+variable "app_memory" {
+  type    = number
+  default = 512
+}
+
+variable "app_desired_count" {
+  type    = number
+  default = 1
+}
 
 variable "db_instance_class" {
-  description = "RDS instance type"
-  type        = string
-  default     = "db.t4g.micro"
+  type    = string
+  default = "db.t4g.micro"
 }
 
 variable "db_name" {
-  description = "Name of the PostgreSQL database"
-  type        = string
-  default     = "attnd"
+  type    = string
+  default = "attnd"
 }
 
 variable "db_username" {
-  description = "Master DB username"
-  type        = string
-  default     = "attnd"
+  type    = string
+  default = "attnd"
 }
 
 variable "db_allocated_storage" {
-  description = "Initial storage in GB"
-  type        = number
-  default     = 20
+  type    = number
+  default = 20
+}
+
+# ── Secrets (set via TF_VAR_* in CI, never committed) ────────────────────────
+
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+
+variable "django_secret_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "attestation_jwt_secret" {
+  type      = string
+  sensitive = true
+}
+
+variable "attnd_api_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "openai_api_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "apple_app_bundle_id" {
+  type    = string
+  default = "com.arcu.attnd-ios2"
+}
+
+variable "apple_team_id" {
+  type    = string
+  default = "8T487X8VY7"
+}
+
+variable "android_package_name" {
+  type    = string
+  default = "com.arcu.attnd"
 }
