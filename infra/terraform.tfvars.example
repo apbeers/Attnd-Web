@@ -1,0 +1,24 @@
+# Copy to terraform.tfvars and fill in secrets — never commit terraform.tfvars
+
+aws_region  = "us-east-1"
+environment = "production"
+app_name    = "attnd"
+domain_name = "attnd.app"
+
+# Database
+db_instance_class    = "db.t4g.micro"
+db_name              = "attnd"
+db_username          = "attnd"
+db_allocated_storage = 20
+
+# ECS sizing (256 CPU = 0.25 vCPU, 512 MB — scale up as needed)
+app_cpu           = 256
+app_memory        = 512
+app_desired_count = 1
+
+# Secrets — set these (never commit)
+db_password            = "CHANGE_ME"
+django_secret_key      = "CHANGE_ME"
+attestation_jwt_secret = "CHANGE_ME"
+attnd_api_key          = "CHANGE_ME"
+openai_api_key         = ""
