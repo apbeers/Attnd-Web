@@ -27,14 +27,14 @@ resource "aws_ecs_task_definition" "app" {
     }]
 
     environment = [
-      { name = "PORT",         value = tostring(var.app_port) },
-      { name = "DEBUG",        value = "0" },
+      { name = "PORT",          value = tostring(var.app_port) },
+      { name = "DEBUG",         value = "0" },
       { name = "ALLOWED_HOSTS", value = ".${var.domain_name},${aws_lb.main.dns_name}" },
-      { name = "AWS_REGION",   value = var.aws_region },
+      { name = "AWS_REGION",    value = var.aws_region },
     ]
 
-    # All app secrets (including DATABASE_URL) injected from one Secrets Manager JSON.
-    # Individual JSON keys are referenced with the :key:: syntax.
+    # All app secrets injected from Secrets Manager at task startup.
+    # Bedrock access is via the task IAM role — no API key secret needed.
     secrets = [
       { name = "DATABASE_URL",           valueFrom = "${aws_secretsmanager_secret.app.arn}:DATABASE_URL::" },
       { name = "SECRET_KEY",             valueFrom = "${aws_secretsmanager_secret.app.arn}:SECRET_KEY::" },

@@ -1,8 +1,12 @@
-name: Deploy — Dev
+name: Deploy — Web Dev
 
 on:
   push:
     branches: [develop]
+    paths:
+      - 'web/**'
+      - 'infra/**'
+      - '.github/workflows/deploy-web-dev.yml'
 
 permissions:
   id-token: write   # required for OIDC
@@ -53,7 +57,6 @@ jobs:
             -var="django_secret_key=${{ secrets.DEV_DJANGO_SECRET_KEY }}" \
             -var="attestation_jwt_secret=${{ secrets.DEV_ATTESTATION_JWT_SECRET }}" \
             -var="attnd_api_key=${{ secrets.DEV_ATTND_API_KEY }}" \
-            -var="openai_api_key=${{ secrets.DEV_OPENAI_API_KEY }}" \
             -out=tfplan \
             -input=false
 
@@ -125,13 +128,12 @@ jobs:
             --tag $ECR_URL:$SHA \
             --tag $ECR_URL:latest \
             --push \
-            .
+            web
 
       - name: Run database migrations
         env:
           CLUSTER: ${{ needs.terraform.outputs.ecs_cluster }}
         run: |
-          # Get the network config from the running service to launch one-off task in same VPC/SG
           NETWORK=$(aws ecs describe-services \
             --cluster "$CLUSTER" \
             --services "$CLUSTER" \

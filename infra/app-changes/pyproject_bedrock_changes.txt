@@ -1,0 +1,20 @@
+OpenAI → Bedrock dependency swap
+=================================
+
+In pyproject.toml, make the following change to the dependencies list:
+
+REMOVE:
+    "openai>=2.8.0,<3.0.0",
+
+ADD:
+    "boto3>=1.38.0",
+
+Then regenerate the lockfile:
+    uv lock
+
+Commit both files:
+    git add pyproject.toml uv.lock
+    git commit -m "chore: replace openai with boto3 for Bedrock"
+
+Note: boto3 is already available in the Docker image base (python:3.12-slim)
+if you install it via uv. No Dockerfile changes needed.

@@ -94,12 +94,6 @@ variable "attnd_api_key" {
   sensitive = true
 }
 
-variable "openai_api_key" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
 variable "apple_app_bundle_id" {
   type    = string
   default = "com.arcu.attnd-ios2"

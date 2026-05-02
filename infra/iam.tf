@@ -55,3 +55,23 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
     }]
   })
 }
+
+# Allows the scraper (scrape/service.py) to call Claude via Bedrock.
+# No API key is needed — the task role handles authentication.
+resource "aws_iam_role_policy" "ecs_task_bedrock" {
+  name = "bedrock-invoke"
+  role = aws_iam_role.ecs_task.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["bedrock:InvokeModel"]
+      Resource = [
+        # Foundation model (direct invocation)
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-haiku-20241022-v1:0",
+        # Cross-region inference profile (automatic failover across regions)
+        "arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-3-5-haiku-20241022-v1:0",
+      ]
+    }]
+  })
+}

@@ -21,15 +21,16 @@ resource "aws_secretsmanager_secret_version" "app" {
   # DATABASE_URL is intentionally left as a placeholder here.
   # The deploy pipeline overwrites this secret after terraform apply
   # with the fully-constructed DATABASE_URL (see deploy workflow).
+  #
+  # OPENAI_API_KEY has been removed — Bedrock uses the ECS task IAM role.
   secret_string = jsonencode({
-    DATABASE_URL           = "placeholder-updated-by-pipeline"
-    SECRET_KEY             = var.django_secret_key
-    APPLE_APP_BUNDLE_ID    = var.apple_app_bundle_id
-    APPLE_TEAM_ID          = var.apple_team_id
-    ANDROID_PACKAGE_NAME   = var.android_package_name
-    ATTESTATION_JWT_SECRET = var.attestation_jwt_secret
-    ATTND_API_KEY          = var.attnd_api_key
-    OPENAI_API_KEY         = var.openai_api_key
+    DATABASE_URL            = "placeholder-updated-by-pipeline"
+    SECRET_KEY              = var.django_secret_key
+    APPLE_APP_BUNDLE_ID     = var.apple_app_bundle_id
+    APPLE_TEAM_ID           = var.apple_team_id
+    ANDROID_PACKAGE_NAME    = var.android_package_name
+    ATTESTATION_JWT_SECRET  = var.attestation_jwt_secret
+    ATTND_API_KEY           = var.attnd_api_key
     AWS_STORAGE_BUCKET_NAME = aws_s3_bucket.media.bucket
   })
 
