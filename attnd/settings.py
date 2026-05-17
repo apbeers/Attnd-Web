@@ -18,6 +18,15 @@ if DEBUG:
 else:
     ALLOWED_HOSTS = ['.herokuapp.com', '.attnd.app']
 
+ALLOWED_HOSTS += ['127.0.0.1', 'localhost']
+
+# Local dev overrides — never redirect to HTTPS on localhost
+if '127.0.0.1' in ALLOWED_HOSTS:
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    LANGUAGE_COOKIE_SECURE = False
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
