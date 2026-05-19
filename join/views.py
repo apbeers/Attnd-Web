@@ -44,7 +44,7 @@ class AppleAppSiteAssociation(View):
         team_id = os.getenv('APPLE_TEAM_ID', '<TEAM_ID>')
         bundle_id = os.getenv('APPLE_APP_BUNDLE_ID', '<BUNDLE_ID>')
         app_id = f'{team_id}.{bundle_id}'
-        clip_id = f'{app_id}.Clip'
+        clip_id = f'{app_id}.clip'
         data = {
             'appclips': {
                 'apps': [clip_id],
