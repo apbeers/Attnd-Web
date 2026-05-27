@@ -8,6 +8,8 @@ Disallow: /console/
 Disallow: /api/
 Disallow: /accounts/
 Disallow: /scrape/
+Allow: /.well-known/apple-app-site-association
+Allow: /.well-known/assetlinks.json
 Disallow: /.well-known/
 
 Sitemap: https://attnd.app/sitemap.xml
