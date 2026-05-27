@@ -191,6 +191,7 @@ class Command(BaseCommand):
                         start_time=start_time + timedelta(hours=item_data['hours_delta']),
                         location=loc,
                         event=event,
+                        user=user,
                     )
 
             # Remove locations that are no longer in the fixture
