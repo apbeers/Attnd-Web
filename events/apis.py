@@ -352,7 +352,7 @@ class PushNotificationsUnSubscribe(ApiKeyRequired, View):
 # ---------------------------------------------------------------------------
 
 @method_decorator(csrf_exempt, name='dispatch')
-class SendNotifications(View):
+class SendNotifications(ApiKeyRequired, View):
 
     def post(self, request):
         now = timezone.now()
