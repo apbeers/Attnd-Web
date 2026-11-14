@@ -484,7 +484,10 @@ heroku addons:create mailgun:starter -a attnd-dev
 | TXT | the DKIM name Mailgun shows, minus `.attnd.app` (e.g. `pic._domainkey.mg`) | the long `k=rsa; p=…` value from Mailgun |
 | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:YOUR_EMAIL` (monitor first; tighten to `p=quarantine` once mail flows cleanly) |
 
-- **Skip Mailgun's MX records** (they're for receiving mail at mg.attnd.app, not needed to send). Adding MX at Namecheap means switching **Mail Settings** to *Custom MX*, which turns off Namecheap email forwarding for attnd.app; leave that alone if you forward mail today.
+| MX | `mg` | `mxa.mailgun.org`, priority 10 |
+| MX | `mg` | `mxb.mailgun.org`, priority 10 |
+
+- **The MX records are required**, not optional: Mailgun sends from a bounce address at `mg.attnd.app`, and iCloud (and others) reject mail whose sender domain has no MX ("450 4.1.8 Sender address rejected: Domain not found", seen Nov 14, 2026). At Namecheap, MX rows can only be added when **Mail Settings** (in Advanced DNS) is **Custom MX**. If it is set to *Email Forwarding* for attnd.app today, switching turns that forwarding off: then also add MX rows for host `@` pointing at Namecheap's forwarding servers (as listed on Namecheap's email-forwarding help page) or whatever receives attnd.app mail, so mail to attnd.app addresses keeps working.
 - If attnd.app already has an SPF TXT on the root (`@`), leave it; this one is on `mg` only.
 
 **4. Verify:** back in Mailgun → the domain → **Verify DNS settings** (DNS can take minutes to a few hours). When it shows verified, use the SMTP credentials for `mg.attnd.app` (Domain settings → **SMTP credentials**, login `postmaster@mg.attnd.app`; reset the password to see it) on both apps, so they stop using the sandbox:
