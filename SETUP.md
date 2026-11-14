@@ -501,6 +501,20 @@ heroku config:set -a attnd-dev MAILGUN_SMTP_PASSWORD="$(pbpaste)"
 
 **5. Test** (after the code fixes are deployed): `heroku run python manage.py sendtestemail YOUR_EMAIL -a attnd-dev`. Check it arrives in the inbox, not spam, and that Gmail's "Show original" says SPF, DKIM and DMARC **PASS**.
 
+### 11b. Email security (done Nov 14, 2026)
+Live DNS (Namecheap, DNSSEC on), checked through dns.google:
+
+| Record | Value | Why |
+|---|---|---|
+| TXT `_dmarc` | `v=DMARC1; p=reject; rua=mailto:<owner>` | Receivers **reject** mail claiming to be `@attnd.app` / `@mg.attnd.app` that fails SPF/DKIM. Daily reports go to the owner. |
+| TXT `@` | `v=spf1 -all` | The main domain never sends mail (alongside `google-site-verification`). |
+| TXT `mg` | `v=spf1 include:mailgun.org ~all` | Only Mailgun sends for `mg.attnd.app`. |
+| TXT `k2026._domainkey.mg` | 2048-bit RSA key | Active Mailgun DKIM key (selector `k2026`). The old 1024-bit `mailo._domainkey.mg` key is deactivated in Mailgun; its DNS record can be deleted. |
+| MX `mg` | `mxa`/`mxb.mailgun.org`, priority 10 | Bounces; iCloud rejects senders without MX. |
+| CAA `@` | `0 issue "letsencrypt.org"` | Only Let's Encrypt may issue HTTPS certificates (Heroku ACM uses it for attnd.app and www). |
+
+> **Adding any service that sends email as `@attnd.app` or a subdomain** (Google Workspace, Stripe receipts from your domain, a newsletter tool, another app): set up its SPF and DKIM records *before* it sends. With `p=reject`, its mail is otherwise refused from the first message. Hosting must also stay on Let's Encrypt (CAA) unless the CAA record is updated first.
+
 ## Key reference
 
 For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.
