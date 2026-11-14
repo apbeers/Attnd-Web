@@ -12,7 +12,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 3. Apple | ⏳ ✅ App ID capabilities checked. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. **Next:** 3b, the App Store Connect key (`Z43S25BCS9`, downloaded) goes into GitHub, then 3c (TestFlight group). |
 | 4. Google / Android | ⏳ CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
 | 5. Local dev keys | ⬜ |
-| 6. Check it all works | ⬜ |
+| 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. Waiting on: iOS (3b/3c), Android (step 4), and the first release to `main`. |
 
 Notes:
 - If the Heroku CLI says an update is available, run `heroku update` first. It's optional.
