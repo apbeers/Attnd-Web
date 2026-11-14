@@ -237,7 +237,7 @@ Android apps are identified by their package name **plus the certificate they're
 
 Three things need these fingerprints.
 
-**1. Look up the fingerprints.** Play Console → Attnd → **Test and release → Setup → App signing** (also reachable from **Protected with Play**). Note four values:
+**1. Look up the fingerprints.** Play Console → Attnd → **Test and release → App integrity → App signing** (the **App signing** tab or section, sometimes behind a *Settings* link). Note four values:
 - **App signing key certificate:** SHA-256 and SHA-1
 - **Upload key certificate:** SHA-1 (and SHA-256, for reference)
 
