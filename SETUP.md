@@ -324,7 +324,8 @@ Note: the app now requires **Android 15 or later**. Play will stop offering upda
 The Android app supports phones and foldables, not tablets, so turn tablets off in Play Console. The app's own settings can't hide it from tablets without also hiding it from unfolded foldables.
 1. Play Console → Attnd → **Reach and devices → Device catalog** (older consoles: **Release → Device catalog**).
 2. Click **Manage exclusion rules** (or filter the catalog by **Form factor: Tablet**) and exclude **Tablet**. Leave **Phone** included. Also exclude Chromebook, TV, Wear, Car and XR if they're listed.
-3. Search the catalog for a foldable, for example `Pixel Fold` or `Galaxy Z Fold`, and check it still says **Supported**.
+3. **Release → Advanced settings → Form factors:** if **Android XR** (or Wear OS, TV, Automotive) is listed as Active, click **Manage** and opt it out. Leave **Inline Installs** off; it only matters for apps that promote other apps.
+4. Search the catalog for a foldable, for example `Pixel Fold` or `Galaxy Z Fold`, and check it still says **Supported**.
 
 Existing installs on excluded tablets keep working but stop getting updates. If you want screenshots to match, remove tablet screenshots from **Store presence → Main store listing**.
 
