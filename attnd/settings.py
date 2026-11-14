@@ -165,6 +165,8 @@ RATE_LIMITS = {
     'reset_ip': _rate('reset_ip', '10/3600'),         # password reset requests per IP, 1 hour
     'signup_ip': _rate('signup_ip', '10/3600'),       # signup attempts per IP, 1 hour
     'otp_user': _rate('otp_user', '5/900'),           # wrong two-factor codes per account, 15 min
+    'passkey_ip': _rate('passkey_ip', '20/900'),      # failed passkey sign-ins per IP, 15 min
+    'email_code_user': _rate('email_code_user', '3/900'),  # sign-in codes emailed per account, 15 min
     'csp_report_ip': _rate('csp_report_ip', '60/60'),  # CSP violation reports logged per IP, 1 min
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
@@ -220,6 +222,21 @@ STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', '
 
 # Public base URL of this deployment, for links in emails (dev sets its herokuapp URL).
 SITE_URL = os.getenv('SITE_URL', 'https://attnd.app').rstrip('/')
+
+# Passkeys (WebAuthn, console.webauthn). A passkey belongs to one domain (the relying party ID): passkeys
+# made on the dev app (its herokuapp host) don't work on attnd.app and the other way round.
+# WEBAUTHN_RP_ID defaults to SITE_URL's host; WEBAUTHN_ORIGINS (comma-separated) to SITE_URL's origin, plus
+# http://localhost:8000 with DEBUG (pages served from localhost then use the RP ID "localhost"; WebAuthn
+# doesn't work on IP addresses such as 127.0.0.1).
+from urllib.parse import urlsplit as _urlsplit  # noqa: E402
+
+_site = _urlsplit(SITE_URL)
+WEBAUTHN_RP_ID = os.getenv('WEBAUTHN_RP_ID', '').strip().lower() or (_site.hostname or 'localhost')
+WEBAUTHN_RP_NAME = os.getenv('WEBAUTHN_RP_NAME', 'Attnd')
+WEBAUTHN_ORIGINS = [o.strip().rstrip('/') for o in os.getenv('WEBAUTHN_ORIGINS', '').split(',') if o.strip()] or [
+    f'{_site.scheme}://{_site.netloc}']
+if DEBUG:
+    WEBAUTHN_ORIGINS += [o for o in ('http://localhost:8000',) if o not in WEBAUTHN_ORIGINS]
 
 # Email: Mailgun SMTP (Heroku add-on; SETUP.md step 11). Production sends from mg.attnd.app; dev uses its
 # own Mailgun sandbox, which only delivers to authorized recipients. EMAIL_HOST_USER/PASSWORD are the
