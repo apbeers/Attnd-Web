@@ -52,9 +52,9 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 |----|--------|------|-----|-----|---------|
 | API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | ✅ dev (TestFlight, App Attest verified on a real iPhone) · ⬜ prod | ✅ dev · ⬜ prod |
 | API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ⬜ prod | — | — |
-| API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ⬜ prod | ⬜ | ⬜ |
-| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages | additive | ✅ dev · ⬜ prod | ⬜ | ⬜ |
-| API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | 🚧 dev · ⬜ prod | 🚧 dev · ⬜ prod |
+| API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 ## Log
 
