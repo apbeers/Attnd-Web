@@ -9,7 +9,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, `CONTACT_EMAIL`, Scheduler jobs and GitHub deploy settings. ✅ Stack heroku-26 and Python 3.15. **Still to do:** check Postgres and upgrade to 18 (commands under "Keeping Heroku current"), and add Cloudinary on both apps so uploads survive restarts. |
-| 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ✅ 3b: `ASC_ISSUER_ID` re-set; CI signs, uploads and reaches TestFlight (iOS run 100). ⬜ **3e: CI signing certificate (owner, on the Mac — reminder pending)**: until it's stored, CI revokes and re-creates a "Created via API" certificate on every iOS build (works, but noisy). Nov 14: certificate created in Xcode (expires Nov 14, 2027); export stopped because .p12 was greyed out — see the Keychain tip in step 3e. |
+| 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ✅ 3b: `ASC_ISSUER_ID` re-set; CI signs, uploads and reaches TestFlight (iOS run 100). ✅ **3e: CI signing certificate** stored as `IOS_DEV_CERT_P12_BASE64` / `IOS_DEV_CERT_PASSWORD` (Nov 14, 2026; renew before Nov 14, 2027). |
 | 4. Google / Android | ⬜ 4e: exclude tablets in Play Console. ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev** deploys from `develop`. ✅ **Android** publishes to Play internal testing. ✅ **iOS** builds reach TestFlight, and on Nov 14 a real iPhone passed App Attest against dev and joined an event (lookup, join, bundle, 304s). Waiting on: the first release to `main`. |
@@ -18,7 +18,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
-- [ ] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets).
+- [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [ ] Database backups: `heroku pg:backups:schedule DATABASE_URL --at '03:00 America/Chicago' -a attnd-web` (and `-a attnd-dev`), then `heroku pg:backups:capture -a attnd-web`.
 - [ ] Protect `main` in all three repos (GitHub ruleset blocking force-push and deletion; command in the chat log of Nov 14 / ask Claude).
 - [ ] Sign in to the dev console and enroll two-factor (staff accounts must, step 12).
