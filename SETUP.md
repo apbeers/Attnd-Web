@@ -76,6 +76,13 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
 3. ✅ The OpenAI and Places keys are already set on production.
 4. **Play Integrity isn't configured on production** (there's no `GOOGLE_SERVICE_ACCOUNT_JSON`), so Android builds from the Play Store can't attest. Old Android builds fell back to the static key, which is now rotated, so the current Play Store version can't reach the API until this is set (step 4) and a new build ships. iOS builds use App Attest, which is configured.
 
+5. **File uploads need permanent storage.** Production has no `CLOUDINARY_URL`, so flyers and location photos uploaded in the console are saved on Heroku's temporary disk and **lost on every restart or deploy**. Add Cloudinary's free plan to both apps:
+   ```bash
+   heroku addons:create cloudinary:starter -a attnd-web
+   heroku addons:create cloudinary:starter -a attnd-dev
+   ```
+   That sets `CLOUDINARY_URL`, and the server switches to it automatically.
+
 ### Dev (`attnd-dev`) — created by Claude
 - ✅ App `attnd-dev` at `https://attnd-dev-7ab893f37020.herokuapp.com/`. Heroku now gives new apps a random hostname, so use this exact host wherever this guide says `ATTND_SERVER`.
 - ✅ Postgres (essential-0), Scheduler, and generated `SECRET_KEY`, `API_KEY` and `ATTESTATION_JWT_SECRET`.
