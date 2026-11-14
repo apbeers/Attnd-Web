@@ -1,4 +1,5 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}App layout · {{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="row g-4">
@@ -19,7 +20,7 @@
         <ul class="list-group mb-3" id="tab-list">
           {% for cb in form.tabs %}
           <li class="list-group-item d-flex align-items-center gap-2" data-tab="{{ cb.data.value }}">
-            <i class="bi bi-grip-vertical drag-handle"></i>{{ cb.tag }}<label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
+            {% icon "grip" "drag-handle" %}{{ cb.tag }}<label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
           </li>{% endfor %}
         </ul>
         {{ form.tab_order }}
@@ -32,7 +33,7 @@
           <div class="col-md-6"><label class="form-label small fw-semibold">Locations list</label>{{ form.locations_style }}</div>
           <div class="col-md-6"><label class="form-label small fw-semibold">Schedule</label>{{ form.schedule_style }}</div>
           <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.secondary_pane.label }}</label>{{ form.secondary_pane }}
-            <div class="form-text">Unfolded phones (like iPhone Duo), tablets and foldables.</div></div>
+            <div class="form-text">Unfolded foldable phones — iPhone Duo and Android foldables.</div></div>
           <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.map_clustering.label }}</label>{{ form.map_clustering }}</div>
           <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.map_fit_all.label }}</label>{{ form.map_fit_all }}</div>
           <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.show_location_images.label }}</label>{{ form.show_location_images }}</div>
@@ -56,7 +57,6 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" crossorigin="anonymous"></script>
 <script>
 (function () {
   const form = document.getElementById('display-form');
@@ -69,7 +69,7 @@
   saved.forEach(t => { const li = list.querySelector(`[data-tab="${t}"]`); if (li) list.appendChild(li); });
   const toggleTabs = () => list.querySelectorAll('input').forEach(i => i.disabled = !custom.checked);
   custom.addEventListener('change', toggleTabs); toggleTabs();
-  if (window.Sortable) Sortable.create(list, {handle: '.drag-handle', animation: 150, onEnd: () => { syncOrder(); refresh(); }});
+  makeSortable(list, {handle: '.drag-handle', onEnd: () => { syncOrder(); refresh(); }});
   syncOrder();
   let timer;
   async function refresh() {

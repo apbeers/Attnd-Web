@@ -1,26 +1,27 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}New event{% endblock %}
 {% block content %}
 <div class="row justify-content-center"><div class="col-lg-8">
 <h1 class="h3 mb-3">New event</h1>
-<ul class="nav nav-pills mb-3">
-  <li class="nav-item"><button class="nav-link {% if mode != 'blank' %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#ai" type="button"><i class="bi bi-stars"></i> Build it with AI</button></li>
-  <li class="nav-item"><button class="nav-link {% if mode == 'blank' %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#blank" type="button">Start from scratch</button></li>
+<ul class="nav nav-pills mb-3" data-tabs>
+  <li class="nav-item"><button class="nav-link {% if mode != 'blank' %}active{% endif %}" data-tab-target="#ai" type="button">{% icon "stars" %} Build it with AI</button></li>
+  <li class="nav-item"><button class="nav-link {% if mode == 'blank' %}active{% endif %}" data-tab-target="#blank" type="button">Start from scratch</button></li>
 </ul>
 <div class="tab-content">
-  <div class="tab-pane fade {% if mode != 'blank' %}show active{% endif %}" id="ai">
+  <div class="tab-pane {% if mode != 'blank' %}active{% endif %}" id="ai">
     <div class="card"><div class="card-body p-4">
       <p class="text-muted">Give the AI anything that describes your event. It creates a <strong>draft</strong> with locations and a schedule that you can review and edit before attendees see it.</p>
       <form method="post" enctype="multipart/form-data">{% csrf_token %}
         <input type="hidden" name="mode" value="ai"><input type="hidden" name="browser_tz" id="browser_tz">
         {% for err in ai_form.non_field_errors %}<div class="alert alert-danger py-2">{{ err }}</div>{% endfor %}
         {% for field in ai_form %}{% include 'console/_field.html' %}{% endfor %}
-        <button class="btn btn-primary btn-lg"><i class="bi bi-stars"></i> Build my event</button>
+        <button class="btn btn-primary btn-lg">{% icon "stars" %} Build my event</button>
         <span class="text-muted small ms-2">Usually takes under a minute.</span>
       </form>
     </div></div>
   </div>
-  <div class="tab-pane fade {% if mode == 'blank' %}show active{% endif %}" id="blank">
+  <div class="tab-pane {% if mode == 'blank' %}active{% endif %}" id="blank">
     <div class="card"><div class="card-body p-4">
       <form method="post">{% csrf_token %}<input type="hidden" name="mode" value="blank">
         {% for field in blank_form %}{% include 'console/_field.html' %}{% endfor %}

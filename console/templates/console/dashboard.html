@@ -1,4 +1,5 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}Your events{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center mb-3">
@@ -13,7 +14,7 @@
 {% endfor %}
 {% if not upcoming and not past %}
   <div class="card p-5 text-center">
-    <i class="bi bi-stars display-5 text-primary"></i>
+    {% icon "stars" "display-5 text-primary" %}
     <h2 class="h4 mt-3">Create your first event</h2>
     <p class="text-muted">Paste your event website or upload a flyer — the AI builds the locations and schedule for you to review.</p>
     <div><a class="btn btn-primary btn-lg" href="{% url 'console:event_new' %}">Create an event</a></div>

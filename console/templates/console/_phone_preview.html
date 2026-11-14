@@ -1,4 +1,4 @@
-{% load tz %}
+{% load console_tags %}{% load tz %}
 <div class="mx-auto border border-4 border-dark rounded-5 overflow-hidden bg-white shadow" style="width:300px;height:600px;display:flex;flex-direction:column;--accent:{{ d.accent_color|default:'#ff5a1f' }}">
   <div class="px-3 pt-4 pb-2 border-bottom">
     {% if not event.paid %}<div class="small text-center text-white rounded mb-2" style="background:#b26b00;font-size:.7rem">Demo event</div>{% endif %}
@@ -8,7 +8,7 @@
   <div class="flex-grow-1 overflow-hidden p-2" style="font-size:.8rem">
     {% if d.default_tab == 'map' %}
       <div class="rounded h-100 position-relative" style="background:linear-gradient(135deg,#e8f0e3,#dfe9f3)">
-        {% for loc in locations|slice:":8" %}<i class="bi bi-geo-alt-fill position-absolute fs-5" style="color:var(--accent);left:{% cycle 15 55 35 70 25 60 45 80 %}%;top:{% cycle 20 30 55 45 70 15 80 60 %}%"></i>{% endfor %}
+        {% for loc in locations|slice:":8" %}<span class="position-absolute fs-5" style="color:var(--accent);left:{% cycle 15 55 35 70 25 60 45 80 %}%;top:{% cycle 20 30 55 45 70 15 80 60 %}%">{% icon "pin-fill" %}</span>{% endfor %}
         {% if d.map_clustering %}<span class="position-absolute badge rounded-pill" style="background:var(--accent);left:40%;top:40%">{{ d.stats.location_count }}</span>{% endif %}
       </div>
     {% elif d.default_tab == 'schedule' %}
@@ -33,7 +33,7 @@
   </div>
   <div class="d-flex justify-content-around border-top py-2" style="font-size:.65rem">
     {% for t, label in tab_labels %}<div class="text-center" style="{% if t == d.default_tab %}color:var(--accent);font-weight:600{% else %}color:#888{% endif %}">
-      <i class="bi {% if t == 'map' %}bi-map{% elif t == 'locations' %}bi-list-ul{% elif t == 'schedule' %}bi-calendar3{% elif t == 'flyer' %}bi-file-earmark-image{% else %}bi-bell{% endif %} d-block fs-6"></i>{{ label }}</div>{% endfor %}
+      <span class="d-block fs-6">{% if t == 'map' %}{% icon "map" %}{% elif t == 'locations' %}{% icon "list" %}{% elif t == 'schedule' %}{% icon "calendar" %}{% elif t == 'flyer' %}{% icon "image" %}{% else %}{% icon "bell" %}{% endif %}</span>{{ label }}</div>{% endfor %}
   </div>
 </div>
 <p class="text-center small text-muted mt-2">{{ d.resolved_preset|capfirst }} layout</p>

@@ -1,4 +1,5 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}Details · {{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="card mb-4"><div class="card-body p-4">
@@ -27,7 +28,7 @@
   </form>
 </div></div>
 {% if event.locked_fields %}
-<p class="small text-muted"><i class="bi bi-lock-fill lock"></i> Fields you’ve edited are protected from AI refreshes — the AI can still suggest changes, but they’re unticked by default.</p>
+<p class="small text-muted">{% icon "lock" "lock" %} Fields you’ve edited are protected from AI refreshes — the AI can still suggest changes, but they’re unticked by default.</p>
 {% endif %}
 <div class="card border-danger"><div class="card-body">
   <h2 class="h6 text-danger">Delete event</h2>

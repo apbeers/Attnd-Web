@@ -20,6 +20,15 @@ Current mobile apps use **API v2** (`/api/v2/`, see `API_V2.md`): one `bundle/` 
 5. **Apps follow** — every content change bumps `Event.content_version` (signals in `events/signals.py`); apps poll `bundle/` with `If-None-Match` and can get a silent `content_updated` push.
 6. **Adaptive layout** — `events/display.py` picks a preset (intimate / standard / festival) from size + spread; organizers override any key in **App layout**; the resolved dict ships in the bundle.
 
+## Dependency policy
+
+Avoid third-party libraries. Use Django and the Python standard library first; the organizer console uses
+its own CSS (`console/static/console/console.css`), inline SVG icons (`console_tags.icon`) and vanilla JS
+(`console.js`) — no CSS/JS frameworks or CDNs. Existing server dependencies are kept where the standard
+library has no equivalent (Postgres driver, Pillow, OpenAI SDK, Google auth, HTTP/2 for APNs via
+`httpx[http2]`, CBOR for App Attest). Stripe is the expected future exception. The marketing homepage
+(`home/`) still uses its original vendored Bootstrap theme.
+
 ## Tech Stack
 
 - **Python 3.12** managed with `uv`

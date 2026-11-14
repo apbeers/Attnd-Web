@@ -1,10 +1,11 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}Review AI updates · {{ event.name }}{% endblock %}
 {% block event_content %}
 <a href="{% url 'console:changesets' event.id %}" class="small text-decoration-none">← AI updates</a>
 <h2 class="h4 mt-2">{{ cs.summary }}</h2>
 <p class="text-muted small">Found {{ cs.created_at|timesince }} ago{% if cs.status != 'pending' %} · {{ cs.get_status_display }}{% endif %}.</p>
-{% if cs.notes %}<div class="alert alert-light border"><i class="bi bi-chat-left-text"></i> <strong>AI notes:</strong> {{ cs.notes }}</div>{% endif %}
+{% if cs.notes %}<div class="alert alert-light border">{% icon "chat" %} <strong>AI notes:</strong> {{ cs.notes }}</div>{% endif %}
 {% if stale and cs.status == 'pending' %}<div class="alert alert-warning small">The event changed after these suggestions were made, so some “before” values may be out of date. Review carefully.</div>{% endif %}
 
 <form method="post">{% csrf_token %}
@@ -12,7 +13,7 @@
 <div class="d-flex flex-wrap gap-2 mb-3">
   <button type="button" class="btn btn-sm btn-outline-secondary" data-select="all">Select all</button>
   <button type="button" class="btn btn-sm btn-outline-secondary" data-select="none">Select none</button>
-  <span class="small text-muted align-self-center ms-2"><i class="bi bi-lock-fill lock"></i> = you edited this by hand, so it’s unticked</span>
+  <span class="small text-muted align-self-center ms-2">{% icon "lock" "lock" %} = you edited this by hand, so it’s unticked</span>
 </div>
 {% endif %}
 {% for row in rows %}{% with ch=row.change %}
@@ -34,7 +35,7 @@
     <tr>
       <td style="width:1.5rem">{% if ch.op == 'update' and cs.status == 'pending' and ch.status == 'pending' %}
         <input class="form-check-input field-toggle" data-change="{{ ch.id }}" type="checkbox" name="field_{{ ch.id }}_{{ f.name }}" value="1" {% if not f.conflict %}checked{% endif %}>{% endif %}</td>
-      <td class="text-muted text-nowrap" style="width:7rem">{{ f.label }} {% if f.conflict %}<i class="bi bi-lock-fill lock"></i>{% endif %}</td>
+      <td class="text-muted text-nowrap" style="width:7rem">{{ f.label }} {% if f.conflict %}{% icon "lock" "lock" %}{% endif %}</td>
       <td>{% if ch.op == 'update' %}<span class="diff-old">{{ f.old|truncatechars:300 }}</span> → {% endif %}
         {% if f.is_image and f.new != '—' %}<img src="{{ f.new }}" alt="" height="40" class="rounded me-1">{% endif %}
         <span class="{% if ch.op == 'update' %}diff-new{% endif %}">{{ f.new|truncatechars:300 }}</span></td>
@@ -50,7 +51,7 @@
     <label class="form-check-label small" for="notify">Refresh attendees’ apps right away</label></div>
   <div class="ms-auto d-flex gap-2">
     <button name="action" value="discard" class="btn btn-outline-secondary" onclick="return confirm('Discard all suggestions?')">Discard all</button>
-    <button name="action" value="apply" class="btn btn-primary"><i class="bi bi-check2"></i> Apply selected</button>
+    <button name="action" value="apply" class="btn btn-primary">{% icon "check" %} Apply selected</button>
   </div>
 </div></div>
 {% endif %}

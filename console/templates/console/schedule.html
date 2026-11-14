@@ -1,4 +1,5 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}Schedule · {{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -8,7 +9,7 @@
       {% for loc in locations %}<option value="{{ loc.id }}" {% if location_filter == loc.id|stringformat:"s" %}selected{% endif %}>{{ loc.name }}</option>{% endfor %}
     </select>
   </form>
-  <a class="btn btn-primary" href="{% url 'console:item_new' event.id %}"><i class="bi bi-plus-lg"></i> Add item</a>
+  <a class="btn btn-primary" href="{% url 'console:item_new' event.id %}">{% icon "plus" %} Add item</a>
 </div>
 {% for day, items in days %}
   <h3 class="h6 muted-label mt-4">{{ day|date:"l, F j" }}</h3>
@@ -20,7 +21,7 @@
         <a class="fw-semibold text-decoration-none" href="{% url 'console:item_edit' event.id it.id %}">{{ it.name }}</a>
         {% for t in it.tags %}<span class="badge text-bg-light border ms-1">{{ t }}</span>{% endfor %}
         {% if it.hidden %}<span class="badge text-bg-secondary ms-1">Hidden</span>{% endif %}
-        {% if it.locked_fields %}<i class="bi bi-lock-fill lock small ms-1" title="Edited by you"></i>{% endif %}
+        {% if it.locked_fields %}{% icon "lock" "lock small ms-1" %}{% endif %}
         <div class="small text-muted">{{ it.location.name|default:"No specific location" }}</div>
       </div>
     </li>

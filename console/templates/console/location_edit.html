@@ -1,6 +1,6 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}{% if location.pk %}{{ location.name }}{% else %}New location{% endif %} · {{ event.name }}{% endblock %}
-{% block head %}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">{% endblock %}
 {% block event_content %}
 <a href="{% url 'console:locations' event.id %}" class="small text-decoration-none">← All locations</a>
 <h2 class="h4 mt-2 mb-3">{% if location.pk %}{{ location.name }}{% else %}New location{% endif %}</h2>
@@ -22,7 +22,7 @@
           <div class="col-md-6">{% include 'console/_field.html' with field=form.latitude %}</div>
           <div class="col-md-6">{% include 'console/_field.html' with field=form.longitude %}</div>
         </div>
-        <div id="pin-map" class="rounded mb-3" style="height:260px"></div>
+        <div id="pin-map" class="pin-map mb-3" style="height:260px" data-pin-svg="{% filter force_escape %}{% icon 'pin-fill' %}{% endfilter %}"></div>
         <p class="form-text mt-n2">Click the map to place the pin.</p>
         {% include 'console/_field.html' with field=form.website %}
         <div class="row">
@@ -40,7 +40,7 @@
     {% if location.pk %}
     <div class="card mb-4"><div class="card-body">
       <div class="d-flex align-items-center mb-2"><h3 class="h6 muted-label mb-0 me-auto">Schedule here</h3>
-        <a class="btn btn-sm btn-outline-primary" href="{% url 'console:item_new' event.id %}?location={{ location.pk }}"><i class="bi bi-plus"></i> Add</a></div>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'console:item_new' event.id %}?location={{ location.pk }}">{% icon "plus" %} Add</a></div>
       <ul class="list-group list-group-flush">
         {% for it in items %}<li class="list-group-item px-0"><a href="{% url 'console:item_edit' event.id it.id %}">{{ it.name }}</a>
           <div class="small text-muted">{{ it.start_time|date:"D g:i A" }}</div></li>
@@ -49,7 +49,7 @@
     </div></div>
     <form method="post" action="{% url 'console:location_action' event.id location.pk %}" class="d-flex flex-wrap gap-2">{% csrf_token %}
       <input type="hidden" name="next" value="{% url 'console:location_edit' event.id location.pk %}">
-      {% if location.locked_fields %}<button name="action" value="unlock" class="btn btn-sm btn-outline-secondary"><i class="bi bi-unlock"></i> Let AI update it again</button>{% endif %}
+      {% if location.locked_fields %}<button name="action" value="unlock" class="btn btn-sm btn-outline-secondary">{% icon "unlock" %} Let AI update it again</button>{% endif %}
       <button name="action" value="delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this location?')">Delete</button>
     </form>
     {% endif %}
@@ -57,20 +57,13 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
 <script>
 (function () {
-  if (!window.L) return;
   const lat = document.getElementById('id_latitude'), lng = document.getElementById('id_longitude');
-  const start = (lat.value && lng.value) ? [+lat.value, +lng.value]
+  const has = lat.value && lng.value;
+  const center = has ? [+lat.value, +lng.value]
     : {% if event.latitude is not None %}[{{ event.latitude|stringformat:"f" }}, {{ event.longitude|stringformat:"f" }}]{% else %}[39.8, -98.6]{% endif %};
-  const map = L.map('pin-map').setView(start, (lat.value || {{ event.latitude|yesno:"1,0" }}) ? 16 : 4);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(map);
-  let marker = (lat.value && lng.value) ? L.marker(start).addTo(map) : null;
-  map.on('click', e => {
-    lat.value = e.latlng.lat.toFixed(6); lng.value = e.latlng.lng.toFixed(6);
-    marker ? marker.setLatLng(e.latlng) : (marker = L.marker(e.latlng).addTo(map));
-  });
+  pinPicker(document.getElementById('pin-map'), lat, lng, center, (has || {{ event.latitude|yesno:"true,false" }}) ? 16 : 4);
 })();
 </script>
 {% endblock %}

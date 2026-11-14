@@ -1,9 +1,9 @@
-<div class="mb-3{% if inline %} form-check{% endif %}">
+{% load console_tags %}<div class="mb-3{% if inline %} form-check{% endif %}">
   {% if field.field.widget.input_type == 'checkbox' %}
     {{ field }} <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
   {% else %}
     <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}
-      {% if field.name in locked %}<i class="bi bi-lock-fill lock small" title="Edited by you — AI refreshes won't change this"></i>{% endif %}</label>
+      {% if field.name in locked %}{% icon "lock" "lock small" %}{% endif %}</label>
     {{ field }}
   {% endif %}
   {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}

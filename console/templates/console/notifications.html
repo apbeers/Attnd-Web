@@ -1,4 +1,5 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}Notifications · {{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="row g-4">
@@ -12,7 +13,7 @@
         <div class="mb-3">{% for radio in form.when %}<div class="form-check form-check-inline">{{ radio.tag }}
           <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label></div>{% endfor %}</div>
         <div id="send-time">{% include 'console/_field.html' with field=form.send_time %}</div>
-        <button class="btn btn-primary"><i class="bi bi-send"></i> Send</button>
+        <button class="btn btn-primary">{% icon "send" %} Send</button>
       </form>
     </div></div>
   </div>

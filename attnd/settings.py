@@ -115,6 +115,11 @@ STORAGES = {
     },
 }
 
+# Tests render templates without running collectstatic first
+import sys  # noqa: E402
+if len(sys.argv) > 1 and sys.argv[1] == 'test':
+    STORAGES['staticfiles']['BACKEND'] = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/console/'
 LOGOUT_REDIRECT_URL = '/'

@@ -25,6 +25,12 @@ class BootstrapMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _bootstrapify(self)
+        # Show coordinates at a sensible precision instead of 20 decimal places
+        instance = getattr(self, 'instance', None)
+        for f in ('latitude', 'longitude'):
+            value = getattr(instance, f, None) if instance is not None else None
+            if f in self.fields and value is not None and not self.is_bound:
+                self.initial[f] = round(float(value), 6)
 
 
 class AIImportForm(BootstrapMixin, forms.Form):
