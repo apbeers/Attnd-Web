@@ -198,8 +198,24 @@ The new release also changes behaviour reviewers and users will notice:
    ```bash
    gh secret set GOOGLE_SERVICES_JSON -R apbeers/Attnd-Android < /Users/andrewbeers/Downloads/google-services.json
    ```
-3. Put the file at `Attnd-Android/app/google-services.json` for local builds. It's gitignored.
-4. Set up the server's Google service account, which covers both push and Play Integrity. See **Key reference → `GOOGLE_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`**.
+3. ✅ Put the file at `Attnd-Android/app/google-services.json` for local builds. It's gitignored.
+4. **Give the server one Google key that covers both Android push and the Play Integrity device check.**
+   1. **Check that Play Integrity uses this project.** Go to Play Console → Attnd → **Test and release → App integrity → Play Integrity API**. The linked Cloud project should be the Firebase **Attnd** project. If it's a different project, or none, click **Link a Cloud project** and choose it.
+   2. **Turn on the two APIs.** Open each link, choose the **Attnd** project at the top, and click **Enable**. If it says *Manage*, the API is already on.
+      - https://console.cloud.google.com/apis/library/playintegrity.googleapis.com
+      - https://console.cloud.google.com/apis/library/fcm.googleapis.com
+   3. **Create a new key.** Firebase → **Project settings → Service accounts → Generate new private key**. This downloads `attnd-…-firebase-adminsdk-….json` to Downloads. The Firebase admin account can send pushes, and because it belongs to the linked project it can also decode Play Integrity tokens.
+   4. **Find the Project ID.** It's on Firebase → **Project settings → General → Project ID**.
+   5. **Put the key on both Heroku apps.** Swap in your Project ID:
+      ```bash
+      heroku config:set -a attnd-web FCM_PROJECT_ID=your-project-id GOOGLE_SERVICE_ACCOUNT_JSON="$(cat /Users/andrewbeers/Downloads/*firebase-adminsdk*.json)"
+      heroku config:set -a attnd-dev FCM_PROJECT_ID=your-project-id GOOGLE_SERVICE_ACCOUNT_JSON="$(cat /Users/andrewbeers/Downloads/*firebase-adminsdk*.json)"
+      ```
+   6. **Rotate out the old keys.** Go to https://console.cloud.google.com/iam-admin/serviceaccounts (Attnd project) → the **firebase-adminsdk** account → **Keys**. Delete every key except the one created today. Do the same on any other service account that has old keys you don't use.
+   7. Back up the JSON in your password manager, then delete it:
+      ```bash
+      rm /Users/andrewbeers/Downloads/*firebase-adminsdk*.json
+      ```
 
 ### 4b. Google Play publishing from CI
 1. In [Google Cloud console](https://console.cloud.google.com), using the same project, enable the **Google Play Android Developer API**.
