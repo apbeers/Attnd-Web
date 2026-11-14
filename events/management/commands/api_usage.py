@@ -22,7 +22,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, days, **options):
         since = timezone.now() - timedelta(days=days)
-        recent = Device.objects.filter(last_seen__gte=since)
+        recent = Device.objects.real().filter(last_seen__gte=since)
         self.stdout.write(f'Devices seen in the last {days} days: {recent.count()}\n')
 
         self.stdout.write('By API version:')

@@ -4,6 +4,16 @@ v2 is what the current iOS and Android apps use. The v1 endpoints in `API.md` st
 
 - **Base URL:** `https://attnd.app/api/v2/`
 - **Authentication:** the same as v1. Send `Authorization: Bearer <attestation JWT>`. In dev and CI builds you can send the static key instead. When you get a `401`, invalidate the JWT, re-attest, and retry once.
+- **CI keys (API-008):** live integration tests may send a CI key (server setting `CI_API_KEYS`) instead. It works even when the
+  static key is turned off (production), but only for the DEMO event (`DEMO_EVENT_CODE`):
+  - `events/lookup/` answers `404` for any other event (exactly like an unknown code); `events/nearby/` lists only DEMO;
+  - `events/<id>/bundle|join|leave|usage/` answer `404` unless `<id>` is DEMO;
+  - `devices/`, `join/` and `leave/` take only device ids starting `ci-` (`403` otherwise), e.g. `ci-ios-<run>`;
+  - `usage/` answers exactly as for a real app (same `accepted`) but records nothing;
+  - every other API path answers `401`. `/api/app-status/` needs no key at all.
+
+  Devices whose id starts with `ci-` (with any key) are left out of organizer audience counts, install/join/leave
+  counts and pushes, so test runs don't show up in DEMO's stats. Apps never send a CI key.
 - **Timestamps:** ISO 8601 with a UTC offset. Display times in the **event's** `timezone`, not the device's.
 - **Coordinates:** may be `null`, meaning unknown. Never drop a pin for a `null` coordinate, and never treat `0,0` as a real location.
 - **Forward compatibility:** clients **must ignore unknown keys** and **must fall back to defaults for missing keys**, in every object, and especially in `display`.

@@ -54,12 +54,14 @@ class JoinEventRedirect(View):
     def get(self, request, event_code):
         code = (event_code or '').strip().upper()
         event = Event.objects.filter(event_code__iexact=code).exclude(status=Event.STATUS_DRAFT).first()
-        kind = client_kind(request.headers.get('User-Agent'))
+        user_agent = request.headers.get('User-Agent') or ''
+        kind = client_kind(user_agent)
         if event is None:
             response = render(request, 'join/not_found.html', {'code': code}, status=404)
             response['Cache-Control'] = 'no-cache'
             return response
-        if kind != 'bot':
+        # 'attnd-ci' marks the live integration tests (live_tests/), which must not inflate the DEMO stats.
+        if kind != 'bot' and 'attnd-ci' not in user_agent.lower():
             from events import usage
             usage.record(event, 'link_open', detail=kind)
 

@@ -508,9 +508,9 @@ from console.mail import AllowListSMTPBackend, allowed  # noqa: E402
 
 class EmailTests(ConsoleTests):
     def test_smtp_uses_tls(self):
-        self.assertTrue(django_settings.EMAIL_USE_TLS)
+        self.assertTrue(django_settings.EMAIL_SMTP_OPTIONS['use_tls'])
 
-    @override_settings(EMAIL_HOST_PASSWORD='x', SITE_URL='https://dev.example.com',
+    @override_settings(EMAIL_ENABLED=True, SITE_URL='https://dev.example.com',
                        DEFAULT_FROM_EMAIL='Attnd <noreply@mg.example.com>')
     def test_invite_email_links_to_this_site_from_the_default_sender(self):
         self.client.post(self.url('team'), {'action': 'invite', 'email': 'helper@example.com', 'role': 'admin'})
@@ -522,7 +522,7 @@ class EmailTests(ConsoleTests):
         self.assertNotIn('https://attnd.app', message.body)
 
     def test_no_invite_email_without_credentials(self):
-        with override_settings(EMAIL_HOST_PASSWORD=''):
+        with override_settings(EMAIL_ENABLED=False):
             self.client.post(self.url('team'), {'action': 'invite', 'email': 'helper@example.com', 'role': 'admin'})
         self.assertEqual(mail.outbox, [])
 
@@ -556,7 +556,7 @@ class EmailTests(ConsoleTests):
         sent = []
         with patch('django.core.mail.backends.smtp.EmailBackend.send_messages',
                    lambda self, messages: sent.extend(messages) or len(messages)):
-            backend = AllowListSMTPBackend()
+            backend = AllowListSMTPBackend(alias='default', host='smtp.example.com', port=587)
             a = mail.EmailMessage('one', 'x', to=['me@example.com', 'other@example.com'])
             b = mail.EmailMessage('two', 'x', to=['other@example.com'])
             self.assertEqual(backend.send_messages([a, b]), 1)

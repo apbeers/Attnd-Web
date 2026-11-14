@@ -15,12 +15,14 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 6. Check it all works | ⏳ ✅ **Web dev** deploys from `develop`. ✅ **Android** publishes to Play internal testing. ✅ **iOS** builds reach TestFlight, and on Nov 14 a real iPhone passed App Attest against dev and joined an event (lookup, join, bundle, 304s). Waiting on: the first release to `main`. |
 | 11. Email | ⏳ ✅ Mailgun Starter (free) add-ons on attnd-web (`mailgun-spherical-62131`) and attnd-dev (`mailgun-silhouetted-37822`; separate account, Mailgun can't be shared between apps; dev stays on its sandbox, which only mails authorized recipients). ✅ `mg.attnd.app` added (tracking off), Namecheap SPF/DKIM/DMARC added, **verified** by Mailgun. ✅ SMTP credentials (`postmaster@…`) set on both apps as `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD` + `DEFAULT_FROM_EMAIL`; dev `SITE_URL` set. ✅ Code: TLS, from address, per-site links, allow-list, password reset. ✅ `ADMIN_EMAILS` (both apps) and dev `EMAIL_ALLOWED_RECIPIENTS` = the owner's address; owner authorized on dev's sandbox; Nov 14 dev test emails (plain + `--admins`) **delivered** to iCloud. ✅ MX records for `mg` added; production-domain test from `noreply@mg.attnd.app` **delivered** to iCloud (Nov 14). ⬜ The production app itself sends once develop is released to main. |
 | 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then add a passkey (or an authenticator app) at the first admin sign-in, on dev and again on production (passkeys are per domain), and save the recovery codes. |
+| 13. CI keys (live tests) | ⬜ Generate a CI key, set `CI_API_KEYS` on production (needs the owner's go-ahead; works once the API-008 code is released to `main`) and store it as `ATTND_PROD_CI_KEY` in all three repos; store the dev key as `ATTND_DEV_API_KEY` in Attnd-Web. Commands in step 13. |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
 - [x] Protect `main` in all three repos: ruleset "Protect main" blocks force-push and deletion (Nov 14, 2026). Add "require status checks" once releases go through pull requests.
+- [ ] Step 13: CI keys for the live integration tests (`CI_API_KEYS` on attnd-web, `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web).
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
@@ -542,6 +544,32 @@ The console and admin now have sign-in rate limits, two-factor sign-in for staff
    Then sign in again and set it up anew.
 4. **CSP on production** (optional): it enforces by default. To watch first without blocking anything, `heroku config:set -a attnd-web CSP_MODE=report`, check the logs for `CSP violation` lines (`heroku logs -a attnd-web | grep CSP`), then `heroku config:unset -a attnd-web CSP_MODE`.
 
+## 13. CI keys for the live integration tests (5 min)
+
+Each repo's pipeline runs live integration tests: **Integration · dev** against the dev server (its static `API_KEY`) and
+**Integration · prod** against attnd.app. Production gets a **CI key** instead of the static key (API-008): it still works
+after 4d turns the static key off, but only for the DEMO event (lookup, nearby, its bundle/join/leave/usage, `ci-` devices).
+Usage it posts is discarded and `ci-` devices never appear in audience numbers. Until the API-008 code is on `main` and the
+key is set, **Integration · prod** fails, as a warning only: it never blocks a deploy or release.
+
+1. Generate one key and send it straight to Heroku production and to the three repos (it's never shown or saved).
+   Setting it on `attnd-web` is a production config change:
+   ```bash
+   CI_KEY="$(python3 -c "import secrets;print(secrets.token_urlsafe(32))")"
+   heroku config:set -a attnd-web CI_API_KEYS="$CI_KEY"
+   for r in Attnd-Web Attnd-iOS Attnd-Android; do printf %s "$CI_KEY" | gh secret set ATTND_PROD_CI_KEY -R apbeers/$r; done
+   unset CI_KEY
+   ```
+2. The web repo's dev integration job uses the dev app's static key:
+   ```bash
+   heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_DEV_API_KEY -R apbeers/Attnd-Web
+   ```
+3. Check: the next push to `develop` shows **Integration · dev** green after the deploy. **Integration · prod** turns green
+   once production runs the API-008 code.
+
+To rotate: run step 1 again (the old key stops working the moment `CI_API_KEYS` changes). Several keys can be set at once,
+comma-separated, to rotate without a gap. Keys shorter than 32 characters are ignored.
+
 ## Key reference
 
 For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.
@@ -702,6 +730,13 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
 **`GOOGLE_SERVICES_JSON`** (Attnd-Android repo secret): Firebase configuration for the Android app (push).
 - **Where:** Firebase → Project settings → General → Your apps → Android app → **google-services.json** download. Both Android apps are in the same file.
 - **Put:** `pbcopy < google-services.json`, then paste into the Attnd-Android repository secret. This file isn't truly secret, but keeping it out of git keeps the repo clean.
+
+**`CI_API_KEYS`** (Heroku `attnd-web`) and **`ATTND_PROD_CI_KEY`** (repo secret in all three repos): the DEMO-only CI key
+for the production integration tests (API-008, step 13). **If leaked:** run step 13 again; the key can only read the public
+DEMO event and register `ci-` test devices.
+
+**`ATTND_DEV_API_KEY`** (Attnd-Web repo secret): the **dev** app's `API_KEY`, for the web repo's **Integration · dev** job
+(step 13). Same value as `ATTND_API_KEY` in the app repos.
 
 **`ATTND_API_KEY`** (Attnd-iOS and Attnd-Android repo secrets): the **dev** app's `API_KEY`, used only for the optional live API tests. **Replace the old value**, which is likely the leaked production key. To turn the live tests on, also add the repo variables `LIVE_API_TESTS=true` and `LIVE_API_SERVER=attnd-dev-7ab893f37020.herokuapp.com`.
 

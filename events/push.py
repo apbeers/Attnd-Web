@@ -196,7 +196,7 @@ CONTENT_PUSH_TTL = 3600
 def _recipients(event, silent=False):
     """Push tokens per platform. Visible alerts go only to devices that opted in (``subscribed``);
     silent ``content_updated`` pushes go to every device in the event with a token (API-007)."""
-    devices = Device.objects.filter(event=event).exclude(push_token='')
+    devices = Device.objects.real().filter(event=event).exclude(push_token='')
     if not silent:
         devices = devices.filter(subscribed=True)
     ios = [d.push_token for d in devices if d.platform == 'ios']

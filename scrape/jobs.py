@@ -268,7 +268,6 @@ def _email_owner(event, changeset, pending):
                      f'Review them: {site_url(reverse("console:changeset", args=[changeset.id]))}\n'),
             from_email=None,
             recipient_list=sorted(set(recipients)),
-            fail_silently=True,
         )
     except Exception:
         logger.exception('Could not email %s', recipients)

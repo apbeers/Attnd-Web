@@ -132,10 +132,11 @@ People only ever see and sign in with their **email** (`console.auth_backends.Em
 
 ## API Authentication
 
-All API views mix in `ApiKeyRequired` (`events/apis.py`). Two accepted token forms:
+All API views mix in `ApiKeyRequired` (`events/apis.py`). Three accepted token forms:
 
 1. **Static API key** — `Authorization: Bearer <API_KEY>` env var. For dev/CI builds only. Keys listed (by SHA-256) in `REVOKED_API_KEY_SHA256` in `events/apis.py` are always rejected.
-2. **Attestation JWT** — short-lived JWT issued by `/api/v1/attest/ios/` or `/api/v1/attest/android/` after verifying Apple App Attest or Google Play Integrity. Used by production mobile builds.
+2. **Attestation JWT** — short-lived JWT issued by `/api/v1/attest/ios/` or `/api/v1/attest/android/` after verifying Apple App Attest or Google Play Integrity. Used by production mobile builds. The secret must be ≥ 32 bytes (system check `attnd.W001`, an error with `check --deploy`).
+3. **CI key** (API-008) — `CI_API_KEYS`, for the live integration tests. Works with the static key off, but only for the DEMO event: views opt in with `ci_scope` (`event` → other ids 404, `lookup`/`nearby` → results limited to DEMO, `device`); `ci-` device ids only; usage is answered normally and discarded; anything else 401. Devices with a `ci-` id are excluded everywhere counts are shown (`Device.objects.real()`) and from pushes.
 
 On 401 the mobile clients invalidate their stored JWT and re-attest before retrying once.
 
@@ -207,7 +208,11 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy) and `events/tests_integration.py`.
+Tests live in `<app>/tests.py`, `events/tests_ci_keys.py` (API-008), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy) and `events/tests_integration.py`.
+
+Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (no `staticfiles/` needed), `django.request` logs only errors (tests hit 4xx on purpose), and a 32+ byte test JWT secret. CI also runs `manage.py check` with `-W error::DeprecationWarning`; run the whole suite that way when upgrading Django/Python.
+
+**Live integration tests** (`live_tests/`, stdlib only, not collected by `manage.py test`): `ATTND_IT_SERVER=<host> ATTND_IT_KEY=<key> python3 live_tests/run.py` checks a deployed server: the v2 edge cases (status codes per `API_V2.md`), the DEMO facts shared with the iOS/Android suites, `/join/` per user agent, well-known files, `/health/`, security headers, `/admin/` 404. Skipped without both variables. CI: "Integration · dev" after the dev deploy (`ATTND_DEV_API_KEY`), "Integration · prod" alongside the tests (`ATTND_PROD_CI_KEY`, informational). Device ids `ci-web-…`; user agent contains `attnd-ci`.
 
 ## Environment Variables
 
@@ -216,10 +221,12 @@ Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push), `c
 | `SECRET_KEY` | Yes | Django secret key (startup fails without it unless `DEBUG`/`CI`) |
 | `DEBUG` | No | Set to any truthy value to enable debug mode |
 | `API_KEY` | Yes | Static bearer token for mobile API auth |
+| `STATIC_API_KEY_ENABLED` | No | Default `1`; `0` on production after the first release (SETUP 4d) turns `API_KEY` off |
+| `CI_API_KEYS` | No | Comma-separated CI keys (≥ 32 chars) for the live integration tests: DEMO event only, also with the static key off (API-008, SETUP "CI keys") |
 | `DATABASE_URL` | Prod | PostgreSQL connection string |
 | `CLOUDINARY_URL` | Prod | Cloudinary connection string |
 | `GOOGLE_PLACES_API_KEY` | No | Location image fetching during scrape |
-| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Email | Mailgun SMTP credentials for the sending domain (`postmaster@mg.attnd.app` on prod; dev uses its sandbox). No password = mail goes to the log |
+| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Email | Mailgun SMTP credentials for the sending domain (`postmaster@mg.attnd.app` on prod; dev uses its sandbox). No password = mail goes to the log. They feed Django 6.1's `MAILERS` (settings `EMAIL_ENABLED`, `EMAIL_SMTP_OPTIONS`); the deprecated `EMAIL_*` Django settings aren't used |
 | `DEFAULT_FROM_EMAIL` | No | Default `Attnd <noreply@mg.attnd.app>` |
 | `SITE_URL` | No | Base URL for links in emails, default `https://attnd.app` (dev sets its herokuapp URL) |
 | `ADMIN_EMAILS` | No | Comma-separated; get server error emails |

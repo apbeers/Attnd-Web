@@ -22,6 +22,8 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_HSTS_SECONDS = 0 if DEBUG else int(os.getenv('SECURE_HSTS_SECONDS', str(365 * 24 * 3600)))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = False
+# security.W021 ("not preloaded") is deliberate: the preload list is hard to leave again.
+SILENCED_SYSTEM_CHECKS = ['security.W021']
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 
@@ -129,6 +131,10 @@ import sys  # noqa: E402
 TESTING = len(sys.argv) > 1 and sys.argv[1] == 'test'
 if TESTING:
     STORAGES['staticfiles']['BACKEND'] = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+    # No collectstatic in tests: WhiteNoise finds files through the finders on demand instead of scanning
+    # STATIC_ROOT at startup (which warned "No directory at: …/staticfiles/").
+    WHITENOISE_AUTOREFRESH = True
+    WHITENOISE_USE_FINDERS = True
 
 # Silent "content_updated" push whenever attendee-visible content changes (events.push.content_changed).
 CONTENT_PUSH_ENABLED = not TESTING and os.getenv('CONTENT_PUSH_ENABLED', '1') not in ('0', 'false', 'False')
@@ -219,6 +225,10 @@ APP_UPDATE_MESSAGE = os.getenv('APP_UPDATE_MESSAGE', '')
 SUPPORTED_API_VERSIONS = [int(v) for v in os.getenv('SUPPORTED_API_VERSIONS', '1,2').split(',') if v.strip()]
 # Production should set STATIC_API_KEY_ENABLED=0 so only attested official apps can call the API.
 STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', 'false', 'False')
+# CI keys (API-008): comma-separated bearer tokens for the apps' live integration tests against production.
+# Separate from API_KEY and still accepted with STATIC_API_KEY_ENABLED=0, but only for the DEMO event
+# (lookup, nearby, its bundle/join/leave/usage) and for `ci-…` device ids; usage they post is discarded.
+CI_API_KEYS = [k.strip() for k in os.getenv('CI_API_KEYS', '').split(',') if k.strip()]
 
 # Public base URL of this deployment, for links in emails (dev sets its herokuapp URL).
 SITE_URL = os.getenv('SITE_URL', 'https://attnd.app').rstrip('/')
@@ -242,23 +252,31 @@ if DEBUG:
     WEBAUTHN_ORIGINS += [o for o in ('http://localhost:8000',) if o not in WEBAUTHN_ORIGINS]
 
 # Email: Mailgun SMTP (Heroku add-on; SETUP.md step 11). Production sends from mg.attnd.app; dev uses its
-# own Mailgun sandbox, which only delivers to authorized recipients. EMAIL_HOST_USER/PASSWORD are the
+# own Mailgun sandbox, which only delivers to authorized recipients. The env vars EMAIL_HOST_USER/PASSWORD are the
 # domain's SMTP credentials (the add-on doesn't provide a password). Without a password, mail is printed
 # to the log instead of sent.
-EMAIL_HOST = os.getenv('MAILGUN_SMTP_SERVER', 'smtp.mailgun.org')
-EMAIL_PORT = int(os.getenv('MAILGUN_SMTP_PORT', '587'))
-EMAIL_USE_TLS = True
-EMAIL_TIMEOUT = 15
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER') or os.getenv('MAILGUN_SMTP_LOGIN', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD') or os.getenv('MAILGUN_SMTP_PASSWORD', '')
+# Django 6.1 MAILERS (the EMAIL_HOST/EMAIL_PORT/... settings are deprecated). EMAIL_ENABLED says whether real
+# mail can be sent (console.mail.email_enabled); EMAIL_SMTP_OPTIONS are the SMTP backend's options.
+_SMTP_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD') or os.getenv('MAILGUN_SMTP_PASSWORD', '')
+EMAIL_ENABLED = bool(_SMTP_PASSWORD)
+EMAIL_SMTP_OPTIONS = {
+    'host': os.getenv('MAILGUN_SMTP_SERVER', 'smtp.mailgun.org'),
+    'port': int(os.getenv('MAILGUN_SMTP_PORT', '587')),
+    'username': os.getenv('EMAIL_HOST_USER') or os.getenv('MAILGUN_SMTP_LOGIN', ''),
+    'password': _SMTP_PASSWORD,
+    'use_tls': True,
+    'timeout': 15,
+}
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Attnd <noreply@mg.attnd.app>')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 # Comma-separated; these get server error emails.
 ADMINS = [('Attnd admin', e.strip()) for e in os.getenv('ADMIN_EMAILS', '').split(',') if e.strip()]
 # Comma-separated addresses or @domains; when set, mail to anyone else is logged and dropped (use on dev).
 EMAIL_ALLOWED_RECIPIENTS = [e.strip().lower() for e in os.getenv('EMAIL_ALLOWED_RECIPIENTS', '').split(',') if e.strip()]
-EMAIL_BACKEND = ('console.mail.AllowListSMTPBackend' if EMAIL_HOST_PASSWORD
-                 else 'django.core.mail.backends.console.EmailBackend')
+MAILERS = {
+    'default': ({'BACKEND': 'console.mail.AllowListSMTPBackend', 'OPTIONS': EMAIL_SMTP_OPTIONS} if EMAIL_ENABLED
+                else {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}),
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -339,6 +357,10 @@ LOGGING = {
         },
     },
 }
+if TESTING:
+    # Many tests deliberately get 4xx answers (404, 401, 429...), which django.request logs as warnings.
+    # Only its errors (5xx, unhandled exceptions) stay visible in test output.
+    LOGGING["loggers"]["django.request"] = {"handlers": ["console"], "level": "ERROR", "propagate": False}
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 
@@ -358,7 +380,7 @@ APPLE_ATTEST_ENVIRONMENT = os.getenv('APPLE_ATTEST_ENVIRONMENT', 'production')
 # Set to the full contents of your Google service account JSON key file.
 # If running on GCP/Cloud Run, leave empty and application default credentials
 # will be used automatically.
-ANDROID_PACKAGE_NAME = os.getenv('ANDROID_PACKAGE_NAME', '')
+# ANDROID_PACKAGE_NAME is set above (default com.arcu.attnd); it used to be redefined here with an empty default.
 GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON', '')
 
 # ---------------------------------------------------------------------------
@@ -368,6 +390,10 @@ GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON', '')
 # Falls back to SECRET_KEY if not set.
 ATTESTATION_JWT_SECRET = os.getenv('ATTESTATION_JWT_SECRET', '')
 ATTESTATION_JWT_TTL_HOURS = int(os.getenv('ATTESTATION_JWT_TTL_HOURS', '24'))
+# HS256 keys must be at least 32 bytes (RFC 7518 §3.2); the system check attnd.W001/E001 enforces it.
+# Tests run with a short SECRET_KEY, so they get a dedicated test-only secret of the right length.
+if TESTING and not ATTESTATION_JWT_SECRET:
+    ATTESTATION_JWT_SECRET = 'test-only-attestation-jwt-secret-32-bytes-or-more'
 
 # ---------------------------------------------------------------------------
 # Push notifications (see events/push.py)

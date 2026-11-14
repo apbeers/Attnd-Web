@@ -58,11 +58,12 @@ def record(event, metric, *, detail='', platform='', count=1, at=None):
         UsageCount.objects.filter(**key).update(count=F('count') + count)
 
 
-def ingest(event, platform, entries, now=None):
+def ingest(event, platform, entries, now=None, save=True):
     """Validate and record a batch from an app. Returns how many entries were accepted.
 
     Unknown metrics, invalid details, ids from other events and out-of-range times are dropped
-    silently: analytics must never make an app request fail.
+    silently: analytics must never make an app request fail. ``save=False`` validates and counts
+    exactly the same but records nothing (CI keys, API-008).
     """
     now = now or timezone.now()
     if not isinstance(entries, list):
@@ -114,6 +115,8 @@ def ingest(event, platform, entries, now=None):
         key = (metric, detail, bucket_start(at))
         totals[key] = min(totals.get(key, 0) + count, MAX_COUNT)
         accepted += 1
+    if not save:
+        return accepted
     for (metric, detail, bucket), count in totals.items():
         record(event, metric, detail=detail, platform=platform, count=count, at=bucket)
     return accepted

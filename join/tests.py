@@ -113,7 +113,8 @@ class JoinEventRedirectTests(TestCase):
 
     def test_opens_are_counted_by_device_and_bots_are_ignored(self):
         from events.models import UsageCount
-        for ua in (IOS_UA, ANDROID_UA, ANDROID_UA, DESKTOP_UA, 'Slackbot-LinkExpanding 1.0', 'facebookexternalhit/1.1'):
+        for ua in (IOS_UA, ANDROID_UA, ANDROID_UA, DESKTOP_UA, 'Slackbot-LinkExpanding 1.0', 'facebookexternalhit/1.1',
+                   IOS_UA + ' attnd-ci', ANDROID_UA + ' attnd-ci'):  # live integration tests aren't counted
             self.client.get('/join/testevt/', HTTP_USER_AGENT=ua)
         counts = {u.detail: u.count for u in UsageCount.objects.filter(event=self.event, metric='link_open')}
         self.assertEqual(counts, {'ios': 1, 'android': 2, 'desktop': 1})

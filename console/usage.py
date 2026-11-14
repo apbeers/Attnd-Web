@@ -184,7 +184,7 @@ def app_usage(tz, days=30):
     event_rows = sorted(({'event': events[i], **v} for i, v in per_event.items() if i in events),
                         key=lambda r: (r['activity'], r['joins']), reverse=True)[:50]
 
-    seen = Device.objects.filter(last_seen__gte=since)
+    seen = Device.objects.real().filter(last_seen__gte=since)
     versions = (seen.values('platform', 'app_version', 'api_version').annotate(n=Count('id'))
                 .order_by('platform', '-n'))
     return {

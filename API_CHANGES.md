@@ -56,11 +56,25 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages (5-minute buckets) | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 | API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 | API-007 | Live updates via silent push to every device; slow safety poll; offline caching | additive (behaviour only, no shape change) | ✅ dev · ⬜ prod | ✅ dev (f7c1d9c) | ✅ dev (c03cc2d) |
+| API-008 | CI keys: DEMO-only API access for live integration tests (`CI_API_KEYS`); `ci-` devices not counted | additive (server only, new key type) | ✅ dev (not deployed yet) · ⬜ prod | — (CI uses it: live tests) | — (CI uses it: live tests) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-008: CI keys for live integration tests
+**Why:** the three repos run live integration tests against dev *and* production. Production will turn the static key off
+(SETUP.md 4d), and the tests must never see or change real events.
+**Server (additive, no shape change):** `CI_API_KEYS` (comma-separated, ≥ 32 characters each, compared by SHA-256 in
+constant time) are accepted alongside the static key and attestation JWTs, also with `STATIC_API_KEY_ENABLED=0`, but only
+for the DEMO event (`DEMO_EVENT_CODE`): lookup/nearby show only DEMO (other events: `404` like an unknown code), DEMO's
+`bundle/`, `join/`, `leave/`, `usage/` (other ids: `404`), and `devices/`. With a CI key, device ids must start `ci-`
+(`403`), and `usage/` answers exactly as usual (`accepted` included) while discarding the counts. Everything else is `401`.
+Devices with a `ci-` id (any key) are excluded from console audience numbers, install/join/leave counts, `api_usage`
+and pushes; `/join/` opens with `attnd-ci` in the User-Agent aren't counted.
+**iOS / Android:** nothing in the apps. Their CI live tests use device ids `ci-ios-…` / `ci-android-…`, read the key
+from the `ATTND_PROD_CI_KEY` secret for production (the dev static key for dev) and always leave DEMO at the end.
 
 ### API-007: live updates via silent push
 **Why:** the 5 s foreground poll (API-006) is ~200 req/s per 1,000 open apps, too much for one Basic dyno. Push becomes the primary live-update signal; polling is only a slow safety net.

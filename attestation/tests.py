@@ -57,10 +57,9 @@ class TokenTests(TestCase):
 
     def test_wrong_issuer_rejected(self):
         import jwt
-        from django.conf import settings
         bad_token = jwt.encode(
             {'sub': 'k', 'platform': 'ios', 'iat': 0, 'exp': 9999999999, 'iss': 'other'},
-            settings.SECRET_KEY,
+            tokens._secret(),
             algorithm='HS256',
         )
         self.assertIsNone(tokens.verify(bad_token))

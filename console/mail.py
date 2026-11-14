@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def email_enabled():
     """True when real email can be sent (SMTP credentials configured)."""
-    return bool(settings.EMAIL_HOST_PASSWORD)
+    return bool(settings.EMAIL_ENABLED)
 
 
 def site_url(path=''):

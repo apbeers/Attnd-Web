@@ -1,7 +1,10 @@
 # Web pipeline
 #   push to develop/main, or a PR      → checks + tests (against Postgres, like production)
 #   push to develop      → deploy to the Heroku dev app        (environment: dev)
+#                          → then "Integration · dev": live tests (live_tests/) against the new dev deploy
 #   push to main         → deploy to the Heroku production app (environment: production)
+#   every push           → "Integration · prod": live tests against attnd.app with the DEMO-only CI key
+#                          (API-008), in parallel with the tests; informational, never gates anything
 #
 # Setup: see SETUP.md. Uses only GitHub's own actions.
 name: Web
@@ -65,6 +68,8 @@ jobs:
         run: uv run python manage.py makemigrations --check --dry-run
       - name: Tests (in parallel, one Postgres test database per CPU)
         run: uv run python manage.py test --parallel auto
+      - name: Deprecation check (Django / Python deprecations are errors)
+        run: uv run python -W error::DeprecationWarning -W error::PendingDeprecationWarning manage.py check
       - name: Dependency freshness (informational)
         continue-on-error: true
         run: uv run python scripts/upgrade_deps.py --check
@@ -105,3 +110,48 @@ jobs:
           HEROKU_APP: ${{ vars.HEROKU_APP }}
           HEALTH_URL: https://attnd.app/health/
         run: bash scripts/ci/heroku_deploy.sh
+
+  integration-dev:
+    name: Integration · dev
+    # Tests the dev server this run just deployed. Gates nothing (it runs after the deploy).
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ATTND_IT_SERVER: attnd-dev-7ab893f37020.herokuapp.com
+      ATTND_IT_KEY: ${{ secrets.ATTND_DEV_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+      - name: Live tests against dev
+        run: |
+          [ -n "$ATTND_IT_KEY" ] || echo "::warning::ATTND_DEV_API_KEY is not set: the API tests are skipped (SETUP.md, CI keys)"
+          python live_tests/run.py
+
+  integration-prod:
+    name: Integration · prod
+    # Production as it is now, with the DEMO-only CI key. Runs alongside the tests and never gates a deploy:
+    # a failure shows as a warning on the run.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    env:
+      ATTND_IT_SERVER: attnd.app
+      ATTND_IT_KEY: ${{ secrets.ATTND_PROD_CI_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+      - name: Live tests against production
+        run: |
+          [ -n "$ATTND_IT_KEY" ] || echo "::warning::ATTND_PROD_CI_KEY is not set: the API tests are skipped (SETUP.md, CI keys)"
+          if ! python live_tests/run.py; then
+            echo "::warning::Production integration tests failed (informational; see the step summary)"
+            echo "_Informational: production integration failures never block a deploy._" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

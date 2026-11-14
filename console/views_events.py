@@ -32,7 +32,7 @@ from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm
 from events import push
 from events.content import mark_locked, restore, save_revision
 from events.display import LABELS, clean_overrides, event_stats, resolve_display
-from events.models import (Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
+from events.models import (CI_DEVICE_PREFIX, Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
                            ScheduledItem, events_for_user, generate_event_code, next_send_slot)
 from scrape import diff, jobs
 from scrape.models import Change, ChangeSet, IngestJob
@@ -91,7 +91,7 @@ def dashboard(request):
     events = (events_for_user(request.user)
               .annotate(n_locations=Count('location', distinct=True),
                         n_items=Count('scheduleditem', distinct=True),
-                        n_devices=Count('device', distinct=True),
+                        n_devices=Count('device', filter=~Q(device__id__startswith=CI_DEVICE_PREFIX), distinct=True),
                         n_pending=Count('changesets', filter=Q(changesets__status=ChangeSet.PENDING), distinct=True))
               .order_by('-start_time'))
     now = timezone.now()
@@ -237,7 +237,7 @@ def manifest(request):
 @event_view
 def event_overview(request, event):
     stats = event_stats(event)
-    devices = Device.objects.filter(event=event)
+    devices = Device.objects.real().filter(event=event)
     audience = {
         'joined': devices.count(),
         'subscribed': devices.filter(subscribed=True).exclude(push_token='').count(),
@@ -523,7 +523,7 @@ def notifications(request, event):
             messages.success(request, 'Scheduled.')
         return redirect('console:notifications', event_id=event.pk)
     items = event.notification_set.order_by('-send_time')
-    reach = Device.objects.filter(event=event, subscribed=True).exclude(push_token='').count()
+    reach = Device.objects.real().filter(event=event, subscribed=True).exclude(push_token='').count()
     return render(request, 'console/notifications.html', _ctx(event, 'notifications', form=form,
                                                                notifications=items, reach=reach))
 
@@ -799,7 +799,7 @@ def _email_invite(event, email, inviter):
             message=(f'{inviter.email} invited you to help manage {event.name} on Attnd.\n\n'
                      f'Sign up with this email address to get access: {site_url(reverse("console:signup"))}\n'
                      f'Already have an account? Sign in with this email: {site_url(reverse("login"))}\n'),
-            from_email=None, recipient_list=[email], fail_silently=False)
+            from_email=None, recipient_list=[email])
         return True
     except Exception:
         logger.exception('Could not email the invitation to %s', email)
@@ -814,7 +814,7 @@ def _email_invite(event, email, inviter):
 def usage(request, event):
     from console.usage import event_usage
     data = event_usage(event, _tz(event))
-    audience = Device.objects.filter(event=event)
+    audience = Device.objects.real().filter(event=event)
     return render(request, 'console/usage.html', _ctx(event, 'usage', usage=data, in_event_now=audience.count()))
 
 

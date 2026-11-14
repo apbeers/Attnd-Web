@@ -285,6 +285,21 @@ class Notification(models.Model):
         return self.title
 
 
+# Devices whose id starts with this are automated tests (live integration suites, CI keys: API-008).
+# They are left out of organizer audience counts, usage counters and pushes.
+CI_DEVICE_PREFIX = 'ci-'
+
+
+def is_ci_device(device_id):
+    return str(device_id or '').startswith(CI_DEVICE_PREFIX)
+
+
+class DeviceQuerySet(models.QuerySet):
+    def real(self):
+        """Devices of real people: without the automated test devices (``ci-…`` ids)."""
+        return self.exclude(id__startswith=CI_DEVICE_PREFIX)
+
+
 class Device(models.Model):
     id = models.CharField(max_length=128, primary_key=True)
     event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True)
@@ -297,6 +312,8 @@ class Device(models.Model):
     # API version can be retired: see API_CHANGES.md and `manage.py api_usage`.
     api_version = models.PositiveSmallIntegerField(null=True, blank=True)
     joined_at = models.DateTimeField(null=True, blank=True)
+
+    objects = DeviceQuerySet.as_manager()
 
     class Meta:
         indexes = [

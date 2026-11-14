@@ -598,7 +598,7 @@ class PasskeyFlowTests(TestCase):
 # Emailed codes
 # ---------------------------------------------------------------------------
 
-@override_settings(EMAIL_HOST_PASSWORD='configured')
+@override_settings(EMAIL_ENABLED=True)
 class EmailCodeTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -712,7 +712,7 @@ class EmailCodeTests(TestCase):
         self.client.post(reverse('console:account'), {'action': 'email_codes_on'})
         self.assertFalse(SignInSecurity.objects.filter(user=self.staff, email_codes_enabled=True).exists())
 
-    @override_settings(EMAIL_HOST_PASSWORD='')
+    @override_settings(EMAIL_ENABLED=False)
     def test_not_offered_without_email(self):
         self.client.force_login(self.organizer)
         self.assertContains(self.client.get(reverse('console:account')), 'Email isn’t set up on this server')

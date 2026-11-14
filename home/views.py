@@ -6,7 +6,8 @@ from django.shortcuts import render
 def _build_number() -> str:
     path = os.path.join(settings.BASE_DIR, "version.txt")
     try:
-        return open(path).read().strip()
+        with open(path, encoding='utf-8') as fh:
+            return fh.read().strip()
     except OSError:
         return "?"
 

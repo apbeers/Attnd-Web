@@ -11,7 +11,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views import View
 
-from events.models import Event, Location, Notification, Device, ScheduledItem
+from events.models import Event, Location, Notification, Device, ScheduledItem, is_ci_device
 from attestation import tokens as attest_tokens
 
 
@@ -159,6 +159,39 @@ def static_key_ok(bearer):
     return hmac.compare_digest(bearer.encode(), key.encode())
 
 
+# CI keys (API-008) shorter than this are ignored (system check attnd.W002 warns about them).
+CI_KEY_MIN_LENGTH = 32
+
+
+def ci_key_ok(bearer):
+    """True if `bearer` is one of settings.CI_API_KEYS. Compared by SHA-256 digest in constant time,
+    against every configured key. Independent of STATIC_API_KEY_ENABLED."""
+    import hashlib
+    import hmac
+    keys = [k for k in getattr(settings, 'CI_API_KEYS', []) if len(k) >= CI_KEY_MIN_LENGTH]
+    if not bearer or not keys:
+        return False
+    digest = hashlib.sha256(bearer.encode()).digest()
+    ok = False
+    for key in keys:
+        ok |= hmac.compare_digest(digest, hashlib.sha256(key.encode()).digest())
+    return ok
+
+
+def demo_event():
+    """The live DEMO event (settings.DEMO_EVENT_CODE), or None."""
+    code = getattr(settings, 'DEMO_EVENT_CODE', '')
+    return live_events().filter(event_code__iexact=code).first() if code else None
+
+
+def is_ci_request(request):
+    return getattr(request, 'ci_key', False)
+
+
+def _not_found():
+    return JsonResponse({'error': 'Not found'}, status=404)
+
+
 class ApiKeyRequired:
     """
     Accept either:
@@ -166,7 +199,15 @@ class ApiKeyRequired:
         with CI, dev environments, and the existing console.
       - A short-lived attestation JWT issued by /api/v1/attest/ios/ or
         /api/v1/attest/android/ for production mobile clients.
+      - A CI key (settings.CI_API_KEYS, API-008): only for the views that set `ci_scope`, and there
+        only for the DEMO event and for `ci-…` device ids. Everything else answers 401.
+
+    `ci_scope` per view: 'event' (the <event_id> must be the DEMO event, otherwise 404), 'lookup' and
+    'nearby' (the view limits its results to the DEMO event), 'device' (registration). Views with an
+    'event' or 'device' scope also require a `ci-` device id in the body from a CI key.
     """
+
+    ci_scope = None
 
     def dispatch(self, request, *args, **kwargs):
         bearer = request.headers.get('Authorization', '').removeprefix('Bearer ').strip()
@@ -184,7 +225,24 @@ class ApiKeyRequired:
             request.attested_platform = payload.get('platform')
             return super().dispatch(request, *args, **kwargs)
 
+        # CI key: DEMO event only
+        if self.ci_scope and ci_key_ok(bearer):
+            request.ci_key = True
+            if self.ci_scope == 'event':
+                demo = demo_event()
+                if demo is None or str(kwargs.get('event_id')) != str(demo.id):
+                    return _not_found()
+            return super().dispatch(request, *args, **kwargs)
+
         return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+
+def ci_device_refused(request, device_id):
+    """With a CI key, only test devices (`ci-…` ids) may be registered, joined or left."""
+    from events.models import is_ci_device
+    if is_ci_request(request) and device_id and not is_ci_device(device_id):
+        return JsonResponse({'error': 'CI keys may only use device ids starting "ci-"'}, status=403)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +422,8 @@ def register_device(device_id, event=..., platform='', push_token=None, app_vers
         device.api_version = api_version
     device.last_seen = now
     device.save()
+    if is_ci_device(device_id):
+        return device  # automated tests don't count as installs or joins
     # Anonymous usage counters (API-005): totals only, never which device.
     from events import usage
     if created:
@@ -408,6 +468,8 @@ def _leave(device_id, event_id):
     if device is None:
         return
     Device.objects.filter(pk=device.pk).update(event=None)
+    if is_ci_device(device.pk):
+        return
     from events import usage
     usage.record(device.event, 'leave', platform=device.platform)
 

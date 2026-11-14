@@ -6,4 +6,4 @@ class EventsConfig(AppConfig):
     name = 'events'
 
     def ready(self):
-        from events import signals  # noqa: F401
+        from events import checks, signals  # noqa: F401
