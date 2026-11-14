@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 import datetime
 
-from events.models import Event, Location, Notification
+from events.models import Device, Event, Location, Notification
 
 TRIAL_USERNAME = "trialuser"
 
@@ -298,3 +298,47 @@ class NotificationSlotTests(ConsoleTests):
         self.assertEqual(next_send_slot(base), base)
         self.assertEqual(next_send_slot(base + datetime.timedelta(minutes=1)).minute, 10)
         self.assertEqual(next_send_slot(base + datetime.timedelta(minutes=59, seconds=1)).hour, 11)
+
+
+class UsagePageTests(ConsoleTests):
+    def setUp(self):
+        super().setUp()
+        from events import usage
+        start = timezone.now() - datetime.timedelta(hours=5)
+        for h in range(5):
+            at = start + datetime.timedelta(hours=h)
+            usage.record(self.event, 'app_open', platform='ios', count=h + 1, at=at)
+            usage.record(self.event, 'tab_view', detail='map', platform='android', count=2, at=at)
+        usage.record(self.event, 'location_view', detail=str(self.loc.id), platform='ios', count=7)
+        usage.record(self.event, 'schedule_item_view', detail=str(self.item.id), platform='ios', count=3)
+        usage.record(self.event, 'join', platform='ios', count=4)
+        usage.record(None, 'install', platform='ios', count=4)
+
+    def test_owner_sees_event_usage(self):
+        html = self.client.get(self.url('usage')).content.decode()
+        self.assertIn('Gallery A', html)
+        self.assertIn('Opening', html)
+        self.assertIn('Map tab', html)
+        self.assertIn('<svg', html)
+        self.assertIn('>15<', html)  # app opens 1+2+3+4+5
+
+    def test_other_users_cannot_see_it(self):
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(self.url('usage')).status_code, 404)
+        self.assertEqual(self.client.get(reverse('console:admin_usage')).status_code, 404)
+
+    def test_admin_sees_app_usage_and_support_lookup(self):
+        admin = User.objects.create_superuser('admin@example.com', 'admin@example.com', 'pw')
+        self.client.force_login(admin)
+        Device.objects.create(id='3F2A9C1B-1111-2222-3333-444455556666', platform='ios', app_version='2.0.90',
+                              api_version=2, event=self.event, last_seen=timezone.now())
+        html = self.client.get(reverse('console:admin_usage')).content.decode()
+        self.assertIn('Art Walk', html)
+        self.assertIn('2.0.90', html)
+        found = self.client.get(reverse('console:admin_usage'), {'code': '3f2a9c1b'}).content.decode()
+        self.assertIn('3F2A9C1B-1111-2222-3333-444455556666', found)
+        self.assertIn('ARTWALK1', found)
+        missing = self.client.get(reverse('console:admin_usage'), {'code': 'ABC'}).content.decode()
+        self.assertIn('No device matches', missing)
+        # Admins can open any event's usage page.
+        self.assertEqual(self.client.get(self.url('usage')).status_code, 200)

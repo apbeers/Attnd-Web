@@ -39,4 +39,6 @@ urlpatterns = [
     path('events/<int:event_id>/changes/', v.changesets, name='changesets'),
     path('events/<int:event_id>/history/', v.history, name='history'),
     path('events/<int:event_id>/team/', v.team, name='team'),
+    path('events/<int:event_id>/usage/', v.usage, name='usage'),
+    path('usage/', v.admin_usage, name='admin_usage'),
 ]

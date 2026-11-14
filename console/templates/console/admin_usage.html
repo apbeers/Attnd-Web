@@ -1,0 +1,60 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}App usage{% endblock %}
+{% block content %}
+<h1 class="h4 mb-1">App usage</h1>
+<p class="text-muted">Every event, last {{ usage.days }} days. Anonymous counts only. Only site admins can see this page.</p>
+
+<div class="card mb-4"><div class="card-body">
+  <h2 class="h6">{% icon "support" %} Support lookup</h2>
+  <form method="get" class="d-flex gap-2 mb-2" style="max-width:28rem">
+    <input name="code" value="{{ code }}" class="form-control" placeholder="Support code from the app's Options screen" autocomplete="off">
+    <button class="btn btn-primary">Look up</button>
+  </form>
+  {% if devices is not None %}
+    {% if devices %}
+    <div class="table-responsive"><table class="table table-sm mb-0">
+      <thead><tr><th>Device</th><th>Platform</th><th>App</th><th>API</th><th>Event</th><th>Joined</th><th>Last seen</th><th>Push</th></tr></thead>
+      <tbody>{% for d in devices %}<tr>
+        <td><code>{{ d.id }}</code></td><td>{{ d.platform|default:"?" }}</td><td>{{ d.app_version|default:"–" }}</td>
+        <td>{% if d.api_version %}v{{ d.api_version }}{% else %}–{% endif %}</td>
+        <td>{% if d.event %}<a href="{% url 'console:event' d.event.id %}">{{ d.event.name }}</a> ({{ d.event.event_code }}){% else %}–{% endif %}</td>
+        <td>{{ d.joined_at|date:"M j, g:i A"|default:"–" }}</td><td>{{ d.last_seen|date:"M j, g:i A"|default:"never" }}</td>
+        <td>{% if d.push_token %}{% if d.subscribed %}on{% else %}off{% endif %}{% else %}no token{% endif %}</td>
+      </tr>{% endfor %}</tbody></table></div>
+    {% else %}<p class="text-muted small mb-0">No device matches "{{ code }}". Codes are at least 6 characters.</p>{% endif %}
+  {% endif %}
+</div></div>
+
+<div class="card mb-4"><div class="card-body">
+  <div class="row text-center g-3">
+    <div class="col-6 col-md-3"><div class="stat">{{ usage.installs }}</div><div class="muted-label">New installs</div></div>
+    <div class="col-6 col-md-3"><div class="stat">{{ usage.active_devices }}</div><div class="muted-label">Active devices</div></div>
+    <div class="col-6 col-md-3"><div class="stat">{{ usage.joins }}</div><div class="muted-label">Event joins</div></div>
+    <div class="col-6 col-md-3"><div class="stat">{{ usage.activity }}</div><div class="muted-label">Interactions</div></div>
+  </div>
+</div></div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body"><h2 class="h6">Activity per day</h2>{% include 'console/_chart.html' with c=usage.activity_chart label="Activity per day" %}</div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body"><h2 class="h6">Joins per day</h2>{% include 'console/_chart.html' with c=usage.joins_chart label="Joins per day" %}</div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body"><h2 class="h6">New installs per day</h2>{% include 'console/_chart.html' with c=usage.installs_chart label="Installs per day" %}</div></div></div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7"><div class="card"><div class="card-body">
+    <h2 class="h6">Events by activity</h2>
+    <table class="table table-sm mb-0"><thead><tr><th>Event</th><th class="text-end">Joins</th><th class="text-end">Interactions</th></tr></thead><tbody>
+      {% for r in usage.events %}<tr><td><a href="{% url 'console:usage' r.event.id %}">{{ r.event.name }}</a></td><td class="text-end">{{ r.joins }}</td><td class="text-end">{{ r.activity }}</td></tr>
+      {% empty %}<tr><td colspan="3" class="text-muted">No activity yet.</td></tr>{% endfor %}
+    </tbody></table>
+  </div></div></div>
+  <div class="col-lg-5"><div class="card"><div class="card-body">
+    <h2 class="h6">App versions in use</h2>
+    <table class="table table-sm mb-0"><thead><tr><th>Platform</th><th>App</th><th>API</th><th class="text-end">Devices</th></tr></thead><tbody>
+      {% for v in usage.versions %}<tr><td>{{ v.platform|default:"?" }}</td><td>{{ v.app_version|default:"–" }}</td><td>{% if v.api_version %}v{{ v.api_version }}{% else %}–{% endif %}</td><td class="text-end">{{ v.n }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="text-muted">No devices seen.</td></tr>{% endfor %}
+    </tbody></table>
+  </div></div></div>
+</div>
+{% endblock %}

@@ -245,3 +245,7 @@ ANDROID_ALLOW_UNRECOGNIZED_APP = _env_bool('ANDROID_ALLOW_UNRECOGNIZED_APP', Fal
 ANDROID_REQUIRE_PLAY_LICENSE = _env_bool('ANDROID_REQUIRE_PLAY_LICENSE', True)
 ANDROID_REQUIRE_STRONG_INTEGRITY = _env_bool('ANDROID_REQUIRE_STRONG_INTEGRITY', False)
 ANDROID_SIGNING_CERT_SHA256 = os.getenv('ANDROID_SIGNING_CERT_SHA256', '') or os.getenv('ANDROID_SHA256_FINGERPRINT', '')
+
+# UsageCount's unique constraint treats NULL events as equal (nulls_distinct=False). Postgres (production,
+# CI) supports it; local SQLite doesn't, and events.usage.record() copes without it.
+SILENCED_SYSTEM_CHECKS = ['models.W047']

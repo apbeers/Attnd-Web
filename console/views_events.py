@@ -627,3 +627,29 @@ def team(request, event):
             return redirect('console:team', event_id=event.pk)
     return render(request, 'console/team.html', _ctx(event, 'team', form=form, is_owner=is_owner,
                                                       members=event.members.select_related('user')))
+
+
+# ---------------------------------------------------------------------------
+# Usage (API-005): anonymous counts only
+# ---------------------------------------------------------------------------
+
+@event_view
+def usage(request, event):
+    from console.usage import event_usage
+    data = event_usage(event, _tz(event))
+    audience = Device.objects.filter(event=event)
+    return render(request, 'console/usage.html', _ctx(event, 'usage', usage=data, in_event_now=audience.count()))
+
+
+@login_required
+def admin_usage(request):
+    """App-wide usage and support lookup, for site admins only."""
+    if not request.user.is_superuser:
+        raise Http404
+    from console.usage import app_usage, find_devices
+    tz = timezone.get_current_timezone()
+    code = request.GET.get('code', '').strip()
+    return render(request, 'console/admin_usage.html', {
+        'usage': app_usage(tz), 'code': code, 'devices': find_devices(code) if code else None,
+        'section': 'admin_usage',
+    })

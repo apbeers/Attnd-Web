@@ -1,0 +1,12 @@
+{% comment %}Inline SVG bar chart. Expects `c` from console.usage.chart() and `label`.{% endcomment %}
+{% if c %}
+<figure class="usage-chart mb-0" aria-label="{{ label }}">
+  <svg viewBox="0 0 {{ c.width }} {{ c.height }}" role="img" preserveAspectRatio="none">
+    <title>{{ label }}</title>
+    <line x1="0" y1="{{ c.height }}" x2="{{ c.width }}" y2="{{ c.height }}" class="axis"/>
+    {% for b in c.bars %}<rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"><title>{{ b.label }}: {{ b.value }}</title></rect>{% endfor %}
+  </svg>
+  <div class="usage-ticks">{% for b in c.bars %}{% if b.tick %}<span style="left:{{ b.left }}%">{{ b.label }}</span>{% endif %}{% endfor %}</div>
+  <figcaption class="small text-muted">Peak {{ c.max }} per {{ c.unit }}. Hover a bar for its value.</figcaption>
+</figure>
+{% else %}<p class="text-muted small mb-0">No data yet.</p>{% endif %}

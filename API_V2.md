@@ -72,6 +72,30 @@ Registers or updates a device. Call it on launch, and whenever the push token or
 
 ---
 
+### `POST events/<id>/usage/` (API-005)
+Anonymous usage counts. **Never send a device ID or anything identifying**; the server ignores one if sent.
+```json
+{"platform": "ios", "events": [
+  {"name": "tab_view", "detail": "map", "count": 3, "at": "2026-11-14T16:05:00Z"},
+  {"name": "location_view", "detail": "42"}, {"name": "app_open"}]}
+```
+→ `{"status": "ok", "accepted": 3}`
+
+| `name` | `detail` |
+|--------|----------|
+| `app_open` | none. The app came to the foreground (or launched) while in this event. |
+| `tab_view` | `map`, `locations`, `schedule`, `flyer`, `notifications` or `options` |
+| `location_view` | location id. A location's detail was opened, from a list, a map pin or a schedule item. |
+| `schedule_item_view` | schedule item id |
+| `notification_open` | notification id when known. A push notification was tapped. |
+| `search` | none. A search was run. **Never send the search text.** |
+| `refresh` | none. Pull to refresh. |
+
+- `count` is optional (default 1). `at` is optional ISO 8601, used to place the count in its hour (within the last 7 days). Up to 200 entries per request.
+- Unknown names, invalid details and ids from other events are dropped silently. A malformed body still returns `200`.
+- **Client behaviour:** aggregate in memory by (name, detail, hour) and send at most every ~60 seconds, when the app goes to the background, and before leaving an event. Drop the batch after one failed retry. Analytics must never block or slow the UI, and never show errors.
+- The server counts joins, leaves and new installs itself; don't send those.
+
 ## Outside the version: update check (API-003)
 
 ### `GET /api/app-status/?platform=ios|android&version=<app version>&api=<API version the build speaks>`

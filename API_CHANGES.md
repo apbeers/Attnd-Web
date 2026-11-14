@@ -52,11 +52,29 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 |----|--------|------|-----|-----|---------|
 | API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | 🚧 dev (TestFlight) · ⬜ prod | ✅ dev · ⬜ prod |
 | API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ⬜ prod | — | — |
+| API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ⬜ prod | ⬜ | ⬜ |
+| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages | additive | ✅ dev · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | 🚧 dev · ⬜ prod | 🚧 dev · ⬜ prod |
 
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-005: anonymous usage counts
+**Why:** organizers see how the app was used during their event (joins over time, activity by hour, which features, locations and schedule items people looked at). The admin sees the same for every event, plus app-wide totals.
+**Privacy:** counts only. Apps send no device ID; the server stores hourly totals per event, metric, detail and platform (`UsageCount`), and nothing that links a count to a device or a person. The privacy policy says so.
+**API (additive):** `POST events/<id>/usage/` (see `API_V2.md` for metrics and client behaviour). The server records `join` (only when a device newly joins), `leave` and `install` itself.
+**Console:** event sidebar → **Usage**; admins also get **App usage** (all events, versions in use, support lookup).
+**iOS / Android:** add a small usage reporter that aggregates by (name, detail, hour), flushes every ~60 s, on background and before leaving, and never blocks the UI or shows errors. Instrument: `app_open` (launch/foreground while in an event), `tab_view` (each tab selection, including Options), `location_view`, `schedule_item_view`, `notification_open` (push tap), `search` (when a search is submitted or the query settles; never the text), `refresh` (pull to refresh).
+
+### API-004: build and support info (app only)
+**Why:** when someone reports a problem, the admin can find their device and see exactly which build and server it uses.
+**Apps:** Options gains an **About / Support** section:
+- non-production builds (server isn't `attnd.app`) show a prominent "Internal test build: dev server" warning at the top of Options;
+- app version and build number, server host, API version, platform/OS version and device model, current event (name, code, id, content version), last refresh time;
+- a **support code**: the first 8 characters of the device ID, upper case, without dashes;
+- **Copy support info**, which copies all of the above plus the full device ID as plain text.
+**Console:** admin → App usage → **Support lookup** finds the device by support code (platform, app and API version, event, joined, last seen, push status).
 
 ### API-003: update check and update screen
 **Why:** if a change ever has to break old builds, or an old build has a serious bug, the server can tell those builds to update instead of letting them fail.

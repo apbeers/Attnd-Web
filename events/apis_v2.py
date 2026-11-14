@@ -21,7 +21,8 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from events import content
-from events.apis import ApiKeyRequired, live_events, lookup_event, nearby_events, register_device
+from events import usage
+from events.apis import ApiKeyRequired, _leave, live_events, lookup_event, nearby_events, register_device
 from events.models import Device
 
 API_VERSION = 2
@@ -107,7 +108,7 @@ class LeaveV2(ApiKeyRequired, View):
         device_id = _body(request).get('device_id', '')
         if not device_id:
             return JsonResponse({'error': 'device_id is required'}, status=400)
-        Device.objects.filter(id=device_id, event_id=event_id).update(event=None)
+        _leave(device_id, event_id)
         return JsonResponse({'status': 'ok'})
 
 
@@ -123,3 +124,21 @@ class DeviceV2(ApiKeyRequired, View):
         device = register_device(device_id, api_version=API_VERSION, **body)
         return JsonResponse({'status': 'ok', 'subscribed': device.subscribed,
                              'event_id': device.event_id})
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class UsageV2(ApiKeyRequired, View):
+    """POST events/<id>/usage/  {"platform": "ios"|"android", "events": [{"name", "detail"?, "count"?, "at"?}]}
+
+    Anonymous usage counts (API-005). No device ID is accepted or stored. Invalid entries are
+    dropped silently, so analytics never makes an app request fail.
+    """
+
+    def post(self, request, event_id):
+        event = live_events().filter(id=event_id).first()
+        if event is None:
+            return JsonResponse({'error': 'Not found'}, status=404)
+        body = _body(request)
+        platform = body.get('platform') if body.get('platform') in ('ios', 'android') else ''
+        accepted = usage.ingest(event, platform, body.get('events'))
+        return JsonResponse({'status': 'ok', 'accepted': accepted})

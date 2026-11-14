@@ -13,7 +13,8 @@
     <a class="navbar-brand" href="{% url 'console:dashboard' %}">attnd<span>.</span></a>
     <div class="ms-auto d-flex align-items-center gap-2">
       <a class="btn btn-sm btn-primary" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>
-      {% if user.is_superuser %}<a class="btn btn-sm btn-outline-secondary" href="/admin/">Admin</a>{% endif %}
+      {% if user.is_superuser %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
+      <a class="btn btn-sm btn-outline-secondary" href="/admin/">Admin</a>{% endif %}
       <form method="post" action="{% url 'logout' %}" class="m-0">{% csrf_token %}
         <button class="btn btn-sm btn-link text-muted">Sign out</button></form>
     </div>
@@ -45,6 +46,7 @@
           <a class="nav-link {% if section == 'display' %}active{% endif %}" href="{% url 'console:display' event.id %}">{% icon "phone" %}App layout</a>
           <a class="nav-link {% if section == 'changes' %}active{% endif %}" href="{% url 'console:changesets' event.id %}">{% icon "stars" %}AI updates
             {% if pending_changes %}<span class="badge rounded-pill text-bg-primary ms-1">{{ pending_changes }}</span>{% endif %}</a>
+          <a class="nav-link {% if section == 'usage' %}active{% endif %}" href="{% url 'console:usage' event.id %}">{% icon "chart" %}Usage</a>
           <a class="nav-link {% if section == 'history' %}active{% endif %}" href="{% url 'console:history' event.id %}">{% icon "history" %}History</a>
           <a class="nav-link {% if section == 'team' %}active{% endif %}" href="{% url 'console:team' event.id %}">{% icon "people" %}Team</a>
         </nav>

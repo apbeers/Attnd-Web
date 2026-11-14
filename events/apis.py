@@ -346,9 +346,11 @@ def register_device(device_id, event=..., platform='', push_token=None, app_vers
     device_id = str(device_id)[:128]
     device, created = Device.objects.get_or_create(id=device_id, defaults={'platform': platform or ''})
     now = timezone.now()
+    newly_joined = None
     if event is not ...:
         if event is not None and device.event_id != event.id:
             device.joined_at = now
+            newly_joined = event
         device.event = event
     if platform in ('ios', 'android'):
         device.platform = platform
@@ -362,6 +364,12 @@ def register_device(device_id, event=..., platform='', push_token=None, app_vers
         device.api_version = api_version
     device.last_seen = now
     device.save()
+    # Anonymous usage counters (API-005): totals only, never which device.
+    from events import usage
+    if created:
+        usage.record(None, 'install', platform=device.platform)
+    if newly_joined is not None:
+        usage.record(newly_joined, 'join', platform=device.platform)
     return device
 
 
@@ -387,8 +395,21 @@ class JoinEventView(ApiKeyRequired, View):
 class LeaveEventView(ApiKeyRequired, View):
 
     def post(self, request, device_id, event_id):
-        Device.objects.filter(id=device_id).update(event=None)
+        _leave(device_id, event_id=None)  # v1 always cleared the device's event, whatever the id
         return JsonResponse({'status': 'ok'})
+
+
+def _leave(device_id, event_id):
+    """Detach a device from its event (only from `event_id` when given) and count the leave anonymously."""
+    devices = Device.objects.filter(id=device_id).exclude(event=None).select_related('event')
+    if event_id is not None:
+        devices = devices.filter(event_id=event_id)
+    device = devices.first()
+    if device is None:
+        return
+    Device.objects.filter(pk=device.pk).update(event=None)
+    from events import usage
+    usage.record(device.event, 'leave', platform=device.platform)
 
 
 @method_decorator(csrf_exempt, name='dispatch')

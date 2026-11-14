@@ -4,6 +4,7 @@
     "events/<int:event_id>/bundle/",
     "events/<int:event_id>/join/",
     "events/<int:event_id>/leave/",
+    "events/<int:event_id>/usage/",
     "events/lookup/",
     "events/nearby/"
   ],
@@ -162,6 +163,10 @@
       "event_id": "null",
       "status": "string",
       "subscribed": "boolean"
+    },
+    "POST events/<id>/usage/": {
+      "accepted": "integer",
+      "status": "string"
     },
     "GET /api/app-status/": {
       "latest_version": "null",

@@ -23,14 +23,14 @@ table { border-collapse: collapse; } details summary { cursor: pointer; }
 .row { display: flex; flex-wrap: wrap; margin: 0 calc(var(--gx, 1.5rem) * -.5); row-gap: var(--gy, 0); }
 .row > * { flex: 0 0 100%; max-width: 100%; padding: 0 calc(var(--gx, 1.5rem) * .5); }
 .g-3 { --gx: 1rem; --gy: 1rem; } .g-4 { --gx: 1.5rem; --gy: 1.5rem; }
-.col-4 { flex: 0 0 33.333%; max-width: 33.333%; }
+.col-4 { flex: 0 0 33.333%; max-width: 33.333%; } .col-6 { flex: 0 0 50%; max-width: 50%; }
 @media (min-width: 768px) {
-  .col-md-4 { flex: 0 0 33.333%; max-width: 33.333%; } .col-md-5 { flex: 0 0 41.667%; max-width: 41.667%; }
+  .col-md-3 { flex: 0 0 25%; max-width: 25%; } .col-md-4 { flex: 0 0 33.333%; max-width: 33.333%; } .col-md-5 { flex: 0 0 41.667%; max-width: 41.667%; }
   .col-md-6 { flex: 0 0 50%; max-width: 50%; } .col-md-7 { flex: 0 0 58.333%; max-width: 58.333%; }
   .col-md-8 { flex: 0 0 66.667%; max-width: 66.667%; } .pt-md-4 { padding-top: 1.5rem; }
 }
 @media (min-width: 992px) {
-  .col-lg-2 { flex: 0 0 16.667%; max-width: 16.667%; } .col-lg-5 { flex: 0 0 41.667%; max-width: 41.667%; }
+  .col-lg-2 { flex: 0 0 16.667%; max-width: 16.667%; } .col-lg-4 { flex: 0 0 33.333%; max-width: 33.333%; } .col-lg-5 { flex: 0 0 41.667%; max-width: 41.667%; }
   .col-lg-6 { flex: 0 0 50%; max-width: 50%; } .col-lg-7 { flex: 0 0 58.333%; max-width: 58.333%; }
   .col-lg-8 { flex: 0 0 66.667%; max-width: 66.667%; } .col-lg-10 { flex: 0 0 83.333%; max-width: 83.333%; }
 }
@@ -155,3 +155,15 @@ input[type=file].form-control { padding: .35rem; }
 .pin-map .credit { position: absolute; bottom: 0; right: 0; background: rgba(255,255,255,.8); font-size: .7rem; padding: 0 .3rem; z-index: 2; }
 .navbar > .container-fluid { display: flex; align-items: center; }
 .form-check { flex-wrap: wrap; } .form-check > .form-text { flex-basis: 100%; margin-top: 0; padding-left: 1.5rem; }
+
+/* Usage charts (inline SVG, console/_chart.html) */
+.usage-chart svg { width: 100%; height: 170px; display: block; }
+.usage-chart rect { fill: var(--primary); opacity: .85; }
+.usage-chart rect:hover { opacity: 1; }
+.usage-chart .axis { stroke: #d6d9e0; stroke-width: 1; }
+.usage-ticks { position: relative; height: 1.4rem; margin-bottom: .25rem; font-size: .72rem; color: var(--muted); }
+.usage-ticks span { position: absolute; top: .2rem; white-space: nowrap; }
+.table th { text-align: left; } .table .text-end, .text-end { text-align: right; }
+
+.table-responsive { overflow-x: auto; }
+.table-sm td, .table-sm th { padding: .35rem .5rem; }

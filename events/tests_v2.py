@@ -265,3 +265,48 @@ class AppStatusTests(TestCase):
 
     def test_attestation_routes_are_not_swallowed_by_the_catch_all(self):
         self.assertEqual(self.client.get('/api/v1/attest/nonce/', secure=True).status_code, 200)
+
+
+class UsageTests(V2Base):
+    def counts(self, **filters):
+        from events.models import UsageCount
+        return {(u.metric, u.detail, u.platform): u.count for u in UsageCount.objects.filter(**filters)}
+
+    def test_ingest_validates_and_buckets_anonymously(self):
+        other = Event.objects.create(name='Other', event_code='OTHER1', start_time=timezone.now(), user=self.user)
+        foreign = Location.objects.create(event=other, user=self.user, name='Elsewhere')
+        resp = self.post(f'/api/v2/events/{self.event.id}/usage/', {'platform': 'ios', 'device_id': 'should-be-ignored', 'events': [
+            {'name': 'tab_view', 'detail': 'map', 'count': 3},
+            {'name': 'tab_view', 'detail': 'Map'},
+            {'name': 'tab_view', 'detail': 'settings-hack'},
+            {'name': 'location_view', 'detail': str(self.loc.id)},
+            {'name': 'location_view', 'detail': str(foreign.id)},
+            {'name': 'search', 'detail': 'my secret search'},
+            {'name': 'made_up', 'count': 9},
+            {'name': 'app_open', 'count': 10 ** 9},
+            'garbage',
+        ]})
+        self.assertEqual(resp.json(), {'status': 'ok', 'accepted': 5})
+        counts = self.counts(event=self.event)
+        self.assertEqual(counts[('tab_view', 'map', 'ios')], 4)
+        self.assertEqual(counts[('location_view', str(self.loc.id), 'ios')], 1)
+        self.assertEqual(counts[('search', '', 'ios')], 1)  # the search text is never stored
+        self.assertEqual(counts[('app_open', '', 'ios')], 500)  # capped
+        self.assertNotIn(('location_view', str(foreign.id), 'ios'), counts)
+        from events.models import UsageCount
+        self.assertFalse(any('should-be-ignored' in str(v) for v in UsageCount.objects.values()))
+
+    def test_bad_bodies_never_fail(self):
+        for body in ({}, {'events': 'nope'}, {'events': [None, 1, []]}):
+            self.assertEqual(self.post(f'/api/v2/events/{self.event.id}/usage/', body).json()['accepted'], 0)
+        self.assertEqual(self.post('/api/v2/events/999999/usage/', {'events': []}).status_code, 404)
+
+    def test_join_install_and_leave_are_counted_once(self):
+        body = {'device_id': 'phone-1', 'platform': 'android'}
+        self.post(f'/api/v2/events/{self.event.id}/join/', body)
+        self.post(f'/api/v2/events/{self.event.id}/join/', body)  # silent rejoin on every launch: not a new join
+        self.post(f'/api/v2/events/{self.event.id}/leave/', {'device_id': 'phone-1'})
+        counts = self.counts(event=self.event)
+        self.assertEqual(counts[('join', '', 'android')], 1)
+        self.assertEqual(counts[('leave', '', 'android')], 1)
+        self.assertEqual(self.counts(event=None)[('install', '', 'android')], 1)

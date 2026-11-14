@@ -310,3 +310,28 @@ def events_for_user(user):
     if user.is_superuser:
         return Event.objects.all()
     return Event.objects.filter(models.Q(user=user) | models.Q(members__user=user)).distinct()
+
+
+class UsageCount(models.Model):
+    """Anonymous hourly usage totals (API-005).
+
+    Apps report how often features were used. The server keeps only these counters: no device ID,
+    IP address or anything that identifies a person is ever stored with them. `event` is null for
+    app-wide counts that happen outside an event (new app installs).
+    """
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='usage')
+    hour = models.DateTimeField()  # UTC, truncated to the hour
+    metric = models.CharField(max_length=32)
+    detail = models.CharField(max_length=32, blank=True)  # a tab name, or a location / schedule item / notification id
+    platform = models.CharField(max_length=12, blank=True)
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['event', 'hour', 'metric', 'detail', 'platform'], name='usage_bucket_unique',
+                                    nulls_distinct=False),
+        ]
+        indexes = [models.Index(fields=['event', 'hour']), models.Index(fields=['hour'])]
+
+    def __str__(self):
+        return f'{self.event_id} {self.hour:%Y-%m-%d %H}h {self.metric}:{self.detail} {self.platform} = {self.count}'
