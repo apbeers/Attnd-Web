@@ -356,6 +356,13 @@ Limits to know about:
 | Android | `Attnd-Android/local.properties` | `ATTND_API_KEY=…`, `MAPS_API_KEY=…`, `ATTND_SERVER=attnd-dev-7ab893f37020.herokuapp.com` |
 | Web | your shell | `DEBUG=1 API_KEY=dev-key uv run python manage.py runserver` |
 
+**Web needs Docker** for its database: the local server and tests use PostgreSQL 18 (the same as Heroku and CI), started by a script. One-time install on your Mac, then start it:
+```bash
+brew install --cask docker
+open -a Docker
+cd Attnd-Web && scripts/dev_db.sh
+```
+
 ## 6. Check it all works
 
 1. Push anything to `develop` in each repo, or re-run the latest workflow from the Actions tab.

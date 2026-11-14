@@ -59,7 +59,7 @@ Upgrade Python packages with `uv run python scripts/upgrade_deps.py` (also runs 
 
 - **Python 3.15** managed with `uv` (`.python-version`; Heroku reads the same file)
 - **Django 6.1** (no DRF)
-- **PostgreSQL 18** in production (Heroku Postgres essential-0) via `dj-database-url`; SQLite in local dev
+- **PostgreSQL 18 everywhere**: Heroku Postgres (essential-0), CI (`postgres:18` service) and local dev/tests (`scripts/dev_db.sh`, Docker). No SQLite: without `DATABASE_URL` the settings point at the local `postgres://attnd:attnd@localhost:5432/attnd`
 - **Cloudinary** for media storage in production (falls back to local filesystem)
 - **Whitenoise** for static files
 - **Gunicorn** (gthread, 1 worker × 4 threads) as WSGI server
@@ -150,21 +150,17 @@ Well-known files served from `join/views.py`:
 
 ## Local Development
 
+PostgreSQL 18 runs in Docker, the same major version as Heroku and CI:
+
 ```bash
-# Install dependencies
 uv sync
-
-# Set required env vars
-export DEBUG=1
-export SECRET_KEY=dev-secret
-export API_KEY=dev-key
-
-# Run migrations
+scripts/dev_db.sh                     # start Postgres 18 (Docker Desktop on Mac; `dockerd &` first in a Claude cloud session)
+export DEBUG=1 SECRET_KEY=dev-secret API_KEY=dev-key
 uv run python manage.py migrate
-
-# Start dev server
 uv run python manage.py runserver
 ```
+
+`scripts/dev_db.sh stop` stops it; `scripts/dev_db.sh reset` deletes it and its data.
 
 ## Background work
 
@@ -175,8 +171,9 @@ uv run python manage.py runserver
 ## Running Tests
 
 ```bash
-uv run python manage.py test
+scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
+Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service).
 
 Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and `events/tests_integration.py`.
 

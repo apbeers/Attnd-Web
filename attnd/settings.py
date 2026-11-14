@@ -81,11 +81,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'attnd.wsgi.application'
 
+# PostgreSQL everywhere (Heroku, CI, local, tests), so behaviour never differs between them.
+# Without DATABASE_URL this points at the local database from `scripts/dev_db.sh` (Postgres 18 in Docker).
+import dj_database_url  # noqa: E402
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default='postgres://attnd:attnd@localhost:5432/attnd', conn_max_age=600, conn_health_checks=True),
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -149,10 +151,6 @@ EMAIL_HOST_USER = os.getenv('MAILGUN_SMTP_LOGIN')
 EMAIL_HOST_PASSWORD = os.getenv('MAILGUN_SMTP_PASSWORD')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-if os.getenv('DATABASE_URL'):
-    import dj_database_url
-    DATABASES['default'].update(dj_database_url.config(conn_max_age=600))
 
 if os.getenv('CLOUDINARY_URL'):
     STORAGES['default']['BACKEND'] = 'cloudinary_storage.storage.MediaCloudinaryStorage'
@@ -246,6 +244,3 @@ ANDROID_REQUIRE_PLAY_LICENSE = _env_bool('ANDROID_REQUIRE_PLAY_LICENSE', True)
 ANDROID_REQUIRE_STRONG_INTEGRITY = _env_bool('ANDROID_REQUIRE_STRONG_INTEGRITY', False)
 ANDROID_SIGNING_CERT_SHA256 = os.getenv('ANDROID_SIGNING_CERT_SHA256', '') or os.getenv('ANDROID_SHA256_FINGERPRINT', '')
 
-# UsageCount's unique constraint treats NULL events as equal (nulls_distinct=False). Postgres (production,
-# CI) supports it; local SQLite doesn't, and events.usage.record() copes without it.
-SILENCED_SYSTEM_CHECKS = ['models.W047']
