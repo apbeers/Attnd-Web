@@ -3,9 +3,14 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv('SECRET_KEY') or 'asdfhaslf23hf723hf738h'
-
 DEBUG = bool(os.getenv('DEBUG'))
+
+SECRET_KEY = os.getenv('SECRET_KEY', '')
+if not SECRET_KEY:
+    if DEBUG or os.getenv('CI'):
+        SECRET_KEY = 'insecure-dev-only-secret-key'
+    else:
+        raise RuntimeError('SECRET_KEY must be set in production')
 
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
@@ -110,8 +115,8 @@ STORAGES = {
     },
 }
 
-LOGIN_URL = '/admin/login/'
-LOGIN_REDIRECT_URL = '/admin/'
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/console/'
 LOGOUT_REDIRECT_URL = '/'
 
 API_KEY = os.getenv('API_KEY', '')
@@ -187,3 +192,21 @@ GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON', '')
 # Falls back to SECRET_KEY if not set.
 ATTESTATION_JWT_SECRET = os.getenv('ATTESTATION_JWT_SECRET', '')
 ATTESTATION_JWT_TTL_HOURS = int(os.getenv('ATTESTATION_JWT_TTL_HOURS', '24'))
+
+# ---------------------------------------------------------------------------
+# Push notifications (see events/push.py)
+# ---------------------------------------------------------------------------
+APNS_AUTH_KEY = os.getenv('APNS_AUTH_KEY', '')
+APNS_KEY_ID = os.getenv('APNS_KEY_ID', '')
+APNS_TEAM_ID = os.getenv('APNS_TEAM_ID', '')
+APNS_TOPIC = os.getenv('APNS_TOPIC', '')
+APNS_USE_SANDBOX = bool(os.getenv('APNS_USE_SANDBOX'))
+FCM_PROJECT_ID = os.getenv('FCM_PROJECT_ID', '')
+FCM_SERVICE_ACCOUNT_JSON = os.getenv('FCM_SERVICE_ACCOUNT_JSON', '')
+
+# ---------------------------------------------------------------------------
+# AI event import (see scrape/)
+# ---------------------------------------------------------------------------
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
+# Run AI jobs in a background thread of the web dyno when no worker dyno is running.
+INGEST_RUN_INLINE = os.getenv('INGEST_RUN_INLINE', '1') not in ('0', 'false', 'False', '')

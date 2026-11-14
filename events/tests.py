@@ -287,6 +287,8 @@ class MultiTenantAdminTests(TestCase):
             'longitude': '-97.35',
             'address': '123 Main St',
             'event': event_pk,
+            'sort_order': 0,
+            'locked_fields': '[]',
         }
         data.update(overrides)
         return data

@@ -12,7 +12,7 @@ dependencies = [
     "cloudinary==1.44.2",
     "django-cloudinary-storage==0.3.0",
     "qrcode[pil]==8.2",
-    "httpx==0.28.1",
+    "httpx[http2]==0.28.1",
     "beautifulsoup4==4.14.3",
     "openai==2.38.0",
     "pyjwt==2.13.0",
