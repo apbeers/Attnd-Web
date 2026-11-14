@@ -1,5 +1,5 @@
 # Web pipeline
-#   every push / PR      → checks + tests (against Postgres, like production)
+#   push to develop/main, or a PR      → checks + tests (against Postgres, like production)
 #   push to develop      → deploy to the Heroku dev app        (environment: dev)
 #   push to main         → deploy to the Heroku production app (environment: production)
 #
@@ -8,7 +8,7 @@ name: Web
 
 on:
   push:
-    branches: ['**']
+    branches: [main, develop]
   pull_request:
   workflow_dispatch:
 

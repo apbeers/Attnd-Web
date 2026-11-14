@@ -368,7 +368,7 @@ Limits to know about:
 
 | Branch | Web | iOS | Android |
 |---|---|---|---|
-| any push / PR | tests (Postgres 18) | build + unit tests | unit tests, lint, debug build |
+| push to `develop`/`main`, or a PR | tests (Postgres 18) | build + unit tests | unit tests, lint, debug build |
 | `develop` | Heroku dev | TestFlight "Internal", using the dev server | Play internal testing, using the dev server |
 | `main` | Heroku production | App Review → auto-release | Play production |
 
