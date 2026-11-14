@@ -30,9 +30,10 @@
     </div></div>
 
     <div class="card mb-4"><div class="card-body">
-      <h2 class="h5">{% icon "stars" "text-primary" %} Keep it up to date with AI</h2>
-      <p class="text-muted small mb-3">The AI re-reads your sources and suggests changes. Nothing changes until you accept it, and anything you edited by hand is protected.
-        {% if event.last_refreshed_at %}Last checked {{ event.last_refreshed_at|timesince }} ago.{% endif %}</p>
+      <h2 class="h5">{% icon "stars" "text-primary" %} Keep it in sync with your website</h2>
+      <p class="text-muted small mb-3">Turn on watching and Attnd checks your pages for changes: every 10 minutes during the event, hourly in the week before, every few hours before that.
+        Checking is free; the AI only re-reads a page when its content actually changed. Anything you edited by hand is never overwritten.
+        {% if event.last_refreshed_at %}Last AI update {{ event.last_refreshed_at|timesince }} ago.{% endif %}</p>
       <form method="post" action="{% url 'console:event_refresh' event.id %}" enctype="multipart/form-data" class="mb-4">{% csrf_token %}
         <details class="mb-2"><summary class="small text-muted">Add new material (optional)</summary>
           <div class="pt-2">{% for field in refresh_form %}{% include 'console/_field.html' %}{% endfor %}</div>
@@ -43,12 +44,20 @@
         {% include 'console/_field.html' with field=sources_form.source_urls_text %}
         <div class="row">
           <div class="col-md-6">{% include 'console/_field.html' with field=sources_form.refresh_schedule %}</div>
-          <div class="col-md-6 pt-md-4">{% include 'console/_field.html' with field=sources_form.auto_accept_minor inline=True %}</div>
+          <div class="col-md-6">{% include 'console/_field.html' with field=sources_form.update_mode %}</div>
         </div>
         <details class="mb-3"><summary class="small text-muted">Extra source text</summary>
           <div class="pt-2">{{ sources_form.source_text }}</div></details>
-        <button class="btn btn-sm btn-secondary">Save refresh settings</button>
+        {% if can_manage %}<button class="btn btn-sm btn-secondary">Save</button>{% else %}<p class="small text-muted mb-0">Only the owner and event admins can change these.</p>{% endif %}
       </form>
+      {% if source_pages %}
+      <details class="mt-3"><summary class="small text-muted">Watched pages ({{ source_pages|length }}){% if event.sources_checked_at %} · checked {{ event.sources_checked_at|timesince }} ago{% endif %}</summary>
+        <ul class="small mb-0 mt-2">{% for p in source_pages %}
+          <li><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|truncatechars:70 }}</a>
+            <span class="text-muted">· {% if p.has_pending_change %}<strong class="text-primary">changed, AI update pending</strong>{% elif p.changed_at %}last changed {{ p.changed_at|timesince }} ago{% elif p.checked_at %}no changes yet{% else %}not checked yet{% endif %}{% if p.failures %} · <span class="text-danger">{{ p.last_status }}</span>{% endif %}</span></li>
+        {% endfor %}</ul>
+      </details>
+      {% endif %}
     </div></div>
 
     {% if changesets %}

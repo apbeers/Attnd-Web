@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 import datetime
 
-from events.models import Device, Event, Location, Notification
+from events.models import Device, Event, EventInvite, EventMember, Location, Notification
 
 TRIAL_USERNAME = "trialuser"
 
@@ -39,7 +39,7 @@ class SignUpViewTests(TestCase):
 
     def test_valid_post_creates_regular_user(self):
         self._post(self.valid_data)
-        user = User.objects.get(username='new@example.com')
+        user = User.objects.get(email='new@example.com')
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
         self.assertEqual(user.email, 'new@example.com')
@@ -69,7 +69,7 @@ class SignUpViewTests(TestCase):
         data = {**self.valid_data, 'claim': 'TESTCODE'}
         self._post(data)
 
-        new_user = User.objects.get(username='new@example.com')
+        new_user = User.objects.get(email='new@example.com')
         event.refresh_from_db()
         self.assertEqual(event.user, new_user)
         self.assertEqual(event.location_set.filter(user=new_user).count(), 1)
@@ -81,7 +81,7 @@ class SignUpViewTests(TestCase):
         """An invalid claim code still creates the account and lands on the empty dashboard."""
         data = {**self.valid_data, 'claim': 'BADCODE99'}
         response = self._post(data)
-        user = User.objects.get(username='new@example.com')
+        user = User.objects.get(email='new@example.com')
         self.assertEqual(Event.objects.filter(user=user).count(), 0)
         self.assertRedirects(response, reverse('console:dashboard'), fetch_redirect_response=False)
 
@@ -354,7 +354,9 @@ class AccountEmailTests(TestCase):
 
     def test_new_accounts_store_lowercase_email(self):
         self.client.post(reverse('console:signup'), {'email': 'New@Example.com', 'password': 'a-strong-password-123'})
-        self.assertTrue(User.objects.filter(username='new@example.com', email='new@example.com').exists())
+        user = User.objects.get(email='new@example.com')
+        self.assertNotIn('@', user.username)  # the username is an internal id, never the email
+        self.assertTrue(self.client.login(username='NEW@example.com', password='a-strong-password-123'))
 
     def test_sign_in_with_email_or_username_any_case(self):
         User.objects.create_superuser('u8741', 'admin@example.com', 'pw')
@@ -363,3 +365,89 @@ class AccountEmailTests(TestCase):
             self.client.logout()
         self.assertFalse(self.client.login(username='admin@example.com', password='wrong'))
         self.assertFalse(self.client.login(username='nobody@example.com', password='pw'))
+
+
+class TeamAndOwnershipTests(ConsoleTests):
+    def post_team(self, **data):
+        return self.client.post(self.url('team'), data, follow=True)
+
+    def test_deleting_the_owner_leaves_the_event_unassigned(self):
+        self.owner.delete()
+        self.event.refresh_from_db()
+        self.assertIsNone(self.event.user)
+        self.assertTrue(Location.objects.filter(pk=self.loc.pk).exists())
+        admin = User.objects.create_superuser('root', 'root@example.com', 'pw')
+        self.client.force_login(admin)
+        self.assertContains(self.client.get(reverse('console:admin_usage')), 'Unassigned events')
+        self.assertContains(self.client.get(self.url('team')), 'This event is unassigned')
+        self.post_team(action='assign_owner', email='OTHER@example.com')
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.user, self.other)
+
+    def test_invite_before_signup_becomes_membership(self):
+        self.post_team(action='invite', email='Helper@Example.com', role='admin')
+        self.assertTrue(EventInvite.objects.filter(event=self.event, email='helper@example.com', role='admin').exists())
+        self.client.logout()
+        self.client.post(reverse('console:signup'), {'email': 'helper@example.com', 'password': 'a-strong-password-123'})
+        helper = User.objects.get(email='helper@example.com')
+        self.assertEqual(EventMember.objects.get(event=self.event, user=helper).role, 'admin')
+        self.assertFalse(EventInvite.objects.filter(event=self.event).exists())
+        self.assertEqual(self.client.get(self.url('locations')).status_code, 200)
+
+    def test_contributors_edit_but_cannot_manage_the_team(self):
+        EventMember.objects.create(event=self.event, user=self.other, role='contributor')
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(self.url('schedule')).status_code, 200)
+        self.post_team(action='invite', email='x@example.com', role='admin')
+        self.assertFalse(EventInvite.objects.exists())
+        self.client.post(self.url('event_status'), {'action': 'unpublish'})
+        self.client.post(self.url('event_delete'), {'confirm_code': self.event.event_code})
+        self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
+
+    def test_admins_add_contributors_only_and_owner_can_transfer(self):
+        EventMember.objects.create(event=self.event, user=self.other, role='admin')
+        self.client.force_login(self.other)
+        self.post_team(action='invite', email='new@example.com', role='admin')
+        self.assertEqual(EventInvite.objects.get(email='new@example.com').role, 'contributor')
+        self.client.force_login(self.owner)
+        member = EventMember.objects.get(event=self.event, user=self.other)
+        self.post_team(action='transfer', member=member.pk)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.user, self.other)
+        self.assertEqual(EventMember.objects.get(event=self.event, user=self.owner).role, 'admin')
+
+
+class AccountPageTests(TestCase):
+    def setUp(self):
+        from console.accounts import create_account
+        self.user = create_account('Me@Example.com', 'old-password-123')
+        self.client.force_login(self.user)
+
+    def test_change_email_keeps_the_account(self):
+        User.objects.create_user('someone', 'taken@example.com', 'x')
+        r = self.client.post(reverse('console:account'), {'action': 'email', 'email-email': 'TAKEN@example.com',
+                                                           'email-password': 'old-password-123'})
+        self.assertContains(r, 'Another account already uses that email.')
+        self.client.post(reverse('console:account'), {'action': 'email', 'email-email': 'New@Example.com',
+                                                       'email-password': 'old-password-123'})
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'new@example.com')
+        self.client.logout()
+        self.assertTrue(self.client.login(username='new@example.com', password='old-password-123'))
+        self.assertFalse(self.client.login(username='me@example.com', password='old-password-123'))
+
+    def test_wrong_password_does_not_change_email(self):
+        self.client.post(reverse('console:account'), {'action': 'email', 'email-email': 'x@example.com',
+                                                       'email-password': 'nope'})
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'me@example.com')
+
+    def test_create_admin_command(self):
+        from unittest.mock import patch
+
+        from django.core.management import call_command
+        with patch('getpass.getpass', return_value='a-strong-password-123'):
+            call_command('create_admin', 'Boss@Example.com')
+        boss = User.objects.get(email='boss@example.com')
+        self.assertTrue(boss.is_superuser)
+        self.assertNotIn('@', boss.username)

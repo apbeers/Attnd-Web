@@ -26,6 +26,14 @@
   {% endif %}
 </div></div>
 
+{% if unassigned %}
+<div class="card mb-4 border-start border-warning border-4"><div class="card-body">
+  <h2 class="h6">Unassigned events</h2>
+  <p class="small text-muted">Their owners' accounts were deleted. They stay live; open one and use Team → assign an owner.</p>
+  <ul class="mb-0">{% for e in unassigned %}<li><a href="{% url 'console:team' e.id %}">{{ e.name }}</a> <span class="text-muted small">{{ e.event_code }} · {{ e.start_time|date:"M j, Y" }}</span></li>{% endfor %}</ul>
+</div></div>
+{% endif %}
+
 <div class="card mb-4"><div class="card-body">
   <div class="row text-center g-3">
     <div class="col-6 col-md-3"><div class="stat">{{ usage.installs }}</div><div class="muted-label">New installs</div></div>

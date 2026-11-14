@@ -12,3 +12,25 @@ class SignUpForm(forms.Form):
         'class': 'form-control',
         'autocomplete': 'new-password',
     }))
+
+
+class EmailChangeForm(forms.Form):
+    email = forms.EmailField(label='New email', widget=forms.EmailInput(attrs={'class': 'form-control', 'autocomplete': 'email'}))
+    password = forms.CharField(label='Current password', widget=forms.PasswordInput(attrs={
+        'class': 'form-control', 'autocomplete': 'current-password'}))
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_password(self):
+        if not self.user.check_password(self.cleaned_data['password']):
+            raise forms.ValidationError('That password is not right.')
+        return self.cleaned_data['password']
+
+    def clean_email(self):
+        from console.accounts import email_in_use, normalize_email
+        email = normalize_email(self.cleaned_data['email'])
+        if email_in_use(email, exclude=self.user):
+            raise forms.ValidationError('Another account already uses that email.')
+        return email

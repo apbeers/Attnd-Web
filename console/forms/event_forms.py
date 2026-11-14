@@ -7,7 +7,7 @@ from django import forms
 from events.display import (LABELS, LOCATIONS_STYLES, PRESETS, SCHEDULE_STYLES, SECONDARY_PANES, TABS)
 from django.utils import timezone
 
-from events.models import Event, Location, Notification, ScheduledItem, is_send_slot
+from events.models import Event, EventMember, Location, Notification, ScheduledItem, is_send_slot
 
 DT_WIDGET = forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}, format='%Y-%m-%dT%H:%M')
 DT_FORMATS = ['%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M']
@@ -140,12 +140,15 @@ class EventForm(BootstrapMixin, forms.ModelForm):
 class SourcesForm(BootstrapMixin, forms.ModelForm):
     source_urls_text = forms.CharField(
         label='Source websites', required=False, widget=forms.Textarea(attrs={'rows': 2}),
-        help_text='The AI re-reads these when refreshing. One per line.')
+        help_text='Your event pages. One per line. The pages the AI reads from them are watched too.')
 
     class Meta:
         model = Event
-        fields = ['refresh_schedule', 'auto_accept_minor', 'source_text']
-        labels = {'source_text': 'Extra source text', 'refresh_schedule': 'Automatic refresh'}
+        fields = ['refresh_schedule', 'update_mode', 'source_text']
+        labels = {'source_text': 'Extra source text', 'refresh_schedule': 'Keep in sync with your website',
+                  'update_mode': 'When the website changes'}
+        help_texts = {'update_mode': 'Even when applying automatically, removals and anything someone edited by hand '
+                                     'wait for review.'}
         widgets = {'source_text': forms.Textarea(attrs={'rows': 3})}
 
     def __init__(self, *args, **kwargs):
@@ -324,4 +327,5 @@ class DisplayForm(forms.Form):
 
 
 class TeamInviteForm(BootstrapMixin, forms.Form):
-    email = forms.EmailField(label='Organizer email')
+    email = forms.EmailField(label='Email')
+    role = forms.ChoiceField(label='Role', choices=EventMember.ROLE_CHOICES, initial=EventMember.ROLE_CONTRIBUTOR)

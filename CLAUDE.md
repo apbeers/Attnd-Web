@@ -32,8 +32,8 @@ attnd-web is the coordinating repo for all three. Any feature that touches the A
 ## Platform model (the "full vision")
 
 1. **AI import** — an organizer (or anonymous visitor on the homepage) gives URLs / a PDF or image / pasted text. An `IngestJob` crawls + extracts with OpenAI structured output and creates the event (`scrape/jobs.py`, `scrape/service.py`).
-2. **Manual management** — the organizer console (`/console/`) edits everything. Any field a person edits is added to that row's `locked_fields`.
-3. **AI refresh** — on demand or on a schedule, the AI re-reads the sources *with the current data* and returns its view; `scrape/diff.py` turns that into a `ChangeSet` of field-level `Change`s. Locked fields become conflicts (unticked), empty AI values never blank data, removals need cited evidence.
+2. **Manual management** — the organizer console (`/console/`) edits everything. Any field a person edits is added to that row's `locked_fields`. An event has an owner plus a team (`EventMember`: admins manage the team and settings, contributors edit content); invites by email work before the person has an account (`EventInvite`, claimed on sign-up/sign-in).
+3. **Website watching + AI refresh** — `scrape/watch.py` fingerprints the event's pages (conditional GET + hash of visible text/JSON-LD; every 10 min during the event, hourly the week before, 6-hourly earlier) and runs the AI only on pages that changed, with a minimum gap and daily cap (`WATCH_MIN_AI_GAP_MINUTES`, `WATCH_MAX_AI_RUNS_PER_DAY`). `update_mode` review/minor/auto decides what applies itself (removals and locked fields always wait). Manual "Check for updates now" re-crawls everything. The AI re-reads the sources *with the current data* and returns its view; `scrape/diff.py` turns that into a `ChangeSet` of field-level `Change`s. Locked fields become conflicts (unticked), empty AI values never blank data, removals need cited evidence.
 4. **Review** — the organizer accepts per change / per field; `apply_changeset` applies atomically, snapshots an `EventRevision` first (rollback from History), and bumps `content_version` once.
 5. **Apps follow** — every content change bumps `Event.content_version` (signals in `events/signals.py`); apps poll `bundle/` with `If-None-Match` and can get a silent `content_updated` push.
 6. **Adaptive layout** — `events/display.py` picks a preset (intimate / standard / festival) from size + spread; organizers override any key in **App layout**; the resolved dict ships in the bundle.
@@ -79,16 +79,21 @@ static/         # Project-level static assets
 public/         # Files served at root by Whitenoise (robots.txt, etc.)
 ```
 
+## Accounts
+
+People only ever see and sign in with their **email** (`console.auth_backends.EmailOrUsernameBackend`, case-insensitive). The account's `username` is an internal generated id (`u` + 10 hex, `console.accounts.new_username`), so an email can change (Account page, `/console/account/`) without losing the account. Emails are unique case-insensitively (Postgres index `auth_user_email_lower_uniq` + `email_in_use`). Create a site admin with `python manage.py create_admin you@example.com`. Deleting an account never deletes events: they become unassigned.
+
 ## Data Models (`events/models.py`)
 
 | Model | Key fields |
 |-------|------------|
-| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, content_version, source_urls, refresh_schedule, auto_accept_minor, locked_fields |
+| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, content_version, source_urls, refresh_schedule (off/watch), update_mode, sources_checked_at, locked_fields; `user` = owner, null = unassigned (owner deleted; admins reassign from Team) |
 | `Location` | name, snippet, description, category, sort_order, hidden, image/image_url, lat/lng (nullable), address, locked_fields — FK to Event |
 | `ScheduledItem` | name, description, start/end_time, tags, hidden, locked_fields — FK to Event, optional FK to Location |
 | `Notification` | title, body, send_time, sent, sent_at, delivered/failed counts — FK to Event |
 | `Device` | id (UUID string PK), platform (ios/android), subscribed, push_token, app_version, last_seen, event FK |
-| `EventMember` | extra organizers (editors) for an event |
+| `EventMember` / `EventInvite` | team: admin or contributor; pending invites by email |
+| `scrape.SourcePage` | a watched page: etag/last-modified, content hash, pending hash |
 | `EventRevision` | full content snapshot for rollback |
 | `scrape.IngestJob` / `ChangeSet` / `Change` | AI runs and the reviewable edits they propose |
 
@@ -165,7 +170,7 @@ uv run python manage.py runserver
 ## Background work
 
 - **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
-- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, starts scheduled AI refreshes, re-queues interrupted jobs, expires unclaimed trial events.
+- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, expires unclaimed trial events.
 - **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged.
 
 ## Running Tests

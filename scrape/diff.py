@@ -375,7 +375,7 @@ def apply_changeset(changeset, decisions, user=None, partial_ok=False):
     Returns the number of changes applied.
     """
     event = changeset.event
-    owner = event.user
+    owner = user or event.user  # who applied it, else the owner (may be None if unassigned)
     applied = 0
     with transaction.atomic():
         save_revision(event, f'Before applying AI changes: {changeset.summary}'[:256], user)

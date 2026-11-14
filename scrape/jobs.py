@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from events.models import Event
 from scrape import diff
-from scrape.models import ChangeSet, IngestJob
+from scrape.models import Change, ChangeSet, IngestJob
 from scrape.service import scrape_event
 
 logger = logging.getLogger(__name__)
@@ -163,6 +163,8 @@ def _run_create(job):
         source_urls=job.urls,
         source_text=job.text,
     )
+    from scrape import watch
+    watch.sync_pages(event, discovered=data.get('source_pages', []))
     job.event = event
     job.status = IngestJob.DONE
     job.progress = ''
@@ -185,10 +187,12 @@ def _run_refresh(job):
     text = job.text or ''
     if not urls and not text and not job.upload_data:
         raise ValueError('This event has no sources to refresh from. Add a website or upload a flyer.')
-    _progress(job, 'Reading the latest information…')
+    watched = job.trigger == IngestJob.TRIGGER_WATCH
+    _progress(job, 'Reading the pages that changed…' if watched else 'Reading the latest information…')
     data = scrape_event(
         urls=urls, text=text, attachments=_attachments(job), instructions=job.instructions,
         current=diff.current_state(event), google_api_key='',  # geocode only what changes, below
+        crawl=not watched,  # the watcher re-reads only the pages that changed
     )
     _progress(job, 'Comparing with your event…')
     changes = diff.compute_changes(event, data)
@@ -196,10 +200,21 @@ def _run_refresh(job):
     cs = diff.save_changeset(event, job, changes, notes=data.get('notes', ''))
 
     auto_applied = 0
-    if event.auto_accept_minor and cs.status == ChangeSet.PENDING:
-        decisions = diff.default_decisions(cs, minor_only=True)
+    if event.update_mode != Event.UPDATE_REVIEW and cs.status == ChangeSet.PENDING:
+        decisions = diff.default_decisions(cs, minor_only=event.update_mode == Event.UPDATE_MINOR)
+        # Even in automatic mode, removals wait for a person (default_decisions already leaves out
+        # fields someone edited by hand).
+        decisions = {cid: d for cid, d in decisions.items()
+                     if cs.changes.filter(pk=cid).exclude(op=Change.OP_DELETE).exists()}
         if decisions:
             auto_applied = diff.apply_changeset(cs, decisions, user=None, partial_ok=True)
+
+    from scrape import watch
+    if watched:
+        watch.mark_read(event, urls)
+    elif urls:
+        watch.sync_pages(event, discovered=data.get('source_pages', []))
+        watch.forget_fingerprints(event)
 
     Event.objects.filter(pk=event.pk).update(last_refreshed_at=timezone.now())
     job.status = IngestJob.DONE
@@ -209,7 +224,7 @@ def _run_refresh(job):
     pending = cs.changes.filter(status='pending').count()
     job.result = {'changeset_id': cs.id, 'summary': cs.summary, 'pending': pending, 'auto_applied': auto_applied}
     job.save()
-    if pending and job.trigger == IngestJob.TRIGGER_SCHEDULE:
+    if pending and job.trigger in (IngestJob.TRIGGER_SCHEDULE, IngestJob.TRIGGER_WATCH):
         _email_owner(event, cs, pending)
 
 
@@ -237,8 +252,12 @@ def _geocode_new_locations(event, changes):
 
 
 def _email_owner(event, changeset, pending):
-    owner = event.user
-    if not owner.email or not getattr(settings, 'EMAIL_HOST_PASSWORD', None):
+    """Tell the owner and event admins that AI updates are waiting for review."""
+    from events.models import EventMember
+    recipients = [u.email for u in ([event.user] if event.user else []) if u.email]
+    recipients += list(event.members.filter(role=EventMember.ROLE_ADMIN).exclude(user__email='')
+                       .values_list('user__email', flat=True))
+    if not recipients or not getattr(settings, 'EMAIL_HOST_PASSWORD', None):
         return
     try:
         send_mail(
@@ -246,47 +265,8 @@ def _email_owner(event, changeset, pending):
             message=(f'Attnd checked your event sources and found: {changeset.summary}.\n\n'
                      f'Review them: https://attnd.app/console/changes/{changeset.id}/\n'),
             from_email='Attnd <noreply@attnd.app>',
-            recipient_list=[owner.email],
+            recipient_list=sorted(set(recipients)),
             fail_silently=True,
         )
     except Exception:
-        logger.exception('Could not email %s', owner.email)
-
-
-# ---------------------------------------------------------------------------
-# Scheduled refreshes
-# ---------------------------------------------------------------------------
-
-def refresh_due(event, now):
-    if event.refresh_schedule == Event.REFRESH_OFF or not event.source_urls:
-        return False
-    if event.status == Event.STATUS_ARCHIVED:
-        return False
-    end = event.end_time or (event.start_time + timedelta(days=1))
-    if now > end + timedelta(days=1):
-        return False  # event is over
-    last = event.last_refreshed_at
-    interval = timedelta(hours=23)
-    if event.refresh_schedule == Event.REFRESH_EVENT_WEEK and event.start_time - timedelta(hours=12) <= now <= end:
-        interval = timedelta(minutes=55)
-    return last is None or now - last >= interval
-
-
-def queue_scheduled_refreshes(now=None):
-    now = now or timezone.now()
-    queued = 0
-    candidates = Event.objects.exclude(refresh_schedule=Event.REFRESH_OFF).exclude(status=Event.STATUS_DRAFT)
-    for event in candidates:
-        if not refresh_due(event, now):
-            continue
-        if event.ingest_jobs.filter(status__in=[IngestJob.QUEUED, IngestJob.RUNNING]).exists():
-            continue
-        # Don't pile up unreviewed proposals: skip if one is still waiting.
-        if event.changesets.filter(status=ChangeSet.PENDING).exists() and not event.auto_accept_minor:
-            continue
-        job = IngestJob.objects.create(kind=IngestJob.KIND_REFRESH, event=event, trigger=IngestJob.TRIGGER_SCHEDULE,
-                                       timezone=event.timezone)
-        Event.objects.filter(pk=event.pk).update(last_refreshed_at=now)
-        enqueue(job)
-        queued += 1
-    return queued
+        logger.exception('Could not email %s', recipients)

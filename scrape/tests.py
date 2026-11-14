@@ -375,7 +375,7 @@ class RefreshJobTests(RunJobsInline, TestCase):
         self.assertEqual(job.result["pending"], 1)
 
     def test_auto_accept_minor(self):
-        self.event.auto_accept_minor = True
+        self.event.update_mode = Event.UPDATE_MINOR
         self.event.save()
         data = _sample_data()
         data["locations"][0]["existing_id"] = self.stage.id
@@ -394,14 +394,6 @@ class RefreshJobTests(RunJobsInline, TestCase):
         jobs.run_job(job.pk)
         job.refresh_from_db()
         self.assertEqual(job.status, IngestJob.FAILED)
-
-    def test_scheduled_refresh_queues_when_due(self):
-        Event.objects.filter(pk=self.event.pk).update(
-            refresh_schedule=Event.REFRESH_DAILY, last_refreshed_at=django_timezone.now() - timedelta(days=2),
-            start_time=django_timezone.now() + timedelta(days=3), end_time=None)
-        with patch("scrape.jobs._start_background"):
-            self.assertEqual(jobs.queue_scheduled_refreshes(), 1)
-            self.assertEqual(jobs.queue_scheduled_refreshes(), 0)  # already queued
 
     def test_stale_jobs_are_requeued_then_failed(self):
         job = IngestJob.objects.create(kind=IngestJob.KIND_REFRESH, event=self.event, status=IngestJob.RUNNING,
@@ -477,3 +469,99 @@ class ExpireTrialEventsCommandTests(TestCase):
         out = io.StringIO()
         call_command("expire_trial_events", stdout=out)
         self.assertIn("Deleted", out.getvalue())
+
+
+class WatchTests(TestCase):
+    """The website watcher: cheap fingerprints, AI only on change, rate limits."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        self.user = User.objects.create_user("w", "w@example.com", "pw")
+        now = django_timezone.now()
+        self.event = Event.objects.create(
+            name="Fest", event_code="WATCH1", start_time=now + timedelta(hours=2), user=self.user,
+            source_urls=["https://fest.example/"], refresh_schedule=Event.REFRESH_WATCH)
+        self.pages = {"https://fest.example/": '<html><body><h1>Fest</h1><p>Main stage 7pm</p>'
+                                              '<script>var t=12345</script></body></html>'}
+        self.requests = []
+
+    def http(self):
+        import httpx
+
+        def handler(request):
+            self.requests.append(request)
+            body = self.pages.get(str(request.url))
+            if body is None:
+                return httpx.Response(404)
+            etag = '"' + str(abs(hash(body))) + '"'
+            if request.headers.get("if-none-match") == etag:
+                return httpx.Response(304, headers={"etag": etag})
+            return httpx.Response(200, text=body, headers={"content-type": "text/html", "etag": etag})
+        return httpx.Client(transport=httpx.MockTransport(handler))
+
+    def check(self, minutes=0):
+        from scrape import watch
+        return watch.check_event(self.event, django_timezone.now() + timedelta(minutes=minutes), client=self.http())
+
+    def test_first_check_baselines_without_ai(self):
+        with patch("scrape.jobs._start_background"):
+            result = self.check()
+        self.assertEqual(result["changed"], [])
+        self.assertFalse(IngestJob.objects.exists())
+
+    def test_unchanged_pages_use_304_and_volatile_bits_are_ignored(self):
+        with patch("scrape.jobs._start_background"):
+            self.check()
+            self.check(10)
+            self.assertEqual(self.requests[-1].headers.get("if-none-match") is not None, True)
+            # Only a script changed: what readers see is the same, so no AI.
+            self.pages["https://fest.example/"] = self.pages["https://fest.example/"].replace("12345", "99999")
+            self.assertEqual(self.check(20)["changed"], [])
+        self.assertFalse(IngestJob.objects.exists())
+
+    def test_a_real_change_queues_one_ai_update_for_that_page_only(self):
+        with patch("scrape.jobs._start_background"):
+            self.check()
+            self.pages["https://fest.example/"] = self.pages["https://fest.example/"].replace("7pm", "8pm")
+            result = self.check(10)
+            self.assertTrue(result["queued"])
+            job = IngestJob.objects.get()
+            self.assertEqual((job.trigger, job.urls), (IngestJob.TRIGGER_WATCH, ["https://fest.example/"]))
+            # Still unread and a job is queued: no second job.
+            self.assertFalse(self.check(20)["queued"])
+        self.assertEqual(IngestJob.objects.count(), 1)
+
+    def test_rate_limits(self):
+        from scrape import watch
+        now = django_timezone.now()
+        IngestJob.objects.create(kind=IngestJob.KIND_REFRESH, event=self.event, trigger=IngestJob.TRIGGER_WATCH,
+                                 status=IngestJob.DONE, created_at=now - timedelta(minutes=5))
+        self.assertEqual(watch._may_run_ai(self.event, now)[0], False)  # minimum gap
+        self.assertEqual(watch._may_run_ai(self.event, now + timedelta(minutes=20))[0], True)
+        with self.settings(WATCH_MAX_AI_RUNS_PER_DAY=1):
+            self.assertEqual(watch._may_run_ai(self.event, now + timedelta(minutes=20))[0], False)
+
+    def test_watch_job_reads_only_changed_pages_and_marks_them_read(self):
+        from scrape import watch
+        with patch("scrape.jobs._start_background"):
+            self.check()
+            self.pages["https://fest.example/"] = self.pages["https://fest.example/"].replace("7pm", "8pm")
+            self.check(10)
+        job = IngestJob.objects.get()
+        data = {"name": "Fest", "locations": [], "schedule": [], "notes": "", "source_pages": []}
+        with patch("scrape.jobs.scrape_event", return_value=data) as scrape:
+            jobs.run_job(job.id)
+        self.assertEqual(scrape.call_args.kwargs["crawl"], False)
+        page = self.event.source_pages.get()
+        self.assertFalse(page.has_pending_change)
+        with patch("scrape.jobs._start_background"):
+            self.assertEqual(watch.check_event(self.event, django_timezone.now() + timedelta(minutes=40),
+                                               client=self.http())["changed"], [])
+
+    def test_check_interval_follows_the_event(self):
+        from scrape import watch
+        start = self.event.start_time
+        self.assertEqual(watch.check_interval(self.event, start - timedelta(days=30)), timedelta(hours=6))
+        self.assertEqual(watch.check_interval(self.event, start - timedelta(days=3)), timedelta(hours=1))
+        self.assertEqual(watch.check_interval(self.event, start), timedelta(minutes=10))
+        self.assertIsNone(watch.check_interval(self.event, start + timedelta(days=3)))

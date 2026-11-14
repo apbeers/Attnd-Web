@@ -6,6 +6,7 @@ app_name = 'console'
 urlpatterns = [
     path('', v.dashboard, name='dashboard'),
     path('signup/', views.SignUpView.as_view(), name='signup'),
+    path('account/', views.account, name='account'),
     path('new/', v.event_new, name='event_new'),
     path('jobs/<uuid:job_id>/', v.job_detail, name='job'),
     path('changes/<int:changeset_id>/', v.changeset_detail, name='changeset'),

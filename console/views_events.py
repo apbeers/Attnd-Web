@@ -7,6 +7,7 @@ the organizer's local time.
 
 import io
 import json
+import logging
 import re
 from datetime import timedelta
 from functools import wraps
@@ -31,10 +32,12 @@ from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm
 from events import push
 from events.content import mark_locked, restore, save_revision
 from events.display import LABELS, clean_overrides, event_stats, resolve_display
-from events.models import (Device, Event, EventMember, EventRevision, Location, Notification, ScheduledItem,
-                           events_for_user, generate_event_code, next_send_slot)
+from events.models import (Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
+                           ScheduledItem, events_for_user, generate_event_code, next_send_slot)
 from scrape import diff, jobs
 from scrape.models import Change, ChangeSet, IngestJob
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +171,7 @@ def event_overview(request, event):
     sources_form = SourcesForm(instance=event)
     return render(request, 'console/event_overview.html', _ctx(
         event, 'overview', stats=stats, audience=audience, sources_form=sources_form,
+        source_pages=list(event.source_pages.all()), can_manage=event.can_manage_team(request.user),
         refresh_form=RefreshForm(),
         recent_jobs=event.ingest_jobs.all()[:5],
         changesets=event.changesets.exclude(status=ChangeSet.EMPTY)[:5],
@@ -190,6 +194,9 @@ def event_edit(request, event):
 @event_view
 @require_POST
 def event_status(request, event):
+    if not event.can_manage_team(request.user):
+        messages.error(request, 'Only the owner and event admins can publish, unpublish or archive the event.')
+        return redirect('console:event', event_id=event.pk)
     action = request.POST.get('action')
     if action == 'publish':
         event.status = Event.STATUS_PUBLISHED
@@ -215,10 +222,16 @@ def event_status(request, event):
 @event_view
 @require_POST
 def event_sources(request, event):
+    if not event.can_manage_team(request.user):
+        messages.error(request, 'Only the owner and event admins can change the website settings.')
+        return redirect('console:event', event_id=event.pk)
     form = SourcesForm(request.POST, instance=event)
     if form.is_valid():
         form.save()
-        messages.success(request, 'Refresh settings saved.')
+        from scrape import watch
+        watch.sync_pages(event)
+        messages.success(request, 'Website settings saved.' + (' Attnd will watch your pages for changes.'
+                                                                if event.refresh_schedule == Event.REFRESH_WATCH else ''))
     else:
         messages.error(request, 'Please fix the source URLs.')
     return redirect('console:event', event_id=event.pk)
@@ -243,7 +256,7 @@ def event_refresh(request, event):
 @event_view
 @require_POST
 def event_delete(request, event):
-    if event.user_id != request.user.id and not request.user.is_superuser:
+    if event.role_for(request.user) != 'owner':
         messages.error(request, 'Only the owner can delete this event.')
         return redirect('console:event', event_id=event.pk)
     if request.POST.get('confirm_code', '').strip().upper() != event.event_code.upper():
@@ -291,7 +304,7 @@ def location_edit(request, event, location_id=None):
     if request.method == 'POST' and form.is_valid():
         loc = form.save(commit=False)
         if not loc.pk:
-            loc.user = event.user
+            loc.user = request.user
             loc.sort_order = (event.location_set.order_by('-sort_order')
                               .values_list('sort_order', flat=True).first() or 0) + 1
         else:
@@ -370,7 +383,7 @@ def item_edit(request, event, item_id=None):
     if request.method == 'POST' and form.is_valid():
         item = form.save(commit=False)
         if not item.pk:
-            item.user = event.user
+            item.user = request.user
         else:
             mark_locked(item, form.changed_data)
         item.save()
@@ -607,26 +620,103 @@ def history(request, event):
 
 @event_view
 def team(request, event):
+    """Owner + admins + contributors. Invites by email work before the person has an account."""
+    from console.accounts import display_name, email_in_use, normalize_email
+    role = event.role_for(request.user)
+    can_manage = role in ('owner', EventMember.ROLE_ADMIN)
+    is_owner = role == 'owner'
     form = TeamInviteForm(request.POST or None)
-    is_owner = event.user_id == request.user.id or request.user.is_superuser
-    if request.method == 'POST' and is_owner:
-        if request.POST.get('remove'):
-            EventMember.objects.filter(event=event, pk=request.POST['remove']).delete()
-            messages.info(request, 'Removed.')
-            return redirect('console:team', event_id=event.pk)
-        if form.is_valid():
-            user = User.objects.filter(email__iexact=form.cleaned_data['email']).first()
-            if user is None:
-                messages.error(request, 'No Attnd account uses that email yet. Ask them to sign up at '
-                                        'attnd.app/console/signup/ first, then add them here.')
-            elif user.id == event.user_id:
+    back = redirect('console:team', event_id=event.pk)
+
+    if request.method == 'POST':
+        action = request.POST.get('action', 'invite')
+        member = None
+        if request.POST.get('member'):
+            member = EventMember.objects.filter(event=event, pk=request.POST['member']).select_related('user').first()
+
+        if action == 'leave' and role in EventMember.ROLE_CHOICES_DICT:
+            EventMember.objects.filter(event=event, user=request.user).delete()
+            messages.info(request, f'You left {event.name}.')
+            return redirect('console:dashboard')
+
+        if action == 'assign_owner' and request.user.is_superuser:
+            email = normalize_email(request.POST.get('email'))
+            new_owner = User.objects.filter(email__iexact=email).first()
+            if new_owner is None:
+                messages.error(request, f'No account uses {email}. They need to sign up first.')
+                return back
+            _set_owner(event, new_owner)
+            messages.success(request, f'{display_name(new_owner)} now owns this event.')
+            return back
+
+        if not can_manage:
+            messages.error(request, 'Only the owner and event admins can change the team.')
+            return back
+
+        if action == 'invite' and form.is_valid():
+            email = normalize_email(form.cleaned_data['email'])
+            new_role = form.cleaned_data['role'] if is_owner else EventMember.ROLE_CONTRIBUTOR
+            user = User.objects.filter(email__iexact=email).first()
+            if user is not None and user.id == event.user_id:
                 messages.info(request, 'They already own this event.')
+            elif user is not None:
+                EventMember.objects.update_or_create(event=event, user=user, defaults={'role': new_role})
+                messages.success(request, f'{email} can now help run this event.')
             else:
-                EventMember.objects.get_or_create(event=event, user=user)
-                messages.success(request, f'{user.email} can now manage this event.')
-            return redirect('console:team', event_id=event.pk)
-    return render(request, 'console/team.html', _ctx(event, 'team', form=form, is_owner=is_owner,
-                                                      members=event.members.select_related('user')))
+                EventInvite.objects.update_or_create(event=event, email=email,
+                                                     defaults={'role': new_role, 'invited_by': request.user})
+                sent = _email_invite(event, email, request.user)
+                messages.success(request, f'Invited {email}. {"We emailed them" if sent else "Send them"} the sign-up '
+                                          f'link: they get access as soon as they sign up with that email.')
+        elif action == 'cancel_invite':
+            EventInvite.objects.filter(event=event, pk=request.POST.get('invite')).delete()
+            messages.info(request, 'Invitation cancelled.')
+        elif action == 'remove' and member and (is_owner or member.role == EventMember.ROLE_CONTRIBUTOR):
+            member.delete()
+            messages.info(request, f'Removed {display_name(member.user)}.')
+        elif action == 'role' and member and is_owner and request.POST.get('role') in dict(EventMember.ROLE_CHOICES):
+            member.role = request.POST['role']
+            member.save(update_fields=['role'])
+            messages.success(request, f'{display_name(member.user)} is now {member.get_role_display().lower()}.')
+        elif action == 'transfer' and member and is_owner:
+            _set_owner(event, member.user)
+            messages.success(request, f'{display_name(member.user)} now owns this event. You are an admin.')
+        return back
+
+    return render(request, 'console/team.html', _ctx(
+        event, 'team', form=form, role=role, can_manage=can_manage, is_owner=is_owner,
+        members=event.members.select_related('user').order_by('role', 'user__email'),
+        invites=event.invites.order_by('email'), signup_url=request.build_absolute_uri(reverse('console:signup'))))
+
+
+def _set_owner(event, new_owner):
+    """Make new_owner the owner. The previous owner (if any) stays on the team as an admin."""
+    previous = event.user
+    with transaction.atomic():
+        EventMember.objects.filter(event=event, user=new_owner).delete()
+        Event.objects.filter(pk=event.pk).update(user=new_owner)
+        if previous is not None and previous.pk != new_owner.pk:
+            EventMember.objects.update_or_create(event=event, user=previous,
+                                                 defaults={'role': EventMember.ROLE_ADMIN})
+    event.user = new_owner
+
+
+def _email_invite(event, email, inviter):
+    """Email the invitation when outgoing mail is configured. Returns True if sent."""
+    from django.conf import settings
+    from django.core.mail import send_mail
+    if not getattr(settings, 'EMAIL_HOST_PASSWORD', None):
+        return False
+    try:
+        send_mail(
+            subject=f'You\'re invited to help run {event.name} on Attnd',
+            message=(f'{inviter.email} invited you to help manage {event.name} on Attnd.\n\n'
+                     f'Sign up with this email address to get access: https://attnd.app/console/signup/\n'),
+            from_email='Attnd <noreply@attnd.app>', recipient_list=[email], fail_silently=False)
+        return True
+    except Exception:
+        logger.exception('Could not email the invitation to %s', email)
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -651,5 +741,6 @@ def admin_usage(request):
     code = request.GET.get('code', '').strip()
     return render(request, 'console/admin_usage.html', {
         'usage': app_usage(tz), 'code': code, 'devices': find_devices(code) if code else None,
+        'unassigned': Event.objects.filter(user__isnull=True).order_by('-start_time'),
         'section': 'admin_usage',
     })

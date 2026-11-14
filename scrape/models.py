@@ -18,6 +18,8 @@ class IngestJob(models.Model):
     STATUS_CHOICES = [(QUEUED, 'Queued'), (RUNNING, 'Running'), (DONE, 'Done'), (FAILED, 'Failed')]
 
     TRIGGER_TRIAL, TRIGGER_CONSOLE, TRIGGER_SCHEDULE = 'trial', 'console', 'schedule'
+    # The website watcher saw pages change: re-read only those pages (job.urls), without crawling.
+    TRIGGER_WATCH = 'watch'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     kind = models.CharField(max_length=16, choices=KIND_CHOICES)
@@ -107,3 +109,29 @@ class Change(models.Model):
 
     def __str__(self):
         return f'{self.get_op_display()} {self.entity} {self.label}'
+
+
+class SourcePage(models.Model):
+    """One web page an event's content comes from, fingerprinted so the watcher can tell cheaply
+    whether it changed (scrape.watch). AI runs only when a fingerprint changes."""
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='source_pages')
+    url = models.URLField(max_length=1024)
+    etag = models.CharField(max_length=256, blank=True)
+    last_modified = models.CharField(max_length=64, blank=True)
+    content_hash = models.CharField(max_length=64, blank=True)  # what the event currently reflects
+    pending_hash = models.CharField(max_length=64, blank=True)  # a change not yet read by the AI
+    checked_at = models.DateTimeField(null=True, blank=True)
+    changed_at = models.DateTimeField(null=True, blank=True)
+    last_status = models.CharField(max_length=32, blank=True)  # e.g. "200", "304", "error: …"
+    failures = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['event', 'url'], name='source_page_unique')]
+        ordering = ['id']
+
+    @property
+    def has_pending_change(self):
+        return bool(self.pending_hash) and self.pending_hash != self.content_hash
+
+    def __str__(self):
+        return self.url

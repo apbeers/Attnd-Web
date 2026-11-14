@@ -8,6 +8,7 @@ payload.  No browser required — works on Heroku and any plain Python env.
 
 import json
 import logging
+import re
 import textwrap
 import time
 from collections import deque
@@ -355,11 +356,13 @@ def _normalize(data: dict) -> dict:
     return data
 
 
-def gather_sources(urls: list[str]) -> str:
+def gather_sources(urls: list[str], crawl: bool = True) -> str:
+    """Read the URLs. With crawl=False only the pages themselves (the website watcher re-reads just
+    the pages that changed)."""
     parts = []
     for url in urls:
         try:
-            parts.append(_crawl(url))
+            parts.append(_crawl(url) if crawl else _crawl(url, max_depth=0, max_pages=1))
         except Exception as exc:  # one bad URL should not sink the rest
             logger.warning("Crawl failed for %s: %s", url, exc)
     return "\n\n---\n\n".join(p for p in parts if p)
@@ -547,7 +550,7 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
 
 def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None = None, text: str = "",
                  attachments: list | None = None, current: dict | None = None,
-                 instructions: str = "", enrich: bool = True) -> dict:
+                 instructions: str = "", enrich: bool = True, crawl: bool = True) -> dict:
     """
     Read the sources and return a normalized extraction dict (see EVENT_SCHEMA).
 
@@ -557,7 +560,9 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
     urls = list(urls or ([url] if url else []))
     logger.info("scrape_event: %d urls, %d chars text, %d attachments, refresh=%s",
                 len(urls), len(text), len(attachments or []), current is not None)
-    content = gather_sources(urls) if urls else ""
+    content = gather_sources(urls, crawl=crawl) if urls else ""
+    # Every web page that was read, so the website watcher can fingerprint them (scrape.watch).
+    pages = list(dict.fromkeys(re.findall(r"^## Source: (https?://\S+)", content, flags=re.M)))
     if text:
         content = (content + "\n\n---\n\n## Source: organizer notes\n\n" + text).strip()
     if not content.strip() and not attachments:
@@ -567,4 +572,5 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
 
     if google_api_key and enrich:
         data = _enrich_with_places(data, google_api_key)
+    data["source_pages"] = pages
     return data

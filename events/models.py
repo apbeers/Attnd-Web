@@ -51,12 +51,19 @@ class Event(CoordinatesMixin, models.Model):
     ]
 
     REFRESH_OFF = 'off'
-    REFRESH_DAILY = 'daily'
-    REFRESH_EVENT_WEEK = 'event_week'
+    REFRESH_WATCH = 'watch'
     REFRESH_CHOICES = [
-        (REFRESH_OFF, 'Off — only when I ask'),
-        (REFRESH_DAILY, 'Daily'),
-        (REFRESH_EVENT_WEEK, 'Daily, then hourly on event days'),
+        (REFRESH_OFF, 'Off: only when I ask'),
+        (REFRESH_WATCH, 'Watch my website for changes'),
+    ]
+
+    UPDATE_REVIEW = 'review'
+    UPDATE_MINOR = 'minor'
+    UPDATE_AUTO = 'auto'
+    UPDATE_MODE_CHOICES = [
+        (UPDATE_REVIEW, 'Ask me to review every change'),
+        (UPDATE_MINOR, 'Apply small fixes, ask about the rest'),
+        (UPDATE_AUTO, 'Apply changes automatically'),
     ]
 
     name = models.CharField(max_length=256)
@@ -75,7 +82,8 @@ class Event(CoordinatesMixin, models.Model):
     address = models.CharField(max_length=512, blank=True)
     order_id = models.CharField(max_length=512, blank=True)
     created_at = models.DateTimeField(default=dj_tz.now, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    # The owner. Null = unassigned (the owner's account was deleted); site admins can reassign it.
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
 
     # Presentation — organizer overrides only; resolved by events.display
     display_config = models.JSONField(default=dict, blank=True)
@@ -90,9 +98,9 @@ class Event(CoordinatesMixin, models.Model):
     source_urls = models.JSONField(default=list, blank=True)
     source_text = models.TextField(blank=True)
     refresh_schedule = models.CharField(max_length=16, choices=REFRESH_CHOICES, default=REFRESH_OFF)
-    auto_accept_minor = models.BooleanField(
-        default=False, help_text='Automatically apply small AI edits (typos, descriptions, images)')
+    update_mode = models.CharField(max_length=8, choices=UPDATE_MODE_CHOICES, default=UPDATE_REVIEW)
     last_refreshed_at = models.DateTimeField(null=True, blank=True)
+    sources_checked_at = models.DateTimeField(null=True, blank=True)  # last cheap website check
     locked_fields = models.JSONField(default=list, blank=True,
                                      help_text='Fields edited by a person; AI refreshes will not overwrite them')
 
@@ -111,12 +119,26 @@ class Event(CoordinatesMixin, models.Model):
         )
         self.refresh_from_db(fields=['content_version', 'content_updated_at'])
 
+    @property
+    def auto_accept_minor(self):
+        return self.update_mode in (self.UPDATE_MINOR, self.UPDATE_AUTO)
+
+    def role_for(self, user):
+        """'owner', 'admin', 'contributor' or None. Site admins act as owners of every event."""
+        if not user or not user.is_authenticated:
+            return None
+        if user.is_superuser or (self.user_id is not None and self.user_id == user.id):
+            return 'owner'
+        member = self.members.filter(user=user).only('role').first()
+        return member.role if member else None
+
     def can_edit(self, user):
-        if not user.is_authenticated:
-            return False
-        if user.is_superuser or self.user_id == user.id:
-            return True
-        return self.members.filter(user=user).exists()
+        """Everyone on the team edits content."""
+        return self.role_for(user) is not None
+
+    def can_manage_team(self, user):
+        """The owner and event admins add and remove people, and change event-wide settings."""
+        return self.role_for(user) in ('owner', EventMember.ROLE_ADMIN)
 
     class Meta:
         indexes = [
@@ -145,7 +167,7 @@ class Location(CoordinatesMixin, models.Model):
     sort_order = models.IntegerField(default=0)
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
     CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url',
@@ -184,7 +206,7 @@ class ScheduledItem(models.Model):
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
 
     CONTENT_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags']
 
@@ -226,7 +248,7 @@ class Notification(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True)
     delivered_count = models.PositiveIntegerField(default=0)
     failed_count = models.PositiveIntegerField(default=0)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
     class Meta:
@@ -271,13 +293,20 @@ class Device(models.Model):
 
 
 class EventMember(models.Model):
-    """Additional organizers who can manage an event (the owner is Event.user)."""
-    ROLE_EDITOR = 'editor'
-    ROLE_CHOICES = [(ROLE_EDITOR, 'Editor')]
+    """People who help run an event. The owner (Event.user) is not a member.
+
+    - admin: everything the owner can do except deleting the event or transferring it
+    - contributor: edits content (details, locations, schedule, notifications, AI updates)
+    """
+    ROLE_ADMIN = 'admin'
+    ROLE_CONTRIBUTOR = 'contributor'
+    ROLE_EDITOR = ROLE_CONTRIBUTOR  # old name
+    ROLE_CHOICES = [(ROLE_ADMIN, 'Admin'), (ROLE_CONTRIBUTOR, 'Contributor')]
+    ROLE_CHOICES_DICT = dict(ROLE_CHOICES)
 
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='members')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='event_memberships')
-    role = models.CharField(max_length=16, choices=ROLE_CHOICES, default=ROLE_EDITOR)
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES, default=ROLE_CONTRIBUTOR)
     created_at = models.DateTimeField(default=dj_tz.now)
 
     class Meta:
@@ -301,6 +330,22 @@ class EventRevision(models.Model):
 
     def __str__(self):
         return f'{self.event} v{self.content_version}: {self.summary}'
+
+
+class EventInvite(models.Model):
+    """A team invitation for an email with no account yet. It becomes an EventMember when someone
+    signs up or signs in with that email (console.accounts.claim_invites)."""
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='invites')
+    email = models.EmailField()
+    role = models.CharField(max_length=16, choices=EventMember.ROLE_CHOICES, default=EventMember.ROLE_CONTRIBUTOR)
+    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(default=dj_tz.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['event', 'email'], name='invite_unique_email')]
+
+    def __str__(self):
+        return f'{self.email} → {self.event}'
 
 
 def events_for_user(user):

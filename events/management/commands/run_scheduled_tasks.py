@@ -8,16 +8,16 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from events import push
-from scrape import jobs
+from scrape import jobs, watch
 
 
 class Command(BaseCommand):
-    help = 'Send due notifications, start scheduled AI refreshes, recover stuck jobs, expire trials.'
+    help = 'Send due notifications, check watched event websites, recover stuck jobs, expire trials.'
 
     def handle(self, *args, **options):
         sent = push.send_due_notifications()
         recovered = jobs.recover_stale()
-        queued = jobs.queue_scheduled_refreshes()
+        watched, queued = watch.check_watched_events()
         from attestation.views import purge_expired_nonces
         purge_expired_nonces()
         # Privacy policy: device records unused for 12 months are deleted
@@ -25,7 +25,8 @@ class Command(BaseCommand):
         from django.utils import timezone
         from events.models import Device
         Device.objects.filter(last_seen__lt=timezone.now() - timedelta(days=365)).delete()
-        self.stdout.write(f'notifications sent: {sent}; stale jobs recovered: {recovered}; refreshes queued: {queued}')
+        self.stdout.write(f'notifications sent: {sent}; stale jobs recovered: {recovered}; '
+                          f'websites checked: {watched}; AI updates queued: {queued}')
 
         # Idempotent and cheap: delete unclaimed trial events past their expiry
         call_command('expire_trial_events', stdout=self.stdout)

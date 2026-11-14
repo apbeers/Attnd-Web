@@ -129,6 +129,10 @@ LOGOUT_REDIRECT_URL = '/'
 API_KEY = os.getenv('API_KEY', '')
 CONTACT_EMAIL = os.getenv('CONTACT_EMAIL', '')
 
+# Website watching (scrape.watch): limits on AI runs triggered by detected page changes, per event.
+WATCH_MIN_AI_GAP_MINUTES = int(os.getenv('WATCH_MIN_AI_GAP_MINUTES', '15'))
+WATCH_MAX_AI_RUNS_PER_DAY = int(os.getenv('WATCH_MAX_AI_RUNS_PER_DAY', '24'))
+
 # Organizers sign in with their email (or username), case-insensitively.
 AUTHENTICATION_BACKENDS = ['console.auth_backends.EmailOrUsernameBackend']
 

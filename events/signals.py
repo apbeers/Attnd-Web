@@ -9,7 +9,7 @@ from events.models import Event, Location, Notification, ScheduledItem
 # Event fields that do not affect what attendees see
 _EVENT_BOOKKEEPING = {'content_version', 'content_updated_at', 'last_refreshed_at',
                       'locked_fields', 'source_urls', 'source_text', 'refresh_schedule',
-                      'auto_accept_minor', 'order_id'}
+                      'update_mode', 'sources_checked_at', 'order_id'}
 
 
 @receiver(post_save, sender=Event)
