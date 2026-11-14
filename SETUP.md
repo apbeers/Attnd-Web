@@ -10,7 +10,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, `CONTACT_EMAIL`, Scheduler jobs and GitHub deploy settings. ✅ Stack heroku-26 and Python 3.15. **Still to do:** check Postgres and upgrade to 18 (commands under "Keeping Heroku current"), and add Cloudinary on both apps so uploads survive restarts. |
 | 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ❌ 3b: the CI key check (iOS run 78) reports that the `ASC_ISSUER_ID` secret is not the Issuer ID UUID. Re-set it with the command under 3b, then re-run the iOS workflow. |
-| 4. Google / Android | ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
+| 4. Google / Android | ⬜ 4e: exclude tablets in Play Console. ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. ✅ **Android:** `develop` publishes to Play internal testing. Waiting on: iOS (3b `ASC_ISSUER_ID`) and the first release to `main`. |
 
@@ -319,6 +319,14 @@ If it prints nothing useful, Spotlight didn't find the file. Run it from your At
 | GH-android env `production` variable (optional) | `RELEASE_NOTES` | text shown in Play |
 
 Note: the app now requires **Android 15 or later**. Play will stop offering updates to phones on older versions.
+
+### 4e. Phones only, no tablets (Play Console, 5 min)
+The Android app supports phones and foldables, not tablets, so turn tablets off in Play Console. The app's own settings can't hide it from tablets without also hiding it from unfolded foldables.
+1. Play Console → Attnd → **Reach and devices → Device catalog** (older consoles: **Release → Device catalog**).
+2. Click **Manage exclusion rules** (or filter the catalog by **Form factor: Tablet**) and exclude **Tablet**. Leave **Phone** included. Also exclude Chromebook, TV, Wear, Car and XR if they're listed.
+3. Search the catalog for a foldable, for example `Pixel Fold` or `Galaxy Z Fold`, and check it still says **Supported**.
+
+Existing installs on excluded tablets keep working but stop getting updates. If you want screenshots to match, remove tablet screenshots from **Store presence → Main store listing**.
 
 ## 4d. Lock the production API to genuine apps (after the first release)
 
