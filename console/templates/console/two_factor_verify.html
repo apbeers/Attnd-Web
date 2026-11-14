@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static console_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -6,23 +6,48 @@
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
 </head>
 <body class="bg-light">
-<div class="d-flex justify-content-center align-items-center min-vh-100">
-  <div class="card shadow-sm" style="width:100%;max-width:420px;">
+<div class="d-flex justify-content-center align-items-center min-vh-100 py-4">
+  <div class="card shadow-sm" style="width:100%;max-width:440px;">
     <div class="card-body p-4">
-      <h2 class="card-title mb-3 text-center">Enter your code</h2>
-      <p class="text-muted small">Open your authenticator app and enter the 6-digit code for Attnd ({{ user.email }}). Lost your phone? Enter one of your recovery codes instead.</p>
+      <h2 class="card-title mb-2 text-center">One more step</h2>
+      <p class="text-muted small text-center">Confirm it’s you, {{ user.email }}.</p>
       {% if error %}<div class="alert alert-danger py-2" role="alert">{{ error }}</div>{% endif %}
+      {% if email_sent %}<div class="alert alert-success py-2" role="status">We emailed a 6-digit code to {{ user.email }}. It works once, for {{ email_minutes }} minutes.</div>{% endif %}
+
+      {% if has_passkeys %}
+      <div data-passkey-second-step data-passkey-scope data-options-url="{% url 'passkey_auth_options' %}"
+           data-verify-url="{% url 'passkey_auth' %}" data-next="{{ next }}">
+        <div class="alert alert-danger py-2" role="alert" data-passkey-error hidden></div>
+        <div class="d-grid mb-3" data-passkey-ui hidden>
+          <button type="button" class="btn btn-primary" data-passkey-button>{% icon "key" %} Use a passkey</button>
+        </div>
+        <p class="small text-muted" data-passkey-fallback hidden>This browser can’t use passkeys. Use a code instead.</p>
+      </div>
+      {% endif %}
+
+      {% if code_help %}
       <form method="post">{% csrf_token %}
         <input type="hidden" name="next" value="{{ next }}">
-        <div class="mb-3"><label class="form-label" for="id_code">Code</label>
+        <div class="mb-2"><label class="form-label" for="id_code">Code</label>
           <input class="form-control font-monospace" type="text" name="code" id="id_code" inputmode="numeric"
-                 autocomplete="one-time-code" maxlength="20" autofocus required></div>
-        <div class="d-grid"><button class="btn btn-primary">Continue</button></div>
+                 autocomplete="one-time-code" maxlength="20" aria-describedby="code_help" required
+                 {% if not has_passkeys or email_sent %}autofocus{% endif %}></div>
+        <p class="small text-muted mb-3" id="code_help">{{ code_help }}</p>
+        <div class="d-grid"><button class="btn {% if has_passkeys %}btn-outline-primary{% else %}btn-primary{% endif %}">Continue</button></div>
       </form>
-      <form method="post" action="{% url 'logout' %}" class="text-center mt-3 mb-0">{% csrf_token %}
+      {% endif %}
+
+      {% if email_on %}
+      <form method="post" class="text-center mt-3 mb-0">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="action" value="send_email">
+        <button class="btn btn-sm btn-link">{% icon "mail" %} {% if email_sent %}Email me a new code{% else %}Email me a code{% endif %}</button>
+      </form>
+      {% endif %}
+      <form method="post" action="{% url 'logout' %}" class="text-center mt-2 mb-0">{% csrf_token %}
         <button class="btn btn-sm btn-link text-muted">Sign out</button></form>
     </div>
   </div>
 </div>
+<script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>

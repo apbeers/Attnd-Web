@@ -6,7 +6,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from attnd import views as attnd_views
-from console import views_auth
+from console import views_auth, views_passkeys
 from events.app_status import app_status_view, retired_api_view
 from home.sitemaps import StaticSitemap
 from join import views as join_views
@@ -36,6 +36,12 @@ urlpatterns = [
     path('accounts/login/', views_auth.SignInView.as_view(), name='login'),
     path('accounts/2fa/', views_auth.two_factor_verify, name='two_factor_verify'),
     path('accounts/2fa/setup/', views_auth.two_factor_setup, name='two_factor_setup'),
+    path('accounts/2fa/recovery-codes/', views_auth.recovery_codes, name='two_factor_recovery_codes'),
+    path('accounts/passkeys/auth/options/', views_passkeys.auth_options, name='passkey_auth_options'),
+    path('accounts/passkeys/auth/', views_passkeys.auth_verify, name='passkey_auth'),
+    path('accounts/passkeys/register/options/', views_passkeys.register_options, name='passkey_register_options'),
+    path('accounts/passkeys/register/', views_passkeys.register_verify, name='passkey_register'),
+    path('accounts/passkeys/prompt/dismiss/', views_passkeys.prompt_dismiss, name='passkey_prompt_dismiss'),
     # Password reset in the console's style (the admin app's own templates would win otherwise).
     path('accounts/password_reset/', views_auth.ResetPasswordView.as_view(
         template_name='console/password_reset_form.html',

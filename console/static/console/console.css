@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }
 /* Attnd console — self-contained styles (no CSS framework). */
 :root {
   --attnd: #431f86; --primary: #431f86; --primary-dark: #32166a; --primary-soft: #efe9fa; --primary-mid: #7b4fd6; --success: #198754; --danger: #c62828;

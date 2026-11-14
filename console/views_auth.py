@@ -1,4 +1,5 @@
-"""Sign-in, password reset and two-factor views (rate limited; see attnd/ratelimit.py and twofactor.py)."""
+"""Sign-in, password reset and two-factor views (rate limited; see attnd/ratelimit.py and twofactor.py).
+Passkey (WebAuthn) endpoints are in views_passkeys.py."""
 
 from urllib.parse import urlencode
 
@@ -14,8 +15,9 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 
 from attnd.ratelimit import RateLimit, client_ip
-from console import totp, twofactor
-from console.models import TwoFactorDevice
+from console import totp, twofactor, webauthn
+from console.mail import email_enabled
+from console.models import SignInSecurity, TwoFactorDevice
 
 LOGIN_EMAIL = RateLimit('login_email')
 LOGIN_IP = RateLimit('login_ip')
@@ -23,12 +25,17 @@ RESET_EMAIL = RateLimit('reset_email')
 RESET_IP = RateLimit('reset_ip')
 SIGNUP_IP = RateLimit('signup_ip')
 OTP_USER = RateLimit('otp_user')
+EMAIL_CODE_USER = RateLimit('email_code_user')
+
+NEW_RECOVERY_CODES = '_new_recovery_codes'  # session: codes to show once on the recovery codes page
+PASSKEY_PROMPT = '_passkey_prompt'  # session: offer "Sign in faster with a passkey" after a password sign-in
 
 # Same wording whether or not the email has an account.
 LOGIN_LIMITED = 'Too many sign-in attempts. Please wait 15 minutes and try again, or reset your password.'
 RESET_LIMITED = 'Too many reset requests. Please wait an hour and try again.'
 SIGNUP_LIMITED = 'Too many sign-up attempts from your network. Please wait an hour and try again.'
 OTP_LIMITED = 'Too many wrong codes. Please wait 15 minutes and try again.'
+EMAIL_LIMITED = 'We’ve sent several codes already. Please wait 15 minutes, or use another way to sign in.'
 
 
 class SignInView(auth_views.LoginView):
@@ -50,7 +57,11 @@ class SignInView(auth_views.LoginView):
 
     def form_valid(self, form):
         LOGIN_EMAIL.reset(self.email)
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        user = form.get_user()
+        if not twofactor.has_passkeys(user) and not twofactor.security(user).passkey_prompt_dismissed:
+            self.request.session[PASSKEY_PROMPT] = True  # shown once in the console (context processor)
+        return response
 
 
 class ResetPasswordView(auth_views.PasswordResetView):
@@ -81,40 +92,71 @@ def admin_login(request):
     return redirect(reverse('login') + '?' + urlencode({'next': request.GET.get('next') or reverse('admin:index')}))
 
 
-def _next_url(request) -> str:
-    target = request.POST.get('next') or request.GET.get('next') or ''
+def _next_url(request, target: str | None = None) -> str:
+    """`target` (or the request's `next`) if it is a safe URL on this site, else the console."""
+    if target is None:
+        target = request.POST.get('next') or request.GET.get('next') or ''
     if target and url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()},
                                                   require_https=request.is_secure()):
         return target
     return settings.LOGIN_REDIRECT_URL
 
 
+def _with_next(name: str, next_url: str) -> str:
+    return reverse(name) + '?' + urlencode({'next': next_url})
+
+
 @login_required
 def two_factor_verify(request):
-    """Second sign-in step: a code from the authenticator app, or a recovery code."""
-    device = twofactor.confirmed_device(request.user)
+    """Second sign-in step after the password: a passkey (JavaScript, views_passkeys), or a code from the
+    authenticator app, an emailed code, or a recovery code (this form)."""
+    user = request.user
     next_url = _next_url(request)
-    if device is None:
-        return redirect(reverse('two_factor_setup') + '?' + urlencode({'next': next_url}))
-    if twofactor.is_verified(request):
+    step = twofactor.pending_step(request)
+    if step == 'setup':
+        return redirect(_with_next('two_factor_setup', next_url))
+    if step is None:
         return redirect(next_url)
-    error, status = None, 200
-    if request.method == 'POST':
-        if OTP_USER.exceeded(request.user.pk):
+    email_on = twofactor.email_codes_on(user)
+    error, status, email_sent = None, 200, False
+    if request.method == 'POST' and request.POST.get('action') == 'send_email':
+        if not email_on:
+            return redirect(_with_next('two_factor_verify', next_url))
+        if EMAIL_CODE_USER.exceeded(user.pk):
+            error, status = EMAIL_LIMITED, 429
+        else:
+            EMAIL_CODE_USER.hit(user.pk)
+            twofactor.send_email_code(user)
+            email_sent = True
+    elif request.method == 'POST':
+        if OTP_USER.exceeded(user.pk):
             error, status = OTP_LIMITED, 429
         else:
-            used = twofactor.check_code(device, request.POST.get('code', ''))
+            used = twofactor.check_code(user, request.POST.get('code', ''))
             if used:
-                OTP_USER.reset(request.user.pk)
+                OTP_USER.reset(user.pk)
                 twofactor.mark_verified(request)
                 if used == 'recovery':
-                    left = len(device.recovery_codes)
+                    left = twofactor.recovery_codes_left(user)
                     messages.warning(request, f'You used a recovery code; {left} left. '
                                               'You can make new ones on your Account page.')
                 return redirect(next_url)
-            OTP_USER.hit(request.user.pk)
-            error = 'That code didn’t work. Check the time on your phone, or use a recovery code.'
-    return render(request, 'console/two_factor_verify.html', {'next': next_url, 'error': error}, status=status)
+            OTP_USER.hit(user.pk)
+            error = 'That code didn’t work. Check it and try again, or use a recovery code.'
+    has_totp = twofactor.confirmed_device(user) is not None
+    has_recovery = twofactor.recovery_codes_left(user) > 0
+    kinds = [kind for kind, on in (('the 6-digit code from your authenticator app', has_totp),
+                                   ('the code we email you', email_on),
+                                   ('one of your recovery codes', has_recovery)) if on]
+    code_help = ''
+    if kinds:
+        code_help = 'Enter ' + (kinds[0] if len(kinds) == 1 else ', '.join(kinds[:-1]) + ' or ' + kinds[-1]) + '.'
+    return render(request, 'console/two_factor_verify.html', {
+        'code_help': code_help,
+        'next': next_url, 'error': error, 'email_sent': email_sent,
+        'has_passkeys': twofactor.has_passkeys(user), 'has_totp': has_totp, 'email_on': email_on,
+        'email_minutes': twofactor.EMAIL_CODE_MINUTES,
+    }, status=status)
 
 
 def _qr_svg(text: str) -> str:
@@ -124,14 +166,15 @@ def _qr_svg(text: str) -> str:
 
 @login_required
 def two_factor_setup(request):
-    """Turn on two-factor sign-in: scan the QR code (or type the key), confirm with a code, then save the
-    recovery codes, which are shown only this once. Staff are sent here until they've done it."""
+    """Add a strong sign-in method. Staff without one are sent here until they've done it: a passkey first
+    (JavaScript, views_passkeys), or an authenticator app (scan the QR code or type the key, confirm with a
+    code). Recovery codes are shown once when the account's first second factor is turned on."""
     next_url = _next_url(request)
+    if twofactor.pending_step(request) == 'verify':
+        return redirect(_with_next('two_factor_verify', next_url))
     existing = TwoFactorDevice.objects.filter(user=request.user).first()
     if existing is not None and existing.confirmed:
-        if not twofactor.is_verified(request):
-            return redirect(reverse('two_factor_verify') + '?' + urlencode({'next': next_url}))
-        messages.info(request, 'Two-factor sign-in is already on.')
+        messages.info(request, 'Your authenticator app is already set up.')
         return redirect('console:account')
     device = existing or twofactor.start_setup(request.user)
     error, status = None, 200
@@ -140,44 +183,93 @@ def two_factor_setup(request):
             error, status = OTP_LIMITED, 429
         else:
             codes = twofactor.confirm_setup(device, request.POST.get('code', ''))
-            if codes:
+            if codes is not None:
                 OTP_USER.reset(request.user.pk)
                 twofactor.mark_verified(request)
                 return render(request, 'console/two_factor_setup.html',
-                              {'recovery_codes': codes, 'next': next_url})
+                              {'done': True, 'recovery_codes': codes, 'next': next_url})
             OTP_USER.hit(request.user.pk)
             error = 'That code didn’t match. Enter the 6-digit code your app shows now.'
     account = request.user.email or request.user.username
     uri = totp.provisioning_uri(device.secret, account, settings.TWO_FACTOR_ISSUER)
+    required = twofactor.is_required(request.user) and not twofactor.strong_methods(request.user)
     return render(request, 'console/two_factor_setup.html', {
         'next': next_url, 'error': error, 'otpauth_uri': uri, 'qr_svg': mark_safe(_qr_svg(uri)),
         'secret_groups': ' '.join(device.secret[i:i + 4] for i in range(0, len(device.secret), 4)),
-        'required': twofactor.is_required(request.user),
+        'required': required, 'offer_passkey': required,
+        'passkey_name': webauthn.default_name(request.META.get('HTTP_USER_AGENT', '')),
     }, status=status)
 
 
+@login_required
+def recovery_codes(request):
+    """Shows recovery codes made in this session once (after adding a first passkey or turning on emailed
+    codes), then they are gone from the session."""
+    next_url = _next_url(request)
+    codes = request.session.pop(NEW_RECOVERY_CODES, None)
+    if not codes:
+        return redirect(next_url)
+    return render(request, 'console/two_factor_setup.html', {'done': True, 'recovery_codes': codes, 'next': next_url})
+
+
 def account_two_factor_action(request):
-    """Account page actions: new recovery codes, or turn two-factor off (not for staff). Both need a
-    current code. Returns (recovery codes to show or None, response or None)."""
-    device = twofactor.confirmed_device(request.user)
+    """Account page actions for the authenticator app, emailed codes and recovery codes.
+    Returns (recovery codes to show or None, response or None)."""
+    user = request.user
     action = request.POST.get('action')
-    if device is None:
-        return None, redirect('console:account')
-    if OTP_USER.exceeded(request.user.pk):
+    device = twofactor.confirmed_device(user)
+    back = redirect('console:account')
+
+    if action == 'email_codes_on':
+        if twofactor.is_required(user):
+            messages.error(request, 'Admin accounts use a passkey or an authenticator app instead.')
+        elif not email_enabled() or not user.email:
+            messages.error(request, 'Email isn’t set up on this server, so emailed codes are not available.')
+        else:
+            row = twofactor.security(user)
+            row.email_codes_enabled = True
+            row.save(update_fields=['email_codes_enabled'])
+            twofactor.mark_verified(request)  # this session was fully signed in; keep it that way
+            messages.success(request, 'Emailed codes are on: after your password, we’ll email you a code.')
+            codes = twofactor.first_recovery_codes(user)
+            return (codes or None), None
+        return None, back
+    if action == 'email_codes_off':
+        SignInSecurity.objects.filter(user=user).update(
+            email_codes_enabled=False, email_code_hash='', email_code_expires_at=None)
+        twofactor.after_factor_removed(user)
+        messages.success(request, 'Emailed codes are off.')
+        return None, back
+
+    if OTP_USER.exceeded(user.pk):
         messages.error(request, OTP_LIMITED)
-        return None, redirect('console:account')
-    if action == '2fa_disable' and twofactor.is_required(request.user):
-        messages.error(request, 'Admin accounts must keep two-factor sign-in on.')
-        return None, redirect('console:account')
-    used = twofactor.check_code(device, request.POST.get('code', ''), allow_recovery=(action == '2fa_disable'))
-    if not used:
-        OTP_USER.hit(request.user.pk)
-        messages.error(request, 'That code didn’t work.')
-        return None, redirect('console:account')
-    OTP_USER.reset(request.user.pk)
+        return None, back
+    if action == '2fa_codes':
+        if not twofactor.has_second_factor(user):
+            return None, back
+        password = request.POST.get('password', '')
+        ok = (twofactor.check_code(user, request.POST.get('code', ''), allow_recovery=False) is not None
+              or (password and user.check_password(password)))
+        if not ok:
+            OTP_USER.hit(user.pk)
+            messages.error(request, 'That didn’t work.')
+            return None, back
+        OTP_USER.reset(user.pk)
+        return twofactor.new_recovery_codes(user), None
     if action == '2fa_disable':
-        device.delete()
-        request.session.pop(twofactor.SESSION_KEY, None)
-        messages.success(request, 'Two-factor sign-in is off.')
-        return None, redirect('console:account')
-    return twofactor.new_recovery_codes(device), None
+        if device is None:
+            return None, back
+        if twofactor.is_required(user) and not twofactor.has_passkeys(user):
+            messages.error(request, 'Admin accounts need a passkey or an authenticator app. '
+                                    'Add a passkey before turning the authenticator app off.')
+            return None, back
+        if twofactor.check_totp(device, request.POST.get('code', '')) or \
+                twofactor.use_recovery_code(user, request.POST.get('code', '')):
+            OTP_USER.reset(user.pk)
+            device.delete()
+            twofactor.after_factor_removed(user)
+            messages.success(request, 'The authenticator app is off.')
+            return None, back
+        OTP_USER.hit(user.pk)
+        messages.error(request, 'That code didn’t work.')
+    return None, back

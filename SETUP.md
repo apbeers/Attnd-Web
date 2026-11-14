@@ -14,14 +14,14 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev** deploys from `develop`. ✅ **Android** publishes to Play internal testing. ✅ **iOS** builds reach TestFlight, and on Nov 14 a real iPhone passed App Attest against dev and joined an event (lookup, join, bundle, 304s). Waiting on: the first release to `main`. |
 | 11. Email | ⏳ ✅ Mailgun Starter (free) add-ons on attnd-web (`mailgun-spherical-62131`) and attnd-dev (`mailgun-silhouetted-37822`; separate account, Mailgun can't be shared between apps; dev stays on its sandbox, which only mails authorized recipients). ✅ `mg.attnd.app` added (tracking off), Namecheap SPF/DKIM/DMARC added, **verified** by Mailgun. ✅ SMTP credentials (`postmaster@…`) set on both apps as `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD` + `DEFAULT_FROM_EMAIL`; dev `SITE_URL` set. ✅ Code: TLS, from address, per-site links, allow-list, password reset. ✅ `ADMIN_EMAILS` (both apps) and dev `EMAIL_ALLOWED_RECIPIENTS` = the owner's address; owner authorized on dev's sandbox; Nov 14 dev test emails (plain + `--admins`) **delivered** to iCloud. ✅ MX records for `mg` added; production-domain test from `noreply@mg.attnd.app` **delivered** to iCloud (Nov 14). ⬜ The production app itself sends once develop is released to main. |
-| 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then set up two-factor sign-in at the first admin sign-in (dev, then production) and save the recovery codes. |
+| 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then add a passkey (or an authenticator app) at the first admin sign-in, on dev and again on production (passkeys are per domain), and save the recovery codes. |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
 - [x] Protect `main` in all three repos: ruleset "Protect main" blocks force-push and deletion (Nov 14, 2026). Add "require status checks" once releases go through pull requests.
-- [ ] Sign in to the dev console and enroll two-factor (staff accounts must, step 12).
+- [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
 - If the Heroku CLI says an update is available, run `heroku update` first. It's optional.
@@ -532,8 +532,10 @@ The console and admin now have sign-in rate limits, two-factor sign-in for staff
    heroku config:set -a attnd-dev ADMIN_URL_PATH=<something-private>/
    heroku config:set -a attnd-web ADMIN_URL_PATH=<something-private>/
    ```
-2. **Set up two-factor sign-in on each admin account.** Sign in at `/accounts/login/` on dev (and on production after the release). You are sent to "Set up two-factor sign-in": scan the QR code with an authenticator app (iOS Passwords, 1Password, Google Authenticator …), enter the code, and **save the 10 recovery codes** in your password manager. Every staff/superuser account does this at its next sign-in.
-3. **Locked out?** (lost phone and recovery codes):
+2. **Secure each admin account with a passkey (or an authenticator app).** Sign in with your password at `/accounts/login/` on dev (and on production after the release). You are sent to "Secure your admin account": choose **Add a passkey** (Face ID / Touch ID / your password manager), or scan the QR code with an authenticator app (iOS Passwords, 1Password, Google Authenticator …) and enter the code. Then **save the 10 recovery codes** in your password manager. Every staff/superuser account does this at its next sign-in. Afterwards "Sign in with a passkey" on the sign-in page (or the email field's autofill) signs you in with no password or code.
+   - **Passkeys are per domain.** A passkey made on the dev app (`attnd-dev-7ab893f37020.herokuapp.com`) only works there; production (`attnd.app`) needs its own, made after you sign in there. Your password manager will list two "Attnd" passkeys, one per domain. The domain comes from `SITE_URL` (dev already sets its herokuapp URL); `WEBAUTHN_RP_ID` overrides it. Don't change either on production later: existing passkeys would stop working (sign in with the password + authenticator/recovery code, then add a new passkey).
+   - Add a second passkey or the authenticator app as a backup from **Account** (`/console/account/`), so losing one device doesn't mean using recovery codes.
+3. **Locked out?** (lost passkeys/phone and recovery codes; removes every second factor):
    ```
    heroku run -a attnd-web python manage.py reset_2fa you@example.com
    ```

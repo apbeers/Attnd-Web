@@ -1,21 +1,38 @@
-{% load static %}<!DOCTYPE html>
+{% load static console_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Set up two-factor sign-in — Attnd</title>
+  <title>{% if done %}Recovery codes{% else %}Set up two-factor sign-in{% endif %} — Attnd</title>
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
 </head>
 <body class="bg-light">
 <div class="d-flex justify-content-center align-items-center min-vh-100 py-4">
   <div class="card shadow-sm" style="width:100%;max-width:480px;">
     <div class="card-body p-4">
-      {% if recovery_codes %}
+      {% if done %}
         <h2 class="card-title mb-3 text-center">Two-factor sign-in is on</h2>
-        {% include 'console/_recovery_codes.html' %}
-        <div class="d-grid"><a class="btn btn-primary" href="{{ next }}">I’ve saved them — continue</a></div>
+        {% if recovery_codes %}{% include 'console/_recovery_codes.html' %}{% endif %}
+        <div class="d-grid"><a class="btn btn-primary" href="{{ next }}">{% if recovery_codes %}I’ve saved them — continue{% else %}Continue{% endif %}</a></div>
       {% else %}
-        <h2 class="card-title mb-3 text-center">Set up two-factor sign-in</h2>
-        {% if required %}<p class="small">Admin accounts need a second step when signing in. Set it up once to continue.</p>{% endif %}
+        <h2 class="card-title mb-3 text-center">{% if offer_passkey %}Secure your admin account{% else %}Set up an authenticator app{% endif %}</h2>
+        {% if required %}<p class="small">Admin accounts need a passkey or an authenticator app. Set one up once to continue.</p>{% endif %}
+
+        {% if offer_passkey %}
+        <section data-passkey-ui data-passkey-scope hidden aria-labelledby="passkey_heading" class="mb-4">
+          <h3 class="h6" id="passkey_heading">{% icon "key" %} Add a passkey (recommended)</h3>
+          <p class="small text-muted">Sign in with Face ID, Touch ID, Windows Hello or your phone’s screen lock: no password or code to type. It works as both steps at once.</p>
+          <div class="alert alert-danger py-2" role="alert" data-passkey-error hidden></div>
+          <div class="mb-3"><label class="form-label small" for="id_passkey_name">Name for this passkey</label>
+            <input class="form-control" id="id_passkey_name" maxlength="64" value="{{ passkey_name }}"></div>
+          <div class="d-grid"><button type="button" class="btn btn-primary" data-passkey-register
+                  data-options-url="{% url 'passkey_register_options' %}" data-verify-url="{% url 'passkey_register' %}"
+                  data-next="{{ next }}" data-name-input="#id_passkey_name">{% icon "key" %} Add a passkey</button></div>
+          <hr>
+          <p class="small text-muted mb-0">Or use an authenticator app instead:</p>
+        </section>
+        {% endif %}
+
+        <section aria-label="Authenticator app">
         <ol class="small" style="padding-left:1.2rem">
           <li>Open an authenticator app (Google Authenticator, 1Password, iOS Passwords, Authy …) and scan this code.</li>
           <li>Enter the 6-digit code it shows.</li>
@@ -30,9 +47,10 @@
           <input type="hidden" name="next" value="{{ next }}">
           <div class="mb-3"><label class="form-label" for="id_code">Code from the app</label>
             <input class="form-control font-monospace" type="text" name="code" id="id_code" inputmode="numeric"
-                   autocomplete="one-time-code" maxlength="10" autofocus required></div>
-          <div class="d-grid"><button class="btn btn-primary">Turn on</button></div>
+                   autocomplete="one-time-code" maxlength="10" {% if not offer_passkey %}autofocus{% endif %} required></div>
+          <div class="d-grid"><button class="btn {% if offer_passkey %}btn-outline-primary{% else %}btn-primary{% endif %}">Turn on</button></div>
         </form>
+        </section>
         {% if required %}
           <form method="post" action="{% url 'logout' %}" class="text-center mt-3 mb-0">{% csrf_token %}
             <button class="btn btn-sm btn-link text-muted">Sign out</button></form>
@@ -43,5 +61,6 @@
     </div>
   </div>
 </div>
+<script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>

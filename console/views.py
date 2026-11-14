@@ -13,7 +13,9 @@ from django.views import View
 
 from console.accounts import claim_invites, create_account, email_in_use
 from console.forms.signup import EmailChangeForm, SignUpForm
-from console import twofactor
+from console import passkeys, twofactor, webauthn
+from console.mail import email_enabled
+from console.models import Passkey
 from console.views_auth import SIGNUP_LIMITED, account_two_factor_action, signup_limited
 from events.models import Event, Location, Notification, ScheduledItem, generate_event_code
 
@@ -106,10 +108,13 @@ def account(request):
     for field in password_form.fields.values():
         field.widget.attrs['class'] = 'form-control'
     recovery_codes = None
-    if request.method == 'POST' and request.POST.get('action') in ('2fa_disable', '2fa_codes'):
+    action = request.POST.get('action') if request.method == 'POST' else None
+    if action in ('2fa_disable', '2fa_codes', 'email_codes_on', 'email_codes_off'):
         recovery_codes, response = account_two_factor_action(request)
         if response is not None:
             return response
+    elif action in ('passkey_rename', 'passkey_remove'):
+        return _passkey_action(request, action)
     elif request.method == 'POST' and request.POST.get('action') == 'email':
         email_form = EmailChangeForm(request.user, request.POST, prefix='email')
         if email_form.is_valid():
@@ -127,10 +132,39 @@ def account(request):
             update_session_auth_hash(request, user)
             messages.success(request, 'Password changed.')
             return redirect('console:account')
-    device = twofactor.confirmed_device(request.user)
+    user = request.user
+    device = twofactor.confirmed_device(user)
+    keys = list(Passkey.objects.filter(user=user))
+    required = twofactor.is_required(user)
+    for key in keys:
+        key.removable = passkeys.can_remove(user, key)
     return render(request, 'console/account.html', {
         'email_form': email_form, 'password_form': password_form, 'section': 'account',
-        'two_factor': device, 'two_factor_required': twofactor.is_required(request.user),
+        'two_factor': device, 'two_factor_required': required,
         'recovery_codes': recovery_codes,
-        'recovery_codes_left': len(device.recovery_codes) if device else 0,
+        'recovery_codes_left': twofactor.recovery_codes_left(user),
+        'passkeys': keys, 'passkey_name': webauthn.default_name(request.META.get('HTTP_USER_AGENT', '')),
+        'has_second_factor': twofactor.has_second_factor(user),
+        'email_codes_on': twofactor.email_codes_on(user), 'email_available': email_enabled() and bool(user.email),
+        'totp_removable': device is not None and (not required or bool(keys)),
     })
+
+
+def _passkey_action(request, action):
+    """Rename or remove one of your passkeys. Staff can't remove their last strong method."""
+    passkey = Passkey.objects.filter(user=request.user, pk=request.POST.get('passkey') or 0).first()
+    if passkey is None:
+        messages.error(request, 'That passkey is gone already.')
+    elif action == 'passkey_rename':
+        passkey.name = passkeys.clean_name(request.POST.get('name', ''), request.META.get('HTTP_USER_AGENT', ''))
+        passkey.save(update_fields=['name'])
+        messages.success(request, f'Renamed to “{passkey.name}”.')
+    elif not passkeys.can_remove(request.user, passkey):
+        messages.error(request, 'Admin accounts need a passkey or an authenticator app. '
+                                'Add another one before removing this passkey.')
+    else:
+        passkey.delete()
+        twofactor.after_factor_removed(request.user)
+        messages.success(request, f'Passkey “{passkey.name}” removed. Also delete it from the device or '
+                                  'password manager that holds it.')
+    return redirect('console:account')

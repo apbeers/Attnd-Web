@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static console_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,18 +12,27 @@
       <h2 class="card-title mb-4 text-center">Sign in to Attnd</h2>
       {% if rate_limited %}<div class="alert alert-warning py-2" role="alert">{{ rate_limited }}</div>
       {% elif form.errors %}<div class="alert alert-danger py-2">That email and password didn’t match.</div>{% endif %}
+      <div data-passkey-signin data-passkey-scope data-options-url="{% url 'passkey_auth_options' %}"
+           data-verify-url="{% url 'passkey_auth' %}" data-next="{{ next }}">
+        <div class="alert alert-danger py-2" role="alert" data-passkey-error hidden></div>
+        <div class="d-grid mb-3" data-passkey-ui hidden>
+          <button type="button" class="btn btn-primary" data-passkey-button>{% icon "key" %} Sign in with a passkey</button>
+          <p class="text-center small text-muted mt-2 mb-0">or with your email and password</p>
+        </div>
+      </div>
       <form method="post">{% csrf_token %}
         <input type="hidden" name="next" value="{{ next }}">
         <div class="mb-3"><label class="form-label" for="id_username">Email</label>
-          <input class="form-control" type="text" name="username" id="id_username" autocomplete="username" autofocus required></div>
+          <input class="form-control" type="text" name="username" id="id_username" autocomplete="username webauthn" autofocus required></div>
         <div class="mb-3"><label class="form-label" for="id_password">Password</label>
           <input class="form-control" type="password" name="password" id="id_password" autocomplete="current-password" required></div>
         <p class="small text-end mt-n2 mb-3"><a href="{% url 'password_reset' %}">Forgot your password?</a></p>
-        <div class="d-grid"><button class="btn btn-primary">Sign in</button></div>
+        <div class="d-grid"><button class="btn btn-outline-primary">Sign in</button></div>
       </form>
       <p class="text-center small text-muted mt-3 mb-0">New here? <a href="{% url 'console:signup' %}">Create an account</a></p>
     </div>
   </div>
 </div>
+<script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>

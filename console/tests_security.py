@@ -223,7 +223,7 @@ class TwoFactorTests(TestCase):
 
     def test_optional_enrollment_from_the_account_page(self):
         self.client.force_login(self.organizer)
-        self.assertContains(self.client.get(reverse('console:account')), 'Set up two-factor sign-in')
+        self.assertContains(self.client.get(reverse('console:account')), 'Set up an authenticator app')
         page = self.client.get(reverse('two_factor_setup'))
         self.assertContains(page, '<svg')
         device = TwoFactorDevice.objects.get(user=self.organizer)
@@ -240,7 +240,7 @@ class TwoFactorTests(TestCase):
         self.assertEqual(len(codes), 10)
         for code in codes:
             self.assertContains(response, code)
-            self.assertNotIn(code, str(device.recovery_codes))  # stored hashed only
+            self.assertNotIn(code, str(self.organizer.sign_in_security.recovery_codes))  # stored hashed only
         self.assertEqual(self.client.get(reverse('console:account')).status_code, 200)
 
     def test_regular_user_can_turn_it_off_with_a_code(self):
@@ -261,7 +261,7 @@ class TwoFactorTests(TestCase):
             self.assertEqual(response.status_code, 302, url)
             self.assertTrue(response['Location'].startswith(reverse('two_factor_setup')), url)
         setup = self.client.get(reverse('two_factor_setup') + '?next=' + self.admin_url)
-        self.assertContains(setup, 'Admin accounts need a second step')
+        self.assertContains(setup, 'Admin accounts need a passkey or an authenticator app')
         device = TwoFactorDevice.objects.get(user=self.staff)
         self.client.post(reverse('two_factor_setup'), {'code': self.code(device), 'next': self.admin_url})
         self.assertEqual(self.client.get(self.admin_url).status_code, 200)
@@ -307,8 +307,7 @@ class TwoFactorTests(TestCase):
         response = self.client.post(reverse('two_factor_verify'), {'code': codes[0].upper().replace('-', ' ')})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.client.get(self.admin_url).status_code, 200)
-        device.refresh_from_db()
-        self.assertEqual(len(device.recovery_codes), 9)
+        self.assertEqual(twofactor.recovery_codes_left(self.staff), 9)
         self.sign_in('staff@example.com')
         self.assertEqual(self.client.post(reverse('two_factor_verify'), {'code': codes[0]}).status_code, 200)
         self.assertEqual(self.client.get(self.admin_url).status_code, 302)

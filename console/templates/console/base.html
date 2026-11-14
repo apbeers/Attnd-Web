@@ -30,6 +30,21 @@
     <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible">
       {{ message }}<button type="button" class="btn-close" data-dismiss="alert" aria-label="Close">×</button></div>
   {% endfor %}
+  {% passkey_prompt as show_passkey_prompt %}{% if show_passkey_prompt %}
+    <div class="alert alert-info passkey-prompt" data-passkey-prompt data-passkey-scope hidden role="region" aria-label="Passkey">
+      <div class="d-flex flex-wrap align-items-center gap-3">
+        <div class="flex-grow-1"><strong>{% icon "key" %} Sign in faster with a passkey</strong><br>
+          <span class="small">Use Face ID, Touch ID, Windows Hello or your screen lock instead of your password next time.</span></div>
+        <button type="button" class="btn btn-sm btn-primary" data-passkey-register
+                data-options-url="{% url 'passkey_register_options' %}" data-verify-url="{% url 'passkey_register' %}"
+                data-next="{{ request.get_full_path }}">Add a passkey</button>
+        <form method="post" action="{% url 'passkey_prompt_dismiss' %}" class="m-0">{% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button class="btn btn-sm btn-link text-muted">No thanks</button></form>
+      </div>
+      <div class="small text-danger mt-2" role="alert" data-passkey-error hidden></div>
+    </div>
+  {% endif %}
   {% if event and section %}
     <a class="back-link small" href="{% url 'console:dashboard' %}">← Your events</a>
     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -67,6 +82,7 @@
 </div>
 {% endif %}
 <script src="{% static 'console/console.js' %}"></script>
+<script src="{% static 'console/passkeys.js' %}"></script>
 {% if GOOGLE_MAPS_BROWSER_KEY %}<div id="maps-config" hidden data-key="{{ GOOGLE_MAPS_BROWSER_KEY }}" data-map-id="{{ GOOGLE_MAPS_MAP_ID }}"></div>
 <script src="{% static 'console/maps.js' %}"></script>{% endif %}
 {% block scripts %}{% endblock %}

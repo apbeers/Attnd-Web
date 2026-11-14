@@ -235,6 +235,9 @@ WEBAUTHN_RP_ID = os.getenv('WEBAUTHN_RP_ID', '').strip().lower() or (_site.hostn
 WEBAUTHN_RP_NAME = os.getenv('WEBAUTHN_RP_NAME', 'Attnd')
 WEBAUTHN_ORIGINS = [o.strip().rstrip('/') for o in os.getenv('WEBAUTHN_ORIGINS', '').split(',') if o.strip()] or [
     f'{_site.scheme}://{_site.netloc}']
+# The site also answers at www.<host> (Heroku domain www.attnd.app); a passkey for the RP ID attnd.app works there too.
+if _site.hostname and not _site.hostname.startswith('www.') and '.' in _site.hostname and 'herokuapp' not in _site.hostname:
+    WEBAUTHN_ORIGINS += [o for o in (f'{_site.scheme}://www.{_site.netloc}',) if o not in WEBAUTHN_ORIGINS]
 if DEBUG:
     WEBAUTHN_ORIGINS += [o for o in ('http://localhost:8000',) if o not in WEBAUTHN_ORIGINS]
 
