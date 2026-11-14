@@ -143,20 +143,33 @@ gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
 | GH-ios secret | `ASC_KEY_P8` | full contents of the `.p8` file |
 
 ### 3c. TestFlight
-1. In App Store Connect → Attnd → **TestFlight → Internal Testing → +**, create a group named **Internal**. Add yourself, plus anyone else on your team.
-2. Install the **TestFlight** app on your iPhone and accept the invite.
+1. ✅ The internal group already exists: **App Store Connect Users**, with you as a tester and TestFlight installed on your iPhone. New CI builds get added to this group.
+2. Set the pipeline variables:
+   ```bash
+   gh variable set TESTFLIGHT_GROUP -e dev -b "App Store Connect Users" -R apbeers/Attnd-iOS
+   gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-iOS
+   gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-Android
+   ```
 3. Add to GitHub:
 
 | Where | Name | Value |
 |---|---|---|
 | GH-ios env `dev` variable | `ATTND_SERVER` | `attnd-dev-7ab893f37020.herokuapp.com` |
-| GH-ios env `dev` variable | `TESTFLIGHT_GROUP` | `Internal` |
+| GH-ios env `dev` variable | `TESTFLIGHT_GROUP` | `App Store Connect Users` |
 | GH-ios secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev-7ab893f37020.herokuapp.com` | turns on the live API tests in CI |
 | GH-ios env `production` variable (optional) | `WHATS_NEW` | release notes for the next App Store version |
 
-### 3d. Before the first App Store submission from CI
+### 3d. Before the first App Store release from CI
+
+Attnd is **already approved and live** on the App Store and Google Play, so CI ships **updates**; there's no first-time app setup. Version numbers continue upward automatically: iOS goes from `1.0.44` to `2.0.<run>`, and Android's version code goes from 223/224 to `<run>000`. Each App Store update still goes through normal App Review.
+
+The new release also changes behaviour reviewers and users will notice:
+- **iOS** now requires **iOS 26 or later**.
+- **Android** now requires **Android 15 or later**, so older phones stop getting updates.
+- Push notifications are new and **opt-in** (asked for when the user turns them on in Options).
+
 - Update the privacy policy at `/privacy/` (`home/templates/home/privacy.html`). The app stores a random device ID and push tokens, and the current text says no device identifiers are collected. Also update the matching App Privacy answers in App Store Connect.
-- Make sure the App Store listing (screenshots, description, review contact) is filled in. CI submits the build, but it can't fill in missing store metadata.
+- Optional: refresh the App Store screenshots and description to show the new layouts and push updates. Set the release notes with `gh variable set WHATS_NEW -e production -b "…" -R apbeers/Attnd-iOS` (Android: `RELEASE_NOTES` on Attnd-Android).
 
 ## 4. Google / Android (40 min)
 
@@ -255,7 +268,7 @@ heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/
 heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-Android
 gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-iOS
 gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-Android
-gh variable set TESTFLIGHT_GROUP -e dev -b Internal -R apbeers/Attnd-iOS
+gh variable set TESTFLIGHT_GROUP -e dev -b "App Store Connect Users" -R apbeers/Attnd-iOS
 ```
 
 **Optional:** run the live API tests against dev in CI:
