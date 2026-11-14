@@ -1,5 +1,0 @@
-# DISABLED — real workflow is at infra/github-workflows/deploy-prod.yml
-# Move it to .github/workflows/ when ready to migrate to AWS.
-# See infra/MIGRATION.md for full instructions.
-on: {}
-jobs: {}
