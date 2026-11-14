@@ -194,9 +194,9 @@ The new release also changes behaviour reviewers and users will notice:
 
 ### 4a. Firebase (push notifications)
 1. ✅ The Firebase project **Attnd** already exists (Blaze plan) with the **Attnd - Android** app (`com.arcu.attnd`). Reuse it. Its old keys get rotated in step 4 below.
-2. Add the debug app: **Project Overview → + Add app → Android**, package `com.arcu.attnd.debug`, nickname "Attnd - Android (debug)". Skip the SDK steps, because the build already supports Firebase. Then download the updated `google-services.json` from **Project settings → General**; it now lists both apps. Store it:
+2. ✅ Both Android apps are in Firebase. Add the debug app: **Project Overview → + Add app → Android**, package `com.arcu.attnd.debug`, nickname "Attnd - Android (debug)". Skip the SDK steps, because the build already supports Firebase. Then download the updated `google-services.json` from **Project settings → General**; it now lists both apps. Store it:
    ```bash
-   gh secret set GOOGLE_SERVICES_JSON -R apbeers/Attnd-Android < ~/Downloads/google-services.json
+   gh secret set GOOGLE_SERVICES_JSON -R apbeers/Attnd-Android < /Users/andrewbeers/Downloads/google-services.json
    ```
 3. Put the file at `Attnd-Android/app/google-services.json` for local builds. It's gitignored.
 4. Set up the server's Google service account, which covers both push and Play Integrity. See **Key reference → `GOOGLE_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`**.
