@@ -13,7 +13,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 4. Google / Android | ⬜ 4e: exclude tablets in Play Console. ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev** deploys from `develop`. ✅ **Android** publishes to Play internal testing. ✅ **iOS** builds reach TestFlight, and on Nov 14 a real iPhone passed App Attest against dev and joined an event (lookup, join, bundle, 304s). Waiting on: the first release to `main`. |
-| 11. Email | ⬜ Mailgun + Namecheap DNS for `mg.attnd.app` (step 11); code fixes in ROADMAP.md. |
+| 11. Email | ⏳ ✅ Mailgun Starter (free) add-ons on attnd-web (`mailgun-spherical-62131`) and attnd-dev (`mailgun-silhouetted-37822`; separate account, Mailgun can't be shared between apps; dev stays on its sandbox, which only mails authorized recipients). ✅ `mg.attnd.app` added to the production account, click/open tracking off. ⬜ Namecheap DNS records, verify, SMTP login on attnd-web, code fixes (ROADMAP.md). |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 Notes:
@@ -464,17 +464,15 @@ One-time setup so iPhones show the App Clip card when they scan a code (App Stor
 3. Apple verifies the domain from the association file on attnd.app, so this works after the web release to production.
 
 ## 11. Email (Mailgun, DNS at Namecheap)
-⬜ Not started. Emails the server sends: team invites and "AI updates waiting for review" (both skipped silently until this is done); planned: password reset and error alerts to admins. The code fixes this needs (TLS on port 587, a per-environment site URL for links, `DEFAULT_FROM_EMAIL`, a dev allow-list so dev never emails real people) are listed in `ROADMAP.md` and get done together with this step.
+⏳ In progress (see the progress table). Emails the server sends: team invites and "AI updates waiting for review" (both skipped silently until this is done); planned: password reset and error alerts to admins. The code fixes this needs (TLS on port 587, a per-environment site URL for links, `DEFAULT_FROM_EMAIL`, a dev allow-list so dev never emails real people) are listed in `ROADMAP.md` and get done together with this step.
 
 Sending domain: **`mg.attnd.app`** (a subdomain keeps the main domain's reputation separate). From address: `Attnd <noreply@mg.attnd.app>`.
 
-**1. Mailgun account through Heroku** (one account; dev is attached to it, so both apps share it):
+**1. ✅ Mailgun accounts through Heroku** (done Nov 14, 2026 with the Platform API; Starter is free). Mailgun add-ons can't be attached to a second app, so each app has its own account. Production uses `mg.attnd.app`; dev keeps its sandbox domain (only authorized recipients receive mail, so dev can't email real people):
 ```
-heroku addons:plans mailgun
-heroku addons:create mailgun:PLAN -a attnd-web
-heroku addons:attach mailgun -a attnd-dev
-```
-Pick `PLAN` from the first command's list (plans change). The add-on sets `MAILGUN_SMTP_LOGIN`, `MAILGUN_SMTP_PASSWORD`, `MAILGUN_DOMAIN` (and API keys) on the apps. Until a custom domain is verified, they point at a Mailgun **sandbox** domain that can only email addresses you authorize.
+heroku addons:create mailgun:starter -a attnd-web
+heroku addons:create mailgun:starter -a attnd-dev
+``` The add-on sets `MAILGUN_SMTP_LOGIN`, `MAILGUN_SMTP_PASSWORD`, `MAILGUN_DOMAIN` (and API keys) on the apps. Until a custom domain is verified, they point at a Mailgun **sandbox** domain that can only email addresses you authorize.
 
 **2. Add the domain in Mailgun:** `heroku addons:open mailgun -a attnd-web` → **Sending → Domains → Add new domain** → `mg.attnd.app`, US region. Mailgun then lists the DNS records to add. Turn **click/open tracking off** (Domain settings → Tracking): it rewrites links in transactional email and needs an extra CNAME.
 
