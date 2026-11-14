@@ -8,7 +8,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 |---|---|
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
-| 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, Scheduler jobs and GitHub deploy settings. **Still to do:** add Cloudinary on both apps so uploads survive restarts, and set `CONTACT_EMAIL` on production. |
+| 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, `CONTACT_EMAIL`, Scheduler jobs and GitHub deploy settings. ✅ Stack heroku-26 and Python 3.15. **Still to do:** check Postgres and upgrade to 18 (commands under "Keeping Heroku current"), and add Cloudinary on both apps so uploads survive restarts. |
 | 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ❌ 3b: the CI key check (iOS run 78) reports that the `ASC_ISSUER_ID` secret is not the Issuer ID UUID. Re-set it with the command under 3b, then re-run the iOS workflow. |
 | 4. Google / Android | ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
@@ -97,6 +97,27 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
   heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-Android
   ```
   ✅ Done: both repos have the dev key as `ATTND_API_KEY`. To see the key itself (for example for local dev config), run `heroku config:get API_KEY -a attnd-dev`.
+
+### Keeping Heroku current
+- ✅ **Stack:** both apps are on `heroku-26` (Ubuntu 26.04, supported until April 2031). Production was already set. Claude moved dev on Nov 14, and the switch takes effect on each app's next deploy. `app.json` pins `heroku-26`.
+- ✅ **Python:** `.python-version` says `3.15`, and Heroku reads that file. Patch releases install automatically on the next deploy.
+- ⏳ **Postgres 18:** the current Heroku default. CI tests against 18. Essential-tier databases upgrade in place in a few minutes, and the app is unavailable while that runs. Check versions first:
+  ```bash
+  heroku pg:info -a attnd-dev | grep -i version
+  heroku pg:info -a attnd-web | grep -i version
+  ```
+  If either is below 18, upgrade dev first, check that the site still works, then upgrade production:
+  ```bash
+  heroku pg:upgrade:run DATABASE_URL -a attnd-dev --confirm attnd-dev
+  heroku pg:upgrade:wait DATABASE_URL -a attnd-dev
+  curl -s https://attnd-dev-7ab893f37020.herokuapp.com/health/
+  ```
+  ```bash
+  heroku pg:backups:capture -a attnd-web
+  heroku pg:upgrade:run DATABASE_URL -a attnd-web --confirm attnd-web
+  heroku pg:upgrade:wait DATABASE_URL -a attnd-web
+  ```
+- **Each year:** check that the stack, Python and Postgres versions are still current. Heroku emails before anything is deprecated. Python packages are bumped weekly by the "Upgrade dependencies" workflow.
 
 ### Let GitHub deploy to Heroku
 ```bash
@@ -339,7 +360,7 @@ Limits to know about:
 
 | Branch | Web | iOS | Android |
 |---|---|---|---|
-| any push / PR | tests (Postgres) | build + unit tests | unit tests, lint, debug build |
+| any push / PR | tests (Postgres 18) | build + unit tests | unit tests, lint, debug build |
 | `develop` | Heroku dev | TestFlight "Internal", using the dev server | Play internal testing, using the dev server |
 | `main` | Heroku production | App Review → auto-release | Play production |
 

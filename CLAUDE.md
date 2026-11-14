@@ -1,6 +1,6 @@
 # Attnd Web — Backend & API
 
-Django 6.0 backend serving the REST API consumed by the iOS and Android apps, plus a web console for event organizers. Deployed on Heroku.
+Django 6.1 backend serving the REST API consumed by the iOS and Android apps, plus a web console for event organizers. Deployed on Heroku.
 
 
 ## Branching (initial development)
@@ -47,13 +47,13 @@ Upgrade Python packages with `uv run python scripts/upgrade_deps.py` (also runs 
 
 ## Tech Stack
 
-- **Python 3.12** managed with `uv`
-- **Django 6.0** (no DRF)
-- **PostgreSQL** in production via `dj-database-url`; SQLite in local dev
+- **Python 3.15** managed with `uv` (`.python-version`; Heroku reads the same file)
+- **Django 6.1** (no DRF)
+- **PostgreSQL 18** in production (Heroku Postgres essential-0) via `dj-database-url`; SQLite in local dev
 - **Cloudinary** for media storage in production (falls back to local filesystem)
 - **Whitenoise** for static files
-- **Gunicorn** (gthread, 2 workers × 4 threads) as WSGI server
-- **Heroku** deployment via `Procfile`; Docker image also available
+- **Gunicorn** (gthread, 1 worker × 4 threads) as WSGI server
+- **Heroku** (Cedar generation, `heroku-26` stack, Basic dynos) deployment via `Procfile`; Docker image also available
 
 ## Project Structure
 

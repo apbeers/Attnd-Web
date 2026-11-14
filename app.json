@@ -1,19 +1,22 @@
 {
   "name": "Attnd",
-  "description": "Event management web app",
+  "description": "Attnd: event backend, API and organizer console",
   "formation": {
     "web": {
       "quantity": 1,
-      "size": "eco"
+      "size": "basic"
     },
     "worker": {
       "quantity": 0,
-      "size": "eco"
+      "size": "basic"
     }
   },
   "addons": [
     {
-      "plan": "heroku-postgresql:essential-0"
+      "plan": "heroku-postgresql:essential-0",
+      "options": {
+        "version": "18"
+      }
     },
     {
       "plan": "scheduler:standard"
@@ -23,10 +26,6 @@
     "SECRET_KEY": {
       "description": "Django secret key",
       "generator": "secret"
-    },
-    "GS_BUCKET_NAME": {
-      "description": "Google Cloud Storage bucket for media and static files",
-      "required": false
     },
     "API_KEY": {
       "description": "Static bearer key for dev/CI builds only. Production apps use attestation JWTs.",
@@ -45,11 +44,16 @@
       "description": "Run AI jobs in the web dyno (1) or only in the worker dyno (0)",
       "value": "1",
       "required": false
+    },
+    "CLOUDINARY_URL": {
+      "description": "Cloudinary media storage (set by the Cloudinary add-on). Without it uploads use the dyno filesystem and are lost on restart.",
+      "required": false
     }
   },
   "buildpacks": [
     {
       "url": "heroku/python"
     }
-  ]
+  ],
+  "stack": "heroku-26"
 }
