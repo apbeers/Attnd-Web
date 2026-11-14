@@ -1,0 +1,19 @@
+{% extends 'console/base.html' %}
+{% block title %}Team · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="card mb-4"><ul class="list-group list-group-flush">
+  <li class="list-group-item d-flex"><span class="me-auto">{{ event.user.email|default:event.user.username }}</span><span class="badge text-bg-dark">Owner</span></li>
+  {% for m in members %}
+  <li class="list-group-item d-flex align-items-center"><span class="me-auto">{{ m.user.email }}</span>
+    <span class="badge text-bg-light border me-2">Editor</span>
+    {% if is_owner %}<form method="post">{% csrf_token %}<button name="remove" value="{{ m.id }}" class="btn btn-sm btn-link text-danger">Remove</button></form>{% endif %}
+  </li>{% endfor %}
+</ul></div>
+{% if is_owner %}
+<div class="card"><div class="card-body">
+  <h2 class="h6">Add an organizer</h2>
+  <p class="small text-muted">Editors can change everything except deleting the event.</p>
+  <form method="post" class="d-flex gap-2">{% csrf_token %}{{ form.email }}<button class="btn btn-primary text-nowrap">Add</button></form>
+</div></div>
+{% endif %}
+{% endblock %}

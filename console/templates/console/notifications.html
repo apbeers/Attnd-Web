@@ -1,0 +1,47 @@
+{% extends 'console/base.html' %}
+{% block title %}Notifications · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card"><div class="card-body p-4">
+      <h2 class="h5">Send an update</h2>
+      <p class="small text-muted">Pushes to {{ reach }} device{{ reach|pluralize }} with notifications on, and shows in everyone’s Updates tab.</p>
+      <form method="post">{% csrf_token %}
+        {% include 'console/_field.html' with field=form.title %}
+        {% include 'console/_field.html' with field=form.body %}
+        <div class="mb-3">{% for radio in form.when %}<div class="form-check form-check-inline">{{ radio.tag }}
+          <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label></div>{% endfor %}</div>
+        <div id="send-time">{% include 'console/_field.html' with field=form.send_time %}</div>
+        <button class="btn btn-primary"><i class="bi bi-send"></i> Send</button>
+      </form>
+    </div></div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card"><ul class="list-group list-group-flush">
+    {% for n in notifications %}
+      <li class="list-group-item py-3">
+        <div class="d-flex">
+          <strong class="me-auto">{{ n.title }}</strong>
+          {% if n.sent %}<span class="small text-muted">Sent {{ n.sent_at|default:n.send_time|date:"M j, g:i A" }} · {{ n.delivered_count }} delivered</span>
+          {% else %}<span class="badge text-bg-info">Scheduled {{ n.send_time|date:"M j, g:i A" }}</span>{% endif %}
+        </div>
+        <div class="text-muted">{{ n.body }}</div>
+        {% if not n.sent %}
+        <form method="post" action="{% url 'console:notification_action' event.id n.id %}" class="mt-2 d-flex gap-2">{% csrf_token %}
+          <button name="action" value="send" class="btn btn-sm btn-outline-primary">Send now</button>
+          <button name="action" value="delete" class="btn btn-sm btn-outline-danger">Delete</button>
+        </form>
+        {% endif %}
+      </li>
+    {% empty %}<li class="list-group-item text-muted text-center py-5">No notifications yet.</li>{% endfor %}
+    </ul></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const toggle = () => { document.getElementById('send-time').style.display =
+  document.querySelector('input[name=when]:checked')?.value === 'later' ? '' : 'none'; };
+document.querySelectorAll('input[name=when]').forEach(r => r.addEventListener('change', toggle)); toggle();
+</script>
+{% endblock %}

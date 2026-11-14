@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views import View
 
 from console.forms.signup import SignUpForm
-from events.models import Event, Location, Notification, generate_event_code
+from events.models import Event, Location, Notification, ScheduledItem, generate_event_code
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,10 @@ def _claim_trial_event(user: User, event_code: str) -> bool:
         return False
 
     event.user = user
-    event.save()
+    event.save(update_fields=['user'])
 
     Location.objects.filter(event=event).update(user=user)
+    ScheduledItem.objects.filter(event=event).update(user=user)
     Notification.objects.filter(event=event).update(user=user)
 
     logger.info("Claimed event %r (code=%s) → user %s", event.name, event_code, user.email)
@@ -78,29 +79,11 @@ class SignUpView(View):
                 'claim_code': claim,
             })
 
-        user.is_staff = True
-        user.save()
         login(request, user)
 
-        # If we have a claim code, transfer the trial event; otherwise seed a demo event.
-        if claim and _claim_trial_event(user, claim):
-            pass  # event transferred — nothing else to do
-        else:
-            self.create_demo_event(user=user)
-
-        return redirect('/admin/')
-
-    @staticmethod
-    def create_demo_event(user: User):
-        Event.objects.create(
-            name=f'Demo Event - {user.email}',
-            event_code=generate_event_code(),
-            description='The local art fair is back! Artists will be teaching classes and selling paintings.',
-            latitude=32.754695,
-            longitude=-97.331605,
-            start_time=timezone.now() + datetime.timedelta(weeks=1),
-            flyer='',
-            address='420 Main St, Fort Worth, TX 76102, USA',
-            order_id='',
-            user=user,
-        )
+        # If we have a claim code, transfer the trial event to the new account.
+        if claim:
+            event = Event.objects.filter(event_code=claim).first() if _claim_trial_event(user, claim) else None
+            if event is not None:
+                return redirect('console:event', event_id=event.pk)
+        return redirect('console:dashboard')

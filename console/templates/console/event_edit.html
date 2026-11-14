@@ -1,0 +1,39 @@
+{% extends 'console/base.html' %}
+{% block title %}Details · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="card mb-4"><div class="card-body p-4">
+  <form method="post" enctype="multipart/form-data">{% csrf_token %}
+    {% with locked=event.locked_fields %}
+    {% include 'console/_field.html' with field=form.name %}
+    {% include 'console/_field.html' with field=form.description %}
+    <div class="row">
+      <div class="col-md-4">{% include 'console/_field.html' with field=form.start_time %}</div>
+      <div class="col-md-4">{% include 'console/_field.html' with field=form.end_time %}</div>
+      <div class="col-md-4">{% include 'console/_field.html' with field=form.timezone %}</div>
+    </div>
+    <p class="form-text mt-n2 mb-3">Times are in the event’s time zone ({{ event.timezone }}).</p>
+    {% include 'console/_field.html' with field=form.address %}
+    <div class="row">
+      <div class="col-md-6">{% include 'console/_field.html' with field=form.latitude %}</div>
+      <div class="col-md-6">{% include 'console/_field.html' with field=form.longitude %}</div>
+    </div>
+    {% include 'console/_field.html' with field=form.flyer %}
+    <div class="row">
+      <div class="col-md-4">{% include 'console/_field.html' with field=form.accent_color %}</div>
+      <div class="col-md-8">{% include 'console/_field.html' with field=form.logo_url %}</div>
+    </div>
+    {% endwith %}
+    <button class="btn btn-primary">Save</button>
+  </form>
+</div></div>
+{% if event.locked_fields %}
+<p class="small text-muted"><i class="bi bi-lock-fill lock"></i> Fields you’ve edited are protected from AI refreshes — the AI can still suggest changes, but they’re unticked by default.</p>
+{% endif %}
+<div class="card border-danger"><div class="card-body">
+  <h2 class="h6 text-danger">Delete event</h2>
+  <form method="post" action="{% url 'console:event_delete' event.id %}" class="d-flex gap-2">{% csrf_token %}
+    <input class="form-control form-control-sm" style="max-width:220px" name="confirm_code" placeholder="Type {{ event.event_code }}">
+    <button class="btn btn-sm btn-outline-danger">Delete permanently</button>
+  </form>
+</div></div>
+{% endblock %}

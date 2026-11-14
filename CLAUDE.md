@@ -9,7 +9,16 @@ Attnd is an event attendance app. This repo is the single backend for both mobil
 - **[attnd-ios](https://github.com/apbeers/Attnd-iOS)** — SwiftUI app
 - **[attnd-android](https://github.com/apbeers/Attnd-Android)** — Kotlin/Compose app
 
-The mobile apps call `/api/v1/events/` exclusively. There is no Django REST Framework — all API views are plain Django class-based views returning `JsonResponse`.
+Current mobile apps use **API v2** (`/api/v2/`, see `API_V2.md`): one `bundle/` request returns the event, locations, schedule, notifications and the server-resolved **display config**. `/api/v1/events/` stays for older app builds (shapes unchanged; drafts, hidden rows and location-less items are filtered out for them). There is no Django REST Framework — all API views are plain Django views returning `JsonResponse`.
+
+## Platform model (the "full vision")
+
+1. **AI import** — an organizer (or anonymous visitor on the homepage) gives URLs / a PDF or image / pasted text. An `IngestJob` crawls + extracts with OpenAI structured output and creates the event (`scrape/jobs.py`, `scrape/service.py`).
+2. **Manual management** — the organizer console (`/console/`) edits everything. Any field a person edits is added to that row's `locked_fields`.
+3. **AI refresh** — on demand or on a schedule, the AI re-reads the sources *with the current data* and returns its view; `scrape/diff.py` turns that into a `ChangeSet` of field-level `Change`s. Locked fields become conflicts (unticked), empty AI values never blank data, removals need cited evidence.
+4. **Review** — the organizer accepts per change / per field; `apply_changeset` applies atomically, snapshots an `EventRevision` first (rollback from History), and bumps `content_version` once.
+5. **Apps follow** — every content change bumps `Event.content_version` (signals in `events/signals.py`); apps poll `bundle/` with `If-None-Match` and can get a silent `content_updated` push.
+6. **Adaptive layout** — `events/display.py` picks a preset (intimate / standard / festival) from size + spread; organizers override any key in **App layout**; the resolved dict ships in the bundle.
 
 ## Tech Stack
 
@@ -26,10 +35,10 @@ The mobile apps call `/api/v1/events/` exclusively. There is no Django REST Fram
 ```
 attnd/          # Django project: settings, root urls.py, wsgi/asgi
 events/         # Core models + entire REST API (apis.py, urls.py)
-console/        # Organizer web dashboard (login-protected)
+console/        # Organizer console (/console/): AI create, editors, review, layout, push, history, team
 home/           # Marketing/landing pages
 join/           # /join/<code>/ redirect + AASA & assetlinks well-known files
-scrape/         # AI-powered event scraper (OpenAI + BeautifulSoup)
+scrape/         # AI import/refresh: crawl + OpenAI extraction, jobs, diff/changesets
 attestation/    # Apple App Attest + Google Play Integrity + JWT issuance
 static/         # Project-level static assets
 public/         # Files served at root by Whitenoise (robots.txt, etc.)
@@ -39,24 +48,31 @@ public/         # Files served at root by Whitenoise (robots.txt, etc.)
 
 | Model | Key fields |
 |-------|------------|
-| `Event` | name, event_code (unique), latitude/longitude, start_time, paid, public, flyer, address |
-| `Location` | name, snippet, description, image/image_url, lat/lng, address — FK to Event |
-| `ScheduledItem` | name, description, start_time — FK to Location + Event |
-| `Notification` | title, body, send_time, sent — FK to Event |
-| `Device` | id (UUID string PK), platform (ios/android), subscribed, event FK |
+| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, content_version, source_urls, refresh_schedule, auto_accept_minor, locked_fields |
+| `Location` | name, snippet, description, category, sort_order, hidden, image/image_url, lat/lng (nullable), address, locked_fields — FK to Event |
+| `ScheduledItem` | name, description, start/end_time, tags, hidden, locked_fields — FK to Event, optional FK to Location |
+| `Notification` | title, body, send_time, sent, sent_at, delivered/failed counts — FK to Event |
+| `Device` | id (UUID string PK), platform (ios/android), subscribed, push_token, app_version, last_seen, event FK |
+| `EventMember` | extra organizers (editors) for an event |
+| `EventRevision` | full content snapshot for rollback |
+| `scrape.IngestJob` / `ChangeSet` / `Change` | AI runs and the reviewable edits they propose |
 
-`paid=False` means a demo/trial event created by the scraper — mobile clients must show a "Demo Event" banner. `public=False` events are hidden from search; organizers can still use `/lookup/` to find them.
+- `status`: `draft` (invisible to every API) → `published` → `archived` (still viewable, apps show "ended").
+- `paid=False` means demo/trial — mobile clients must show a "Demo Event" banner.
+- `public` = listed in nearby search. Unclaimed homepage trial events are published but unlisted, reachable by code/QR.
+- Coordinates are nullable; `null` means unknown (never `0,0`).
+- Times are stored in UTC; `Event.timezone` is the IANA zone used for entry and display.
 
 ## API Authentication
 
 All API views mix in `ApiKeyRequired` (`events/apis.py`). Two accepted token forms:
 
-1. **Static API key** — `Authorization: Bearer <API_KEY>` env var. Used in dev, CI, and the console.
+1. **Static API key** — `Authorization: Bearer <API_KEY>` env var. For dev/CI builds only. Keys listed (by SHA-256) in `REVOKED_API_KEY_SHA256` in `events/apis.py` are always rejected.
 2. **Attestation JWT** — short-lived JWT issued by `/api/v1/attest/ios/` or `/api/v1/attest/android/` after verifying Apple App Attest or Google Play Integrity. Used by production mobile builds.
 
 On 401 the mobile clients invalidate their stored JWT and re-attest before retrying once.
 
-## Key API Endpoints
+## Key API Endpoints (v1 — legacy; see `API_V2.md` for v2)
 
 Base: `https://attnd.app/api/v1/events/`
 
@@ -115,19 +131,25 @@ uv run python manage.py migrate
 uv run python manage.py runserver
 ```
 
+## Background work
+
+- **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
+- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, starts scheduled AI refreshes, re-queues interrupted jobs, expires unclaimed trial events.
+- **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged.
+
 ## Running Tests
 
 ```bash
 uv run python manage.py test
 ```
 
-Tests live in `<app>/tests.py` (unit) and `events/tests_integration.py` (integration).
+Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and `events/tests_integration.py`.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SECRET_KEY` | Yes | Django secret key |
+| `SECRET_KEY` | Yes | Django secret key (startup fails without it unless `DEBUG`/`CI`) |
 | `DEBUG` | No | Set to any truthy value to enable debug mode |
 | `API_KEY` | Yes | Static bearer token for mobile API auth |
 | `DATABASE_URL` | Prod | PostgreSQL connection string |
@@ -142,13 +164,22 @@ Tests live in `<app>/tests.py` (unit) and `events/tests_integration.py` (integra
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Prod | Google service account for Play Integrity |
 | `ATTESTATION_JWT_SECRET` | Prod | Secret for signing attestation JWTs |
 | `ATTESTATION_JWT_TTL_HOURS` | No | JWT lifetime in hours, default 24 |
+| `OPENAI_API_KEY` | Yes | AI import / refresh |
+| `OPENAI_MODEL` | No | Extraction model, default `gpt-5-mini` |
+| `INGEST_RUN_INLINE` | No | `1` (default) run AI jobs in web dyno; `0` = worker dyno only |
+| `APNS_AUTH_KEY` / `APNS_KEY_ID` | Push | APNs .p8 key contents and key ID |
+| `APNS_TEAM_ID` / `APNS_TOPIC` | No | Default to `APPLE_TEAM_ID` / `APPLE_APP_BUNDLE_ID` |
+| `APNS_USE_SANDBOX` | No | Truthy for development-signed builds |
+| `FCM_PROJECT_ID` | Push | Firebase project ID |
+| `FCM_SERVICE_ACCOUNT_JSON` | No | Defaults to `GOOGLE_SERVICE_ACCOUNT_JSON` (needs Firebase Messaging permission) |
 
 ## Deployment
 
 Heroku `Procfile`:
 ```
 release: python manage.py migrate --noinput && python manage.py collectstatic --noinput
-web: gunicorn attnd.wsgi --worker-class gthread --workers 2 --threads 4 --timeout 300
+web: gunicorn attnd.wsgi --worker-class gthread --workers 1 --threads 4 --timeout 300
+worker: python manage.py process_ingest_jobs   # optional, scaled to 0 by default
 ```
 
 Docker image uses `uv` for fast dependency installation (`Dockerfile`).

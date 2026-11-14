@@ -1,0 +1,45 @@
+{% extends 'console/base.html' %}
+{% block title %}Locations · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="d-flex align-items-center mb-3">
+  <p class="text-muted mb-0 me-auto">Drag to set the order attendees see.</p>
+  <a class="btn btn-primary" href="{% url 'console:location_new' event.id %}"><i class="bi bi-plus-lg"></i> Add location</a>
+</div>
+<div class="card">
+  <ul class="list-group list-group-flush" id="location-list">
+  {% for loc in locations %}
+    <li class="list-group-item d-flex align-items-center gap-3 py-3" data-id="{{ loc.id }}">
+      <i class="bi bi-grip-vertical drag-handle fs-5"></i>
+      {% if loc.resolved_image_url %}<img src="{{ loc.resolved_image_url }}" alt="" width="48" height="48" class="rounded object-fit-cover">
+      {% else %}<div class="rounded bg-light d-flex align-items-center justify-content-center" style="width:48px;height:48px"><i class="bi bi-geo-alt text-muted"></i></div>{% endif %}
+      <div class="me-auto">
+        <a href="{% url 'console:location_edit' event.id loc.id %}" class="fw-semibold text-decoration-none">{{ loc.name }}</a>
+        {% if loc.category %}<span class="badge text-bg-light border ms-1">{{ loc.category }}</span>{% endif %}
+        {% if loc.hidden %}<span class="badge text-bg-secondary ms-1">Hidden</span>{% endif %}
+        {% if loc.locked_fields %}<i class="bi bi-lock-fill lock small ms-1" title="Edited by you"></i>{% endif %}
+        <div class="small text-muted">{{ loc.snippet|default:loc.address|truncatechars:90 }}</div>
+      </div>
+      {% if not loc.has_coordinates %}<span class="badge text-bg-warning" title="Not on the map yet"><i class="bi bi-geo"></i> No pin</span>{% endif %}
+      <span class="small text-muted text-nowrap">{{ loc.n_items }} item{{ loc.n_items|pluralize }}</span>
+    </li>
+  {% empty %}
+    <li class="list-group-item text-center text-muted py-5">No locations yet. Add stages, booths, venues, food — anywhere attendees go.</li>
+  {% endfor %}
+  </ul>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" crossorigin="anonymous"></script>
+<script>
+const list = document.getElementById('location-list');
+if (list && window.Sortable) Sortable.create(list, {
+  handle: '.drag-handle', animation: 150, ghostClass: 'sortable-ghost',
+  onEnd() {
+    const order = [...list.querySelectorAll('[data-id]')].map(li => li.dataset.id).join(',');
+    const body = new FormData(); body.append('order', order);
+    fetch('{% url "console:locations_reorder" event.id %}', {method: 'POST', body,
+      headers: {'X-CSRFToken': '{{ csrf_token }}'}});
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>{{ event.name }} — Poster</title>
+<style>
+  @page { size: letter; margin: 0.6in; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; color: #111; }
+  h1 { font-size: 44px; margin: 0.4in 0 0.1in; }
+  .sub { font-size: 20px; color: #555; }
+  img { width: 4.5in; height: 4.5in; margin: 0.4in auto 0.2in; display: block; }
+  .code { font-family: ui-monospace, Menlo, monospace; font-size: 40px; font-weight: 800; letter-spacing: .08em; }
+  .how { font-size: 18px; color: #333; margin-top: 0.3in; }
+  .brand { margin-top: 0.4in; color: #ff5a1f; font-weight: 800; font-size: 22px; }
+  @media screen { body { max-width: 8.5in; margin: 0 auto; padding: 0.5in; } .print { margin-top: 20px; } }
+  @media print { .print { display: none; } }
+</style></head>
+<body>
+  <h1>{{ event.name }}</h1>
+  <div class="sub">Map, schedule &amp; live updates on your phone</div>
+  <img src="{% url 'console:event_qr' event.id %}" alt="QR code">
+  <div class="how">Scan with your camera — or open the Attnd app and enter</div>
+  <div class="code">{{ event.event_code }}</div>
+  <div class="brand">attnd.app</div>
+  <button class="print" onclick="window.print()">Print</button>
+</body></html>

@@ -5,11 +5,18 @@
     "web": {
       "quantity": 1,
       "size": "eco"
+    },
+    "worker": {
+      "quantity": 0,
+      "size": "eco"
     }
   },
   "addons": [
     {
       "plan": "heroku-postgresql:essential-0"
+    },
+    {
+      "plan": "scheduler:standard"
     }
   ],
   "env": {
@@ -19,6 +26,24 @@
     },
     "GS_BUCKET_NAME": {
       "description": "Google Cloud Storage bucket for media and static files",
+      "required": false
+    },
+    "API_KEY": {
+      "description": "Static bearer key for dev/CI builds only. Production apps use attestation JWTs.",
+      "required": true
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI key for AI event import/refresh",
+      "required": true
+    },
+    "OPENAI_MODEL": {
+      "description": "OpenAI model for extraction",
+      "value": "gpt-5-mini",
+      "required": false
+    },
+    "INGEST_RUN_INLINE": {
+      "description": "Run AI jobs in the web dyno (1) or only in the worker dyno (0)",
+      "value": "1",
       "required": false
     }
   },

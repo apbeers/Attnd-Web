@@ -33,22 +33,16 @@ class SignUpViewTests(TestCase):
         response = self.client.get(self.url, secure=True)
         self.assertEqual(response.status_code, 200)
 
-    def test_valid_post_redirects_to_admin(self):
+    def test_valid_post_redirects_to_console(self):
         response = self._post(self.valid_data)
-        self.assertRedirects(response, '/admin/', fetch_redirect_response=False)
+        self.assertRedirects(response, reverse('console:dashboard'), fetch_redirect_response=False)
 
-    def test_valid_post_creates_staff_user(self):
+    def test_valid_post_creates_regular_user(self):
         self._post(self.valid_data)
         user = User.objects.get(username='new@example.com')
-        self.assertTrue(user.is_staff)
+        self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
         self.assertEqual(user.email, 'new@example.com')
-
-    def test_valid_post_creates_demo_event_linked_to_user(self):
-        self._post(self.valid_data)
-        user = User.objects.get(username='new@example.com')
-        events = Event.objects.filter(user=user)
-        self.assertEqual(events.count(), 1)
 
     def test_claim_transfers_trial_event(self):
         """Signing up with ?claim=CODE transfers the trial event to the new user."""
@@ -83,12 +77,13 @@ class SignUpViewTests(TestCase):
         # No extra demo event should be created
         self.assertEqual(Event.objects.filter(user=new_user).count(), 1)
 
-    def test_claim_bad_code_falls_back_to_demo_event(self):
-        """An invalid claim code silently falls back to creating the demo event."""
+    def test_claim_bad_code_lands_on_dashboard(self):
+        """An invalid claim code still creates the account and lands on the empty dashboard."""
         data = {**self.valid_data, 'claim': 'BADCODE99'}
-        self._post(data)
+        response = self._post(data)
         user = User.objects.get(username='new@example.com')
-        self.assertEqual(Event.objects.filter(user=user).count(), 1)
+        self.assertEqual(Event.objects.filter(user=user).count(), 0)
+        self.assertRedirects(response, reverse('console:dashboard'), fetch_redirect_response=False)
 
     def test_duplicate_email_returns_200_with_form_error(self):
         User.objects.create_user(username='new@example.com', email='new@example.com', password='x')
@@ -106,3 +101,156 @@ class SignUpViewTests(TestCase):
         response = self._post({'email': 'new@example.com', 'password': ''})
         self.assertEqual(response.status_code, 200)
         self.assertFalse(User.objects.filter(email='new@example.com').exists())
+
+
+# ---------------------------------------------------------------------------
+# Organizer console
+# ---------------------------------------------------------------------------
+
+from unittest.mock import patch  # noqa: E402
+
+from events.models import EventMember, ScheduledItem  # noqa: E402
+from scrape import diff  # noqa: E402
+from scrape.models import ChangeSet, IngestJob  # noqa: E402
+
+
+class ConsoleTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user('owner@example.com', 'owner@example.com', 'pw')
+        self.other = User.objects.create_user('other@example.com', 'other@example.com', 'pw')
+        self.event = Event.objects.create(
+            name='Art Walk', event_code='ARTWALK1', start_time=timezone.now() + datetime.timedelta(days=2),
+            timezone='America/Chicago', latitude=32.75, longitude=-97.33, user=self.owner,
+            status=Event.STATUS_DRAFT)
+        self.loc = Location.objects.create(event=self.event, user=self.owner, name='Gallery A',
+                                           latitude=32.751, longitude=-97.331, category='Gallery')
+        self.item = ScheduledItem.objects.create(event=self.event, user=self.owner, location=self.loc,
+                                                 name='Opening', start_time=self.event.start_time)
+        self.client = Client()
+        self.client.force_login(self.owner)
+
+    def url(self, name, *args):
+        return reverse(f'console:{name}', args=[self.event.pk, *args])
+
+    def test_every_page_renders(self):
+        pages = [reverse('console:dashboard'), reverse('console:event_new'),
+                 self.url('event'), self.url('event_edit'), self.url('locations'), self.url('location_new'),
+                 self.url('location_edit', self.loc.pk), self.url('schedule'), self.url('item_new'),
+                 self.url('item_edit', self.item.pk), self.url('notifications'), self.url('display'),
+                 self.url('changesets'), self.url('history'), self.url('team'), self.url('event_poster'),
+                 self.url('event_qr')]
+        for page in pages:
+            with self.subTest(page=page):
+                self.assertEqual(self.client.get(page, secure=True).status_code, 200)
+
+    def test_other_users_cannot_see_event(self):
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(self.url('event'), secure=True).status_code, 404)
+
+    def test_team_member_can_edit(self):
+        EventMember.objects.create(event=self.event, user=self.other)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(self.url('locations'), secure=True).status_code, 200)
+
+    def test_anonymous_redirects_to_login(self):
+        self.client.logout()
+        resp = self.client.get(reverse('console:dashboard'), secure=True)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/accounts/login/', resp['Location'])
+
+    def test_manual_edit_locks_fields(self):
+        resp = self.client.post(self.url('location_edit', self.loc.pk), {
+            'name': 'Gallery A', 'category': 'Gallery', 'snippet': '', 'description': 'Hand written',
+            'address': '', 'latitude': '32.751', 'longitude': '-97.331', 'website': '', 'image_url': '',
+        }, secure=True)
+        self.assertEqual(resp.status_code, 302)
+        self.loc.refresh_from_db()
+        self.assertEqual(self.loc.description, 'Hand written')
+        self.assertEqual(self.loc.locked_fields, ['description'])
+
+    def test_item_times_are_entered_in_event_timezone(self):
+        resp = self.client.post(self.url('item_new'), {
+            'name': 'Talk', 'start_time': '2026-07-04T18:00', 'end_time': '', 'location': self.loc.pk,
+            'description': '', 'tags_text': 'Talks, Kids',
+        }, secure=True)
+        self.assertEqual(resp.status_code, 302)
+        item = ScheduledItem.objects.get(name='Talk')
+        self.assertEqual(item.start_time.astimezone(datetime.timezone.utc).hour, 23)  # 18:00 CDT
+        self.assertEqual(item.tags, ['Talks', 'Kids'])
+
+    def test_publish_and_list(self):
+        self.client.post(self.url('event_status'), {'action': 'publish'}, secure=True)
+        self.client.post(self.url('event_status'), {'action': 'list'}, secure=True)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.status, Event.STATUS_PUBLISHED)
+        self.assertTrue(self.event.public)
+
+    def test_display_settings_saved_and_previewed(self):
+        data = {'preset': 'festival', 'customize_tabs': 'on', 'tabs': ['schedule', 'map'],
+                'tab_order': 'schedule,map,locations,flyer,notifications', 'default_tab': '',
+                'locations_style': 'cards', 'schedule_style': '', 'secondary_pane': '',
+                'map_clustering': '0', 'map_fit_all': '', 'show_location_images': '', 'enable_search': '',
+                'group_by_category': '', 'accent_color': '#123456'}
+        preview = self.client.post(self.url('display_preview'), data, secure=True)
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.json()['resolved']['tabs'], ['schedule', 'map'])
+        self.client.post(self.url('display'), data, secure=True)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.display_config, {
+            'preset': 'festival', 'tabs': ['schedule', 'map'], 'locations_style': 'cards', 'map_clustering': False})
+        self.assertEqual(self.event.accent_color, '#123456')
+
+    def test_reorder_locations(self):
+        loc2 = Location.objects.create(event=self.event, user=self.owner, name='Gallery B')
+        self.client.post(self.url('locations_reorder'), {'order': f'{loc2.pk},{self.loc.pk}'}, secure=True)
+        self.assertEqual(list(self.event.location_set.order_by('sort_order').values_list('name', flat=True)),
+                         ['Gallery B', 'Gallery A'])
+
+    def test_ai_create_queues_job(self):
+        with patch('scrape.jobs._start_background'):
+            with self.captureOnCommitCallbacks(execute=True):
+                resp = self.client.post(reverse('console:event_new'), {
+                    'mode': 'ai', 'ai-urls': 'https://example.com', 'ai-text': '', 'ai-instructions': ''},
+                    secure=True)
+        job = IngestJob.objects.get()
+        self.assertRedirects(resp, reverse('console:job', args=[job.pk]), fetch_redirect_response=False)
+        self.assertEqual(job.created_by, self.owner)
+        self.assertEqual(job.urls, ['https://example.com'])
+
+    def test_review_and_apply_changes(self):
+        cs = diff.save_changeset(self.event, None, [
+            {'entity': 'location', 'op': 'update', 'target_id': self.loc.pk, 'label': 'Gallery A',
+             'data': {'description': {'old': '', 'new': 'New text'}, 'snippet': {'old': '', 'new': 'Short'}},
+             'conflict_fields': [], 'minor': True},
+            {'entity': 'item', 'op': 'delete', 'target_id': self.item.pk, 'label': 'Opening', 'data': {},
+             'reason': 'Cancelled', 'conflict_fields': [], 'minor': False},
+        ])
+        page = self.client.get(reverse('console:changeset', args=[cs.pk]), secure=True)
+        self.assertContains(page, 'New text')
+        update, delete = cs.changes.order_by('sort')
+        self.client.post(reverse('console:changeset', args=[cs.pk]), {
+            'action': 'apply', f'accept_{update.pk}': '1', f'field_{update.pk}_snippet': '1'}, secure=True)
+        self.loc.refresh_from_db()
+        self.assertEqual(self.loc.snippet, 'Short')
+        self.assertEqual(self.loc.description, '')
+        self.assertTrue(ScheduledItem.objects.filter(pk=self.item.pk).exists())  # delete not ticked
+        cs.refresh_from_db()
+        self.assertEqual(cs.status, ChangeSet.APPLIED)
+
+    def test_history_restore(self):
+        self.client.post(self.url('history'), {'action': 'snapshot'}, secure=True)
+        self.loc.delete()
+        rev = self.event.revisions.first()
+        self.client.post(self.url('history'), {'revision': rev.pk}, secure=True)
+        self.assertTrue(self.event.location_set.filter(name='Gallery A').exists())
+
+    @patch('events.push.deliver')
+    def test_send_notification_now(self, deliver):
+        from events.push import SendResult
+        deliver.return_value = SendResult(delivered=3)
+        self.event.status = Event.STATUS_PUBLISHED
+        self.event.save()
+        self.client.post(self.url('notifications'), {'title': 'Hi', 'body': 'Doors open', 'when': 'now'}, secure=True)
+        n = Notification.objects.get()
+        self.assertTrue(n.sent)
+        self.assertEqual(n.delivered_count, 3)

@@ -1,0 +1,88 @@
+{% extends 'console/base.html' %}
+{% block title %}App layout · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <form method="post" id="display-form">{% csrf_token %}
+      <div class="card mb-4"><div class="card-body p-4">
+        <h2 class="h5">Layout style</h2>
+        <p class="small text-muted">Your event has {{ stats.location_count }} location{{ stats.location_count|pluralize }} and {{ stats.item_count }} schedule item{{ stats.item_count|pluralize }}{% if stats.spread_km %}, spread over {{ stats.spread_km }} km{% endif %}. Automatic picks a style to match and adjusts as your event grows.</p>
+        {% for radio in form.preset %}
+          <div class="form-check mb-1">{{ radio.tag }}<label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label></div>
+        {% endfor %}
+        <div class="alert alert-light border small mt-3 mb-0" id="resolved-reason">Currently using <strong>{{ resolved.resolved_preset|capfirst }}</strong> — {{ resolved.reason }}.</div>
+      </div></div>
+
+      <div class="card mb-4"><div class="card-body p-4">
+        <h2 class="h5">Tabs</h2>
+        <div class="form-check form-switch mb-2">{{ form.customize_tabs }}<label class="form-check-label" for="{{ form.customize_tabs.id_for_label }}">{{ form.customize_tabs.label }}</label></div>
+        <ul class="list-group mb-3" id="tab-list">
+          {% for cb in form.tabs %}
+          <li class="list-group-item d-flex align-items-center gap-2" data-tab="{{ cb.data.value }}">
+            <i class="bi bi-grip-vertical drag-handle"></i>{{ cb.tag }}<label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
+          </li>{% endfor %}
+        </ul>
+        {{ form.tab_order }}
+        <label class="form-label small fw-semibold">Opens on</label>{{ form.default_tab }}
+      </div></div>
+
+      <div class="card mb-4"><div class="card-body p-4">
+        <h2 class="h5">Details</h2>
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label small fw-semibold">Locations list</label>{{ form.locations_style }}</div>
+          <div class="col-md-6"><label class="form-label small fw-semibold">Schedule</label>{{ form.schedule_style }}</div>
+          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.secondary_pane.label }}</label>{{ form.secondary_pane }}
+            <div class="form-text">Unfolded phones (like iPhone Duo), tablets and foldables.</div></div>
+          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.map_clustering.label }}</label>{{ form.map_clustering }}</div>
+          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.map_fit_all.label }}</label>{{ form.map_fit_all }}</div>
+          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.show_location_images.label }}</label>{{ form.show_location_images }}</div>
+          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.enable_search.label }}</label>{{ form.enable_search }}</div>
+          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.group_by_category.label }}</label>{{ form.group_by_category }}</div>
+          <div class="col-md-6"><label class="form-label small fw-semibold">Accent color</label>
+            <div class="d-flex align-items-center gap-2"><input type="color" name="accent_color" class="form-control form-control-color" value="{{ event.accent_color|default:'#ff5a1f' }}">
+              <div class="form-check"><input class="form-check-input" type="checkbox" name="accent_default" id="accent_default" {% if not event.accent_color %}checked{% endif %}>
+                <label class="form-check-label small" for="accent_default">Use Attnd default</label></div></div></div>
+        </div>
+      </div></div>
+      <button class="btn btn-primary">Save layout</button>
+    </form>
+  </div>
+  <div class="col-lg-5">
+    <div class="position-sticky" style="top:1rem">
+      <div class="muted-label text-center mb-2">Preview</div>
+      <div id="preview">{{ preview|safe }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  const form = document.getElementById('display-form');
+  const list = document.getElementById('tab-list');
+  const custom = document.getElementById('{{ form.customize_tabs.id_for_label }}');
+  const orderInput = form.querySelector('input[name=tab_order]');
+  const syncOrder = () => orderInput.value = [...list.querySelectorAll('[data-tab]')].map(li => li.dataset.tab).join(',');
+  // Restore saved order
+  const saved = (orderInput.value || '').split(',').filter(Boolean);
+  saved.forEach(t => { const li = list.querySelector(`[data-tab="${t}"]`); if (li) list.appendChild(li); });
+  const toggleTabs = () => list.querySelectorAll('input').forEach(i => i.disabled = !custom.checked);
+  custom.addEventListener('change', toggleTabs); toggleTabs();
+  if (window.Sortable) Sortable.create(list, {handle: '.drag-handle', animation: 150, onEnd: () => { syncOrder(); refresh(); }});
+  syncOrder();
+  let timer;
+  async function refresh() {
+    syncOrder();
+    const body = new FormData(form);
+    const r = await fetch('{% url "console:display_preview" event.id %}', {method: 'POST', body});
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('preview').innerHTML = d.html;
+    document.getElementById('resolved-reason').innerHTML =
+      `Currently using <strong>${d.resolved.resolved_preset[0].toUpperCase() + d.resolved.resolved_preset.slice(1)}</strong> — ${d.resolved.reason}.`;
+  }
+  form.addEventListener('change', () => { clearTimeout(timer); timer = setTimeout(refresh, 150); });
+})();
+</script>
+{% endblock %}

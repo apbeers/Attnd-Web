@@ -1,0 +1,36 @@
+{% extends 'console/base.html' %}
+{% block title %}Working…{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-6">
+  <div class="card text-center p-5" id="job-card">
+    {% if job.status == 'failed' %}
+      <i class="bi bi-exclamation-triangle display-5 text-danger"></i>
+      <h1 class="h4 mt-3">That didn’t work</h1>
+      <p class="text-muted">{{ job.error }}</p>
+      <div><a class="btn btn-primary" href="{% if event %}{% url 'console:event' event.id %}{% else %}{% url 'console:event_new' %}{% endif %}">Try again</a></div>
+    {% elif job.status == 'done' and event %}
+      <i class="bi bi-check-circle display-5 text-success"></i>
+      <h1 class="h4 mt-3">{{ job.result.summary|default:"Done" }}</h1>
+      <div class="mt-2"><a class="btn btn-primary" href="{% url 'console:event' event.id %}">Back to event</a></div>
+    {% else %}
+      <div class="spinner-border text-primary mx-auto" style="width:3rem;height:3rem"></div>
+      <h1 class="h4 mt-4">{% if job.kind == 'refresh' %}Checking for updates{% else %}Building your event{% endif %}</h1>
+      <p class="text-muted mb-0" id="progress">{{ job.progress|default:"Queued…" }}</p>
+      <p class="text-muted small mt-3">You can leave this page — the work continues in the background.</p>
+    {% endif %}
+  </div>
+</div></div>
+{% endblock %}
+{% block scripts %}{% if not job.is_finished %}
+<script>
+(async function poll() {
+  try {
+    const r = await fetch('?format=json'); const d = await r.json();
+    if (d.progress) document.getElementById('progress').textContent = d.progress;
+    if (d.status === 'done' && d.redirect) { location.href = d.redirect; return; }
+    if (d.status === 'failed') { location.reload(); return; }
+  } catch (e) {}
+  setTimeout(poll, 2000);
+})();
+</script>
+{% endif %}{% endblock %}

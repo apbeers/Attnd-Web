@@ -1,8 +1,42 @@
 from django.urls import path
 
-from console import views
+from console import views, views_events as v
 
 app_name = 'console'
 urlpatterns = [
+    path('', v.dashboard, name='dashboard'),
     path('signup/', views.SignUpView.as_view(), name='signup'),
+    path('new/', v.event_new, name='event_new'),
+    path('jobs/<uuid:job_id>/', v.job_detail, name='job'),
+    path('changes/<int:changeset_id>/', v.changeset_detail, name='changeset'),
+
+    path('events/<int:event_id>/', v.event_overview, name='event'),
+    path('events/<int:event_id>/edit/', v.event_edit, name='event_edit'),
+    path('events/<int:event_id>/status/', v.event_status, name='event_status'),
+    path('events/<int:event_id>/sources/', v.event_sources, name='event_sources'),
+    path('events/<int:event_id>/refresh/', v.event_refresh, name='event_refresh'),
+    path('events/<int:event_id>/delete/', v.event_delete, name='event_delete'),
+    path('events/<int:event_id>/qr.png', v.event_qr, name='event_qr'),
+    path('events/<int:event_id>/poster/', v.event_poster, name='event_poster'),
+
+    path('events/<int:event_id>/locations/', v.locations, name='locations'),
+    path('events/<int:event_id>/locations/new/', v.location_edit, name='location_new'),
+    path('events/<int:event_id>/locations/reorder/', v.locations_reorder, name='locations_reorder'),
+    path('events/<int:event_id>/locations/<int:location_id>/', v.location_edit, name='location_edit'),
+    path('events/<int:event_id>/locations/<int:location_id>/action/', v.location_action, name='location_action'),
+
+    path('events/<int:event_id>/schedule/', v.schedule, name='schedule'),
+    path('events/<int:event_id>/schedule/new/', v.item_edit, name='item_new'),
+    path('events/<int:event_id>/schedule/<int:item_id>/', v.item_edit, name='item_edit'),
+    path('events/<int:event_id>/schedule/<int:item_id>/action/', v.item_action, name='item_action'),
+
+    path('events/<int:event_id>/notifications/', v.notifications, name='notifications'),
+    path('events/<int:event_id>/notifications/<int:notification_id>/', v.notification_action,
+         name='notification_action'),
+
+    path('events/<int:event_id>/display/', v.display_settings, name='display'),
+    path('events/<int:event_id>/display/preview/', v.display_preview, name='display_preview'),
+    path('events/<int:event_id>/changes/', v.changesets, name='changesets'),
+    path('events/<int:event_id>/history/', v.history, name='history'),
+    path('events/<int:event_id>/team/', v.team, name='team'),
 ]

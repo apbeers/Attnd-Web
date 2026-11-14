@@ -1,0 +1,73 @@
+{% extends 'console/base.html' %}
+{% block title %}Review AI updates · {{ event.name }}{% endblock %}
+{% block event_content %}
+<a href="{% url 'console:changesets' event.id %}" class="small text-decoration-none">← AI updates</a>
+<h2 class="h4 mt-2">{{ cs.summary }}</h2>
+<p class="text-muted small">Found {{ cs.created_at|timesince }} ago{% if cs.status != 'pending' %} · {{ cs.get_status_display }}{% endif %}.</p>
+{% if cs.notes %}<div class="alert alert-light border"><i class="bi bi-chat-left-text"></i> <strong>AI notes:</strong> {{ cs.notes }}</div>{% endif %}
+{% if stale and cs.status == 'pending' %}<div class="alert alert-warning small">The event changed after these suggestions were made, so some “before” values may be out of date. Review carefully.</div>{% endif %}
+
+<form method="post">{% csrf_token %}
+{% if cs.status == 'pending' %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <button type="button" class="btn btn-sm btn-outline-secondary" data-select="all">Select all</button>
+  <button type="button" class="btn btn-sm btn-outline-secondary" data-select="none">Select none</button>
+  <span class="small text-muted align-self-center ms-2"><i class="bi bi-lock-fill lock"></i> = you edited this by hand, so it’s unticked</span>
+</div>
+{% endif %}
+{% for row in rows %}{% with ch=row.change %}
+<div class="card mb-2 {% if ch.status == 'rejected' %}opacity-50{% endif %}"><div class="card-body py-3">
+  <div class="d-flex align-items-center gap-2">
+    {% if cs.status == 'pending' and ch.status == 'pending' %}
+      <input class="form-check-input change-toggle mt-0" type="checkbox" name="accept_{{ ch.id }}" value="1" id="c{{ ch.id }}"
+        {% if ch.op != 'update' or row.fields|length > ch.conflict_fields|length %}checked{% endif %}>
+    {% endif %}
+    <span class="badge {% if ch.op == 'create' %}text-bg-success{% elif ch.op == 'delete' %}text-bg-danger{% else %}text-bg-primary{% endif %}">{{ ch.get_op_display }}</span>
+    <label class="fw-semibold" for="c{{ ch.id }}">{{ ch.get_entity_display }}: {{ ch.label }}</label>
+    {% if ch.minor %}<span class="badge text-bg-light border">small</span>{% endif %}
+    {% if ch.status != 'pending' %}<span class="ms-auto small text-muted">{{ ch.get_status_display }}</span>{% endif %}
+  </div>
+  {% if ch.reason %}<div class="small text-muted mt-1">Why: {{ ch.reason }}</div>{% endif %}
+  {% if row.fields %}
+  <table class="table table-sm small mb-0 mt-2"><tbody>
+    {% for f in row.fields %}
+    <tr>
+      <td style="width:1.5rem">{% if ch.op == 'update' and cs.status == 'pending' and ch.status == 'pending' %}
+        <input class="form-check-input field-toggle" data-change="{{ ch.id }}" type="checkbox" name="field_{{ ch.id }}_{{ f.name }}" value="1" {% if not f.conflict %}checked{% endif %}>{% endif %}</td>
+      <td class="text-muted text-nowrap" style="width:7rem">{{ f.label }} {% if f.conflict %}<i class="bi bi-lock-fill lock"></i>{% endif %}</td>
+      <td>{% if ch.op == 'update' %}<span class="diff-old">{{ f.old|truncatechars:300 }}</span> → {% endif %}
+        {% if f.is_image and f.new != '—' %}<img src="{{ f.new }}" alt="" height="40" class="rounded me-1">{% endif %}
+        <span class="{% if ch.op == 'update' %}diff-new{% endif %}">{{ f.new|truncatechars:300 }}</span></td>
+    </tr>{% endfor %}
+  </tbody></table>
+  {% endif %}
+</div></div>
+{% endwith %}{% endfor %}
+
+{% if cs.status == 'pending' %}
+<div class="card mt-3 position-sticky bottom-0"><div class="card-body d-flex flex-wrap align-items-center gap-3">
+  <div class="form-check"><input class="form-check-input" type="checkbox" name="notify_attendees" id="notify" value="1">
+    <label class="form-check-label small" for="notify">Refresh attendees’ apps right away</label></div>
+  <div class="ms-auto d-flex gap-2">
+    <button name="action" value="discard" class="btn btn-outline-secondary" onclick="return confirm('Discard all suggestions?')">Discard all</button>
+    <button name="action" value="apply" class="btn btn-primary"><i class="bi bi-check2"></i> Apply selected</button>
+  </div>
+</div></div>
+{% endif %}
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-select]').forEach(b => b.addEventListener('click', () => {
+  const on = b.dataset.select === 'all';
+  document.querySelectorAll('.change-toggle, .field-toggle').forEach(c => c.checked = on);
+}));
+document.querySelectorAll('.field-toggle').forEach(f => f.addEventListener('change', () => {
+  const any = [...document.querySelectorAll(`.field-toggle[data-change="${f.dataset.change}"]`)].some(x => x.checked);
+  document.getElementById('c' + f.dataset.change).checked = any;
+}));
+document.querySelectorAll('.change-toggle').forEach(c => c.addEventListener('change', () => {
+  document.querySelectorAll(`.field-toggle[data-change="${c.id.slice(1)}"]`).forEach(f => f.checked = c.checked);
+}));
+</script>
+{% endblock %}
