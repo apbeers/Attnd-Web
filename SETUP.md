@@ -9,7 +9,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ `attnd-dev` is created and configured, including the OpenAI and Places keys and its Scheduler job (which starts working after the first dev deploy). **Still to do:** the two production secrets (step 2), then the one-time GitHub setup under **GitHub from the command line**. |
-| 3. Apple | ⬜ CI builds and tests pass. Upload waits for the `ASC_*` secrets (3b). |
+| 3. Apple | ⏳ ✅ App ID capabilities checked: Push Notifications, App Attest and Associated Domains are enabled. **Next:** create the APNs key (3a, step 2). CI builds and tests pass; uploads wait for the `ASC_*` secrets (3b). |
 | 4. Google / Android | ⏳ CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⬜ |
@@ -100,7 +100,9 @@ Copy the token it prints into **GH-web secret `HEROKU_API_KEY`** and into your p
 ## 3. Apple (30 min)
 
 ### 3a. Push notifications (APNs)
-1. Go to [developer.apple.com](https://developer.apple.com) → Certificates, IDs & Profiles → **Identifiers** → `com.arcu.Attnd`. Make sure **Push Notifications** and **App Attest** are both enabled.
+1. ✅ Go to [developer.apple.com](https://developer.apple.com) → Certificates, IDs & Profiles → **Identifiers** → `com.arcu.Attnd`. Check that **Push Notifications**, **App Attest** and **Associated Domains** are enabled. All three are.
+   - Push shows **"Certificates (0)"**. That's expected. Attnd sends pushes with a token-based APNs **key** (step 2), not certificates, so don't click **Configure**.
+   - Leave **Broadcast Capability** unticked. It's for live-broadcast push channels, which Attnd doesn't use.
 2. Go to **Keys → +**, name the key "Attnd APNs", tick **Apple Push Notifications service (APNs)**, then download `AuthKey_XXXXXXXXXX.p8`. Apple only lets you download it once, so keep it safe.
 3. Set it on **both** Heroku apps:
    ```bash
