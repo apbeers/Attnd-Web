@@ -308,11 +308,7 @@ heroku config:set -a attnd-web STATIC_API_KEY_ENABLED=0
 ```
 Keep it on for `attnd-dev`: simulators, Xcode/Android Studio builds and CI need it there.
 
-Also pin the Android signing certificate. Use the **App signing key** SHA-256 from Play Console → Test and release → **App integrity**. The same value also makes `attnd.app/join/…` links open the app:
-```bash
-heroku config:set -a attnd-web ANDROID_SHA256_FINGERPRINT=AA:BB:CC:...
-heroku config:set -a attnd-dev ANDROID_SHA256_FINGERPRINT=AA:BB:CC:...
-```
+✅ The Android signing-certificate pin is already done. It's the same `ANDROID_SHA256_FINGERPRINT` you set in 4c step 2, and the server uses that one value for app links and for the pin.
 
 Limits to know about:
 - App Attest proves the app is genuine and unmodified, and that it runs on real Apple hardware. It isn't a full jailbreak detector.
