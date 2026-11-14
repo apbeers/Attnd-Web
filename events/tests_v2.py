@@ -356,3 +356,38 @@ class DemoEventCommandTests(TestCase):
         self.assertEqual(Event.objects.get(event_code='DEMO').pk, event.pk)
         self.assertTrue(Device.objects.filter(id='real-phone', event=event).exists())
         self.assertEqual(sum(UsageCount.objects.filter(event=event, metric='join').values_list('count', flat=True)), 30)
+
+
+class ReviewSupportTests(TestCase):
+    def test_demo_is_reloaded_only_when_it_is_ending(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from events.management.commands.run_scheduled_tasks import keep_demo_current
+        call_command('load_demo_event', '--devices', '5', stdout=StringIO())
+        event = Event.objects.get(event_code='DEMO')
+        self.assertFalse(keep_demo_current(StringIO()))  # happening now, ends in > 12 h
+        Event.objects.filter(pk=event.pk).update(start_time=timezone.now() - timedelta(days=5),
+                                                 end_time=timezone.now() - timedelta(days=3))
+        self.assertTrue(keep_demo_current(StringIO()))
+        event.refresh_from_db()
+        self.assertEqual(event.timing, 'now')
+        with self.settings(DEMO_EVENT_CODE=''):
+            self.assertFalse(keep_demo_current(StringIO()))
+
+    def test_review_account_joins_the_demo_team(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from events.models import EventMember
+        call_command('load_demo_event', '--devices', '5', stdout=StringIO())
+        out = StringIO()
+        call_command('create_review_account', stdout=out)
+        password = [l.split(':', 1)[1].strip() for l in out.getvalue().splitlines() if 'Password' in l][0]
+        user = User.objects.get(email='appreview@attnd.app')
+        self.assertTrue(user.check_password(password))
+        self.assertEqual(EventMember.objects.get(user=user).role, 'contributor')
+        call_command('create_review_account', stdout=StringIO())  # resets, doesn't duplicate
+        self.assertEqual(User.objects.filter(email='appreview@attnd.app').count(), 1)

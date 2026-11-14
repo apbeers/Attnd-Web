@@ -11,6 +11,27 @@ from events import push
 from scrape import jobs, watch
 
 
+def keep_demo_current(stdout=None):
+    """Reload the demo event (same id, same owner) when it is about to end or has ended."""
+    from datetime import timedelta
+
+    from django.conf import settings
+    from django.utils import timezone
+
+    from events.models import Event
+    code = getattr(settings, 'DEMO_EVENT_CODE', '')
+    event = Event.objects.filter(event_code=code.upper()).select_related('user').first() if code else None
+    if event is None:
+        return False
+    if event.timing == 'now' and event.effective_end - timezone.now() > timedelta(hours=12):
+        return False
+    args = ['load_demo_event', '--code', code]
+    if event.user_id:
+        args += ['--owner', event.user.email]
+    call_command(*args, stdout=stdout)
+    return True
+
+
 class Command(BaseCommand):
     help = 'Send due notifications, check watched event websites, recover stuck jobs, expire trials.'
 
@@ -30,6 +51,9 @@ class Command(BaseCommand):
 
         # Idempotent and cheap: delete unclaimed trial events past their expiry
         call_command('expire_trial_events', stdout=self.stdout)
+
+        # The demo event (store reviewers and sales demos use it) must always be happening now.
+        keep_demo_current(self.stdout)
 
         # Inline jobs run in daemon threads; give them a moment to finish in this one-off dyno.
         import threading

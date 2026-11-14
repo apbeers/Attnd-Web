@@ -148,6 +148,10 @@ AUTHENTICATION_BACKENDS = ['console.auth_backends.EmailOrUsernameBackend']
 GOOGLE_MAPS_BROWSER_KEY = os.getenv('GOOGLE_MAPS_BROWSER_KEY', '')
 GOOGLE_MAPS_MAP_ID = os.getenv('GOOGLE_MAPS_MAP_ID', 'DEMO_MAP_ID')
 
+# The always-current demo event (manage.py load_demo_event); run_scheduled_tasks reloads it before it
+# ends so App Store / Play reviewers and demos always see an event that is happening now. Empty = off.
+DEMO_EVENT_CODE = os.getenv('DEMO_EVENT_CODE', 'DEMO')
+
 # Store links, used by /join/<code>/ and the apps' update prompt (/api/app-status/).
 IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', '')  # https://apps.apple.com/app/id<numeric Apple ID>
 ANDROID_PACKAGE_NAME = os.getenv('ANDROID_PACKAGE_NAME', 'com.arcu.attnd')
