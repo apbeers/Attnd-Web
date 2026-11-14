@@ -53,6 +53,7 @@ def _start_background(job_id):
 
 
 def _thread_main(job_id):
+    close_old_connections()
     try:
         run_job(job_id)
     finally:
@@ -121,7 +122,6 @@ def _fail(job, message):
 
 
 def run_job(job_id, already_claimed=False):
-    close_old_connections()
     job = IngestJob.objects.get(pk=job_id) if already_claimed else claim(job_id)
     if job is None:
         return None

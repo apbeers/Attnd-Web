@@ -1,0 +1,98 @@
+# Web pipeline
+#   every push / PR      → checks + tests (against Postgres, like production)
+#   push to develop      → deploy to the Heroku dev app        (environment: dev)
+#   push to main         → deploy to the Heroku production app (environment: production)
+#
+# Setup: see DEPLOYMENT.md. Uses only GitHub's own actions.
+name: Web
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: web-${{ github.ref }}
+  # Never cancel a deploy half-way; feature branches just run the latest push.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Checks & tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: attnd
+          POSTGRES_PASSWORD: attnd
+          POSTGRES_DB: attnd
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U attnd" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CI: '1'
+      DEBUG: '1'
+      SECRET_KEY: ci-only-secret
+      API_KEY: ci-test-key
+      DATABASE_URL: postgres://attnd:attnd@localhost:5432/attnd
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+      - name: Install uv
+        run: python -m pip install --upgrade uv
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Django system checks
+        run: uv run python manage.py check
+      - name: Migrations are up to date
+        run: uv run python manage.py makemigrations --check --dry-run
+      - name: Tests
+        run: uv run python manage.py test --verbosity 2
+      - name: Dependency freshness (informational)
+        continue-on-error: true
+        run: uv run python scripts/upgrade_deps.py --check
+
+  deploy-dev:
+    name: Deploy → Heroku dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+      url: https://${{ vars.HEROKU_APP }}.herokuapp.com/
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Push to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP: ${{ vars.HEROKU_APP }}
+        run: bash scripts/ci/heroku_deploy.sh
+
+  deploy-prod:
+    name: Deploy → Heroku production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://attnd.app/
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Push to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP: ${{ vars.HEROKU_APP }}
+          HEALTH_URL: https://attnd.app/health/
+        run: bash scripts/ci/heroku_deploy.sh

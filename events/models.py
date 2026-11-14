@@ -1,6 +1,7 @@
 import secrets
 import string
 import uuid
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import models
@@ -14,6 +15,20 @@ def get_file_path(instance, filename):
     return f'{file}_{simple_uuid}.{ext}'
 
 
+def normalize_coord(value):
+    """Store coordinates at 7 decimal places (~1 cm) so float noise never looks like an edit."""
+    if value is None or value == '':
+        return None
+    return Decimal(str(round(float(value), 7)))
+
+
+class CoordinatesMixin:
+    def save(self, *args, **kwargs):
+        self.latitude = normalize_coord(self.latitude)
+        self.longitude = normalize_coord(self.longitude)
+        super().save(*args, **kwargs)
+
+
 def generate_event_code(length: int = 8) -> str:
     """Return a random uppercase alphanumeric code that doesn't already exist."""
     alphabet = string.ascii_uppercase + string.digits
@@ -24,7 +39,7 @@ def generate_event_code(length: int = 8) -> str:
     raise RuntimeError('Could not generate a unique event code after 20 attempts.')
 
 
-class Event(models.Model):
+class Event(CoordinatesMixin, models.Model):
     STATUS_DRAFT = 'draft'
     STATUS_PUBLISHED = 'published'
     STATUS_ARCHIVED = 'archived'
@@ -114,7 +129,7 @@ class Event(models.Model):
         return self.name
 
 
-class Location(models.Model):
+class Location(CoordinatesMixin, models.Model):
     name = models.CharField(max_length=256)
     snippet = models.CharField(max_length=200, blank=True)
     description = models.CharField(max_length=1024, blank=True)

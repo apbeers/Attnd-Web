@@ -1,5 +1,7 @@
 from zoneinfo import available_timezones
 
+from decimal import Decimal
+
 from django import forms
 
 from events.display import (LABELS, LOCATIONS_STYLES, PRESETS, SCHEDULE_STYLES, SECONDARY_PANES, TABS)
@@ -8,6 +10,27 @@ from events.models import Event, Location, Notification, ScheduledItem
 DT_WIDGET = forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}, format='%Y-%m-%dT%H:%M')
 DT_FORMATS = ['%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M']
 TIMEZONE_CHOICES = [(tz, tz.replace('_', ' ')) for tz in sorted(available_timezones()) if '/' in tz or tz == 'UTC']
+
+
+class CoordinateField(forms.DecimalField):
+    """Latitude/longitude compared at 7 decimal places, so re-saving a form never 'changes' them."""
+
+    def __init__(self, **kwargs):
+        kwargs.pop('max_digits', None)
+        kwargs.pop('decimal_places', None)
+        super().__init__(**kwargs)
+
+    def to_python(self, value):
+        value = super().to_python(value)
+        return round(value, 7) if value is not None else None
+
+    def has_changed(self, initial, data):
+        try:
+            data = self.to_python(data)
+        except forms.ValidationError:
+            return True
+        initial = round(Decimal(str(initial)), 7) if initial not in (None, '') else None
+        return initial != data
 
 
 def _bootstrapify(form):
@@ -89,6 +112,7 @@ class EventForm(BootstrapMixin, forms.ModelForm):
     timezone = forms.ChoiceField(choices=TIMEZONE_CHOICES)
 
     class Meta:
+        field_classes = {'latitude': CoordinateField, 'longitude': CoordinateField}
         model = Event
         fields = ['name', 'description', 'start_time', 'end_time', 'timezone', 'address',
                   'latitude', 'longitude', 'flyer', 'accent_color', 'logo_url']
@@ -151,6 +175,7 @@ class RefreshForm(BootstrapMixin, forms.Form):
 
 class LocationForm(BootstrapMixin, forms.ModelForm):
     class Meta:
+        field_classes = {'latitude': CoordinateField, 'longitude': CoordinateField}
         model = Location
         fields = ['name', 'category', 'snippet', 'description', 'address', 'latitude', 'longitude',
                   'website', 'image', 'image_url', 'hidden']

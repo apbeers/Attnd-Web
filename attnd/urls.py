@@ -4,6 +4,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from attnd import views as attnd_views
 from home.sitemaps import StaticSitemap
 from join import views as join_views
 
@@ -12,6 +13,7 @@ sitemaps = {
 }
 
 urlpatterns = [
+    path('health/', attnd_views.health, name='health'),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
     path('', include('home.urls'), name='home'),
     path('admin/', admin.site.urls),

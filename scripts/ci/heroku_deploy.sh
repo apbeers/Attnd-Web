@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Deploy the checked-out commit to a Heroku app over git, then wait for /health/.
+#   HEROKU_API_KEY  (secret)  HEROKU_APP  (app name)  HEALTH_URL (optional)
+set -euo pipefail
+: "${HEROKU_API_KEY:?HEROKU_API_KEY secret is not set}"
+: "${HEROKU_APP:?HEROKU_APP variable is not set for this environment}"
+HEALTH_URL="${HEALTH_URL:-https://${HEROKU_APP}.herokuapp.com/health/}"
+
+echo "Deploying $(git rev-parse --short HEAD) to $HEROKU_APP"
+# The release phase (Procfile) runs migrations; a failed release fails this push.
+git push --force "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP}.git" HEAD:refs/heads/main
+
+for attempt in $(seq 1 30); do
+  code=$(curl -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)
+  if [ "$code" = "200" ]; then
+    echo "Healthy: $HEALTH_URL"
+    exit 0
+  fi
+  echo "Waiting for $HEALTH_URL (HTTP $code, attempt $attempt)"
+  sleep 10
+done
+echo "Deploy finished but $HEALTH_URL never returned 200" >&2
+exit 1

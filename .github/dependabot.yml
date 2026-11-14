@@ -1,0 +1,9 @@
+# Keeps GitHub Actions current. Python pins are bumped together by
+# .github/workflows/upgrade-deps.yml (weekly); Dependabot security alerts still apply.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: develop
