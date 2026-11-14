@@ -417,6 +417,8 @@ heroku config:set SUPPORTED_API_VERSIONS=2 -a attnd-web
 Builds that still use the retired version are then shown the update screen.
 
 ## 8. Google Maps on the website (address autocomplete, pin map)
+✅ Dev: browser key "Attnd web (browser)" created in `attnd-df28e` (referrer-restricted to attnd.app and the dev app; Maps JavaScript API + Places API (New)) and set as `GOOGLE_MAPS_BROWSER_KEY` on attnd-dev. ⬜ Production: set the same key on attnd-web at the first web release: `heroku config:set -a attnd-web GOOGLE_MAPS_BROWSER_KEY="$(heroku config:get GOOGLE_MAPS_BROWSER_KEY -a attnd-dev)"`.
+
 The console uses Google Maps for address suggestions and a draggable pin when `GOOGLE_MAPS_BROWSER_KEY` is set; without it, it keeps the plain address field and the OpenStreetMap pin map. This must be a **new browser key**, restricted to our sites: browser keys are visible to anyone, so never reuse the server or Android keys. Create it (Maps JavaScript API + Places API (New), referrer-restricted) and set it on dev:
 ```bash
 gcloud services enable maps-backend.googleapis.com places.googleapis.com --project attnd-df28e
