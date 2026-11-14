@@ -50,14 +50,14 @@
     <form method="post" action="{% url 'console:location_action' event.id location.pk %}" class="d-flex flex-wrap gap-2">{% csrf_token %}
       <input type="hidden" name="next" value="{% url 'console:location_edit' event.id location.pk %}">
       {% if location.locked_fields %}<button name="action" value="unlock" class="btn btn-sm btn-outline-secondary">{% icon "unlock" %} Let AI update it again</button>{% endif %}
-      <button name="action" value="delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this location?')">Delete</button>
+      <button name="action" value="delete" class="btn btn-sm btn-outline-danger" data-confirm="Delete this location?">Delete</button>
     </form>
     {% endif %}
   </div>
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   const lat = document.getElementById('id_latitude'), lng = document.getElementById('id_longitude');
   const has = lat.value && lng.value;

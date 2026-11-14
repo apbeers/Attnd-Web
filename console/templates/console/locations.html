@@ -30,7 +30,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const list = document.getElementById('location-list');
 if (list) makeSortable(list, {
   handle: '.drag-handle',

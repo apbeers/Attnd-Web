@@ -19,5 +19,6 @@
   <div class="how">Scan with your camera — or open the Attnd app and enter</div>
   <div class="code">{{ event.event_code }}</div>
   <div class="brand">attnd.app</div>
-  <button class="print" onclick="window.print()">Print</button>
+  <button class="print" type="button">Print</button>
+  <script nonce="{{ csp_nonce }}">document.querySelector('.print').addEventListener('click', () => window.print());</script>
 </body></html>

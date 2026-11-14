@@ -26,6 +26,7 @@ from attestation.ios_attest import verify_attestation, verify_assertion, Attesta
 from attestation.android_attest import verify_integrity_token, AndroidAttestationError
 from attestation.models import AttestationNonce, AttestedDevice
 from attestation import tokens
+from attnd.ratelimit import client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +55,7 @@ def purge_expired_nonces() -> int:
 
 
 def _client_ip(request) -> str:
-    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
-    return forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', '')
+    return client_ip(request)  # right-most X-Forwarded-For hop (the one Heroku's router added)
 
 
 _NONCE_RATE_PER_MINUTE = 30

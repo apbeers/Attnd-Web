@@ -24,7 +24,7 @@
 {% if item.pk %}
 <form method="post" action="{% url 'console:item_action' event.id item.pk %}" class="mt-3 d-flex gap-2">{% csrf_token %}
   {% if item.locked_fields %}<button name="action" value="unlock" class="btn btn-sm btn-outline-secondary">{% icon "unlock" %} Let AI update it again</button>{% endif %}
-  <button name="action" value="delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this item?')">Delete</button>
+  <button name="action" value="delete" class="btn btn-sm btn-outline-danger" data-confirm="Delete this item?">Delete</button>
 </form>
 {% endif %}
 {% endblock %}

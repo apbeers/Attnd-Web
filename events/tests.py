@@ -2,11 +2,14 @@ import io
 import json
 from datetime import datetime, timezone as dt_timezone
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
 from PIL import Image
+
+from console.testing import TwoFactorClient
 
 from events.apis import (
     NearbyEventsView, EventByCodeOrNameView, AllLocationsView,
@@ -243,7 +246,7 @@ class MultiTenantAdminTests(TestCase):
         cls.event2 = Event.objects.create(name='Customer2 Event', event_code='c2evt', user=cls.customer2, **_EVENT_BASE)
 
     def setUp(self):
-        self.client = Client()
+        self.client = TwoFactorClient()  # staff: past the two-factor step
 
     # ------------------------------------------------------------------
     # Helpers
@@ -299,7 +302,7 @@ class MultiTenantAdminTests(TestCase):
 
     def test_customer1_can_access_admin(self):
         self.client.force_login(self.customer1)
-        response = self.client.get('/admin/')
+        response = self.client.get(reverse('admin:index'))
         self.assertEqual(response.status_code, 200)
 
     # ------------------------------------------------------------------
@@ -308,20 +311,20 @@ class MultiTenantAdminTests(TestCase):
 
     def test_customer1_can_see_events_section_in_sidebar(self):
         self.client.force_login(self.customer1)
-        response = self.client.get('/admin/')
+        response = self.client.get(reverse('admin:index'))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         # The Events app section should be visible (has_module_permission returns True)
-        self.assertIn('/admin/events/event/', content)
-        self.assertIn('/admin/events/location/', content)
-        self.assertIn('/admin/events/notification/', content)
+        self.assertIn('/' + settings.ADMIN_URL_PATH + 'events/event/', content)
+        self.assertIn('/' + settings.ADMIN_URL_PATH + 'events/location/', content)
+        self.assertIn('/' + settings.ADMIN_URL_PATH + 'events/notification/', content)
 
     def test_customer1_cannot_see_devices_or_users_in_sidebar(self):
         self.client.force_login(self.customer1)
-        response = self.client.get('/admin/')
+        response = self.client.get(reverse('admin:index'))
         content = response.content.decode()
-        self.assertNotIn('/admin/events/device/', content)
-        self.assertNotIn('/admin/auth/user/', content)
+        self.assertNotIn('/' + settings.ADMIN_URL_PATH + 'events/device/', content)
+        self.assertNotIn('/' + settings.ADMIN_URL_PATH + 'auth/user/', content)
 
     # ------------------------------------------------------------------
     # Event changelist visibility
@@ -726,25 +729,25 @@ class AdminQrDownloadTests(TestCase):
         )
 
     def setUp(self):
-        self.client = Client()
+        self.client = TwoFactorClient()  # staff: past the two-factor step
 
     def test_superuser_can_download_qr_png(self):
         self.client.force_login(self.superuser)
-        url = f'/admin/events/event/{self.event.pk}/qr.png/'
+        url = f'/{settings.ADMIN_URL_PATH}events/event/{self.event.pk}/qr.png/'
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'image/png')
 
     def test_qr_download_content_disposition_filename(self):
         self.client.force_login(self.superuser)
-        url = f'/admin/events/event/{self.event.pk}/qr.png/'
+        url = f'/{settings.ADMIN_URL_PATH}events/event/{self.event.pk}/qr.png/'
         response = self.client.get(url)
         self.assertIn('attachment', response['Content-Disposition'])
         self.assertIn('QR_Test_Event.png', response['Content-Disposition'])
 
     def test_customer_can_download_own_event_qr(self):
         self.client.force_login(self.customer)
-        url = f'/admin/events/event/{self.event.pk}/qr.png/'
+        url = f'/{settings.ADMIN_URL_PATH}events/event/{self.event.pk}/qr.png/'
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
@@ -785,7 +788,7 @@ class ScheduledItemAdminTests(TestCase):
         )
 
     def setUp(self):
-        self.client = Client()
+        self.client = TwoFactorClient()  # staff: past the two-factor step
 
     def test_customer1_changelist_shows_own_item(self):
         self.client.force_login(self.customer1)
@@ -807,5 +810,5 @@ class ScheduledItemAdminTests(TestCase):
     def test_scheduled_item_appears_in_location_admin_sidebar(self):
         """ScheduledItemAdmin should be visible in admin sidebar for staff."""
         self.client.force_login(self.customer1)
-        response = self.client.get('/admin/')
-        self.assertIn('/admin/events/scheduleditem/', response.content.decode())
+        response = self.client.get(reverse('admin:index'))
+        self.assertIn('/' + settings.ADMIN_URL_PATH + 'events/scheduleditem/', response.content.decode())

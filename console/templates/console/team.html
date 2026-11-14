@@ -22,12 +22,12 @@
     <span class="me-auto">{{ m.user.email }}{% if m.user_id == user.id %} <span class="text-muted small">(you)</span>{% endif %}</span>
     {% if is_owner %}
       <form method="post" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="action" value="role"><input type="hidden" name="member" value="{{ m.id }}">
-        <select name="role" class="form-select form-select-sm" onchange="this.form.submit()">
+        <select name="role" class="form-select form-select-sm" data-autosubmit>
           <option value="admin" {% if m.role == 'admin' %}selected{% endif %}>Admin</option>
           <option value="contributor" {% if m.role == 'contributor' %}selected{% endif %}>Contributor</option>
         </select></form>
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="transfer"><input type="hidden" name="member" value="{{ m.id }}">
-        <button class="btn btn-sm btn-link" onclick="return confirm('Make {{ m.user.email|escapejs }} the owner? You stay on the team as an admin.')">Make owner</button></form>
+        <button class="btn btn-sm btn-link" data-confirm="Make {{ m.user.email }} the owner? You stay on the team as an admin.">Make owner</button></form>
     {% else %}
       <span class="badge text-bg-light border">{{ m.get_role_display }}</span>
     {% endif %}
@@ -36,7 +36,7 @@
         <button class="btn btn-sm btn-link text-danger">Remove</button></form>
     {% elif m.user_id == user.id %}
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="leave">
-        <button class="btn btn-sm btn-link text-danger" onclick="return confirm('Leave this event?')">Leave</button></form>
+        <button class="btn btn-sm btn-link text-danger" data-confirm="Leave this event?">Leave</button></form>
     {% endif %}
   </li>{% endfor %}
   {% for i in invites %}

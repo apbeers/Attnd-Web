@@ -23,7 +23,7 @@
 </div></div>
 {% endblock %}
 {% block scripts %}{% if not job.is_finished %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (async function poll() {
   try {
     const r = await fetch('?format=json'); const d = await r.json();

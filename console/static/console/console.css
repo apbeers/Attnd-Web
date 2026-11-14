@@ -223,3 +223,6 @@ input[type=file].form-control { padding: .35rem; }
 .back-link:hover { color: var(--primary); }
 .line-chart line[class^="dot-"] { stroke-width: 7; stroke-linecap: round; }
 .line-chart .dot-new { stroke: var(--primary-mid); } .line-chart .dot-total { stroke: var(--primary); }
+.two-factor-qr svg { width: 100%; height: auto; display: block; }
+.align-items-end { align-items: flex-end; }
+.recovery-codes { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, max-content); gap: .25rem 2rem; font-family: var(--mono); }

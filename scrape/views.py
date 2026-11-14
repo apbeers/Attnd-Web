@@ -18,6 +18,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
+from attnd.ratelimit import client_ip
 from scrape import jobs
 from scrape.diff import valid_tz
 from scrape.models import IngestJob
@@ -39,10 +40,7 @@ def _check_rate_limit(ip: str) -> bool:
 
 
 def _client_ip(request) -> str:
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "unknown")
+    return client_ip(request)  # right-most X-Forwarded-For hop (the one Heroku's router added)
 
 
 def qr_data_url(text: str) -> str:

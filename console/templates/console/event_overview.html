@@ -89,7 +89,7 @@
       <div class="d-flex justify-content-center gap-2 mt-2">
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'console:event_qr' event.id %}?download=1">{% icon "download" %} QR</a>
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'console:event_poster' event.id %}" target="_blank">{% icon "printer" %} Poster</a>
-        <button class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText('{{ join_url }}');this.textContent='Copied'">{% icon "link" %} Copy link</button>
+        <button class="btn btn-sm btn-outline-secondary" data-copy="{{ join_url }}">{% icon "link" %} Copy link</button>
       </div>
       <div class="small text-muted text-break text-center mt-1">{{ join_url }}</div>
     </div>
@@ -133,7 +133,7 @@
     <button class="btn btn-primary" data-action="ok" autofocus>Got it</button>
   </div>
 </dialog>
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   const dialog = document.getElementById('sync-notice');
   const key = 'attnd.syncNotice.' + dialog.dataset.event;

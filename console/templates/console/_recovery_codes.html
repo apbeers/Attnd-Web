@@ -1,0 +1,6 @@
+<div class="alert alert-warning">
+  <strong>Save these recovery codes now.</strong> Each one signs you in once if you lose your phone. They won’t be shown again.
+</div>
+<ul class="recovery-codes mb-3">
+  {% for code in recovery_codes %}<li>{{ code }}</li>{% endfor %}
+</ul>

@@ -6,6 +6,24 @@
     if (btn) btn.closest('.alert').remove();
   });
 
+  // No inline event handlers (the Content Security Policy blocks them); these data attributes replace them.
+  // <button data-confirm="Delete this?">: asks first, and does nothing unless confirmed.
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-confirm]');
+    if (el && !window.confirm(el.dataset.confirm)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  // <select data-autosubmit>: submits its form when changed.
+  document.addEventListener('change', e => {
+    const el = e.target.closest('[data-autosubmit]');
+    if (el && el.form) el.form.submit();
+  });
+  // <button data-copy="text">: copies the text, then says so.
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-copy]');
+    if (!el) return;
+    navigator.clipboard.writeText(el.dataset.copy).then(() => { el.textContent = 'Copied'; }).catch(() => {});
+  });
+
   // Tabs: <button data-tab-target="#id">
   document.addEventListener('click', e => {
     const btn = e.target.closest('[data-tab-target]');

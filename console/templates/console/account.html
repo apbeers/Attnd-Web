@@ -18,5 +18,29 @@
       {% for field in password_form %}{% include 'console/_field.html' %}{% endfor %}
       <button class="btn btn-primary">Change password</button></form>
   </div></div></div>
+  <div class="col-12"><div class="card"><div class="card-body">
+    <h2 class="h6">{% icon "lock" %} Two-factor sign-in</h2>
+    {% if recovery_codes %}{% include 'console/_recovery_codes.html' %}{% endif %}
+    {% if two_factor %}
+      <p class="small">On since {{ two_factor.confirmed_at|date:"M j, Y" }}. You enter a code from your authenticator app after your password.
+        {{ recovery_codes_left }} recovery code{{ recovery_codes_left|pluralize }} left.</p>
+      <div class="d-flex flex-wrap gap-4">
+        <form method="post" class="d-flex gap-2 align-items-end">{% csrf_token %}<input type="hidden" name="action" value="2fa_codes">
+          <div><label class="form-label small" for="id_codes_code">Code from your app</label>
+            <input class="form-control form-control-sm font-monospace" id="id_codes_code" name="code" inputmode="numeric" autocomplete="one-time-code" required></div>
+          <button class="btn btn-sm btn-outline-secondary">New recovery codes</button></form>
+        {% if not two_factor_required %}
+        <form method="post" class="d-flex gap-2 align-items-end">{% csrf_token %}<input type="hidden" name="action" value="2fa_disable">
+          <div><label class="form-label small" for="id_disable_code">Code or recovery code</label>
+            <input class="form-control form-control-sm font-monospace" id="id_disable_code" name="code" autocomplete="one-time-code" required></div>
+          <button class="btn btn-sm btn-outline-danger" data-confirm="Turn off two-factor sign-in?">Turn off</button></form>
+        {% endif %}
+      </div>
+      {% if two_factor_required %}<p class="small text-muted mt-2 mb-0">Admin accounts always use two-factor sign-in.</p>{% endif %}
+    {% else %}
+      <p class="small">Add a second step when you sign in: a 6-digit code from an authenticator app on your phone.</p>
+      <a class="btn btn-sm btn-primary" href="{% url 'two_factor_setup' %}?next={% url 'console:account' %}">Set up two-factor sign-in</a>
+    {% endif %}
+  </div></div></div>
 </div>
 {% endblock %}

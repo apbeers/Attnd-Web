@@ -50,7 +50,7 @@
   <div class="form-check"><input class="form-check-input" type="checkbox" name="notify_attendees" id="notify" value="1">
     <label class="form-check-label small" for="notify">Refresh attendees’ apps right away</label></div>
   <div class="ms-auto d-flex gap-2">
-    <button name="action" value="discard" class="btn btn-outline-secondary" onclick="return confirm('Discard all suggestions?')">Discard all</button>
+    <button name="action" value="discard" class="btn btn-outline-secondary" data-confirm="Discard all suggestions?">Discard all</button>
     <button name="action" value="apply" class="btn btn-primary">{% icon "check" %} Apply selected</button>
   </div>
 </div></div>
@@ -58,7 +58,7 @@
 </form>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 document.querySelectorAll('[data-select]').forEach(b => b.addEventListener('click', () => {
   const on = b.dataset.select === 'all';
   document.querySelectorAll('.change-toggle, .field-toggle').forEach(c => c.checked = on);

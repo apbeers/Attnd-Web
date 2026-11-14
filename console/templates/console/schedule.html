@@ -4,7 +4,7 @@
 {% block event_content %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <form method="get" class="me-auto">
-    <select name="location" class="form-select form-select-sm" onchange="this.form.submit()">
+    <select name="location" class="form-select form-select-sm" data-autosubmit>
       <option value="">All locations ({{ count }} items)</option>
       {% for loc in locations %}<option value="{{ loc.id }}" {% if location_filter == loc.id|stringformat:"s" %}selected{% endif %}>{{ loc.name }}</option>{% endfor %}
     </select>

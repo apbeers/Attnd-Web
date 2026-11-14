@@ -95,7 +95,15 @@ public/         # Files served at root by Whitenoise (robots.txt, etc.)
 
 ## Accounts
 
-People only ever see and sign in with their **email** (`console.auth_backends.EmailOrUsernameBackend`, case-insensitive). The account's `username` is an internal generated id (`u` + 10 hex, `console.accounts.new_username`), so an email can change (Account page, `/console/account/`) without losing the account. Emails are unique case-insensitively (Postgres index `auth_user_email_lower_uniq` + `email_in_use`). Create a site admin with `python manage.py create_admin you@example.com`. Deleting an account never deletes events: they become unassigned.
+People only ever see and sign in with their **email** (`console.auth_backends.EmailOrUsernameBackend`, case-insensitive). The account's `username` is an internal generated id (`u` + 10 hex, `console.accounts.new_username`), so an email can change (Account page, `/console/account/`) without losing the account. Emails are unique case-insensitively (Postgres index `auth_user_email_lower_uniq` + `email_in_use`). Create a site admin with `python manage.py create_admin you@example.com` (they set up two-factor sign-in at their first sign-in; see Security). Deleting an account never deletes events: they become unassigned.
+
+## Security
+
+- **HTTPS**: outside `DEBUG`, HTTP redirects to HTTPS, session/CSRF cookies are `Secure` (+ `HttpOnly`, `SameSite=Lax`), HSTS 1 year with subdomains (not preloaded). `SECURE_PROXY_SSL_HEADER` trusts Heroku's `X-Forwarded-Proto`.
+- **Rate limits** (`attnd/ratelimit.py`, Django's cache = `LocMemCache`: fine with Heroku's single gthread web process; with more processes use `DatabaseCache` + `createcachetable`): failed sign-ins 5 per email and 20 per IP per 15 min (a success clears the email's count); password-reset requests 3 per email and 10 per IP per hour; signups 10 per IP per hour; wrong two-factor codes 5 per account per 15 min. Over the limit: the same page with a friendly message and HTTP 429, worded the same whether or not the email has an account. Client IP = the **last** `X-Forwarded-For` hop (the one Heroku's router appends). Override with `RATE_LIMIT_<NAME>=count/seconds` or `settings.RATE_LIMITS`. The admin's own login page redirects to the site's sign-in (`/accounts/login/`, `console.views_auth.SignInView`).
+- **Two-factor sign-in** (`console/totp.py` RFC 6238 TOTP, `console/twofactor.py`, `TwoFactorMiddleware`, model `console.TwoFactorDevice`): staff and superusers must use an authenticator app; after the password they enter a code at `/accounts/2fa/` (±1 step, each step accepted once) or a single-use recovery code (10, stored as SHA-256 hashes). Staff without one are sent to enrollment (`/accounts/2fa/setup/`: QR code, key, otpauth link, confirm with a code, recovery codes shown once) before the console, admin or password change open. Organizers can turn it on/off and make new recovery codes on **Account**. The TOTP secret is stored as plain base32 (no crypto dependency). Lockouts: `python manage.py reset_2fa <email>` (also signs the account out everywhere) or delete the device in the admin. Tests that sign in as staff use `console.testing.TwoFactorClient`.
+- **Content Security Policy** (Django's built-in `ContentSecurityPolicyMiddleware`, `CSP_POLICY` in settings): `default-src 'self'`; scripts from self + a per-request nonce (+ Google Maps hosts when `GOOGLE_MAPS_BROWSER_KEY` is set, per Google's Maps JS CSP guidance); `img-src` self, `data:`, `blob:`, `https:` (organizer image URLs, Cloudinary, map tiles); `style-src` allows inline styles; `frame-ancestors 'none'`, `base-uri`/`form-action 'self'`, `object-src 'none'`; violations go to `/csp-report/` and are logged (`attnd.csp`). `CSP_MODE=enforce|report|off`. Rules for templates: every inline `<script>` gets `nonce="{{ csp_nonce }}"` (or move it to a static file), and **no inline event handlers** (`onclick=` …): use `data-confirm="…"`, `data-autosubmit`, `data-copy="…"` (handled in `console.js`) or `addEventListener`. `console/tests_security.py` checks every template.
+- **Admin** lives at `ADMIN_URL_PATH` (default `manage-attnd/`); `/admin/` is a 404. Link to it with `{% url 'admin:index' %}`.
 
 ## Data Models (`events/models.py`)
 
@@ -194,7 +202,7 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and `events/tests_integration.py`.
+Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path) and `events/tests_integration.py`.
 
 ## Environment Variables
 
@@ -232,6 +240,11 @@ Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and
 | `APNS_USE_SANDBOX` | No | Truthy for development-signed builds |
 | `FCM_PROJECT_ID` | Push | Firebase project ID |
 | `FCM_SERVICE_ACCOUNT_JSON` | No | Defaults to `GOOGLE_SERVICE_ACCOUNT_JSON` (needs Firebase Messaging permission) |
+| `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
+| `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |
+| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `CSP_REPORT_IP` (60/60) |
+| `RATE_LIMIT_TRUST_X_FORWARDED_FOR` | No | Default `1` (behind Heroku's router); `0` = use the socket address |
+| `TWO_FACTOR_ISSUER` | No | Name shown in authenticator apps, default `Attnd` |
 
 ## Deployment
 

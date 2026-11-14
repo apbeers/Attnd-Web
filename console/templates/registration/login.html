@@ -10,7 +10,8 @@
   <div class="card shadow-sm" style="width:100%;max-width:420px;">
     <div class="card-body p-4">
       <h2 class="card-title mb-4 text-center">Sign in to Attnd</h2>
-      {% if form.errors %}<div class="alert alert-danger py-2">That email and password didn’t match.</div>{% endif %}
+      {% if rate_limited %}<div class="alert alert-warning py-2" role="alert">{{ rate_limited }}</div>
+      {% elif form.errors %}<div class="alert alert-danger py-2">That email and password didn’t match.</div>{% endif %}
       <form method="post">{% csrf_token %}
         <input type="hidden" name="next" value="{{ next }}">
         <div class="mb-3"><label class="form-label" for="id_username">Email</label>

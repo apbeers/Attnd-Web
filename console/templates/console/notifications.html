@@ -40,7 +40,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const toggle = () => { document.getElementById('send-time').style.display =
   document.querySelector('input[name=when]:checked')?.value === 'later' ? '' : 'none'; };
 document.querySelectorAll('input[name=when]').forEach(r => r.addEventListener('change', toggle)); toggle();

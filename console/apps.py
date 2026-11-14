@@ -6,4 +6,4 @@ class ConsoleConfig(AppConfig):
     name = 'console'
 
     def ready(self):
-        from console import signals  # noqa: F401
+        from console import signals, twofactor  # noqa: F401  (signal receivers)

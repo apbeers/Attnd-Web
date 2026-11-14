@@ -13,6 +13,8 @@ from django.views import View
 
 from console.accounts import claim_invites, create_account, email_in_use
 from console.forms.signup import EmailChangeForm, SignUpForm
+from console import twofactor
+from console.views_auth import SIGNUP_LIMITED, account_two_factor_action, signup_limited
 from events.models import Event, Location, Notification, ScheduledItem, generate_event_code
 
 logger = logging.getLogger(__name__)
@@ -57,6 +59,9 @@ class SignUpView(View):
     def post(self, request):
         form = SignUpForm(request.POST)
         claim = request.POST.get('claim', '').strip()
+        if signup_limited(request):
+            return render(request, 'registration/signup.html', {
+                'form': form, 'claim_code': claim, 'rate_limited': SIGNUP_LIMITED}, status=429)
 
         if not form.is_valid():
             return render(request, 'registration/signup.html', {
@@ -100,7 +105,12 @@ def account(request):
     password_form = PasswordChangeForm(request.user, prefix='pw')
     for field in password_form.fields.values():
         field.widget.attrs['class'] = 'form-control'
-    if request.method == 'POST' and request.POST.get('action') == 'email':
+    recovery_codes = None
+    if request.method == 'POST' and request.POST.get('action') in ('2fa_disable', '2fa_codes'):
+        recovery_codes, response = account_two_factor_action(request)
+        if response is not None:
+            return response
+    elif request.method == 'POST' and request.POST.get('action') == 'email':
         email_form = EmailChangeForm(request.user, request.POST, prefix='email')
         if email_form.is_valid():
             request.user.email = email_form.cleaned_data['email']
@@ -117,5 +127,10 @@ def account(request):
             update_session_auth_hash(request, user)
             messages.success(request, 'Password changed.')
             return redirect('console:account')
-    return render(request, 'console/account.html', {'email_form': email_form, 'password_form': password_form,
-                                                     'section': 'account'})
+    device = twofactor.confirmed_device(request.user)
+    return render(request, 'console/account.html', {
+        'email_form': email_form, 'password_form': password_form, 'section': 'account',
+        'two_factor': device, 'two_factor_required': twofactor.is_required(request.user),
+        'recovery_codes': recovery_codes,
+        'recovery_codes_left': len(device.recovery_codes) if device else 0,
+    })

@@ -1,0 +1,47 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up two-factor sign-in — Attnd</title>
+  <link rel="stylesheet" href="{% static 'console/console.css' %}">
+</head>
+<body class="bg-light">
+<div class="d-flex justify-content-center align-items-center min-vh-100 py-4">
+  <div class="card shadow-sm" style="width:100%;max-width:480px;">
+    <div class="card-body p-4">
+      {% if recovery_codes %}
+        <h2 class="card-title mb-3 text-center">Two-factor sign-in is on</h2>
+        {% include 'console/_recovery_codes.html' %}
+        <div class="d-grid"><a class="btn btn-primary" href="{{ next }}">I’ve saved them — continue</a></div>
+      {% else %}
+        <h2 class="card-title mb-3 text-center">Set up two-factor sign-in</h2>
+        {% if required %}<p class="small">Admin accounts need a second step when signing in. Set it up once to continue.</p>{% endif %}
+        <ol class="small" style="padding-left:1.2rem">
+          <li>Open an authenticator app (Google Authenticator, 1Password, iOS Passwords, Authy …) and scan this code.</li>
+          <li>Enter the 6-digit code it shows.</li>
+        </ol>
+        <div class="text-center mb-2 two-factor-qr" style="max-width:220px;margin:0 auto">{{ qr_svg }}</div>
+        <p class="small text-muted mb-1">Can’t scan? Enter this key in the app (time-based):</p>
+        <p class="font-monospace text-center mb-2" style="word-break:break-all">{{ secret_groups }}</p>
+        <details class="small text-muted mb-3"><summary>Setup link</summary>
+          <code style="word-break:break-all">{{ otpauth_uri }}</code></details>
+        {% if error %}<div class="alert alert-danger py-2" role="alert">{{ error }}</div>{% endif %}
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="next" value="{{ next }}">
+          <div class="mb-3"><label class="form-label" for="id_code">Code from the app</label>
+            <input class="form-control font-monospace" type="text" name="code" id="id_code" inputmode="numeric"
+                   autocomplete="one-time-code" maxlength="10" autofocus required></div>
+          <div class="d-grid"><button class="btn btn-primary">Turn on</button></div>
+        </form>
+        {% if required %}
+          <form method="post" action="{% url 'logout' %}" class="text-center mt-3 mb-0">{% csrf_token %}
+            <button class="btn btn-sm btn-link text-muted">Sign out</button></form>
+        {% else %}
+          <p class="text-center small mt-3 mb-0"><a href="{% url 'console:account' %}">Cancel</a></p>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+</body>
+</html>

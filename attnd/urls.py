@@ -6,6 +6,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from attnd import views as attnd_views
+from console import views_auth
 from events.app_status import app_status_view, retired_api_view
 from home.sitemaps import StaticSitemap
 from join import views as join_views
@@ -18,7 +19,11 @@ urlpatterns = [
     path('health/', attnd_views.health, name='health'),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
     path('', include('home.urls'), name='home'),
-    path('admin/', admin.site.urls),
+    # The admin lives at ADMIN_URL_PATH (/admin/ is a 404). Its login page goes to the site's sign-in,
+    # which is rate limited and leads to the two-factor step.
+    path(settings.ADMIN_URL_PATH + 'login/', views_auth.admin_login),
+    path(settings.ADMIN_URL_PATH, admin.site.urls),
+    path('csp-report/', attnd_views.csp_report, name='csp_report'),
     path('console/', include('console.urls'), name='console'),
     path('api/v1/events/', include('events.urls'), name='events'),
     path('api/v2/', include('events.urls_v2')),
@@ -28,8 +33,11 @@ urlpatterns = [
     re_path(r'^api/v(?P<version>\d+)/', retired_api_view),
     path('join/', include('join.urls')),
     path('scrape/', include('scrape.urls')),
+    path('accounts/login/', views_auth.SignInView.as_view(), name='login'),
+    path('accounts/2fa/', views_auth.two_factor_verify, name='two_factor_verify'),
+    path('accounts/2fa/setup/', views_auth.two_factor_setup, name='two_factor_setup'),
     # Password reset in the console's style (the admin app's own templates would win otherwise).
-    path('accounts/password_reset/', auth_views.PasswordResetView.as_view(
+    path('accounts/password_reset/', views_auth.ResetPasswordView.as_view(
         template_name='console/password_reset_form.html',
         email_template_name='console/password_reset_email.html',
         subject_template_name='console/password_reset_subject.txt'), name='password_reset'),

@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 import datetime
 
+from console.testing import TwoFactorClient
 from events.models import Device, Event, EventInvite, EventMember, Location, Notification
 
 TRIAL_USERNAME = "trialuser"
@@ -126,7 +127,7 @@ class ConsoleTests(TestCase):
                                            latitude=32.751, longitude=-97.331, category='Gallery')
         self.item = ScheduledItem.objects.create(event=self.event, user=self.owner, location=self.loc,
                                                  name='Opening', start_time=self.event.start_time)
-        self.client = Client()
+        self.client = TwoFactorClient()  # some tests sign in as a superuser
         self.client.force_login(self.owner)
 
     def url(self, name, *args):

@@ -14,7 +14,7 @@
       <div class="small text-muted">{{ r.created_at|date:"M j, Y g:i A" }}{% if r.created_by %} · {{ r.created_by.email }}{% endif %} ·
         {{ r.snapshot.locations|length }} locations, {{ r.snapshot.schedule|length }} items</div></div>
     <form method="post">{% csrf_token %}<input type="hidden" name="revision" value="{{ r.id }}">
-      <button class="btn btn-sm btn-outline-secondary" onclick="return confirm('Restore this version? Your current content is snapshotted first.')">Restore</button></form>
+      <button class="btn btn-sm btn-outline-secondary" data-confirm="Restore this version? Your current content is snapshotted first.">Restore</button></form>
   </li>
 {% empty %}<li class="list-group-item text-muted text-center py-5">No snapshots yet.</li>{% endfor %}
 </ul></div>

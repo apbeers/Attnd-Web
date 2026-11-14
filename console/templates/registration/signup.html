@@ -17,6 +17,7 @@
                 <strong>✓ Event found.</strong> Sign up to claim it as yours.
             </div>
             {% endif %}
+            {% if rate_limited %}<div class="alert alert-warning py-2" role="alert">{{ rate_limited }}</div>{% endif %}
             <form method="post" autocomplete="on">
                 {% csrf_token %}
                 {% if claim_code %}<input type="hidden" name="claim" value="{{ claim_code }}">{% endif %}
@@ -39,7 +40,7 @@
                 </div>
             </form>
             <p class="text-center mt-3 mb-0 small">
-                Already have an account? <a href="/admin/login/">Log in</a>
+                Already have an account? <a href="{% url 'login' %}">Sign in</a>
             </p>
         </div>
     </div>

@@ -33,7 +33,7 @@
 </div></div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   document.getElementById('browser_tz').value = tz;
   const sel = document.getElementById('id_blank-timezone');

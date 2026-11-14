@@ -20,11 +20,18 @@
     <a class="brand" href="/">attnd<span>.</span></a>
     <h1 style="font-size:1.6rem;margin:18px 0 8px">We couldn't find that event</h1>
     <p class="muted">{% if code %}No event uses the code <strong class="mono">{{ code }}</strong>.{% endif %} Check the code on the poster or with the organizers.</p>
-    <form onsubmit="event.preventDefault(); const c = this.code.value.trim(); if (c) location.href = '/join/' + encodeURIComponent(c.toUpperCase()) + '/';">
+    <form id="join-code-form">
       <input name="code" placeholder="Event code" autocomplete="off" autocapitalize="characters" aria-label="Event code">
       <button class="btn btn-primary">Go</button>
     </form>
   </div>
 </main>
+<script nonce="{{ csp_nonce }}">
+document.getElementById('join-code-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const c = e.target.code.value.trim();
+  if (c) location.href = '/join/' + encodeURIComponent(c.toUpperCase()) + '/';
+});
+</script>
 </body>
 </html>

@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.http import HttpResponse
-from django.urls import path
+from django.urls import path, reverse
 from django.utils.html import format_html
 
 from events.models import Event, Location, Notification, Device, ScheduledItem, generate_event_code
@@ -131,7 +131,7 @@ class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
         buf = io.BytesIO()
         img.save(buf, format='PNG')
         b64 = base64.b64encode(buf.getvalue()).decode()
-        download_url = f'/admin/events/event/{obj.pk}/qr.png/'
+        download_url = reverse('admin:events_event_qr_png', args=[obj.pk])
         safe_name = re.sub(r'[^a-zA-Z0-9]+', '_', obj.name).strip('_')
         return format_html(
             '<img src="data:image/png;base64,{}" width="200" style="display:block;margin-bottom:8px">'

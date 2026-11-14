@@ -61,7 +61,9 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'console.middleware.TwoFactorMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
 ]
 
 ROOT_URLCONF = 'attnd.urls'
@@ -77,6 +79,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.csp',
                 'console.context_processors.maps',
             ],
         },
@@ -131,6 +134,50 @@ if TESTING:
 CONTENT_PUSH_ENABLED = not TESTING and os.getenv('CONTENT_PUSH_ENABLED', '1') not in ('0', 'false', 'False')
 CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '5'))
 CONTENT_PUSH_MIN_INTERVAL = int(os.getenv('CONTENT_PUSH_MIN_INTERVAL', '60'))
+
+# Rate limits (attnd.ratelimit) and other per-process counters (scrape/'s "try it" limit) live here.
+# LocMemCache is shared by the gthread threads of one process, and Heroku runs a single web process
+# (Procfile: 1 worker), so the counts are global. With more web processes or dynos each process would
+# count on its own (limits effectively multiply); switch to DatabaseCache (+ `createcachetable` in the
+# Procfile release line) then.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'attnd',
+        'OPTIONS': {'MAX_ENTRIES': 10000},
+    },
+}
+
+
+def _rate(name, default):
+    """A limit as (count, window seconds) from env RATE_LIMIT_<NAME>="count/seconds", e.g. "5/900"."""
+    value = os.getenv(f'RATE_LIMIT_{name.upper()}', default)
+    count, _, window = value.partition('/')
+    return int(count), int(window)
+
+
+# Sign-in, password reset, signup and two-factor attempts (attnd.ratelimit). Override per deployment with
+# RATE_LIMIT_<NAME> (e.g. RATE_LIMIT_LOGIN_EMAIL=10/900) or in tests with override_settings(RATE_LIMITS=…).
+RATE_LIMITS = {
+    'login_email': _rate('login_email', '5/900'),     # failed sign-ins per email, 15 min
+    'login_ip': _rate('login_ip', '20/900'),          # failed sign-ins per IP, 15 min
+    'reset_email': _rate('reset_email', '3/3600'),    # password reset requests per email, 1 hour
+    'reset_ip': _rate('reset_ip', '10/3600'),         # password reset requests per IP, 1 hour
+    'signup_ip': _rate('signup_ip', '10/3600'),       # signup attempts per IP, 1 hour
+    'otp_user': _rate('otp_user', '5/900'),           # wrong two-factor codes per account, 15 min
+    'csp_report_ip': _rate('csp_report_ip', '60/60'),  # CSP violation reports logged per IP, 1 min
+}
+# Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
+# Set to 0 when not behind such a proxy (the header could then be forged freely).
+RATE_LIMIT_TRUST_X_FORWARDED_FOR = os.getenv('RATE_LIMIT_TRUST_X_FORWARDED_FOR', '1') not in ('0', 'false', 'False')
+
+# The Django admin lives at a non-obvious path (/admin/ is a 404). Example: ADMIN_URL_PATH=backstage-7f3/
+ADMIN_URL_PATH = os.getenv('ADMIN_URL_PATH', 'manage-attnd/').strip('/') + '/'
+if ADMIN_URL_PATH in ('/', 'admin/'):
+    raise RuntimeError('ADMIN_URL_PATH must be a non-empty path other than admin/')
+
+# Two-factor sign-in (console.twofactor): staff and superusers must use it; anyone can turn it on.
+TWO_FACTOR_ISSUER = os.getenv('TWO_FACTOR_ISSUER', 'Attnd')
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/console/'
@@ -195,6 +242,47 @@ EMAIL_BACKEND = ('console.mail.AllowListSMTPBackend' if EMAIL_HOST_PASSWORD
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ---------------------------------------------------------------------------
+# Content Security Policy (Django's built-in CSP middleware)
+# ---------------------------------------------------------------------------
+# CSP_MODE=enforce (default) | report (Content-Security-Policy-Report-Only: browsers only report) | off.
+# Inline <script> blocks carry nonce="{{ csp_nonce }}"; inline event handlers (onclick=…) are not used.
+# Violations are posted to /csp-report/ and logged (logger attnd.csp).
+from django.utils.csp import CSP  # noqa: E402
+
+CSP_MODE = os.getenv('CSP_MODE', 'enforce').strip().lower()
+if CSP_MODE not in ('enforce', 'report', 'off'):
+    raise RuntimeError('CSP_MODE must be enforce, report or off')
+
+# Google Maps JavaScript API (console address autocomplete and pin map, console/static/console/maps.js),
+# following Google's allowlist CSP guidance for the Maps JavaScript API. Only when a browser key is set.
+_MAPS = GOOGLE_MAPS_BROWSER_KEY != ''
+_MAPS_SCRIPT = ['https://*.googleapis.com', 'https://*.gstatic.com', '*.google.com', 'https://*.ggpht.com',
+                '*.googleusercontent.com', 'blob:'] if _MAPS else []
+_MAPS_CONNECT = ['https://*.googleapis.com', '*.google.com', 'https://*.gstatic.com', 'data:', 'blob:'] if _MAPS else []
+
+CSP_POLICY = {
+    'default-src': [CSP.SELF],
+    'script-src': [CSP.SELF, CSP.NONCE, *_MAPS_SCRIPT],
+    # Style attributes and <style> blocks are used across the site, and Google Maps injects styles.
+    'style-src': [CSP.SELF, CSP.UNSAFE_INLINE, *(['https://fonts.googleapis.com'] if _MAPS else [])],
+    # https: because organizers can point location images and event logos at any website (image_url,
+    # logo_url); Cloudinary (res.cloudinary.com), OpenStreetMap tiles (tile.openstreetmap.org, console.js)
+    # and Google Maps tiles are covered by it. data: = generated QR codes, blob: = Maps.
+    'img-src': [CSP.SELF, 'data:', 'blob:', 'https:'],
+    'font-src': [CSP.SELF, *(['https://fonts.gstatic.com'] if _MAPS else [])],
+    'connect-src': [CSP.SELF, *_MAPS_CONNECT],
+    'frame-src': ['*.google.com'] if _MAPS else [CSP.SELF],
+    'worker-src': [CSP.SELF, 'blob:'],  # /console/sw.js; Maps uses blob: workers
+    'frame-ancestors': [CSP.NONE],
+    'base-uri': [CSP.SELF],
+    'form-action': [CSP.SELF],
+    'object-src': [CSP.NONE],
+    'report-uri': '/csp-report/',
+}
+SECURE_CSP = CSP_POLICY if CSP_MODE == 'enforce' else {}
+SECURE_CSP_REPORT_ONLY = CSP_POLICY if CSP_MODE == 'report' else {}
+
 if os.getenv('CLOUDINARY_URL'):
     STORAGES['default']['BACKEND'] = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
@@ -219,6 +307,11 @@ LOGGING = {
         "level": "INFO",
     },
     "loggers": {
+        "attnd.csp": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
         "scrape": {
             "handlers": ["console"],
             "level": "DEBUG",
