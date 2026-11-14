@@ -9,7 +9,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ `attnd-dev` is created and configured, including its OpenAI and Places keys and Scheduler job. ✅ The GitHub deploy settings (`HEROKU_API_KEY`, `HEROKU_APP`) and the dev `ATTND_API_KEY` secrets are set. **Still to do:** the two production secrets (step 2, required before the first release to `main`). |
-| 3. Apple | ⏳ ✅ App ID capabilities checked: Push Notifications, App Attest and Associated Domains are enabled. **Next:** create the APNs key (3a, step 2). CI builds and tests pass; uploads wait for the `ASC_*` secrets (3b). |
+| 3. Apple | ⏳ ✅ App ID capabilities checked. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. **Next:** 3b, the App Store Connect key (`Z43S25BCS9`, downloaded) goes into GitHub, then 3c (TestFlight group). |
 | 4. Google / Android | ⏳ CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⬜ |
@@ -122,7 +122,7 @@ gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
    - **Key Restriction:** **Team Scoped (All Topics)**.
 
    Save, then **Continue → Register → Download** `AuthKey_XXXXXXXXXX.p8`. Apple only lets you download it once, so put it in your password manager right away. The **Key ID** is shown on the key's page.
-3. Set it on **both** Heroku apps:
+3. ✅ Set it on **both** Heroku apps (done, key ID `7Q3H2446BU`):
    ```bash
    for app in attnd-web attnd-dev; do
      heroku config:set -a $app APNS_KEY_ID=XXXXXXXXXX APNS_AUTH_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
