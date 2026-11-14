@@ -8,7 +8,7 @@ Do these steps once, in order. Each step says which values go where.
 |---|---|
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
-| 2. Heroku | ⏳ Production: Scheduler add-on exists; the job gets added after the first release. Next: OpenAI key check, then attnd-dev. |
+| 2. Heroku | ⏳ The dev app `attnd-dev` was created by Claude (Postgres, Scheduler and generated secrets are set). **You still need to:** set the two production secrets (below), add the OpenAI key to dev, and add the GitHub deploy token. |
 | 3. Apple | ⬜ |
 | 4. Google / Android | ⬜ |
 | 5. Local dev keys | ⬜ |
@@ -20,6 +20,21 @@ Notes:
 - **GH-web**, **GH-ios** and **GH-android** mean that repo's GitHub page, under **Settings → Secrets and variables → Actions**.
 - **Heroku prod** is the app `attnd-web`. **Heroku dev** is the new app `attnd-dev`.
 - Once everything is set up, pushing to `develop` deploys all three apps to dev and beta, and merging `develop` → `main` releases to production.
+
+---
+
+## Where keys live
+
+| Store | What it's for | Can you read keys back? |
+|---|---|---|
+| **Password manager** (Apple Passwords or 1Password) | The **master copy of every key**. Save each key here the moment you create it. | Yes |
+| **GitHub environment secrets** | Keys the CI/CD pipelines use. | No, write-only |
+| **Heroku config vars** | Keys the running server uses. | Yes (`heroku config:get`) |
+| **Claude cloud environment** ("Attnd Cloud Environment") | Network secrets that give Claude API access. Currently: a Heroku API token for `api.heroku.com`. Claude never sees the value. | No, write-only |
+
+Never keep keys only on your Mac. Once a key is in the password manager and wherever it's used, delete the downloaded file (`.p8`, `.jks`, `.json`).
+
+The Claude environment allows `api.heroku.com`, `attnd.app` and `attnd-dev-7ab893f37020.herokuapp.com`. To give Claude access to another API later, add its token there as a network secret. Claude asks for these through a secure form, never in chat.
 
 ---
 
@@ -52,45 +67,30 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
 ## 2. Heroku (15 min)
 
 ### Production (`attnd-web`)
-1. Scheduler: if `heroku addons:create scheduler:standard -a attnd-web` says the add-on already exists, that's fine. Open it with `heroku addons:open scheduler -a attnd-web` and choose **Create job**:
-   - **Schedule:** Every 10 minutes
-   - **Command:** `python manage.py run_scheduled_tasks`
-   - **Dyno size:** the smallest available (Eco/Basic)
+1. **Required before the first release to `main`:** production has no `SECRET_KEY` or `ATTESTATION_JWT_SECRET`. It has been running on a hardcoded fallback, and the new code refuses to start without a real key. Run this once:
+   ```bash
+   heroku config:set -a attnd-web SECRET_KEY=$(openssl rand -hex 32) ATTESTATION_JWT_SECRET=$(openssl rand -hex 32)
+   ```
+   This signs everyone out of the web console once. The apps re-attest automatically.
+2. ✅ Scheduler job `python manage.py run_scheduled_tasks` (every 10 minutes) is added. It fails harmlessly until the first release to `main`, because the command doesn't exist in the old code.
+3. ✅ The OpenAI and Places keys are already set on production.
+4. **Play Integrity isn't configured on production** (there's no `GOOGLE_SERVICE_ACCOUNT_JSON`), so Android builds from the Play Store can't attest. Old Android builds fell back to the static key, which is now rotated, so the current Play Store version can't reach the API until this is set (step 4) and a new build ships. iOS builds use App Attest, which is configured.
 
-   Add this job **after the first release to `main`**. The command doesn't exist on production until then, so it would just fail every 10 minutes.
-2. OpenAI key: check it with `heroku config:get OPENAI_API_KEY -a attnd-web`. Only if that prints nothing:
-   ```bash
-   heroku config:set -a attnd-web OPENAI_API_KEY=sk-your-real-key
-   ```
-
-### Dev (`attnd-dev`)
-1. Create the app and its add-ons:
-   ```bash
-   heroku create attnd-dev
-   heroku addons:create heroku-postgresql:essential-0 -a attnd-dev
-   heroku addons:create scheduler:standard -a attnd-dev
-   ```
-   If `attnd-dev` is already taken, pick another name and use it everywhere below, including `HEROKU_APP` and `ATTND_SERVER`.
-2. Set its config. This generates fresh secrets and copies the OpenAI, Play Integrity and Places keys from production, so there's nothing to fill in by hand:
-   ```bash
-   heroku config:set -a attnd-dev \
-     SECRET_KEY=$(openssl rand -hex 32) API_KEY=$(openssl rand -hex 32) \
-     ATTESTATION_JWT_SECRET=$(openssl rand -hex 32) \
-     OPENAI_API_KEY="$(heroku config:get OPENAI_API_KEY -a attnd-web)" \
-     GOOGLE_PLACES_API_KEY="$(heroku config:get GOOGLE_PLACES_API_KEY -a attnd-web)" \
-     GOOGLE_SERVICE_ACCOUNT_JSON="$(heroku config:get GOOGLE_SERVICE_ACCOUNT_JSON -a attnd-web)" \
-     APPLE_APP_BUNDLE_ID=com.arcu.Attnd APPLE_TEAM_ID=GQQX4L6TE2 \
-     ANDROID_PACKAGE_NAME=com.arcu.attnd
-   ```
-   - Leave `APPLE_ATTEST_ENVIRONMENT` unset. TestFlight builds use production App Attest.
-   - The dev `API_KEY` is what goes in the `ATTND_API_KEY` GitHub secrets and in your local dev config (section 5). Print it with `heroku config:get API_KEY -a attnd-dev`.
-3. Run `heroku addons:open scheduler -a attnd-dev` and add the same job as production: every 10 minutes, `python manage.py run_scheduled_tasks`. Do this after the first deploy to dev (the first push to `develop` once step "Let GitHub deploy to Heroku" is done).
+### Dev (`attnd-dev`) — created by Claude
+- ✅ App `attnd-dev` at `https://attnd-dev-7ab893f37020.herokuapp.com/`. Heroku now gives new apps a random hostname, so use this exact host wherever this guide says `ATTND_SERVER`.
+- ✅ Postgres (essential-0), Scheduler, and generated `SECRET_KEY`, `API_KEY` and `ATTESTATION_JWT_SECRET`.
+- **You:** copy the third-party keys over from production. The values never touch disk:
+  ```bash
+  heroku config:set -a attnd-dev OPENAI_API_KEY="$(heroku config:get OPENAI_API_KEY -a attnd-web)" GOOGLE_PLACES_API_KEY="$(heroku config:get GOOGLE_PLACES_API_KEY -a attnd-web)"
+  ```
+- After the first deploy to dev, add the same Scheduler job on `attnd-dev` (`heroku addons:open scheduler -a attnd-dev`).
+- The dev `API_KEY` is what goes in the `ATTND_API_KEY` GitHub secrets and in your local dev config. Print it with `heroku config:get API_KEY -a attnd-dev`.
 
 ### Let GitHub deploy to Heroku
 ```bash
 heroku authorizations:create -d "GitHub Actions"
 ```
-Copy the token it prints.
+Copy the token it prints into **GH-web secret `HEROKU_API_KEY`** and into your password manager. GitHub needs its own token: the one in the Claude environment can't be copied out.
 | Where | Name | Value |
 |---|---|---|
 | GH-web secret | `HEROKU_API_KEY` | that token |
@@ -129,9 +129,9 @@ Copy the token it prints.
 
 | Where | Name | Value |
 |---|---|---|
-| GH-ios env `dev` variable | `ATTND_SERVER` | `attnd-dev.herokuapp.com` |
+| GH-ios env `dev` variable | `ATTND_SERVER` | `attnd-dev-7ab893f37020.herokuapp.com` |
 | GH-ios env `dev` variable | `TESTFLIGHT_GROUP` | `Internal` |
-| GH-ios secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev.herokuapp.com` | turns on the live API tests in CI |
+| GH-ios secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev-7ab893f37020.herokuapp.com` | turns on the live API tests in CI |
 | GH-ios env `production` variable (optional) | `WHATS_NEW` | release notes for the next App Store version |
 
 ### 3d. Before the first App Store submission from CI
@@ -175,8 +175,8 @@ Copy the token it prints.
 | GH-android secret | `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` | from `signing.properties` |
 | GH-android secret | `MAPS_API_KEY` | Maps key |
 | GH-android secret | `GOOGLE_SERVICES_JSON` | contents of `google-services.json` |
-| GH-android secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev.herokuapp.com` | turns on the live API tests in CI |
-| GH-android env `dev` variable | `ATTND_SERVER` | `attnd-dev.herokuapp.com` |
+| GH-android secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev-7ab893f37020.herokuapp.com` | turns on the live API tests in CI |
+| GH-android env `dev` variable | `ATTND_SERVER` | `attnd-dev-7ab893f37020.herokuapp.com` |
 | GH-android env `production` variable (optional) | `PLAY_ROLLOUT` | e.g. `0.2` for a 20% staged rollout (default: 100%) |
 | GH-android env `production` variable (optional) | `RELEASE_NOTES` | text shown in Play |
 
@@ -186,8 +186,8 @@ Note: the app now requires **Android 15 or later**. Play will stop offering upda
 
 | App | File (gitignored) | Contents |
 |---|---|---|
-| iOS | `Attnd-iOS/Config/Secrets.xcconfig` | `ATTND_API_KEY = <attnd-dev API_KEY>` and `ATTND_SERVER = attnd-dev.herokuapp.com` |
-| Android | `Attnd-Android/local.properties` | `ATTND_API_KEY=…`, `MAPS_API_KEY=…`, `ATTND_SERVER=attnd-dev.herokuapp.com` |
+| iOS | `Attnd-iOS/Config/Secrets.xcconfig` | `ATTND_API_KEY = <attnd-dev API_KEY>` and `ATTND_SERVER = attnd-dev-7ab893f37020.herokuapp.com` |
+| Android | `Attnd-Android/local.properties` | `ATTND_API_KEY=…`, `MAPS_API_KEY=…`, `ATTND_SERVER=attnd-dev-7ab893f37020.herokuapp.com` |
 | Web | your shell | `DEBUG=1 API_KEY=dev-key uv run python manage.py runserver` |
 
 ## 6. Check it all works

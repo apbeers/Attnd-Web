@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: dev
-      url: https://${{ vars.HEROKU_APP }}.herokuapp.com/
+      url: https://attnd-dev-7ab893f37020.herokuapp.com/
     steps:
       - uses: actions/checkout@v5
         with:

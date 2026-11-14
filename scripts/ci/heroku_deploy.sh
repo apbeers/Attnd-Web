@@ -4,7 +4,13 @@
 set -euo pipefail
 : "${HEROKU_API_KEY:?HEROKU_API_KEY secret is not set}"
 : "${HEROKU_APP:?HEROKU_APP variable is not set for this environment}"
-HEALTH_URL="${HEALTH_URL:-https://${HEROKU_APP}.herokuapp.com/health/}"
+if [ -z "${HEALTH_URL:-}" ]; then
+  # Newer Heroku apps get a randomized hostname, so ask the API for the real one.
+  web_url=$(curl -fsS -H "Authorization: Bearer $HEROKU_API_KEY" \
+    -H "Accept: application/vnd.heroku+json; version=3" "https://api.heroku.com/apps/$HEROKU_APP" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["web_url"])')
+  HEALTH_URL="${web_url%/}/health/"
+fi
 
 echo "Deploying $(git rev-parse --short HEAD) to $HEROKU_APP"
 # The release phase (Procfile) runs migrations; a failed release fails this push.

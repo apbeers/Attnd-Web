@@ -1,2 +1,0 @@
-# DEPRECATED — use infra/environments/dev.tfvars or prod.tfvars instead.
-# This file is kept only for git history reference.

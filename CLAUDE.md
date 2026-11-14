@@ -26,6 +26,13 @@ Current mobile apps use **API v2** (`/api/v2/`, see `API_V2.md`): one `bundle/` 
 5. **Apps follow** — every content change bumps `Event.content_version` (signals in `events/signals.py`); apps poll `bundle/` with `If-None-Match` and can get a silent `content_updated` push.
 6. **Adaptive layout** — `events/display.py` picks a preset (intimate / standard / festival) from size + spread; organizers override any key in **App layout**; the resolved dict ships in the bundle.
 
+## Claude cloud environment ("Attnd Cloud Environment")
+
+- A Heroku API token is stored as a network secret for `api.heroku.com`. Call the Platform API directly (`Accept: application/vnd.heroku+json; version=3`); the proxy injects the token. There is no Heroku CLI login.
+- Allowed hosts: `api.heroku.com`, `attnd.app` (production) and `attnd-dev-7ab893f37020.herokuapp.com` (dev app `attnd-dev`).
+- Heroku apps: `attnd-web` = production (attnd.app), `attnd-dev` = dev (deployed from `develop`).
+- Changing **production** config needs the user's go-ahead. Full key and setup checklist: `SETUP.md`.
+
 ## Dependency policy
 
 Avoid third-party libraries. Use Django and the Python standard library first; the organizer console uses
