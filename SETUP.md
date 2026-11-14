@@ -264,6 +264,11 @@ Check it afterwards: `curl -s https://attnd.app/.well-known/assetlinks.json` sho
      | `com.arcu.attnd` | **Upload key** SHA-1 | Release builds signed with your `.jks` and installed directly (not through Play) | The same Play page → *Upload key certificate* → **SHA-1**. Or from the keystore (it asks for the store password): `keytool -list -v -keystore /path/to/upload.jks -alias YOUR_KEY_ALIAS \| grep SHA1` |
      | `com.arcu.attnd.debug` | **Debug** SHA-1 | Builds run from Android Studio on your Mac | `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android \| grep SHA1`. Android Studio creates this keystore on the first debug build. |
 
+     If `keytool` says *"Unable to locate a Java Runtime"*, your Mac has no system Java. Use the copy bundled with Android Studio instead:
+     ```bash
+     "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool" -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1
+     ```
+
      A shortcut for the last two: in the Attnd-Android folder, run `./gradlew signingReport`. It prints the SHA-1 for the debug build, and for the release build when `signing.properties` is present.
 
      The debug SHA-1 is specific to each Mac. If you build on another computer, add that computer's debug SHA-1 as another `com.arcu.attnd.debug` row.
