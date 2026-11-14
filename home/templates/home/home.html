@@ -1,407 +1,223 @@
-{% load static %}
-
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="en">
-
 <head>
-
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description"
-          content="Attnd lets anyone create and manage their event to help patrons enjoy it to the fullest. Event planners can customize all settings online and instantly send out updates to users attending the event. Individual or Corporate payment options available. Are you a professional event organizer? We can be a valuable addition to packages you already offer to your customers.">
-    <meta name="author" content="Andrew Beers">
-
-    <title>Attnd</title>
-
-    <!-- Bootstrap 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
-
-    <!-- FontAwesome 6 -->
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.7.2/css/all.min.css" rel="stylesheet" crossorigin="anonymous">
-
-    <!-- Simple Line Icons (vendored) -->
-    <link rel="stylesheet" href="{% static 'home/vendor/simple-line-icons/css/simple-line-icons.css' %}">
-
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css?family=Catamaran:100,200,300,400,500,600,700,800,900" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css?family=Muli" rel="stylesheet">
-
-    <!-- Device mockups (vendored) -->
-    <link rel="stylesheet" href="{% static 'home/device-mockups/device-mockups.min.css' %}">
-
-    <!-- Custom styles -->
-    <link href="{% static 'home/css/new-age.min.css' %}" rel="stylesheet">
-
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'home/img/favicon.png' %}">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-
-    <style>
-        html { scroll-behavior: smooth; }
-    </style>
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Attnd puts your event's map, schedule and live updates on every attendee's phone. Paste your event website and AI builds it for you in a minute.">
+  <title>Attnd — your event, in everyone's pocket</title>
+  <link rel="stylesheet" href="{% static 'home/site.css' %}">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'home/img/favicon.png' %}">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 </head>
+<body>
 
-<body id="page-top" data-bs-spy="scroll" data-bs-target="#mainNav" data-bs-offset="56" tabindex="0">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-stars" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M19 15l.8 1.7 1.7.8-1.7.8L19 20l-.8-1.7-1.7-.8 1.7-.8z"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
+</svg>
 
-<!-- Navigation -->
-<nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
-    <div class="container">
-        <a class="navbar-brand" href="#page-top">Get Attnd</a>
-        <button class="navbar-toggler navbar-toggler-right" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
-            Menu
-            <i class="fas fa-bars"></i>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarResponsive">
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="#download">Download</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#features">Features</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#try-it">Try It Free</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#contact">Contact</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/admin/login/">Login</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'console:signup' %}">Sign Up</a>
-                </li>
-            </ul>
-        </div>
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="/">attnd<span>.</span></a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#try-it">Try it free</a>
+      <a href="#download">Download</a>
+      <a href="{% url 'login' %}">Sign in</a>
+      <a class="btn btn-primary btn-small" href="{% url 'console:signup' %}">Create an event</a>
     </div>
+    <details class="nav-menu">
+      <summary>Menu</summary>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#try-it">Try it free</a>
+        <a href="#download">Download</a>
+        <a href="{% url 'login' %}">Sign in</a>
+        <a href="{% url 'console:signup' %}">Create an event</a>
+      </div>
+    </details>
+  </div>
 </nav>
 
-<header class="masthead">
-    <div class="container h-100">
-        <div class="row h-100">
-            <div class="col-lg-7 my-auto">
-                <div class="header-content mx-auto">
-                    <h1 class="mb-5">Get the most out of your event. The Attnd app lets you quickly see event information, maps, and stay up to date as things happen! Perfect for trade shows, outdoor events, concerts, and conferences!</h1>
-                    <a href="#contact" class="btn btn-outline btn-xl">Start Now: $299 per event flat rate!</a>
-                </div>
-            </div>
-            <div class="col-lg-5 my-auto">
-                <div class="device-container">
-                    <div class="device-mockup iphone6_plus portrait white">
-                        <div class="device">
-                            <div class="screen">
-                                <!-- Demo image for screen mockup, you can put an image here, some HTML, an animation, video, or anything else! -->
-                                <img src="{% static 'home/img/demo-map.png' %}" class="img-fluid" alt="">
-                            </div>
-                            <div class="button">
-                                <!-- You can hook the "home button" to some JavaScript events or just remove it -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <h1>Your event's map, schedule and live updates — in everyone's pocket.</h1>
+      <p class="lead">Perfect for festivals, trade shows, outdoor events, concerts and conferences. Paste your event website and AI builds the whole thing in about a minute.</p>
+      <div class="actions">
+        <a href="#try-it" class="btn btn-primary" style="background:#fff;color:var(--attnd)">Try it free</a>
+        <a href="{% url 'console:signup' %}" class="btn btn-ghost">$299 per event, flat</a>
+      </div>
     </div>
+    <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-map.png' %}" alt="The Attnd app showing an event map"></div></div>
+  </div>
 </header>
 
-<section class="download bg-primary text-center" id="download">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-8 mx-auto">
-                <h2 class="section-heading">Download the App</h2>
-                <div class="badges">
-                    <a class="badge-link" href="http://bit.ly/2YEZ4HL"><img src="{% static 'home/img/google-play-badge.svg' %}" alt="Google Play"></a>
-                    <a class="badge-link" href="https://apple.co/2yF6mNa"><img src="{% static 'home/img/app-store-badge.svg' %}" alt="App Store"></a>
-                </div>
-            </div>
-        </div>
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Unlimited attendees, simple setup</h2>
+      <p class="muted">Everything attendees need in one place, and nothing for them to sign up for.</p>
     </div>
+    <div class="features-layout">
+      <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-locations.png' %}" alt="The Attnd app showing a list of locations"></div></div>
+      <div class="grid grid-2">
+        <div class="feature"><svg class="icon"><use href="#i-stars"/></svg><h3>Built by AI, checked by you</h3>
+          <p class="muted">Point us at your website, flyer or program. We pull in every stage, booth and set time, and you review it before anyone sees it.</p></div>
+        <div class="feature"><svg class="icon"><use href="#i-refresh"/></svg><h3>Instant updates</h3>
+          <p class="muted">Change something at the last minute and every attendee's app updates. AI can even watch your site and suggest the edits.</p></div>
+        <div class="feature"><svg class="icon"><use href="#i-map"/></svg><h3>Fits any size of event</h3>
+          <p class="muted">A dozen art-walk stops or hundreds of festival vendors — the app picks the right layout, and you can fine-tune it.</p></div>
+        <div class="feature"><svg class="icon"><use href="#i-bell"/></svg><h3>Push notifications</h3>
+          <p class="muted">Send “doors open”, weather alerts and schedule changes straight to attendees' lock screens.</p></div>
+        <div class="feature"><svg class="icon"><use href="#i-phone"/></svg><h3>Fast mobile app</h3>
+          <p class="muted">Works in rural fields and packed arenas. Scan a QR code and you're in — on iPhone, foldables and Android.</p></div>
+        <div class="feature"><svg class="icon"><use href="#i-file"/></svg><h3>Your flyer, too</h3>
+          <p class="muted">Put a PDF or image of your flyer or map in the app to show anything you want.</p></div>
+      </div>
+    </div>
+  </div>
 </section>
 
-<section class="features" id="features">
-    <div class="container">
-        <div class="section-heading text-center">
-            <h2>Unlimited Attendees, Simple Setup</h2>
-            <p class="text-muted">Check out what you can do!</p>
-            <hr>
-        </div>
-        <div class="row">
-            <div class="col-lg-4 my-auto">
-                <div class="device-container">
-                    <div class="device-mockup iphone6_plus portrait white">
-                        <div class="device">
-                            <div class="screen">
-                                <!-- Demo image for screen mockup, you can put an image here, some HTML, an animation, video, or anything else! -->
-                                <img src="{% static 'home/img/demo-locations.png' %}" class="img-fluid" alt="">
-                            </div>
-                            <div class="button">
-                                <!-- You can hook the "home button" to some JavaScript events or just remove it -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-8 my-auto">
-                <div class="container-fluid">
-                    <div class="row">
-                        <div class="col-lg-6">
-                            <div class="feature-item">
-                                <i class="icon-screen-smartphone text-primary"></i>
-                                <h3>Fast Mobile App</h3>
-                                <p class="text-muted">Works great even in rural events and crowded arenas!</p>
-                            </div>
-                        </div>
-                        <div class="col-lg-6">
-                            <div class="feature-item">
-                                <i class="icon-notebook text-primary"></i>
-                                <h3>Flexible Use</h3>
-                                <p class="text-muted">Put a PDF of your event flyer in the app to show anything you want!</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-lg-6">
-                            <div class="feature-item">
-                                <i class="icon-pencil text-primary"></i>
-                                <h3>Easy Setup</h3>
-                                <p class="text-muted">Create and try every feature for free, pay only when you go public.</p>
-                            </div>
-                        </div>
-                        <div class="col-lg-6">
-                            <div class="feature-item">
-                                <i class="icon-refresh text-primary"></i>
-                                <h3>Instant Updates</h3>
-                                <p class="text-muted">Need to change something last minutes, everyone's app will change too!</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+<section class="band" id="how">
+  <div class="wrap">
+    <div class="section-head"><h2>How it works</h2></div>
+    <div class="grid grid-3">
+      <div class="step"><div class="num">1</div><h3>Import</h3><p class="muted">Paste your event site, upload a flyer, or type it in.</p></div>
+      <div class="step"><div class="num">2</div><h3>Review &amp; publish</h3><p class="muted">Edit anything, choose the app layout, then print your QR poster.</p></div>
+      <div class="step"><div class="num">3</div><h3>Stay current</h3><p class="muted">Send updates, and accept AI-suggested changes as your plans evolve.</p></div>
     </div>
+  </div>
 </section>
 
-<!-- Try It Free Section -->
-<section class="features" id="try-it" style="background-color: #f8f9fa;">
-    <div class="container">
-        <div class="section-heading text-center">
-            <h2>Already Have an Event? Let Us Set It Up.</h2>
-            <p class="text-muted">Paste your event website URL and we'll automatically pull in all the details — locations, times, descriptions — ready for the app.</p>
-            <hr>
-        </div>
-        <div class="row justify-content-center">
-            <div class="col-lg-7">
-                <div class="card shadow-sm border-0 p-4">
-                    <div id="scrape-form-area">
-                        <label for="event-url" class="form-label fw-semibold">Your event website URL</label>
-                        <div class="input-group mb-3">
-                            <input
-                                type="url"
-                                id="event-url"
-                                class="form-control form-control-lg"
-                                placeholder="https://yourevent.com"
-                                autocomplete="off"
-                            >
-                            <button class="btn btn-primary btn-lg" id="scrape-btn" type="button">
-                                Build My Event
-                            </button>
-                        </div>
-                        <p class="text-muted small mb-0">We'll crawl your site, extract event info, and give you a code to try in the app — no account needed.</p>
-                    </div>
-
-                    <!-- Spinner (hidden by default) -->
-                    <div id="scrape-loading" class="text-center py-4" style="display:none !important;">
-                        <div class="spinner-border text-primary mb-3" role="status" style="width:3rem;height:3rem;">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p class="text-muted mb-1">Scanning your event site… this usually takes 30–90 seconds.</p>
-                        <p class="text-muted small" id="scrape-progress"></p>
-                    </div>
-
-                    <!-- Success card (hidden by default) -->
-                    <div id="scrape-success" style="display:none !important;">
-                        <div class="text-center mb-3">
-                            <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
-                            <h4 class="fw-bold">Your event is ready!</h4>
-                        </div>
-                        <p class="text-muted text-center mb-1">Scan with your phone to download the app and jump straight in:</p>
-                        <div class="text-center my-3">
-                            <img id="result-qr" src="" alt="Scan to join event" style="width:180px;height:180px;border-radius:8px;">
-                        </div>
-                        <p class="text-muted text-center small mb-1">Or open the Attnd app, tap <strong>Join Event</strong>, and enter this code:</p>
-                        <div class="text-center mb-3">
-                            <span id="result-code" class="display-6 fw-bold text-primary font-monospace"></span>
-                        </div>
-                        <p id="result-summary" class="text-muted text-center small"></p>
-                        <div class="text-center mt-3">
-                            <button class="btn btn-outline-secondary btn-sm" id="scrape-again-btn">Try another URL</button>
-                        </div>
-
-                        <!-- Claim CTA -->
-                        <hr class="my-4">
-                        <div class="text-center">
-                            <p class="fw-semibold mb-1">Like what you see?</p>
-                            <p class="text-muted small mb-3">Create a free account to customize your event, upload a flyer, manage locations, and send push notifications to attendees.</p>
-                            <a id="claim-account-btn" href="{% url 'console:signup' %}" class="btn btn-primary btn-lg px-4">Create a Free Account →</a>
-                        </div>
-                    </div>
-
-                    <!-- Error card (hidden by default) -->
-                    <div id="scrape-error" class="alert alert-danger mb-0" style="display:none !important;" role="alert">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <span id="error-message"></span>
-                    </div>
-                </div>
-            </div>
-        </div>
+<section id="try-it">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Already have an event? See it in the app.</h2>
+      <p class="muted">Paste your event website. We'll pull in the locations, times and descriptions and give you a code to open in the app — no account needed.</p>
     </div>
+    <div class="card">
+      <div id="scrape-form">
+        <label for="event-url" class="small" style="font-weight:600">Your event website</label>
+        <div class="field" style="margin-top:.4rem">
+          <input type="url" id="event-url" placeholder="https://yourevent.com" autocomplete="off">
+          <button class="btn btn-primary" id="scrape-btn" type="button">Build my event</button>
+        </div>
+      </div>
+
+      <div id="scrape-loading" class="center hidden" aria-live="polite">
+        <div class="spinner" role="status"></div>
+        <p class="muted" style="margin-bottom:.2rem">Reading your event site… this usually takes 30–90 seconds.</p>
+        <p class="muted small" id="scrape-progress"></p>
+      </div>
+
+      <div id="scrape-success" class="center hidden">
+        <svg class="success-icon"><use href="#i-check"/></svg>
+        <h3>Your event is ready!</h3>
+        <p class="muted" style="margin-bottom:0">Scan with your phone to get the app and jump straight in:</p>
+        <img id="result-qr" class="qr" src="" alt="QR code to join the event">
+        <p class="muted small" style="margin-bottom:.2rem">Or open Attnd and enter this code:</p>
+        <div id="result-code" class="result-code"></div>
+        <p id="result-summary" class="muted small"></p>
+        <button class="btn btn-ghost btn-small" id="scrape-again-btn" type="button">Try another URL</button>
+        <hr>
+        <p style="font-weight:600;margin-bottom:.2rem">Like what you see?</p>
+        <p class="muted small">Create a free account to claim this event, edit everything, choose the layout and send notifications.</p>
+        <a id="claim-account-btn" href="{% url 'console:signup' %}" class="btn btn-primary">Claim this event →</a>
+      </div>
+
+      <div id="scrape-error" class="alert hidden" role="alert" style="margin-top:1rem"><span id="error-message"></span></div>
+    </div>
+  </div>
 </section>
 
-<script>
-(function () {
-    const btn = document.getElementById('scrape-btn');
-    const againBtn = document.getElementById('scrape-again-btn');
-    const formArea = document.getElementById('scrape-form-area');
-    const loading = document.getElementById('scrape-loading');
-    const success = document.getElementById('scrape-success');
-    const errorDiv = document.getElementById('scrape-error');
-    const errorMsg = document.getElementById('error-message');
-    const resultCode = document.getElementById('result-code');
-    const resultQr = document.getElementById('result-qr');
-    const resultSummary = document.getElementById('result-summary');
-    const claimBtn = document.getElementById('claim-account-btn');
-
-    function show(el) { el.style.removeProperty('display'); el.style.display = 'block'; }
-    function hide(el) { el.style.setProperty('display', 'none', 'important'); }
-
-    function reset() {
-        show(formArea);
-        hide(loading);
-        hide(success);
-        hide(errorDiv);
-    }
-
-    btn.addEventListener('click', async function () {
-        const url = document.getElementById('event-url').value.trim();
-        if (!url) {
-            document.getElementById('event-url').focus();
-            return;
-        }
-
-        hide(formArea);
-        hide(success);
-        hide(errorDiv);
-        show(loading);
-        btn.disabled = true;
-
-        try {
-            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-            const start = await fetch('/scrape/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, timezone }),
-            });
-            let data = await start.json().catch(() => ({ error: 'Unexpected response from server.' }));
-
-            // The import runs in the background — poll until it finishes (up to ~5 minutes).
-            if (!data.error && data.status_url) {
-                const progressText = document.getElementById('scrape-progress');
-                const deadline = Date.now() + 5 * 60 * 1000;
-                while (true) {
-                    await new Promise(r => setTimeout(r, 2500));
-                    const resp = await fetch(data.status_url);
-                    const status = await resp.json();
-                    if (status.progress && progressText) progressText.textContent = status.progress;
-                    if (status.status === 'done') { data = status; break; }
-                    if (status.status === 'failed') { data = { error: status.error }; break; }
-                    if (Date.now() > deadline) {
-                        data = { error: 'This is taking longer than expected. Please try again in a moment.' };
-                        break;
-                    }
-                }
-            }
-
-            hide(loading);
-
-            if (!data.error) {
-                resultCode.textContent = data.event_code;
-                resultQr.src = data.qr_code;
-                const locText = data.location_count === 1
-                    ? '1 location'
-                    : `${data.location_count} locations`;
-                resultSummary.textContent = `"${data.event_name}" — ${locText} imported.`;
-                claimBtn.href = data.claim_url || `{% url 'console:signup' %}?claim=${encodeURIComponent(data.event_code)}`;
-                show(success);
-            } else {
-                errorMsg.textContent = data.error || 'Something went wrong. Please try again.';
-                show(formArea);
-                show(errorDiv);
-            }
-        } catch (e) {
-            hide(loading);
-            errorMsg.textContent = e.name === 'AbortError'
-                ? 'This is taking longer than expected. Your event may still be processing — please try again in a moment.'
-                : (e.message || 'Network error — please check your connection and try again.');
-            show(formArea);
-            show(errorDiv);
-        } finally {
-            btn.disabled = false;
-        }
-    });
-
-    againBtn.addEventListener('click', function () {
-        document.getElementById('event-url').value = '';
-        reset();
-    });
-
-    // Allow Enter key in the input
-    document.getElementById('event-url').addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') btn.click();
-    });
-}());
-</script>
+<section class="dark center" id="download">
+  <div class="wrap">
+    <h2>Get the app</h2>
+    <p style="opacity:.8">Free for attendees on iPhone and Android.</p>
+    <div class="badges">
+      <a href="https://apple.co/2yF6mNa"><img src="{% static 'home/img/app-store-badge.svg' %}" alt="Download on the App Store"></a>
+      <a href="http://bit.ly/2YEZ4HL"><img src="{% static 'home/img/google-play-badge.svg' %}" alt="Get it on Google Play"></a>
+    </div>
+  </div>
+</section>
 
 <section class="cta">
-    <div class="cta-content">
-        <div class="container">
-            <h2>Start Attnding.</h2>
-            <a href="#contact" class="btn btn-outline btn-xl">Let's Get Started!</a>
-        </div>
-    </div>
-    <div class="overlay"></div>
-</section>
-
-<section class="contact bg-primary" id="contact">
-    <div class="container">
-        <h2>Create an account for free!</h2>
-        <h1>Pay only when your event goes live</h1>
-        <br>
-        <a href="{% url 'console:signup' %}" class="btn btn-outline btn-xl">Create an Account!</a>
-        <br>
-    </div>
+  <div class="wrap">
+    <h2>Create your event for free.</h2>
+    <p class="muted">Pay only when your event goes live.</p>
+    <a href="{% url 'console:signup' %}" class="btn btn-primary">Get started</a>
+  </div>
 </section>
 
 <footer>
-    <div class="container">
-        <p>&copy; Attnd 2026. All Rights Reserved.</p>
-        <ul class="list-inline">
-            <li class="list-inline-item">
-                <a href="https://www.attnd.app/privacy/">Privacy</a>
-            </li>
-        </ul>
-        <p class="text-muted small mb-0">build {{ build }}</p>
-    </div>
+  <div class="wrap">
+    <span>&copy; Attnd {% now "Y" %}. All rights reserved.</span>
+    <span><a href="{% url 'home:privacy' %}">Privacy</a> · <span class="small">build {{ build }}</span></span>
+  </div>
 </footer>
 
-<!-- Bootstrap 5 JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const form = $('scrape-form'), loading = $('scrape-loading'), success = $('scrape-success'), error = $('scrape-error');
+  const input = $('event-url'), btn = $('scrape-btn');
+  const show = (...els) => els.forEach(el => el.classList.remove('hidden'));
+  const hide = (...els) => els.forEach(el => el.classList.add('hidden'));
 
-<!-- Custom scripts -->
-<script src="{% static 'home/js/new-age.min.js' %}"></script>
+  function fail(message) {
+    hide(loading);
+    $('error-message').textContent = message || 'Something went wrong. Please try again.';
+    show(form, error);
+    btn.disabled = false;
+  }
 
+  async function run() {
+    const url = input.value.trim();
+    if (!url) { input.focus(); return; }
+    hide(form, success, error); show(loading); btn.disabled = true;
+    try {
+      const start = await fetch('/scrape/', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone}),
+      });
+      let data = await start.json().catch(() => ({error: 'Unexpected response from the server.'}));
+      if (data.error) return fail(data.error);
+
+      // The import runs in the background; poll until it finishes (up to ~5 minutes).
+      const deadline = Date.now() + 5 * 60 * 1000;
+      while (true) {
+        await new Promise(r => setTimeout(r, 2500));
+        const status = await (await fetch(data.status_url)).json();
+        if (status.progress) $('scrape-progress').textContent = status.progress;
+        if (status.status === 'done') { data = status; break; }
+        if (status.status === 'failed') return fail(status.error);
+        if (Date.now() > deadline) return fail('This is taking longer than expected. Please try again in a moment.');
+      }
+
+      hide(loading);
+      $('result-code').textContent = data.event_code;
+      $('result-qr').src = data.qr_code;
+      const locs = data.location_count === 1 ? '1 location' : `${data.location_count} locations`;
+      $('result-summary').textContent = `“${data.event_name}” — ${locs} imported.`;
+      $('claim-account-btn').href = data.claim_url;
+      show(success);
+      btn.disabled = false;
+    } catch (e) {
+      fail('Network error — please check your connection and try again.');
+    }
+  }
+
+  btn.addEventListener('click', run);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+  $('scrape-again-btn').addEventListener('click', () => { hide(success, error); show(form); input.select(); });
+})();
+</script>
 </body>
-
 </html>
