@@ -327,3 +327,32 @@ class ContentPushTests(V2Base):
         with patch('events.push.notify_content_updated') as notify:
             push._send_content_push(self.event.id)
         notify.assert_called_once()
+
+
+class DemoEventCommandTests(TestCase):
+    def test_loads_every_feature_and_reruns_in_place(self):
+        from django.core.management import call_command
+        from io import StringIO
+
+        from events.models import EventInvite, EventRevision, UsageCount
+        from scrape.models import ChangeSet, SourcePage
+        call_command('load_demo_event', '--devices', '30', stdout=StringIO())
+        event = Event.objects.get(event_code='DEMO')
+        self.assertEqual(event.timing, 'now')
+        self.assertGreater(event.location_set.count(), 10)
+        self.assertTrue(event.location_set.filter(latitude__isnull=True).exists())
+        self.assertGreater(event.scheduleditem_set.count(), 30)
+        self.assertTrue(event.notification_set.filter(sent=True).exists())
+        self.assertTrue(event.notification_set.filter(sent=False).exists())
+        self.assertEqual(set(ChangeSet.objects.filter(event=event).values_list('status', flat=True)), {'applied', 'pending'})
+        self.assertTrue(EventRevision.objects.filter(event=event).exists())
+        self.assertTrue(SourcePage.objects.filter(event=event).exists())
+        self.assertTrue(EventInvite.objects.filter(event=event).exists())
+        joins = sum(UsageCount.objects.filter(event=event, metric='join').values_list('count', flat=True))
+        self.assertEqual(joins, 30)
+        self.assertFalse(Device.objects.filter(event=event).exclude(push_token='').exists())  # no real pushes
+        Device.objects.create(id='real-phone', event=event, platform='ios')
+        call_command('load_demo_event', '--devices', '30', stdout=StringIO())
+        self.assertEqual(Event.objects.get(event_code='DEMO').pk, event.pk)
+        self.assertTrue(Device.objects.filter(id='real-phone', event=event).exists())
+        self.assertEqual(sum(UsageCount.objects.filter(event=event, metric='join').values_list('count', flat=True)), 30)

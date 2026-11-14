@@ -53,12 +53,18 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | ✅ dev (TestFlight, App Attest verified on a real iPhone) · ⬜ prod | ✅ dev · ⬜ prod |
 | API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ⬜ prod | — | — |
 | API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
-| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages (5-minute buckets) | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-006: live updates
+**Why:** organizers scan their event's QR code, keep the app open and edit on the web: the phone should change within seconds.
+**Server:** every attendee-visible change bumps `content_version` and schedules a silent `content_updated` push (debounced: 5 s after the last change, at most one per minute per event; `CONTENT_PUSH_*` settings). No contract change.
+**iOS / Android:** while the app is in the foreground and in an event, `GET bundle/` every 5 seconds with `If-None-Match` (a `304` when unchanged), silently. Shared code, so the iOS App Clip (no push) is live too. Usage counts move from hourly to 5-minute buckets (`at` = start of the UTC 5-minute window).
 
 ### API-005: anonymous usage counts
 **Why:** organizers see how the app was used during their event (joins over time, activity by hour, which features, locations and schedule items people looked at). The admin sees the same for every event, plus app-wide totals.

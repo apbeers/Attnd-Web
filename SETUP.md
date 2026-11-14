@@ -416,6 +416,22 @@ heroku config:set SUPPORTED_API_VERSIONS=2 -a attnd-web
 ```
 Builds that still use the retired version are then shown the update screen.
 
+## 8. Google Maps on the website (address autocomplete, pin map)
+The console uses Google Maps for address suggestions and a draggable pin when `GOOGLE_MAPS_BROWSER_KEY` is set; without it, it keeps the plain address field and the OpenStreetMap pin map. This must be a **new browser key**, restricted to our sites: browser keys are visible to anyone, so never reuse the server or Android keys. Create it (Maps JavaScript API + Places API (New), referrer-restricted) and set it on dev:
+```bash
+gcloud services enable maps-backend.googleapis.com places.googleapis.com --project attnd-df28e
+gcloud services api-keys create --project attnd-df28e --display-name "Attnd web (browser)" --allowed-referrers "https://attnd.app/*,https://attnd-dev-7ab893f37020.herokuapp.com/*" --api-target service=maps-backend.googleapis.com --api-target service=places.googleapis.com
+gcloud services api-keys list --project attnd-df28e --filter "displayName='Attnd web (browser)'" --format "value(name)"
+heroku config:set -a attnd-dev GOOGLE_MAPS_BROWSER_KEY="$(gcloud services api-keys get-key-string NAME_FROM_PREVIOUS_LINE --project attnd-df28e --format 'value(keyString)')"
+```
+Optional: a Map ID (Google Cloud console → Map Management) in `GOOGLE_MAPS_MAP_ID`; the default `DEMO_MAP_ID` is fine for dev.
+
+## 9. Demo event
+A fully populated event that is happening now, with usage history, AI updates and a team. Load or refresh it (same code, same id, so phones stay joined):
+```bash
+heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com
+```
+
 ## Key reference
 
 For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.

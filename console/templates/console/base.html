@@ -65,6 +65,8 @@
 </div>
 {% endif %}
 <script src="{% static 'console/console.js' %}"></script>
+{% if GOOGLE_MAPS_BROWSER_KEY %}<div id="maps-config" hidden data-key="{{ GOOGLE_MAPS_BROWSER_KEY }}" data-map-id="{{ GOOGLE_MAPS_MAP_ID }}"></div>
+<script src="{% static 'console/maps.js' %}"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

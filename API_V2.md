@@ -34,8 +34,10 @@ Returns everything the app shows, in one response.
   - on join
   - when the app comes to the foreground
   - on pull-to-refresh
-  - when a `content_updated` push arrives
-  - every 5 minutes while the app is in the foreground on event days
+  - when a `content_updated` push arrives (sent a few seconds after any change, at most about once a minute per event)
+  - **every 5 seconds while the app is open (foreground) and in an event** (API-006), so organizers editing on the web see the
+    app change live. With `If-None-Match` an unchanged bundle is a bodiless `304`. Don't show a spinner or an error for these
+    polls. The App Clip, which has no push, relies on this.
 ```json
 {
   "schema_version": 2,
@@ -91,9 +93,9 @@ Anonymous usage counts. **Never send a device ID or anything identifying**; the 
 | `search` | none. A search was run. **Never send the search text.** |
 | `refresh` | none. Pull to refresh. |
 
-- `count` is optional (default 1). `at` is optional ISO 8601, used to place the count in its hour (within the last 7 days). Up to 200 entries per request.
+- `count` is optional (default 1). `at` is optional ISO 8601, used to place the count in its UTC 5-minute window (within the last 7 days). Up to 200 entries per request.
 - Unknown names, invalid details and ids from other events are dropped silently. A malformed body still returns `200`.
-- **Client behaviour:** aggregate in memory by (name, detail, hour) and send at most every ~60 seconds, when the app goes to the background, and before leaving an event. Drop the batch after one failed retry. Analytics must never block or slow the UI, and never show errors.
+- **Client behaviour:** aggregate in memory by (name, detail, UTC 5-minute window, sending its start as `at`) and send at most every ~60 seconds, when the app goes to the background, and before leaving an event. Drop the batch after one failed retry. Analytics must never block or slow the UI, and never show errors.
 - The server counts joins, leaves and new installs itself; don't send those.
 
 ## Outside the version: update check (API-003)

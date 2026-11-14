@@ -213,3 +213,7 @@ input[type=file].form-control { padding: .35rem; }
 .live-badge { display: inline-flex; align-items: center; gap: .4em; background: var(--primary); color: #fff; border-radius: 999px;
   padding: .2rem .7rem; font-size: .8rem; font-weight: 600; }
 .text-warning-emphasis { color: #8a6100; }
+.place-autocomplete { display: block; width: 100%; margin-bottom: .35rem; color-scheme: light; }
+.place-autocomplete-target { font-size: .85rem; color: var(--muted); }
+.task-tray[hidden] { display: none; }
+.live-phone img { display: block; margin: 0 auto; }

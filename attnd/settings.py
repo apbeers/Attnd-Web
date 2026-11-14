@@ -74,6 +74,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'console.context_processors.maps',
             ],
         },
     },
@@ -141,6 +142,11 @@ WATCH_MAX_AI_RUNS_PER_DAY = int(os.getenv('WATCH_MAX_AI_RUNS_PER_DAY', '24'))
 
 # Organizers sign in with their email (or username), case-insensitively.
 AUTHENTICATION_BACKENDS = ['console.auth_backends.EmailOrUsernameBackend']
+
+# Google Maps in the console (address autocomplete, pin map). A *browser* key restricted to our domains
+# (HTTP referrers) for the Maps JavaScript API and Places API (New); not the server key above.
+GOOGLE_MAPS_BROWSER_KEY = os.getenv('GOOGLE_MAPS_BROWSER_KEY', '')
+GOOGLE_MAPS_MAP_ID = os.getenv('GOOGLE_MAPS_MAP_ID', 'DEMO_MAP_ID')
 
 # Store links, used by /join/<code>/ and the apps' update prompt (/api/app-status/).
 IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', '')  # https://apps.apple.com/app/id<numeric Apple ID>

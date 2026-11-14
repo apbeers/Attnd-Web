@@ -79,6 +79,15 @@ static/         # Project-level static assets
 public/         # Files served at root by Whitenoise (robots.txt, etc.)
 ```
 
+## Console UX
+
+- **Live editing:** every attendee-visible change bumps `content_version` and schedules a debounced silent push (`events.push.content_changed`); the apps also poll every 5 s while open. App layout autosaves. The "Live on your phone" panel (QR) replaces the old phone mock-up (`_phone_preview.html` is unused for now).
+- **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. Web app manifest at `/console/manifest.webmanifest`.
+- **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
+- **Google Maps** (`console/static/console/maps.js`) when `GOOGLE_MAPS_BROWSER_KEY` is set: Places autocomplete on addresses, draggable pin map; otherwise the OpenStreetMap picker.
+- **Brand colour** purple `#431f86` (from the app icon) across console, site and apps.
+- **Demo data:** `python manage.py load_demo_event [--owner email]` builds the DEMO event (happening now, every feature populated).
+
 ## Accounts
 
 People only ever see and sign in with their **email** (`console.auth_backends.EmailOrUsernameBackend`, case-insensitive). The account's `username` is an internal generated id (`u` + 10 hex, `console.accounts.new_username`), so an email can change (Account page, `/console/account/`) without losing the account. Emails are unique case-insensitively (Postgres index `auth_user_email_lower_uniq` + `email_in_use`). Create a site admin with `python manage.py create_admin you@example.com`. Deleting an account never deletes events: they become unassigned.
