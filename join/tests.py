@@ -27,7 +27,7 @@ ANDROID_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36'
 DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
 
 
-@override_settings(SECURE_SSL_REDIRECT=False, STORAGES=_TEST_STORAGES)
+@override_settings(SECURE_SSL_REDIRECT=False, STORAGES=_TEST_STORAGES, IOS_APP_STORE_URL="https://apps.apple.com/app/id123")
 class JoinEventRedirectTests(TestCase):
 
     @classmethod
@@ -105,7 +105,7 @@ class JoinEventRedirectTests(TestCase):
         self.assertIn('apps.apple.com', response['Location'])
 
 
-@override_settings(SECURE_SSL_REDIRECT=False)
+@override_settings(SECURE_SSL_REDIRECT=False, IOS_APP_STORE_URL="https://apps.apple.com/app/id123")
 class WellKnownTests(TestCase):
 
     def setUp(self):

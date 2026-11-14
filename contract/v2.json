@@ -162,6 +162,13 @@
       "event_id": "null",
       "status": "string",
       "subscribed": "boolean"
+    },
+    "GET /api/app-status/": {
+      "latest_version": "null",
+      "message": "null",
+      "min_version": "null",
+      "update": "string",
+      "update_url": "string"
     }
   },
   "push": {

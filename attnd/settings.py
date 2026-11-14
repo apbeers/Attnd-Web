@@ -126,6 +126,20 @@ LOGOUT_REDIRECT_URL = '/'
 
 API_KEY = os.getenv('API_KEY', '')
 CONTACT_EMAIL = os.getenv('CONTACT_EMAIL', '')
+
+# Store links, used by /join/<code>/ and the apps' update prompt (/api/app-status/).
+IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', '')  # https://apps.apple.com/app/id<numeric Apple ID>
+ANDROID_PACKAGE_NAME = os.getenv('ANDROID_PACKAGE_NAME', 'com.arcu.attnd')
+
+# Update prompt (API_CHANGES.md, API-003). Builds older than APP_MIN_VERSION_<PLATFORM> must update;
+# builds older than APP_LATEST_VERSION_<PLATFORM> are told an update is available. Empty = no prompt.
+APP_MIN_VERSION_IOS = os.getenv('APP_MIN_VERSION_IOS', '')
+APP_MIN_VERSION_ANDROID = os.getenv('APP_MIN_VERSION_ANDROID', '')
+APP_LATEST_VERSION_IOS = os.getenv('APP_LATEST_VERSION_IOS', '')
+APP_LATEST_VERSION_ANDROID = os.getenv('APP_LATEST_VERSION_ANDROID', '')
+APP_UPDATE_MESSAGE = os.getenv('APP_UPDATE_MESSAGE', '')
+# API versions the server still serves. An app on any other version is told to update.
+SUPPORTED_API_VERSIONS = [int(v) for v in os.getenv('SUPPORTED_API_VERSIONS', '1,2').split(',') if v.strip()]
 # Production should set STATIC_API_KEY_ENABLED=0 so only attested official apps can call the API.
 STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', 'false', 'False')
 

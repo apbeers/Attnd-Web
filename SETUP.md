@@ -386,6 +386,28 @@ Limits to know about:
 
 ---
 
+## 7. App Store link and update prompt
+**App Store link** (required). `/join/<code>/` links and the iPhone update screen use it. Until it's set, iPhones opening a join link get the landing page instead of the App Store. ✅ dev is set. Production:
+```bash
+heroku config:set IOS_APP_STORE_URL=https://apps.apple.com/app/id1470627406 -a attnd-web
+```
+
+**Ask users to update** (API-003, optional, any time). Apps check on launch and on every return to the foreground:
+```bash
+heroku config:set APP_LATEST_VERSION_IOS=2.0.90 APP_LATEST_VERSION_ANDROID=2.0.40 -a attnd-web
+```
+That shows a dismissible "new version available" banner to older builds. To force older builds onto a blocking "Update Attnd" screen instead:
+```bash
+heroku config:set APP_MIN_VERSION_IOS=2.0.90 APP_MIN_VERSION_ANDROID=2.0.40 -a attnd-web
+```
+Optional custom text: `heroku config:set APP_UPDATE_MESSAGE="…" -a attnd-web`. Undo any of these with `heroku config:unset NAME -a attnd-web`. Version numbers are the ones TestFlight and Play show (iOS `2.0.<run>`, Android `2.0.<run>`, which differ per platform).
+
+**Retire an old API version** (only when `heroku run -a attnd-web python manage.py api_usage` shows nobody uses it):
+```bash
+heroku config:set SUPPORTED_API_VERSIONS=2 -a attnd-web
+```
+Builds that still use the retired version are then shown the update screen.
+
 ## Key reference
 
 For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.

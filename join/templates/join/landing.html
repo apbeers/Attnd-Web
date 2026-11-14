@@ -15,7 +15,7 @@
     <p class="muted">Get the Attnd app to follow this event's map, schedule and live updates.</p>
     <p>Event code: <strong class="mono" style="font-size:1.3rem">{{ event.event_code }}</strong></p>
     <div class="stack">
-      <a href="{{ ios_url }}" class="btn btn-dark">Download on the App Store</a>
+      {% if ios_url %}<a href="{{ ios_url }}" class="btn btn-dark">Download on the App Store</a>{% endif %}
       <a href="{{ android_url }}" class="btn btn-green">Get it on Google Play</a>
     </div>
     <p class="muted small" style="margin:0">Already have the app? Open it and enter the code above.</p>

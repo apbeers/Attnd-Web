@@ -220,3 +220,48 @@ class RevokedKeyTests(V2Base):
         with patch.object(apis, 'REVOKED_API_KEY_SHA256', revoked):
             self.assertEqual(self.get('/api/v2/events/lookup/?q=FAIR2026').status_code, 401)
         self.assertEqual(self.get('/api/v2/events/lookup/?q=FAIR2026').status_code, 200)
+
+
+@override_settings(APP_MIN_VERSION_IOS='2.0.50', APP_LATEST_VERSION_IOS='2.0.90', APP_MIN_VERSION_ANDROID='',
+                   APP_LATEST_VERSION_ANDROID='', IOS_APP_STORE_URL='https://apps.apple.com/app/id123',
+                   SUPPORTED_API_VERSIONS=[1, 2])
+class AppStatusTests(TestCase):
+    def status(self, **params):
+        return self.client.get('/api/app-status/', params, secure=True).json()
+
+    def test_no_auth_needed_and_versions_compared_numerically(self):
+        self.assertEqual(self.status(platform='ios', version='2.0.9', api=2)['update'], 'required')
+        self.assertEqual(self.status(platform='ios', version='2.0.50', api=2)['update'], 'available')
+        self.assertEqual(self.status(platform='ios', version='2.0.100', api=2)['update'], 'none')
+        self.assertEqual(self.status(platform='ios', version='2.1', api=2)['update'], 'none')
+        body = self.status(platform='ios', version='2.0.9', api=2)
+        self.assertEqual(body['update_url'], 'https://apps.apple.com/app/id123')
+        self.assertEqual(body['min_version'], '2.0.50')
+
+    def test_platform_without_settings_never_prompts(self):
+        body = self.status(platform='android', version='1.0', api=2)
+        self.assertEqual(body['update'], 'none')
+        self.assertIn('play.google.com/store/apps/details?id=', body['update_url'])
+
+    def test_unsupported_api_version_requires_update(self):
+        self.assertEqual(self.status(platform='android', version='9.9', api=1)['update'], 'none')
+        with self.settings(SUPPORTED_API_VERSIONS=[2]):
+            self.assertEqual(self.status(platform='android', version='9.9', api=1)['update'], 'required')
+
+    def test_unparseable_versions_do_not_prompt(self):
+        self.assertEqual(self.status(platform='ios', version='', api=2)['update'], 'none')
+        self.assertEqual(self.status(platform='ios', version='beta', api='x')['update'], 'none')
+
+    def test_retired_api_version_returns_410(self):
+        resp = self.client.get('/api/v1/events/', secure=True, HTTP_USER_AGENT='Attnd/85 CFNetwork Darwin/27.2.0')
+        self.assertEqual(resp.status_code, 404)  # v1 is still supported: an unknown path is just a 404
+        resp = self.client.get('/api/v3/events/', secure=True)
+        self.assertEqual(resp.status_code, 410)
+        self.assertEqual(resp.json()['error'], 'update_required')
+        with self.settings(SUPPORTED_API_VERSIONS=[2]):
+            resp = self.client.get('/api/v1/events/9/', secure=True, HTTP_USER_AGENT='Attnd/85 CFNetwork Darwin/27.2.0')
+        # Routed v1 endpoints still exist until their urls are removed; the catch-all covers removed ones.
+        self.assertIn(resp.status_code, (401, 404, 410))
+
+    def test_attestation_routes_are_not_swallowed_by_the_catch_all(self):
+        self.assertEqual(self.client.get('/api/v1/attest/nonce/', secure=True).status_code, 200)

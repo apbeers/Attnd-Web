@@ -72,6 +72,22 @@ Registers or updates a device. Call it on launch, and whenever the push token or
 
 ---
 
+## Outside the version: update check (API-003)
+
+### `GET /api/app-status/?platform=ios|android&version=<app version>&api=<API version the build speaks>`
+Full path, **not** under `/api/v2/`, and **no `Authorization` header**. It works even for a build whose API version was retired or whose attestation is failing. Its shape is frozen: keys are only ever added.
+```json
+{"update": "none" | "available" | "required", "min_version": "2.0.50" | null, "latest_version": "2.0.90" | null,
+ "update_url": "https://apps.apple.com/app/id1470627406", "message": "…" | null}
+```
+- `required`: show a blocking "Update Attnd" screen with a button to `update_url`. This happens when the build is older than `min_version`, or its `api` version is no longer served.
+- `available`: show a dismissible banner, at most once per `latest_version`.
+- `none`, or any value the app doesn't know: no prompt.
+
+Call it on launch and whenever the app returns to the foreground.
+
+**Retired API versions:** any `/api/vN/…` call to a version the server no longer serves gets `410 Gone` with `{"error": "update_required", "update_url": …}`. Treat `410` or `426` from any API call as `update: required`.
+
 ## Objects
 
 ### Event

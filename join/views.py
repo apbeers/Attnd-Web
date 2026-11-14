@@ -1,14 +1,13 @@
 import os
 from urllib.parse import quote
 
+from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from events.models import Event
 
-IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', 'https://apps.apple.com/app/id<APP_ID>')
-ANDROID_PACKAGE_NAME = os.getenv('ANDROID_PACKAGE_NAME', '<PACKAGE_NAME>')
 
 
 class JoinEventRedirect(View):
@@ -19,18 +18,18 @@ class JoinEventRedirect(View):
 
         android_url = (
             f'https://play.google.com/store/apps/details'
-            f'?id={ANDROID_PACKAGE_NAME}'
+            f'?id={settings.ANDROID_PACKAGE_NAME}'
             f'&referrer={quote(f"event_code={event_code}")}'
         )
 
-        if 'iphone' in ua or 'ipad' in ua or 'ipod' in ua:
-            response = redirect(IOS_APP_STORE_URL)
+        if ('iphone' in ua or 'ipad' in ua or 'ipod' in ua) and settings.IOS_APP_STORE_URL:
+            response = redirect(settings.IOS_APP_STORE_URL)
         elif 'android' in ua:
             response = redirect(android_url)
         else:
             return render(request, 'join/landing.html', {
                 'event': event,
-                'ios_url': IOS_APP_STORE_URL,
+                'ios_url': settings.IOS_APP_STORE_URL,
                 'android_url': android_url,
             })
 
@@ -68,7 +67,7 @@ class AppleAppSiteAssociation(View):
 class AndroidAssetLinks(View):
 
     def get(self, request):
-        package_name = os.getenv('ANDROID_PACKAGE_NAME', '<PACKAGE_NAME>')
+        package_name = settings.ANDROID_PACKAGE_NAME
         fingerprint = os.getenv('ANDROID_SHA256_FINGERPRINT', '<SHA256_FINGERPRINT>')
         data = [{
             'relation': ['delegate_permission/common.handle_all_urls'],

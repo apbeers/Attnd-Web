@@ -195,7 +195,12 @@ Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and
 | `APPLE_APP_BUNDLE_ID` | Prod | For App Attest verification |
 | `APPLE_TEAM_ID` | Prod | For App Attest verification |
 | `APPLE_ATTEST_ENVIRONMENT` | No | `production` (default) or `development` |
-| `ANDROID_PACKAGE_NAME` | Prod | For Play Integrity verification |
+| `ANDROID_PACKAGE_NAME` | No | Default `com.arcu.attnd`; Play Integrity, Play links |
+| `IOS_APP_STORE_URL` | Prod | `https://apps.apple.com/app/id1470627406`; join links and the update screen |
+| `APP_MIN_VERSION_IOS` / `_ANDROID` | No | Older builds get the blocking update screen (API-003) |
+| `APP_LATEST_VERSION_IOS` / `_ANDROID` | No | Older builds get a dismissible "update available" banner |
+| `APP_UPDATE_MESSAGE` | No | Custom text for the update screen and banner |
+| `SUPPORTED_API_VERSIONS` | No | Default `1,2`; apps on other versions are told to update and `/api/vN/` returns 410 |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Prod | Google service account for Play Integrity |
 | `ATTESTATION_JWT_SECRET` | Prod | Secret for signing attestation JWTs |
 | `ATTESTATION_JWT_TTL_HOURS` | No | JWT lifetime in hours, default 24 |

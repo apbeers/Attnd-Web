@@ -52,17 +52,17 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 |----|--------|------|-----|-----|---------|
 | API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | 🚧 dev (TestFlight) · ⬜ prod | ✅ dev · ⬜ prod |
 | API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ⬜ prod | — | — |
-| API-003 | Minimum app version / update prompt | additive | ⬜ proposed | ⬜ | ⬜ |
+| API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | 🚧 dev · ⬜ prod | 🚧 dev · ⬜ prod |
 
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
 
-### API-003: minimum app version and update prompt (proposed, not started)
-**Why:** a safety valve. If a future change ever has to break old builds, or an old build has a serious bug, the server can ask those builds to update instead of failing.
-**API (additive):** the bundle and `POST devices/` responses gain `client: {"min_version": "2.0.0" | null, "latest_version": "2.1.0" | null, "update_url": "…"}`, chosen by the request's `platform`. Missing or `null` means no prompt.
-**iOS / Android:** compare your own version with `min_version`. If lower, show a blocking "Please update Attnd" screen with a button to `update_url`. If only `latest_version` is higher, show a dismissible banner once per version.
-**Web:** console or settings fields per platform, kept in config.
+### API-003: update check and update screen
+**Why:** if a change ever has to break old builds, or an old build has a serious bug, the server can tell those builds to update instead of letting them fail.
+**API (additive, outside the versions):** `GET /api/app-status/?platform&version&api` (see `API_V2.md`). It needs no auth and its shape is frozen. It answers `update: none | available | required` with `min_version`, `latest_version`, `update_url` and `message`. Any `/api/vN/` call to a retired version answers `410` with `"error": "update_required"`.
+**Server:** Heroku config `APP_MIN_VERSION_IOS`/`_ANDROID` (older builds must update), `APP_LATEST_VERSION_IOS`/`_ANDROID` (older builds see the banner), `APP_UPDATE_MESSAGE` (optional text), `SUPPORTED_API_VERSIONS` (default `1,2`), `IOS_APP_STORE_URL`. Unset means no prompt.
+**iOS / Android:** check on launch and on every return to the foreground. `required` (or a `410`/`426` from any call) replaces the whole UI with an "Update Attnd" screen and a button to `update_url`. `available` shows a dismissible banner, remembered per `latest_version`. Unknown `update` values mean no prompt.
 
 ### API-002: device API version (server only)
 `Device.api_version` records the newest API version each device has called: 1 for the legacy endpoints, 2 for v2. `manage.py api_usage` reports active devices by API version, platform and app version. No contract change, no app work.

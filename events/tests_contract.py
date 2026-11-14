@@ -117,6 +117,8 @@ class ApiContractTests(TestCase):
             'POST events/<id>/join/': self.call('post', f'/api/v2/events/{e}/join/', device),
             'POST events/<id>/leave/': self.call('post', f'/api/v2/events/{e}/leave/', {'device_id': 'contract-device'}),
             'POST devices/': self.call('post', '/api/v2/devices/', device),
+            # Unversioned and frozen: old builds rely on it to learn they must update.
+            'GET /api/app-status/': self.call('get', '/api/app-status/?platform=ios&version=2.0.1&api=2'),
         }
         payloads = {}
 
