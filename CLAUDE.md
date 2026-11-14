@@ -26,8 +26,9 @@ Avoid third-party libraries. Use Django and the Python standard library first; t
 its own CSS (`console/static/console/console.css`), inline SVG icons (`console_tags.icon`) and vanilla JS
 (`console.js`) — no CSS/JS frameworks or CDNs. Existing server dependencies are kept where the standard
 library has no equivalent (Postgres driver, Pillow, OpenAI SDK, Google auth, HTTP/2 for APNs via
-`httpx[http2]`, CBOR for App Attest). Stripe is the expected future exception. The marketing homepage
-(`home/`) still uses its original vendored Bootstrap theme.
+`httpx[http2]`, CBOR for App Attest). Stripe is the expected future exception. The public site (`home/`, `join/`) uses one hand-written
+stylesheet (`home/static/home/site.css`) — no vendored frameworks, icon fonts or web fonts.
+Upgrade Python packages with `uv run python scripts/upgrade_deps.py` (also runs weekly in CI).
 
 ## Tech Stack
 
@@ -183,6 +184,8 @@ Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and
 | `FCM_SERVICE_ACCOUNT_JSON` | No | Defaults to `GOOGLE_SERVICE_ACCOUNT_JSON` (needs Firebase Messaging permission) |
 
 ## Deployment
+
+CI/CD for all three repos (develop → dev, main → production) is documented in `DEPLOYMENT.md`.
 
 Heroku `Procfile`:
 ```
