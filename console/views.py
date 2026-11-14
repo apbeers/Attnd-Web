@@ -4,6 +4,7 @@ import logging
 from django.contrib.auth import login
 from django.contrib.auth.models import User
 from django.db import IntegrityError
+from django.db.models import Q
 from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.views import View
@@ -60,10 +61,10 @@ class SignUpView(View):
                 'claim_code': claim,
             })
 
-        email = form.cleaned_data['email']
+        email = form.cleaned_data['email'].strip().lower()
         password = form.cleaned_data['password']
 
-        if User.objects.filter(username=email[:150]).exists():
+        if User.objects.filter(Q(username__iexact=email) | Q(email__iexact=email)).exists():
             form.add_error('email', 'An account with this email already exists.')
             return render(request, 'registration/signup.html', {
                 'form': form,

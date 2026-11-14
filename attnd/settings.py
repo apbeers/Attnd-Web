@@ -129,6 +129,9 @@ LOGOUT_REDIRECT_URL = '/'
 API_KEY = os.getenv('API_KEY', '')
 CONTACT_EMAIL = os.getenv('CONTACT_EMAIL', '')
 
+# Organizers sign in with their email (or username), case-insensitively.
+AUTHENTICATION_BACKENDS = ['console.auth_backends.EmailOrUsernameBackend']
+
 # Store links, used by /join/<code>/ and the apps' update prompt (/api/app-status/).
 IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', '')  # https://apps.apple.com/app/id<numeric Apple ID>
 ANDROID_PACKAGE_NAME = os.getenv('ANDROID_PACKAGE_NAME', 'com.arcu.attnd')

@@ -342,3 +342,24 @@ class UsagePageTests(ConsoleTests):
         self.assertIn('No device matches', missing)
         # Admins can open any event's usage page.
         self.assertEqual(self.client.get(self.url('usage')).status_code, 200)
+
+
+class AccountEmailTests(TestCase):
+    def test_signup_rejects_an_email_already_used_by_any_account(self):
+        User.objects.create_superuser('u8741', 'Owner@Example.com', 'pw')
+        response = self.client.post(reverse('console:signup'), {
+            'email': 'owner@example.COM', 'password': 'a-strong-password-123'})
+        self.assertContains(response, 'An account with this email already exists.')
+        self.assertEqual(User.objects.filter(email__iexact='owner@example.com').count(), 1)
+
+    def test_new_accounts_store_lowercase_email(self):
+        self.client.post(reverse('console:signup'), {'email': 'New@Example.com', 'password': 'a-strong-password-123'})
+        self.assertTrue(User.objects.filter(username='new@example.com', email='new@example.com').exists())
+
+    def test_sign_in_with_email_or_username_any_case(self):
+        User.objects.create_superuser('u8741', 'admin@example.com', 'pw')
+        for name in ('admin@example.com', 'ADMIN@example.com', 'u8741', 'U8741'):
+            self.assertTrue(self.client.login(username=name, password='pw'), name)
+            self.client.logout()
+        self.assertFalse(self.client.login(username='admin@example.com', password='wrong'))
+        self.assertFalse(self.client.login(username='nobody@example.com', password='pw'))
