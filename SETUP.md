@@ -509,7 +509,7 @@ Live DNS (Namecheap, DNSSEC on), checked through dns.google:
 | TXT `_dmarc` | `v=DMARC1; p=reject; rua=mailto:<owner>` | Receivers **reject** mail claiming to be `@attnd.app` / `@mg.attnd.app` that fails SPF/DKIM. Daily reports go to the owner. |
 | TXT `@` | `v=spf1 -all` | The main domain never sends mail (alongside `google-site-verification`). |
 | TXT `mg` | `v=spf1 include:mailgun.org ~all` | Only Mailgun sends for `mg.attnd.app`. |
-| TXT `k2026._domainkey.mg` | 2048-bit RSA key | Active Mailgun DKIM key (selector `k2026`). The old 1024-bit `mailo._domainkey.mg` key is deactivated in Mailgun; its DNS record can be deleted. |
+| TXT `k2026._domainkey.mg` | 2048-bit RSA key | Active Mailgun DKIM key (selector `k2026`). The old 1024-bit `mailo` key is deactivated in Mailgun and its DNS record deleted. |
 | MX `mg` | `mxa`/`mxb.mailgun.org`, priority 10 | Bounces; iCloud rejects senders without MX. |
 | CAA `@` | `0 issue "letsencrypt.org"` | Only Let's Encrypt may issue HTTPS certificates (Heroku ACM uses it for attnd.app and www). |
 
