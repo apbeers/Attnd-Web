@@ -1,0 +1,72 @@
+# API changes and cross-repo tracker
+
+**attnd-web is the coordinating repo.** Every feature that touches the API starts here. This file is the single place that says what changed and what the iOS and Android apps must do about it. The contract itself is [`API_V2.md`](API_V2.md). [`contract/v2.json`](contract/v2.json) is its machine-checked snapshot, and the iOS and Android repos have no copy of either.
+
+## How a feature moves through the three repos
+
+1. **Plan it here.** Add a row to the tracker below and an entry in the log. Say what changes in the API and exactly what each app must do. Classify the change as additive or breaking (rules below).
+2. **Server first, in attnd-web.** Implement it, update `API_V2.md`, refresh the snapshot (`UPDATE_CONTRACT=1 uv run python manage.py test events.tests_contract`) and add tests. The server ships first, because an additive change is invisible to apps that don't know about it yet.
+3. **Then the apps.** In attnd-ios and attnd-android, implement the "iOS" and "Android" parts of the log entry. Mention the entry ID in the commit message, for example `API-003: show the update prompt`.
+4. **Track it.** Tick each column in the tracker as that part reaches `develop`, then again when it reaches production (`main` and the stores).
+
+Server-only changes that don't change what the apps see, such as console features, AI import or internal fields, don't need an entry.
+
+## Compatibility rules
+
+Apps stay installed for months, so **every server release must keep working with every app build still in use.**
+
+**Additive changes are safe and need no new version.** The apps ignore unknown keys and default missing ones (see `API_V2.md`). These are additive:
+- a new key in any response or push payload;
+- a new endpoint;
+- a new optional request field;
+- a new value for a `display` option, as long as the apps fall back to their default for values they don't know. Say this in the log entry.
+
+**Breaking changes need a new version**, because they break app builds already installed:
+- removing or renaming a key, endpoint or push `type`;
+- changing a key's type or meaning (an id from integer to string, a time from UTC to local, a field that used to be nullable becoming required);
+- requiring a new request field, or rejecting requests that worked before;
+- changing auth, URLs or error semantics that the apps depend on.
+
+The contract test (`events/tests_contract.py`) fails on anything it can detect: a removed key or endpoint, or a changed type. It can't detect a change in *meaning*, so classify that yourself.
+
+## Breaking changes
+
+Avoid them. There is almost always an additive alternative: add the new key next to the old one, keep filling the old one, and stop reading it in the apps. When a breaking change really is needed:
+
+1. **New version alongside the old one.** Add `/api/v3/` (`events/urls_v3.py`, `API_V3.md`, `contract/v3.json`), sharing code with v2 wherever possible. v2 keeps its current shape, and its contract test keeps passing unchanged.
+2. **Apps move to v3** in a normal release. Record the first app version that uses v3 in the tracker.
+3. **Retire v2 only when usage says so.** Devices record the newest API version they call (`Device.api_version`). Check with:
+   ```bash
+   heroku run -a attnd-web python manage.py api_usage
+   ```
+   When v2 devices drop to near zero, or after a notice period you're happy with, remove v2 in its own logged entry. Until then v2 stays fully working.
+4. If some devices never update, a minimum-version prompt (proposed in API-003) lets the server tell old builds to update instead of breaking silently.
+
+**v1** (`API.md`) is the legacy API for app builds released before v2. It is frozen, and its devices are recorded as `api_version = 1`. Retire it the same way, once `api_usage` shows no v1 devices.
+
+## Tracker
+
+Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev" means on `develop` / TestFlight / Play internal testing; "prod" means on `main` / the stores.
+
+| ID | Change | Type | Web | iOS | Android |
+|----|--------|------|-----|-----|---------|
+| API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | 🚧 dev (TestFlight) · ⬜ prod | ✅ dev · ⬜ prod |
+| API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ⬜ prod | — | — |
+| API-003 | Minimum app version / update prompt | additive | ⬜ proposed | ⬜ | ⬜ |
+
+## Log
+
+Newest first. Each entry says what changed and what each app must do.
+
+### API-003: minimum app version and update prompt (proposed, not started)
+**Why:** a safety valve. If a future change ever has to break old builds, or an old build has a serious bug, the server can ask those builds to update instead of failing.
+**API (additive):** the bundle and `POST devices/` responses gain `client: {"min_version": "2.0.0" | null, "latest_version": "2.1.0" | null, "update_url": "…"}`, chosen by the request's `platform`. Missing or `null` means no prompt.
+**iOS / Android:** compare your own version with `min_version`. If lower, show a blocking "Please update Attnd" screen with a button to `update_url`. If only `latest_version` is higher, show a dismissible banner once per version.
+**Web:** console or settings fields per platform, kept in config.
+
+### API-002: device API version (server only)
+`Device.api_version` records the newest API version each device has called: 1 for the legacy endpoints, 2 for v2. `manage.py api_usage` reports active devices by API version, platform and app version. No contract change, no app work.
+
+### API-001: API v2
+The v2 API described in `API_V2.md`: one `bundle/` request with event, locations, schedule, notifications and the server-resolved `display` config; ETag/304; join/leave/devices with push tokens; `notification` and `content_updated` pushes. v1 stays unchanged for older builds.
+**iOS / Android:** rewritten onto v2 (done; see each repo's `CLAUDE.md`).

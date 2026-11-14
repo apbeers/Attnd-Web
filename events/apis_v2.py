@@ -24,6 +24,8 @@ from events import content
 from events.apis import ApiKeyRequired, live_events, lookup_event, nearby_events, register_device
 from events.models import Device
 
+API_VERSION = 2
+
 
 def _body(request):
     try:
@@ -79,7 +81,7 @@ class BundleV2(ApiKeyRequired, View):
         resp['Cache-Control'] = 'no-cache'
         device_id = request.headers.get('X-Device-Id')
         if device_id:
-            Device.objects.filter(id=device_id[:128]).update(last_seen=timezone.now())
+            Device.objects.filter(id=device_id[:128]).update(last_seen=timezone.now(), api_version=API_VERSION)
         return resp
 
 
@@ -94,7 +96,8 @@ class JoinV2(ApiKeyRequired, View):
         if not device_id:
             return JsonResponse({'error': 'device_id is required'}, status=400)
         body.pop('event', None)
-        register_device(device_id, event=event, **body)
+        body.pop('api_version', None)
+        register_device(device_id, event=event, api_version=API_VERSION, **body)
         return JsonResponse({'status': 'ok', 'content_version': event.content_version})
 
 
@@ -116,6 +119,7 @@ class DeviceV2(ApiKeyRequired, View):
         if not device_id:
             return JsonResponse({'error': 'device_id is required'}, status=400)
         body.pop('event', None)
-        device = register_device(device_id, **body)
+        body.pop('api_version', None)
+        device = register_device(device_id, api_version=API_VERSION, **body)
         return JsonResponse({'status': 'ok', 'subscribed': device.subscribed,
                              'event_id': device.event_id})

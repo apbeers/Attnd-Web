@@ -116,6 +116,18 @@ class V1CompatTests(V2Base):
         self.assertEqual([i['name'] for i in data['results']], ['Band'])
 
 
+class ApiVersionTrackingTests(V2Base):
+    def test_devices_record_the_api_version_they_use(self):
+        self.client.post(f'/api/v1/events/{self.event.id}/join/old-phone/', '{"platform": "ios"}',
+                         content_type='application/json', secure=True, **AUTH)
+        self.post(f'/api/v2/events/{self.event.id}/join/', {'device_id': 'new-phone', 'platform': 'android',
+                                                             'api_version': 9})
+        self.assertEqual(Device.objects.get(id='old-phone').api_version, 1)
+        self.assertEqual(Device.objects.get(id='new-phone').api_version, 2)
+        self.get(f'/api/v2/events/{self.event.id}/bundle/', HTTP_X_DEVICE_ID='old-phone')
+        self.assertEqual(Device.objects.get(id='old-phone').api_version, 2)
+
+
 class DisplayTests(V2Base):
     def test_small_event_is_intimate(self):
         d = display.resolve_display(self.event)

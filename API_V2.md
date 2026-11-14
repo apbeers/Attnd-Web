@@ -7,6 +7,7 @@ v2 is what the current iOS and Android apps use. The v1 endpoints in `API.md` st
 - **Timestamps:** ISO 8601 with a UTC offset. Display times in the **event's** `timezone`, not the device's.
 - **Coordinates:** may be `null`, meaning unknown. Never drop a pin for a `null` coordinate, and never treat `0,0` as a real location.
 - **Forward compatibility:** clients **must ignore unknown keys** and **must fall back to defaults for missing keys**, in every object, and especially in `display`.
+- **Changes:** every change to this contract is logged in [`API_CHANGES.md`](API_CHANGES.md), with what each app must do. v2 only ever grows (new keys and endpoints). Anything that would break installed apps goes into a new version instead. `contract/v2.json` is the machine-checked snapshot.
 
 ---
 

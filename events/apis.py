@@ -341,7 +341,7 @@ class AllNotificationsView(ApiKeyRequired, View):
 # ---------------------------------------------------------------------------
 
 def register_device(device_id, event=..., platform='', push_token=None, app_version=None,
-                    subscribed=None, **_ignored):
+                    subscribed=None, api_version=None, **_ignored):
     """Create or update a device. ``event=...`` leaves the joined event unchanged."""
     device_id = str(device_id)[:128]
     device, created = Device.objects.get_or_create(id=device_id, defaults={'platform': platform or ''})
@@ -358,6 +358,8 @@ def register_device(device_id, event=..., platform='', push_token=None, app_vers
         device.app_version = app_version[:32]
     if isinstance(subscribed, bool):
         device.subscribed = subscribed
+    if api_version:
+        device.api_version = api_version
     device.last_seen = now
     device.save()
     return device
@@ -376,7 +378,8 @@ class JoinEventView(ApiKeyRequired, View):
                 body = {}
         except (json.JSONDecodeError, AttributeError):
             body = {}
-        register_device(device_id, event=event, **{k: v for k, v in body.items() if k != 'event'})
+        body = {k: v for k, v in body.items() if k not in ('event', 'api_version')}
+        register_device(device_id, event=event, api_version=1, **body)
         return JsonResponse({'status': 'ok'})
 
 
@@ -392,7 +395,7 @@ class LeaveEventView(ApiKeyRequired, View):
 class PushNotificationsSubscribe(ApiKeyRequired, View):
 
     def post(self, request, device_id):
-        Device.objects.filter(id=device_id).update(subscribed=True)
+        Device.objects.filter(id=device_id).update(subscribed=True, api_version=1, last_seen=timezone.now())
         return JsonResponse({'status': 'ok'})
 
 
@@ -400,5 +403,5 @@ class PushNotificationsSubscribe(ApiKeyRequired, View):
 class PushNotificationsUnSubscribe(ApiKeyRequired, View):
 
     def post(self, request, device_id):
-        Device.objects.filter(id=device_id).update(subscribed=False)
+        Device.objects.filter(id=device_id).update(subscribed=False, api_version=1, last_seen=timezone.now())
         return JsonResponse({'status': 'ok'})

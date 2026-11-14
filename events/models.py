@@ -256,6 +256,9 @@ class Device(models.Model):
     push_token = models.CharField(max_length=512, blank=True)
     app_version = models.CharField(max_length=32, blank=True)
     last_seen = models.DateTimeField(null=True, blank=True)
+    # Newest API version this device has called (1 = legacy app builds). Used to decide when an old
+    # API version can be retired: see API_CHANGES.md and `manage.py api_usage`.
+    api_version = models.PositiveSmallIntegerField(null=True, blank=True)
     joined_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
