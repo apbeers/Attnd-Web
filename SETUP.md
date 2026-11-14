@@ -13,6 +13,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 4. Google / Android | ⬜ 4e: exclude tablets in Play Console. ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev** deploys from `develop`. ✅ **Android** publishes to Play internal testing. ✅ **iOS** builds reach TestFlight, and on Nov 14 a real iPhone passed App Attest against dev and joined an event (lookup, join, bundle, 304s). Waiting on: the first release to `main`. |
+| 11. Email | ⬜ Mailgun + Namecheap DNS for `mg.attnd.app` (step 11); code fixes in ROADMAP.md. |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 Notes:
@@ -461,6 +462,43 @@ One-time setup so iPhones show the App Clip card when they scan a code (App Stor
 1. **Default App Clip Experience:** header image 3000×2000 PNG (a purple Attnd image), subtitle "Map, schedule and live updates", action **Open**.
 2. **Advanced App Clip Experience** (App Clip section → Advanced experiences → +): URL `https://attnd.app/join/`, action **Open**, and turn on "this URL prefix covers all URLs below it" so every event code uses it. Business/location fields are optional.
 3. Apple verifies the domain from the association file on attnd.app, so this works after the web release to production.
+
+## 11. Email (Mailgun, DNS at Namecheap)
+⬜ Not started. Emails the server sends: team invites and "AI updates waiting for review" (both skipped silently until this is done); planned: password reset and error alerts to admins. The code fixes this needs (TLS on port 587, a per-environment site URL for links, `DEFAULT_FROM_EMAIL`, a dev allow-list so dev never emails real people) are listed in `ROADMAP.md` and get done together with this step.
+
+Sending domain: **`mg.attnd.app`** (a subdomain keeps the main domain's reputation separate). From address: `Attnd <noreply@mg.attnd.app>`.
+
+**1. Mailgun account through Heroku** (one account; dev is attached to it, so both apps share it):
+```
+heroku addons:plans mailgun
+heroku addons:create mailgun:PLAN -a attnd-web
+heroku addons:attach mailgun -a attnd-dev
+```
+Pick `PLAN` from the first command's list (plans change). The add-on sets `MAILGUN_SMTP_LOGIN`, `MAILGUN_SMTP_PASSWORD`, `MAILGUN_DOMAIN` (and API keys) on the apps. Until a custom domain is verified, they point at a Mailgun **sandbox** domain that can only email addresses you authorize.
+
+**2. Add the domain in Mailgun:** `heroku addons:open mailgun -a attnd-web` → **Sending → Domains → Add new domain** → `mg.attnd.app`, US region. Mailgun then lists the DNS records to add. Turn **click/open tracking off** (Domain settings → Tracking): it rewrites links in transactional email and needs an extra CNAME.
+
+**3. Add the records at Namecheap:** Namecheap → Domain List → attnd.app → **Manage** → **Advanced DNS** → **Add New Record**. In Namecheap's **Host** field, type only the part *before* `attnd.app` (Namecheap appends the domain; entering `mg.attnd.app` would create `mg.attnd.app.attnd.app`). Copy each **Value** exactly from Mailgun; TTL Automatic.
+
+| Type | Host (Namecheap) | Value |
+|---|---|---|
+| TXT | `mg` | SPF from Mailgun, e.g. `v=spf1 include:mailgun.org ~all` |
+| TXT | the DKIM name Mailgun shows, minus `.attnd.app` (e.g. `pic._domainkey.mg`) | the long `k=rsa; p=…` value from Mailgun |
+| TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:YOUR_EMAIL` (monitor first; tighten to `p=quarantine` once mail flows cleanly) |
+
+- **Skip Mailgun's MX records** (they're for receiving mail at mg.attnd.app, not needed to send). Adding MX at Namecheap means switching **Mail Settings** to *Custom MX*, which turns off Namecheap email forwarding for attnd.app; leave that alone if you forward mail today.
+- If attnd.app already has an SPF TXT on the root (`@`), leave it; this one is on `mg` only.
+
+**4. Verify:** back in Mailgun → the domain → **Verify DNS settings** (DNS can take minutes to a few hours). When it shows verified, use the SMTP credentials for `mg.attnd.app` (Domain settings → **SMTP credentials**, login `postmaster@mg.attnd.app`; reset the password to see it) on both apps, so they stop using the sandbox:
+```
+heroku config:set -a attnd-web MAILGUN_SMTP_LOGIN=postmaster@mg.attnd.app MAILGUN_DOMAIN=mg.attnd.app
+heroku config:set -a attnd-dev MAILGUN_SMTP_LOGIN=postmaster@mg.attnd.app MAILGUN_DOMAIN=mg.attnd.app
+heroku config:set -a attnd-web MAILGUN_SMTP_PASSWORD="$(pbpaste)"
+heroku config:set -a attnd-dev MAILGUN_SMTP_PASSWORD="$(pbpaste)"
+```
+(Copy the SMTP password from Mailgun first, then run the last two lines; save it in the password manager too.)
+
+**5. Test** (after the code fixes are deployed): `heroku run python manage.py sendtestemail YOUR_EMAIL -a attnd-dev`. Check it arrives in the inbox, not spam, and that Gmail's "Show original" says SPF, DKIM and DMARC **PASS**.
 
 ## Key reference
 

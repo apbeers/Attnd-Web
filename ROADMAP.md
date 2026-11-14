@@ -20,9 +20,14 @@ they land on Heroku's temporary disk and are **lost on every restart or deploy**
 Needed for team invites (`EventInvite`), password reset, sign-up confirmation and task/ingest notices.
 - Today: SMTP settings point at Mailgun (`MAILGUN_SMTP_LOGIN` / `MAILGUN_SMTP_PASSWORD`, `attnd/settings.py`),
   but no credentials are configured, so nothing is actually sent.
-- To decide: provider (Mailgun, Postmark, Amazon SES, Resend, …), sending domain on attnd.app with
-  SPF/DKIM/DMARC records, a from address, plain-text + HTML templates in the house style, and a dev setup
-  that never emails real people (console backend or a sandbox domain).
+- Decided (Nov 14, 2026): Mailgun via the Heroku add-on, sending domain `mg.attnd.app`, DNS at Namecheap.
+  Account/DNS steps: SETUP.md step 11.
+- Code to do with it: `EMAIL_USE_TLS = True` (port 587 needs it; missing today); `DEFAULT_FROM_EMAIL` /
+  `SERVER_EMAIL` = `Attnd <noreply@mg.attnd.app>` instead of hard-coded senders; links built from a
+  per-environment site URL (emails hard-code https://attnd.app today, so dev mail links to production);
+  dev allow-list (only listed addresses get real mail, the rest goes to the log); console backend when no
+  credentials; password reset (Django's built-in views, console-styled templates); `ADMINS` error emails;
+  plain-text + HTML templates in the house style.
 
 ### Go-live checklist (everything else flagged so far)
 **Release + production config** (production changes need the user's go-ahead)
