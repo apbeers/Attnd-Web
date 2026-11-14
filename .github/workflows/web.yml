@@ -42,7 +42,7 @@ jobs:
       API_KEY: ci-test-key
       DATABASE_URL: postgres://attnd:attnd@localhost:5432/attnd
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version-file: .python-version
@@ -69,7 +69,7 @@ jobs:
       name: dev
       url: https://attnd-dev-7ab893f37020.herokuapp.com/
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Push to Heroku
@@ -87,7 +87,7 @@ jobs:
       name: production
       url: https://attnd.app/
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Push to Heroku
