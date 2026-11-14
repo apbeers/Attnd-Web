@@ -125,6 +125,9 @@ LOGIN_REDIRECT_URL = '/console/'
 LOGOUT_REDIRECT_URL = '/'
 
 API_KEY = os.getenv('API_KEY', '')
+CONTACT_EMAIL = os.getenv('CONTACT_EMAIL', '')
+# Production should set STATIC_API_KEY_ENABLED=0 so only attested official apps can call the API.
+STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', 'false', 'False')
 
 EMAIL_HOST = 'smtp.mailgun.org'
 EMAIL_PORT = 587
@@ -215,3 +218,16 @@ FCM_SERVICE_ACCOUNT_JSON = os.getenv('FCM_SERVICE_ACCOUNT_JSON', '')
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
 # Run AI jobs in a background thread of the web dyno when no worker dyno is running.
 INGEST_RUN_INLINE = os.getenv('INGEST_RUN_INLINE', '1') not in ('0', 'false', 'False', '')
+
+# ---------------------------------------------------------------------------
+# Device attestation policy (see attestation/android_attest.py)
+# ---------------------------------------------------------------------------
+def _env_bool(name, default):
+    value = os.getenv(name)
+    return default if value is None else value not in ('0', 'false', 'False', '')
+
+
+ANDROID_ALLOW_UNRECOGNIZED_APP = _env_bool('ANDROID_ALLOW_UNRECOGNIZED_APP', False)
+ANDROID_REQUIRE_PLAY_LICENSE = _env_bool('ANDROID_REQUIRE_PLAY_LICENSE', True)
+ANDROID_REQUIRE_STRONG_INTEGRITY = _env_bool('ANDROID_REQUIRE_STRONG_INTEGRITY', False)
+ANDROID_SIGNING_CERT_SHA256 = os.getenv('ANDROID_SIGNING_CERT_SHA256', '') or os.getenv('ANDROID_SHA256_FINGERPRINT', '')

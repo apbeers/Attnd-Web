@@ -16,4 +16,6 @@ def home(request):
 
 
 def privacy(request):
-    return render(request, template_name='home/privacy.html')
+    from django.conf import settings
+    return render(request, template_name='home/privacy.html',
+                  context={'contact_email': getattr(settings, 'CONTACT_EMAIL', '')})

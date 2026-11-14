@@ -18,6 +18,13 @@ class Command(BaseCommand):
         sent = push.send_due_notifications()
         recovered = jobs.recover_stale()
         queued = jobs.queue_scheduled_refreshes()
+        from attestation.views import purge_expired_nonces
+        purge_expired_nonces()
+        # Privacy policy: device records unused for 12 months are deleted
+        from datetime import timedelta
+        from django.utils import timezone
+        from events.models import Device
+        Device.objects.filter(last_seen__lt=timezone.now() - timedelta(days=365)).delete()
         self.stdout.write(f'notifications sent: {sent}; stale jobs recovered: {recovered}; refreshes queued: {queued}')
 
         # Idempotent and cheap: delete unclaimed trial events past their expiry

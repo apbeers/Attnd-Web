@@ -22,8 +22,11 @@ Verdict fields we check
 ------------------------
 requestDetails.requestPackageName   must match ANDROID_PACKAGE_NAME
 requestDetails.nonce                must match the challenge we issued (base64)
-appIntegrity.appRecognitionVerdict  PLAY_RECOGNIZED (or UNRECOGNIZED_VERSION in dev)
-deviceIntegrity.deviceRecognitionVerdict  contains MEETS_DEVICE_INTEGRITY (minimum)
+requestDetails.timestampMillis      within 10 minutes
+appIntegrity.appRecognitionVerdict  PLAY_RECOGNIZED (the unmodified build Play distributed)
+appIntegrity.certificateSha256Digest  contains ANDROID_SIGNING_CERT_SHA256 when configured
+accountDetails.appLicensingVerdict  LICENSED (installed from Google Play)
+deviceIntegrity.deviceRecognitionVerdict  contains MEETS_DEVICE_INTEGRITY (not rooted / not an emulator)
 """
 
 import base64
@@ -106,54 +109,80 @@ def verify_integrity_token(
         raise AndroidAttestationError(f"Play Integrity API error: {exc}") from exc
 
     payload = data.get('tokenPayloadExternal', {})
+    return check_verdict(payload, nonce=nonce, package_name=pkg,
+                         require_strong_integrity=require_strong_integrity)
 
-    # --- Check nonce ---
+
+def _cert_digest_b64url(value: str) -> str:
+    """Accept a signing-cert SHA-256 as Play Console shows it (AA:BB:…) or as base64url."""
+    value = value.strip()
+    if ':' in value or (len(value) == 64 and all(c in '0123456789abcdefABCDEF' for c in value)):
+        raw = bytes.fromhex(value.replace(':', ''))
+        return base64.urlsafe_b64encode(raw).decode().rstrip('=')
+    return value.rstrip('=')
+
+
+def check_verdict(payload: dict, *, nonce: str, package_name: str,
+                  require_strong_integrity: bool = False, now_ms: int | None = None) -> dict:
+    """
+    Enforce: the request is ours and fresh, the app is the unmodified build Google Play knows
+    (signed with our key, installed from Play), and the device passes Android integrity checks.
+
+    Settings (all optional):
+        ANDROID_ALLOW_UNRECOGNIZED_APP  True only for testing side-loaded / locally built release apps
+        ANDROID_REQUIRE_PLAY_LICENSE    default True — app must be installed/updated through Google Play
+        ANDROID_SIGNING_CERT_SHA256     Play "App signing key" SHA-256; pins the signing certificate
+        ANDROID_REQUIRE_STRONG_INTEGRITY  require MEETS_STRONG_INTEGRITY (hardware-backed)
+    """
+    import time
+
     request_details = payload.get('requestDetails', {})
-    token_nonce_b64 = request_details.get('nonce', '')
-    # The nonce in the token is base64-encoded; our nonce is the raw string.
-    # Android SDK base64-encodes the nonce before embedding it.
-    expected_nonce_b64 = base64.b64encode(nonce.encode()).decode()
-    if token_nonce_b64 != expected_nonce_b64:
-        raise AndroidAttestationError(
-            f"Nonce mismatch: token has {token_nonce_b64!r}, expected {expected_nonce_b64!r}"
-        )
 
-    # --- Check package name ---
-    token_pkg = request_details.get('requestPackageName', '')
-    if token_pkg != pkg:
+    # --- Our nonce, our package, and recent ---
+    token_nonce = (request_details.get('nonce') or '').rstrip('=')
+    if not nonce or token_nonce != nonce.rstrip('='):
+        raise AndroidAttestationError('Nonce mismatch')
+    if request_details.get('requestPackageName') != package_name:
         raise AndroidAttestationError(
-            f"Package name mismatch: token has {token_pkg!r}, expected {pkg!r}"
-        )
+            f"Package name mismatch: {request_details.get('requestPackageName')!r}")
+    ts = int(request_details.get('timestampMillis') or 0)
+    now_ms = now_ms or int(time.time() * 1000)
+    if not ts or abs(now_ms - ts) > 10 * 60 * 1000:
+        raise AndroidAttestationError('Integrity token is not fresh')
 
-    # --- Check app integrity ---
+    # --- Unmodified app, signed with our key ---
     app_integrity = payload.get('appIntegrity', {})
     app_verdict = app_integrity.get('appRecognitionVerdict', '')
-    if app_verdict not in ('PLAY_RECOGNIZED', 'UNRECOGNIZED_VERSION'):
-        raise AndroidAttestationError(
-            f"App not recognized by Play: appRecognitionVerdict={app_verdict!r}"
-        )
+    allowed = {'PLAY_RECOGNIZED'}
+    if getattr(settings, 'ANDROID_ALLOW_UNRECOGNIZED_APP', False):
+        allowed.add('UNRECOGNIZED_VERSION')
+    if app_verdict not in allowed:
+        raise AndroidAttestationError(f'App is not the official Play build: {app_verdict!r}')
+    if app_integrity.get('packageName') and app_integrity['packageName'] != package_name:
+        raise AndroidAttestationError('App package mismatch')
+    pinned = getattr(settings, 'ANDROID_SIGNING_CERT_SHA256', '')
+    if pinned:
+        digests = [d.rstrip('=') for d in app_integrity.get('certificateSha256Digest', [])]
+        if _cert_digest_b64url(pinned) not in digests:
+            raise AndroidAttestationError('App is not signed with the Attnd signing key')
 
-    # --- Check device integrity ---
-    device_integrity = payload.get('deviceIntegrity', {})
-    device_verdicts: list[str] = device_integrity.get('deviceRecognitionVerdict', [])
-    required = _STRONG_VERDICT if require_strong_integrity else _MIN_VERDICT
+    # --- Installed through Google Play ---
+    if getattr(settings, 'ANDROID_REQUIRE_PLAY_LICENSE', True):
+        licensing = payload.get('accountDetails', {}).get('appLicensingVerdict', '')
+        if licensing != 'LICENSED':
+            raise AndroidAttestationError(f'App was not installed from Google Play: {licensing!r}')
+
+    # --- Untampered device ---
+    device_verdicts: list[str] = payload.get('deviceIntegrity', {}).get('deviceRecognitionVerdict', [])
+    strong = require_strong_integrity or getattr(settings, 'ANDROID_REQUIRE_STRONG_INTEGRITY', False)
+    required = _STRONG_VERDICT if strong else _MIN_VERDICT
     if required not in device_verdicts:
         raise AndroidAttestationError(
-            f"Device integrity insufficient: {device_verdicts!r} (required {required!r})"
-        )
+            f'Device integrity insufficient: {device_verdicts!r} (required {required!r})')
 
-    logger.info(
-        "Android Play Integrity verified: pkg=%s app=%s device=%s",
-        pkg,
-        app_verdict,
-        device_verdicts,
-    )
-
-    return {
-        'verdict': payload,
-        'device_verdict': device_verdicts,
-        'app_verdict': app_verdict,
-    }
+    logger.info('Android Play Integrity verified: pkg=%s app=%s device=%s',
+                package_name, app_verdict, device_verdicts)
+    return {'verdict': payload, 'device_verdict': device_verdicts, 'app_verdict': app_verdict}
 
 
 # ---------------------------------------------------------------------------

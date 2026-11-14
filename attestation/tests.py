@@ -290,3 +290,121 @@ class ExtractNonceTests(unittest.TestCase):
         from attestation.ios_attest import AttestationError
         with self.assertRaises(AttestationError):
             _extract_nonce_from_extension(b'')
+
+
+# ---------------------------------------------------------------------------
+# Play Integrity verdict policy + DB nonces + static key switch
+# ---------------------------------------------------------------------------
+
+import time as _time  # noqa: E402
+
+from django.test import override_settings  # noqa: E402
+
+from attestation.android_attest import AndroidAttestationError, check_verdict  # noqa: E402
+from attestation.models import AttestationNonce  # noqa: E402
+
+
+def _verdict(**overrides):
+    payload = {
+        'requestDetails': {'requestPackageName': 'com.arcu.attnd', 'nonce': 'abc_DEF-123',
+                           'timestampMillis': str(int(_time.time() * 1000))},
+        'appIntegrity': {'appRecognitionVerdict': 'PLAY_RECOGNIZED', 'packageName': 'com.arcu.attnd',
+                         'certificateSha256Digest': ['qrvM3e7_AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBk']},
+        'deviceIntegrity': {'deviceRecognitionVerdict': ['MEETS_DEVICE_INTEGRITY']},
+        'accountDetails': {'appLicensingVerdict': 'LICENSED'},
+    }
+    for path, value in overrides.items():
+        section, key = path.split('__')
+        payload[section][key] = value
+    return payload
+
+
+class PlayIntegrityPolicyTests(TestCase):
+    def check(self, payload, **kw):
+        return check_verdict(payload, nonce='abc_DEF-123', package_name='com.arcu.attnd', **kw)
+
+    def test_official_app_on_genuine_device_passes(self):
+        self.assertEqual(self.check(_verdict())['app_verdict'], 'PLAY_RECOGNIZED')
+
+    def test_nonce_is_compared_as_sent(self):
+        with self.assertRaises(AndroidAttestationError):
+            self.check(_verdict(requestDetails__nonce='YWJjX0RFRi0xMjM='))  # base64 of the nonce ≠ nonce
+
+    def test_modified_or_sideloaded_build_rejected(self):
+        for verdict in ('UNRECOGNIZED_VERSION', 'UNEVALUATED'):
+            with self.subTest(verdict=verdict), self.assertRaises(AndroidAttestationError):
+                self.check(_verdict(appIntegrity__appRecognitionVerdict=verdict))
+
+    @override_settings(ANDROID_ALLOW_UNRECOGNIZED_APP=True)
+    def test_unrecognized_allowed_only_when_configured(self):
+        self.check(_verdict(appIntegrity__appRecognitionVerdict='UNRECOGNIZED_VERSION'))
+
+    def test_rooted_or_emulated_device_rejected(self):
+        for labels in ([], ['MEETS_BASIC_INTEGRITY'], ['MEETS_VIRTUAL_INTEGRITY']):
+            with self.subTest(labels=labels), self.assertRaises(AndroidAttestationError):
+                self.check(_verdict(deviceIntegrity__deviceRecognitionVerdict=labels))
+
+    def test_not_installed_from_play_rejected(self):
+        with self.assertRaises(AndroidAttestationError):
+            self.check(_verdict(accountDetails__appLicensingVerdict='UNLICENSED'))
+
+    def test_stale_token_rejected(self):
+        old = str(int(_time.time() * 1000) - 60 * 60 * 1000)
+        with self.assertRaises(AndroidAttestationError):
+            self.check(_verdict(requestDetails__timestampMillis=old))
+
+    def test_signing_certificate_pin(self):
+        # 32 bytes AA BB CC DD EE FF 00 01 ... in colon-hex form, as Play Console shows it
+        hex_digest = ':'.join(f'{b:02X}' for b in bytes([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]) + bytes(range(26)))
+        with override_settings(ANDROID_SIGNING_CERT_SHA256=hex_digest):
+            self.check(_verdict())
+        with override_settings(ANDROID_SIGNING_CERT_SHA256='11:22:33'):
+            with self.assertRaises(AndroidAttestationError):
+                self.check(_verdict())
+
+
+class DatabaseNonceTests(TestCase):
+    def test_nonce_is_stored_and_single_use(self):
+        from attestation.views import _consume_nonce
+        nonce = self.client.get('/api/v1/attest/nonce/').json()['nonce']
+        self.assertTrue(AttestationNonce.objects.filter(nonce=nonce).exists())
+        self.assertTrue(_consume_nonce(nonce))
+        self.assertFalse(_consume_nonce(nonce))
+
+    def test_expired_nonce_rejected_and_purged(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from attestation.views import _consume_nonce, purge_expired_nonces
+        AttestationNonce.objects.create(nonce='old', created_at=timezone.now() - timedelta(minutes=10))
+        self.assertFalse(_consume_nonce('old'))
+        AttestationNonce.objects.create(nonce='old2', created_at=timezone.now() - timedelta(minutes=10))
+        self.assertEqual(purge_expired_nonces(), 2)  # both expired nonces
+
+    def test_nonce_endpoint_rate_limited(self):
+        from django.core.cache import cache
+        cache.clear()
+        codes = [self.client.get('/api/v1/attest/nonce/').status_code for _ in range(31)]
+        self.assertEqual(codes[-1], 429)
+        cache.clear()
+
+
+@override_settings(API_KEY='static-key')
+class StaticKeySwitchTests(TestCase):
+    def test_static_key_can_be_disabled(self):
+        url = '/api/v2/events/lookup/?q=nothing'
+        self.assertEqual(self.client.get(url, HTTP_AUTHORIZATION='Bearer static-key').status_code, 404)
+        with override_settings(STATIC_API_KEY_ENABLED=False):
+            self.assertEqual(self.client.get(url, HTTP_AUTHORIZATION='Bearer static-key').status_code, 401)
+            token = tokens.issue(device_key='dev', platform='ios')
+            self.assertEqual(self.client.get(url, HTTP_AUTHORIZATION=f'Bearer {token}').status_code, 404)
+
+
+class AppClipBundleTests(TestCase):
+    def test_clip_bundle_id_matches(self):
+        import hashlib
+        from attestation.ios_attest import _matching_app_id
+        team = 'GQQX4L6TE2'
+        clip = hashlib.sha256(f'{team}.com.arcu.Attnd.clip'.encode()).digest()
+        other = hashlib.sha256(f'{team}.com.evil.app'.encode()).digest()
+        self.assertEqual(_matching_app_id(clip, team, 'com.arcu.Attnd'), f'{team}.com.arcu.Attnd.clip')
+        self.assertIsNone(_matching_app_id(other, team, 'com.arcu.Attnd'))

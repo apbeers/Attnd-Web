@@ -10,7 +10,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ `attnd-dev` is created and configured, including its OpenAI and Places keys and Scheduler job. ✅ The GitHub deploy settings (`HEROKU_API_KEY`, `HEROKU_APP`) and the dev `ATTND_API_KEY` secrets are set. **Still to do:** the two production secrets (step 2, required before the first release to `main`). |
 | 3. Apple | ⏳ ✅ App ID capabilities checked. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. **Next:** 3b, the App Store Connect key (`Z43S25BCS9`, downloaded) goes into GitHub, then 3c (TestFlight group). |
-| 4. Google / Android | ⏳ CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
+| 4. Google / Android | ⏳ The Firebase project **Attnd** exists and gets reused (4a). CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. Waiting on: iOS (3b/3c), Android (step 4), and the first release to `main`. |
 
@@ -168,14 +168,29 @@ The new release also changes behaviour reviewers and users will notice:
 - **Android** now requires **Android 15 or later**, so older phones stop getting updates.
 - Push notifications are new and **opt-in** (asked for when the user turns them on in Options).
 
-- Update the privacy policy at `/privacy/` (`home/templates/home/privacy.html`). The app stores a random device ID and push tokens, and the current text says no device identifiers are collected. Also update the matching App Privacy answers in App Store Connect.
+- ✅ The privacy policy at `/privacy/` is rewritten to match what the apps and site actually collect. It goes live with the next production release. Set the contact email it shows:
+  ```bash
+  heroku config:set -a attnd-web CONTACT_EMAIL=you@example.com
+  ```
+- **Update the App Store privacy answers.** In App Store Connect → Attnd → **App Privacy → Edit**:
+  - **Identifiers → Device ID:** collected for *App Functionality*, **not** linked to the user's identity, **not** used for tracking. This covers the random app ID and the push token.
+  - **Location:** answer **not collected**. It's sent only for a nearby-events search and isn't stored, which is how Apple defines data that isn't collected.
+  - **Everything else:** not collected. That includes contact info, usage data, diagnostics and identifiers used for tracking.
+- **Update the Google Play Data safety form.** Play Console → Attnd → **App content → Data safety**:
+  - **Device or other IDs:** collected, not shared, used for *App functionality*, processed ephemerally = No, required.
+  - **Approximate location:** the same, but optional, and processed ephemerally = Yes.
+  - **Data is encrypted in transit:** Yes.
+  - **Users can request data deletion:** Yes, through the contact on the privacy page.
 - Optional: refresh the App Store screenshots and description to show the new layouts and push updates. Set the release notes with `gh variable set WHATS_NEW -e production -b "…" -R apbeers/Attnd-iOS` (Android: `RELEASE_NOTES` on Attnd-Android).
 
 ## 4. Google / Android (40 min)
 
 ### 4a. Firebase (push notifications)
-1. In the [Firebase console](https://console.firebase.google.com), create a project or reuse your Google Cloud project.
-2. Add Android apps for **`com.arcu.attnd`** and **`com.arcu.attnd.debug`**, then download `google-services.json`. It contains both apps.
+1. ✅ The Firebase project **Attnd** already exists (Blaze plan) with the **Attnd - Android** app (`com.arcu.attnd`). Reuse it. Its old keys get rotated in step 4 below.
+2. Add the debug app: **Project Overview → + Add app → Android**, package `com.arcu.attnd.debug`, nickname "Attnd - Android (debug)". Skip the SDK steps, because the build already supports Firebase. Then download the updated `google-services.json` from **Project settings → General**; it now lists both apps. Store it:
+   ```bash
+   gh secret set GOOGLE_SERVICES_JSON -R apbeers/Attnd-Android < ~/Downloads/google-services.json
+   ```
 3. Put the file at `Attnd-Android/app/google-services.json` for local builds. It's gitignored.
 4. Set up the server's Google service account, which covers both push and Play Integrity. See **Key reference → `GOOGLE_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`**.
 
@@ -209,6 +224,29 @@ The new release also changes behaviour reviewers and users will notice:
 | GH-android env `production` variable (optional) | `RELEASE_NOTES` | text shown in Play |
 
 Note: the app now requires **Android 15 or later**. Play will stop offering updates to phones on older versions.
+
+## 4d. Lock the production API to genuine apps (after the first release)
+
+The server now only issues API access to:
+- **iPhone:** the official Attnd app (App Store or TestFlight), verified by Apple App Attest on a genuine iPhone.
+- **Android:** the official Attnd app, unmodified as Google Play distributed it, installed from Google Play, signed with our key, on a device that passes Play Integrity (not rooted, not an emulator, not tampered with).
+
+The static API key is the remaining way around these checks, so turn it off on production **once the new app versions are live in both stores**:
+```bash
+heroku config:set -a attnd-web STATIC_API_KEY_ENABLED=0
+```
+Keep it on for `attnd-dev`: simulators, Xcode/Android Studio builds and CI need it there.
+
+Also pin the Android signing certificate. Use the **App signing key** SHA-256 from Play Console → Test and release → **App integrity**. The same value also makes `attnd.app/join/…` links open the app:
+```bash
+heroku config:set -a attnd-web ANDROID_SHA256_FINGERPRINT=AA:BB:CC:...
+heroku config:set -a attnd-dev ANDROID_SHA256_FINGERPRINT=AA:BB:CC:...
+```
+
+Limits to know about:
+- App Attest proves the app is genuine and unmodified, and that it runs on real Apple hardware. It isn't a full jailbreak detector.
+- Play Integrity's device check is stronger.
+- Someone with a genuine device could still copy a short-lived access token (valid up to 24 hours) and replay it. This stops scraping by bots, modified apps and emulators. It does not stop a determined person using a real phone.
 
 ## 5. Local development keys
 

@@ -178,12 +178,9 @@ def verify_attestation(
     cred_id     = auth_data[55:55 + cred_id_len]
 
     # Step 6 — verify rpIdHash = SHA-256("<team_id>.<bundle_id>")
-    app_id = f"{team_id}.{bundle_id}"
-    expected_rp_id_hash = hashlib.sha256(app_id.encode()).digest()
-    if rp_id_hash != expected_rp_id_hash:
-        raise AttestationError(
-            f"rpIdHash mismatch — expected SHA-256({app_id!r})"
-        )
+    app_id = _matching_app_id(rp_id_hash, team_id, bundle_id)
+    if app_id is None:
+        raise AttestationError(f"rpIdHash mismatch — not one of our app IDs ({bundle_id!r})")
 
     # Step 7 — counter must be 0 at attestation time
     if sign_count != 0:
@@ -242,8 +239,7 @@ def verify_assertion(
 
     # Verify rpIdHash
     rp_id_hash = auth_data[0:32]
-    app_id = f"{team_id}.{bundle_id}"
-    if rp_id_hash != hashlib.sha256(app_id.encode()).digest():
+    if _matching_app_id(rp_id_hash, team_id, bundle_id) is None:
         raise AttestationError("rpIdHash mismatch in assertion")
 
     # Sign count must be strictly greater than stored value
@@ -271,6 +267,20 @@ def verify_assertion(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def bundle_ids(bundle_id) -> list[str]:
+    """The app and its App Clip (`<bundle>.clip`) both attest with their own bundle ID."""
+    ids = [bundle_id] if isinstance(bundle_id, str) else list(bundle_id)
+    return ids + [f"{b}.clip" for b in ids if not b.endswith('.clip')]
+
+
+def _matching_app_id(rp_id_hash: bytes, team_id: str, bundle_id) -> str | None:
+    for b in bundle_ids(bundle_id):
+        app_id = f"{team_id}.{b}"
+        if rp_id_hash == hashlib.sha256(app_id.encode()).digest():
+            return app_id
+    return None
+
 
 def _verify_cert_chain(leaf: x509.Certificate, intermediate: x509.Certificate, root: x509.Certificate):
     """Verify leaf → intermediate → root chain using signature checks."""

@@ -12,48 +12,53 @@ POST /api/v1/attest/ios/assert/     → verify Apple App Attest assertion (per-r
 import json
 import logging
 import secrets
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from attestation.ios_attest import verify_attestation, verify_assertion, AttestationError
 from attestation.android_attest import verify_integrity_token, AndroidAttestationError
-from attestation.models import AttestedDevice
+from attestation.models import AttestationNonce, AttestedDevice
 from attestation import tokens
 
 logger = logging.getLogger(__name__)
 
 # Nonce TTL in seconds — client must attest within this window after fetching nonce
 _NONCE_TTL = 300  # 5 minutes
-_NONCE_CACHE_PREFIX = 'attest:nonce:'
-
-
-def _nonce_cache_key(nonce: str) -> str:
-    return f"{_NONCE_CACHE_PREFIX}{nonce}"
-
-
 def _issue_nonce() -> str:
-    """Create a cryptographically random nonce and store it in cache."""
+    """Create a cryptographically random one-time challenge (base64url, valid as a Play Integrity nonce)."""
     nonce = secrets.token_urlsafe(32)
-    cache.set(_nonce_cache_key(nonce), True, timeout=_NONCE_TTL)
+    AttestationNonce.objects.create(nonce=nonce)
     return nonce
 
 
 def _consume_nonce(nonce: str) -> bool:
-    """
-    Returns True and deletes the nonce if it exists; False if unknown or expired.
-    This is atomic enough for our purposes — cache.delete returns whether
-    the key was present.
-    """
-    key = _nonce_cache_key(nonce)
-    if cache.get(key):
-        cache.delete(key)
-        return True
-    return False
+    """True exactly once for a nonce issued within the last _NONCE_TTL seconds (atomic delete)."""
+    if not nonce or len(nonce) > 64:
+        return False
+    fresh_after = timezone.now() - timedelta(seconds=_NONCE_TTL)
+    deleted, _ = AttestationNonce.objects.filter(nonce=nonce, created_at__gte=fresh_after).delete()
+    return deleted > 0
+
+
+def purge_expired_nonces() -> int:
+    deleted, _ = AttestationNonce.objects.filter(
+        created_at__lt=timezone.now() - timedelta(seconds=_NONCE_TTL)).delete()
+    return deleted
+
+
+def _client_ip(request) -> str:
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    return forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', '')
+
+
+_NONCE_RATE_PER_MINUTE = 30
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +70,11 @@ class NonceView(View):
     """GET /api/v1/attest/nonce/ — returns a one-time challenge."""
 
     def get(self, request):
+        key = f'attest:nonce-rate:{_client_ip(request)}'
+        count = cache.get(key, 0)
+        if count >= _NONCE_RATE_PER_MINUTE:
+            return JsonResponse({'error': 'Too many requests'}, status=429)
+        cache.set(key, count + 1, 60)
         nonce = _issue_nonce()
         return JsonResponse({'nonce': nonce})
 

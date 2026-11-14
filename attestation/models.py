@@ -44,3 +44,10 @@ class AttestedDevice(models.Model):
     def touch(self):
         self.last_seen = timezone.now()
         self.save(update_fields=['last_seen'])
+
+
+class AttestationNonce(models.Model):
+    """One-time challenges for attestation. Stored in the database so they survive restarts
+    and work across every web process (an in-memory cache does neither)."""
+    nonce = models.CharField(max_length=64, primary_key=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)

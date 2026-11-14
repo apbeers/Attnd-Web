@@ -152,7 +152,7 @@ def static_key_ok(bearer):
     import hashlib
     import hmac
     key = settings.API_KEY
-    if not key or not bearer:
+    if not key or not bearer or not getattr(settings, 'STATIC_API_KEY_ENABLED', True):
         return False
     if hashlib.sha256(key.encode()).hexdigest() in REVOKED_API_KEY_SHA256:
         return False
