@@ -221,7 +221,11 @@ The new release also changes behaviour reviewers and users will notice:
 
 ### 4b. Google Play publishing from CI
 1. In [Google Cloud console](https://console.cloud.google.com), using the same project, enable the **Google Play Android Developer API**.
-2. ⏳ Service account **github-play-publisher** created in the Attnd project, with no roles (Play access is granted in Play Console). **Next:** Keys → Add key → Create new key → JSON, then store it in GitHub (command in the Key reference).
+2. ✅ Service account **github-play-publisher** created in the Attnd project, with no roles (Play access is granted in Play Console), and its JSON key downloaded. Store it in GitHub, then remove the file:
+   ```bash
+   gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON -R apbeers/Attnd-Android < /Users/andrewbeers/Downloads/attnd-df28e-51b6a4e6e951.json
+   rm /Users/andrewbeers/Downloads/attnd-df28e-51b6a4e6e951.json
+   ```
 3. In **Play Console → Users and permissions → Invite new users**, enter that service account's email. Under App permissions → Attnd, grant **Release apps to testing tracks**, **Release to production**, and **Manage testing tracks**.
 4. In Play Console → Attnd → **Testing → Internal testing → Testers**, add yourself, then open the **opt-in link** on your Android phone once.
 
