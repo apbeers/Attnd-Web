@@ -149,7 +149,7 @@ gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
 | GH-ios secret | `ASC_ISSUER_ID` | Issuer ID |
 | GH-ios secret | `ASC_KEY_P8` | full contents of the `.p8` file |
 
-### 3b-2. App Clip App ID
+### 3b-2. ✅ App Clip App ID
 The App Clip (`com.arcu.Attnd.clip`) ships inside the app and now uses App Attest too. In [Identifiers](https://developer.apple.com/account/resources/identifiers/list), open **com.arcu.Attnd.clip** and tick **App Attest**. Leave the rest as is, then **Save**.
 
 ### 3c. TestFlight
@@ -180,7 +180,7 @@ The new release also changes behaviour reviewers and users will notice:
 
 - ✅ The privacy policy at `/privacy/` is rewritten to match what the apps and site actually collect. It goes live with the next production release. Set the contact email it shows:
   ```bash
-  heroku config:set -a attnd-web CONTACT_EMAIL=you@example.com
+  heroku config:set -a attnd-web CONTACT_EMAIL=apbeers@icloud.com
   ```
 - **Update the App Store privacy answers.** In App Store Connect → Attnd → **App Privacy → Edit**:
   - **Identifiers → Device ID:** collected for *App Functionality*, **not** linked to the user's identity, **not** used for tracking. This covers the random app ID and the push token.
