@@ -10,7 +10,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, Scheduler jobs and GitHub deploy settings. **Still to do:** add Cloudinary on both apps so uploads survive restarts, and set `CONTACT_EMAIL` on production. |
 | 3. Apple | ⏳ ✅ App ID capabilities checked. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. **Next:** 3b, the App Store Connect key (`Z43S25BCS9`, downloaded) goes into GitHub, then 3c (TestFlight group). |
-| 4. Google / Android | ⏳ ✅ 4a and ✅ 4b done. ✅ 4c: Maps key restricted, server Places key restricted. **Next:** put the app signing SHA-256 on Heroku (4c step 2), then back up the keystore (4c step 4). |
+| 4. Google / Android | ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. The first Play internal-testing upload is running. 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. Waiting on: iOS (3b/3c), Android (step 4), and the first release to `main`. |
 
@@ -241,7 +241,7 @@ Three things need these fingerprints.
 - **App signing key certificate:** SHA-256 and SHA-1
 - **Upload key certificate:** SHA-1 (and SHA-256, for reference)
 
-**2. App links and the signing-certificate pin (server).** Put the **App signing key SHA-256** on both Heroku apps:
+**2. ✅ App links and the signing-certificate pin (server).** Put the **App signing key SHA-256** on both Heroku apps:
 ```bash
 heroku config:set -a attnd-web ANDROID_SHA256_FINGERPRINT=AA:BB:CC:...
 heroku config:set -a attnd-dev ANDROID_SHA256_FINGERPRINT=AA:BB:CC:...
@@ -276,7 +276,7 @@ Check it afterwards: `curl -s https://attnd.app/.well-known/assetlinks.json` sho
    - **Save**. It can take a few minutes to apply.
 4. Test: open the map in the next internal-testing build. A grey map with no streets means a fingerprint or package is wrong.
 
-**4. Keystore backup (required).** The upload keystore secrets are already in GitHub and work: CI built a signed bundle. GitHub won't give them back, though, so keep your own copy. This command finds your `signing.properties` with Spotlight and copies one bundle to the clipboard: the passwords and alias, plus the keystore file as text. Paste it into a new secure note in your password manager:
+**4. ✅ Keystore backup (required).** The upload keystore secrets are already in GitHub and work: CI built a signed bundle. GitHub won't give them back, though, so keep your own copy. This command finds your `signing.properties` with Spotlight and copies one bundle to the clipboard: the passwords and alias, plus the keystore file as text. Paste it into a new secure note in your password manager:
 ```bash
 P=$(mdfind -name signing.properties | grep -i attnd-android | head -1); S=$(grep '^STORE_FILE=' "$P" | cut -d= -f2-); case "$S" in /*) J="$S";; *) J="$(dirname "$P")/$S";; esac; { echo "Attnd Android upload keystore - backed up $(date +%F)"; echo; cat "$P"; echo; echo "Keystore file: $(basename "$J")"; echo "To restore: copy everything below this line, then run: pbpaste | base64 -D > upload.jks"; base64 -i "$J"; } | pbcopy && echo "Copied $(basename "$J") + signing.properties - paste into a secure note"
 ```
