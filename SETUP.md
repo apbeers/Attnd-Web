@@ -10,7 +10,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, Scheduler jobs and GitHub deploy settings. **Still to do:** add Cloudinary on both apps so uploads survive restarts, and set `CONTACT_EMAIL` on production. |
 | 3. Apple | ⏳ ✅ App ID capabilities checked. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. **Next:** 3b, the App Store Connect key (`Z43S25BCS9`, downloaded) goes into GitHub, then 3c (TestFlight group). |
-| 4. Google / Android | ⏳ ✅ 4a Firebase and the server key are done. ✅ 4b: the Play publisher account is created, invited, and stored in GitHub. **Next:** 4c, the signing fingerprints and Maps key restriction. |
+| 4. Google / Android | ⏳ ✅ 4a and ✅ 4b done. ✅ 4c: Maps key restricted, server Places key restricted. **Next:** put the app signing SHA-256 on Heroku (4c step 2), then back up the keystore (4c step 4). |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. Waiting on: iOS (3b/3c), Android (step 4), and the first release to `main`. |
 
@@ -252,7 +252,7 @@ This one value does two jobs:
 
 Check it afterwards: `curl -s https://attnd.app/.well-known/assetlinks.json` should show your fingerprint.
 
-**3. Restrict the Maps API key.** Right now anyone who extracts the key from the app could use it and bill your account. Restricting it means only your signed app can use it.
+**3. ✅ Restrict the Maps API key.** It's restricted to Android apps (`com.arcu.attnd` ×2 and `com.arcu.attnd.debug`) and the Maps SDKs. Right now anyone who extracts the key from the app could use it and bill your account. Restricting it means only your signed app can use it.
 1. Find the key: [Cloud console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials). Its value matches the `MAPS_API_KEY` in your `local.properties`. Check the project switcher at the top, because it may be in an older project.
 2. Make sure **Maps SDK for Android** is enabled in that project (APIs & Services → Library).
 3. Open the key:
@@ -427,7 +427,7 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
 - **Put:** both Heroku apps. Use one key for both, or create a separate "Attnd dev" key to keep spending apart.
 - **If leaked:** revoke it on the same page and create a new one.
 
-**`GOOGLE_PLACES_API_KEY`**: map pins and photos for AI-imported locations.
+**`GOOGLE_PLACES_API_KEY`**: map pins and photos for AI-imported locations. ✅ Restricted to Geocoding API and Places API (New); application restriction **None** (correct for a server).
 - **Create:** [Google Cloud console](https://console.cloud.google.com) → APIs & Services → **Library**: enable **Places API (New)** and **Geocoding API**. Then **Credentials → Create credentials → API key → Edit**:
   - **API restrictions:** restrict the key to those two APIs.
   - **Application restrictions:** None. Heroku has no fixed IP address.
