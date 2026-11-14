@@ -187,7 +187,7 @@ uv run python manage.py runserver
 ```bash
 scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
-Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service).
+Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
 Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and `events/tests_integration.py`.
 

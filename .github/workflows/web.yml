@@ -9,13 +9,16 @@ name: Web
 on:
   push:
     branches: [main, develop]
+    paths-ignore: ['**/*.md']   # docs-only commits don't test or deploy
   pull_request:
+    paths-ignore: ['**/*.md']
   workflow_dispatch:
 
 concurrency:
   group: web-${{ github.ref }}
-  # Never cancel a deploy half-way; feature branches just run the latest push.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+  # A newer push supersedes an older run (its deploy would be replaced anyway). Production runs are
+  # never cancelled half-way.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -48,14 +51,20 @@ jobs:
           python-version-file: .python-version
       - name: Install uv
         run: python -m pip install --upgrade uv
+      - name: Cache Python packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock', '.python-version') }}
+          restore-keys: uv-${{ runner.os }}-
       - name: Install dependencies
         run: uv sync --frozen
       - name: Django system checks
         run: uv run python manage.py check
       - name: Migrations are up to date
         run: uv run python manage.py makemigrations --check --dry-run
-      - name: Tests
-        run: uv run python manage.py test --verbosity 2
+      - name: Tests (in parallel, one Postgres test database per CPU)
+        run: uv run python manage.py test --parallel auto
       - name: Dependency freshness (informational)
         continue-on-error: true
         run: uv run python scripts/upgrade_deps.py --check
