@@ -434,6 +434,19 @@ A fully populated event that is happening now, with usage history, AI updates an
 heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com
 ```
 
+## 10. Join links and the App Clip card
+One link and QR code per event, `https://attnd.app/join/<CODE>/`, for every device (`join/views.py`):
+- **iPhone with the app:** iOS opens the app (Universal Links: `/.well-known/apple-app-site-association` claims only `/join/*`).
+- **iPhone without the app:** the Camera shows the App Clip card. In Safari the page shows the App Clip banner.
+- **Android:** App Links open the app; otherwise Google Play with the code as install referrer.
+- **Computers:** an event page with a QR code.
+Opens are counted per event (iPhone / Android / computer) on the Usage pages.
+
+One-time setup so iPhones show the App Clip card when they scan a code (App Store Connect → Attnd → the version page → **App Clip**):
+1. **Default App Clip Experience:** header image 3000×2000 PNG (a purple Attnd image), subtitle "Map, schedule and live updates", action **Open**.
+2. **Advanced App Clip Experience** (App Clip section → Advanced experiences → +): URL `https://attnd.app/join/`, action **Open**, and turn on "this URL prefix covers all URLs below it" so every event code uses it. Business/location fields are optional.
+3. Apple verifies the domain from the association file on attnd.app, so this works after the web release to production.
+
 ## Key reference
 
 For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.
