@@ -89,18 +89,27 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
   heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-iOS
   heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-Android
   ```
-  To see the key itself (for example for local dev config), run `heroku config:get API_KEY -a attnd-dev`.
+  ✅ Done: both repos have the dev key as `ATTND_API_KEY`. To see the key itself (for example for local dev config), run `heroku config:get API_KEY -a attnd-dev`.
 
 ### Let GitHub deploy to Heroku
 ```bash
 heroku authorizations:create -d "GitHub Actions"
 ```
 Copy the token it prints into **GH-web secret `HEROKU_API_KEY`** and into your password manager. GitHub needs its own token: the one in the Claude environment can't be copied out.
-| Where | Name | Value |
-|---|---|---|
-| GH-web secret | `HEROKU_API_KEY` | that token |
-| GH-web env `dev` variable | `HEROKU_APP` | `attnd-dev` |
-| GH-web env `production` variable | `HEROKU_APP` | `attnd-web` |
+| Where | Type | Name | Value |
+|---|---|---|---|
+| Attnd-Web → Settings → Secrets and variables → Actions | **Repository secret** (not an environment secret) | `HEROKU_API_KEY` | that token |
+| Attnd-Web → Settings → Environments → `dev` | **Environment variable** (not a secret; it's just an app name) | `HEROKU_APP` | `attnd-dev` |
+| Attnd-Web → Settings → Environments → `production` | **Environment variable** | `HEROKU_APP` | `attnd-web` |
+
+Or with `gh`:
+```bash
+heroku authorizations:create -d "GitHub Actions" -S | gh secret set HEROKU_API_KEY -R apbeers/Attnd-Web
+gh variable set HEROKU_APP -e dev -b attnd-dev -R apbeers/Attnd-Web
+gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
+```
+
+**Rule of thumb:** anything that grants access is a **secret**. Names, hosts and settings are **variables**. Secrets used by every deploy go at repository level; values that differ between dev and production go on the environment.
 
 ## 3. Apple (30 min)
 
