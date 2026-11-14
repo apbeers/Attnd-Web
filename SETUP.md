@@ -8,9 +8,9 @@ Do these steps once, in order. Each step says which values go where. For any sin
 |---|---|
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
-| 2. Heroku | ⏳ ✅ `attnd-dev` is created and configured, including its OpenAI and Places keys and Scheduler job. ✅ The GitHub deploy settings (`HEROKU_API_KEY`, `HEROKU_APP`) and the dev `ATTND_API_KEY` secrets are set. **Still to do:** the two production secrets (step 2, required before the first release to `main`). |
+| 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, Scheduler jobs and GitHub deploy settings. **Still to do:** add Cloudinary on both apps so uploads survive restarts, and set `CONTACT_EMAIL` on production. |
 | 3. Apple | ⏳ ✅ App ID capabilities checked. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. **Next:** 3b, the App Store Connect key (`Z43S25BCS9`, downloaded) goes into GitHub, then 3c (TestFlight group). |
-| 4. Google / Android | ⏳ The Firebase project **Attnd** exists and gets reused (4a). CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
+| 4. Google / Android | ⏳ ✅ 4a: both Firebase Android apps added, `GOOGLE_SERVICES_JSON` in GitHub, Play Integrity linked with all responses on, and the server key (`attnd-df28e`) on both Heroku apps. **Next:** delete the old service-account keys (4a.4 step 6), then 4b: invite the Play publisher account. |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. Waiting on: iOS (3b/3c), Android (step 4), and the first release to `main`. |
 
@@ -67,7 +67,7 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
 ## 2. Heroku (15 min)
 
 ### Production (`attnd-web`)
-1. **Required before the first release to `main`:** production has no `SECRET_KEY` or `ATTESTATION_JWT_SECRET`. It has been running on a hardcoded fallback, and the new code refuses to start without a real key. Run this once:
+1. ✅ **Required before the first release to `main`:** set real `SECRET_KEY` and `ATTESTATION_JWT_SECRET` values on production (done and verified). Production previously had neither. It has been running on a hardcoded fallback, and the new code refuses to start without a real key. Run this once:
    ```bash
    heroku config:set -a attnd-web SECRET_KEY=$(openssl rand -hex 32) ATTESTATION_JWT_SECRET=$(openssl rand -hex 32)
    ```
@@ -208,7 +208,7 @@ The new release also changes behaviour reviewers and users will notice:
       - https://console.cloud.google.com/apis/library/fcm.googleapis.com
    3. **Create a new key.** Firebase → **Project settings → Service accounts → Generate new private key**. This downloads `attnd-…-firebase-adminsdk-….json` to Downloads. The Firebase admin account can send pushes, and because it belongs to the linked project it can also decode Play Integrity tokens.
    4. ✅ **Find the Project ID.** It's `attnd-df28e`. It's on Firebase → **Project settings → General → Project ID**.
-   5. **Put the key on both Heroku apps.** Swap in your Project ID:
+   5. ✅ **Put the key on both Heroku apps.** Done and verified: `FCM_PROJECT_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` are set, and both releases succeeded. Swap in your Project ID:
       ```bash
       heroku config:set -a attnd-web FCM_PROJECT_ID=attnd-df28e GOOGLE_SERVICE_ACCOUNT_JSON="$(cat /Users/andrewbeers/Downloads/attnd-df28e-firebase-adminsdk-fbsvc-2af30fbbb4.json)"
       heroku config:set -a attnd-dev FCM_PROJECT_ID=attnd-df28e GOOGLE_SERVICE_ACCOUNT_JSON="$(cat /Users/andrewbeers/Downloads/attnd-df28e-firebase-adminsdk-fbsvc-2af30fbbb4.json)"
