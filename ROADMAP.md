@@ -56,8 +56,7 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
   (device id, anonymous usage counts, push tokens, organizer accounts, AI processing of uploads/URLs).
 
 **Operations (suggested, not yet discussed)**
-- Database backups/rollback: check what the Heroku Postgres plan includes; upgrade the plan or schedule
-  `pg:backups` before real data exists.
+- ✅ Database backups: daily scheduled on both apps (Nov 14, 2026; SETUP.md). Consider a higher Postgres plan for point-in-time rollback before real data grows.
 - Error alerting: today errors only reach Heroku logs. At minimum, email admins on server errors
   (Django `ADMINS` + email, once email works) and a log drain or Heroku alerting.
 - Load: since API-007 open apps poll every 5 min (60 s without a push token), but each content push makes
