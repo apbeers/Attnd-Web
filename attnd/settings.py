@@ -12,25 +12,28 @@ if not SECRET_KEY:
     else:
         raise RuntimeError('SECRET_KEY must be set in production')
 
+# HTTPS only outside local development (DEBUG). Heroku terminates TLS and sets X-Forwarded-Proto.
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 LANGUAGE_COOKIE_SECURE = not DEBUG
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# Browsers remember to use HTTPS only (1 year, every subdomain). Not on the preload list (hard to undo).
+SECURE_HSTS_SECONDS = 0 if DEBUG else int(os.getenv('SECURE_HSTS_SECONDS', str(365 * 24 * 3600)))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 if DEBUG:
     ALLOWED_HOSTS = ['*']
 else:
     ALLOWED_HOSTS = ['.herokuapp.com', '.attnd.app']
 
+# Local runs (manage.py runserver/test, health checks from inside the dyno). This used to also switch off
+# the HTTPS redirect and secure cookies everywhere, because this list always contains localhost; local
+# development runs with DEBUG=1, which already does that (see the top of this file).
 ALLOWED_HOSTS += ['127.0.0.1', 'localhost']
-
-# Local dev overrides — never redirect to HTTPS on localhost
-if '127.0.0.1' in ALLOWED_HOSTS:
-    SECURE_SSL_REDIRECT = False
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
-    LANGUAGE_COOKIE_SECURE = False
 
 INSTALLED_APPS = [
     'django.contrib.admin',
