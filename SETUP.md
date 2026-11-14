@@ -8,7 +8,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 |---|---|
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
-| 2. Heroku | ⏳ ✅ `attnd-dev` is created and configured, including the OpenAI and Places keys and its Scheduler job (which starts working after the first dev deploy). **Still to do:** the two production secrets (step 2), then the one-time GitHub setup under **GitHub from the command line**. |
+| 2. Heroku | ⏳ ✅ `attnd-dev` is created and configured, including its OpenAI and Places keys and Scheduler job. ✅ The GitHub deploy settings (`HEROKU_API_KEY`, `HEROKU_APP`) and the dev `ATTND_API_KEY` secrets are set. **Still to do:** the two production secrets (step 2, required before the first release to `main`). |
 | 3. Apple | ⏳ ✅ App ID capabilities checked: Push Notifications, App Attest and Associated Domains are enabled. **Next:** create the APNs key (3a, step 2). CI builds and tests pass; uploads wait for the `ASC_*` secrets (3b). |
 | 4. Google / Android | ⏳ CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
 | 5. Local dev keys | ⬜ |
@@ -102,7 +102,7 @@ Copy the token it prints into **GH-web secret `HEROKU_API_KEY`** and into your p
 | Attnd-Web → Settings → Environments → `dev` | **Environment variable** (not a secret; it's just an app name) | `HEROKU_APP` | `attnd-dev` |
 | Attnd-Web → Settings → Environments → `production` | **Environment variable** | `HEROKU_APP` | `attnd-web` |
 
-Or with `gh`:
+✅ Done (with `gh`):
 ```bash
 heroku authorizations:create -d "GitHub Actions" -S | gh secret set HEROKU_API_KEY -R apbeers/Attnd-Web
 gh variable set HEROKU_APP -e dev -b attnd-dev -R apbeers/Attnd-Web
