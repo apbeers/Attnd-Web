@@ -24,6 +24,41 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
   SPF/DKIM/DMARC records, a from address, plain-text + HTML templates in the house style, and a dev setup
   that never emails real people (console backend or a sandbox domain).
 
+### Go-live checklist (everything else flagged so far)
+**Release + production config** (production changes need the user's go-ahead)
+- First web release: merge `develop` → `main`. Production still runs old code: no new join page / AASA
+  (App Clip experience and Universal Links depend on it), and main's old packages carry ~200 Dependabot alerts.
+- Production config: `GOOGLE_MAPS_BROWSER_KEY`, `IOS_APP_STORE_URL`; `APNS_USE_SANDBOX` off;
+  `APPLE_ATTEST_ENVIRONMENT=production`.
+- Production DEMO event (`load_demo_event`) and the App Review account (`create_review_account`): both
+  stores' review notes tell reviewers to use code DEMO on attnd.app.
+- Production cleanup (SETUP step 7): list users and demo events, delete with a go-ahead.
+- Heroku Postgres: check the version and upgrade to 18 (SETUP step 2).
+- First app releases to `main` (iOS App Review, Play production), then Play production lock-down (SETUP 4d).
+
+**Store setup (user, in the consoles)**
+- Play Console: exclude tablets (SETUP 4e); App access (no login, code DEMO); data safety; content rating;
+  category; contact email; privacy policy URL; the service account needs "Manage store presence".
+- App Store Connect: App Clip experiences (default + advanced for `https://attnd.app/join/`; work once
+  production serves the new AASA); App Review contact (`REVIEW_CONTACT_*` repo variables); App Privacy answers.
+- Store screenshots: finish getting both screenshot pipelines working, upload, and remove their temporary
+  push triggers.
+
+**Product gaps**
+- Payments: events stay "Demo event" (`paid=False`) and there is no way for an organizer to pay/upgrade
+  yet. Stripe is the expected exception to the dependency policy.
+- Legal pages: check `/privacy/` (and add terms) actually describe what the apps and console collect
+  (device id, anonymous usage counts, push tokens, organizer accounts, AI processing of uploads/URLs).
+
+**Operations (suggested, not yet discussed)**
+- Database backups/rollback: check what the Heroku Postgres plan includes; upgrade the plan or schedule
+  `pg:backups` before real data exists.
+- Error alerting: today errors only reach Heroku logs. At minimum, email admins on server errors
+  (Django `ADMINS` + email, once email works) and a log drain or Heroku alerting.
+- Load: the 5 s poll is ~200 req/s per 1,000 open apps on one Basic dyno (gthread, 4 threads). Either build
+  the silent-push live updates below first, or size dynos for the first big event.
+- Revisit the "push straight to develop" rule (branch protection, PRs) once there are real users.
+
 ## Future
 
 ### Live updates via silent push instead of 5 s polling (would be API-007)
