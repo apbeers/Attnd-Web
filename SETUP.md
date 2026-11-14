@@ -2,7 +2,21 @@
 
 Do these steps once, in order. Each step says which values go where.
 
-Note: paste only the lines inside the command boxes. zsh doesn't treat `#` as a comment by default, so the boxes contain no comments.
+## Progress
+
+| Step | Status |
+|---|---|
+| 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
+| 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
+| 2. Heroku | ⏳ Production: Scheduler add-on exists; the job gets added after the first release. Next: OpenAI key check, then attnd-dev. |
+| 3. Apple | ⬜ |
+| 4. Google / Android | ⬜ |
+| 5. Local dev keys | ⬜ |
+| 6. Check it all works | ⬜ |
+
+Notes:
+- If the Heroku CLI says an update is available, run `heroku update` first. It's optional.
+- Paste only the lines inside the command boxes. zsh doesn't treat `#` as a comment by default, so the boxes contain no comments.
 - **GH-web**, **GH-ios** and **GH-android** mean that repo's GitHub page, under **Settings → Secrets and variables → Actions**.
 - **Heroku prod** is the app `attnd-web`. **Heroku dev** is the new app `attnd-dev`.
 - Once everything is set up, pushing to `develop` deploys all three apps to dev and beta, and merging `develop` → `main` releases to production.
@@ -11,11 +25,11 @@ Note: paste only the lines inside the command boxes. zsh doesn't treat `#` as a 
 
 ## 0. GitHub (5 min)
 
-1. In **Attnd-iOS** and **Attnd-Android**, set the default branch to `main`: Settings → General → Default branch → switch icon → `main`. Attnd-Web is already on `main`.
+1. ✅ Set the default branch to `main` in **Attnd-iOS** and **Attnd-Android** (Settings → General → Default branch). Attnd-Web was already on `main`.
 2. Optional cleanup:
    - **Attnd-Android:** `master` is a single 2021 "initial commit" and can be deleted. The real code now lives on `main` and `develop`.
    - **Attnd-Web:** `master` is an old side line that is not part of `main`. Glance at it before deleting. Web's old 2021 `develop` history is still reachable, because it was merged into the new `develop` without its content.
-3. In each of the three repos, create two environments under Settings → Environments: **`dev`** and **`production`**. On `production` you can also add yourself as a required reviewer if you want a one-tap approval before each production deploy.
+3. ✅ In each of the three repos, create two environments under Settings → Environments: **`dev`** and **`production`**. On `production` you can also add yourself as a required reviewer if you want a one-tap approval before each production deploy.
 
 ## 1. Rotate the leaked API key (2 min) — required
 
@@ -25,6 +39,15 @@ Also replace the old `ATTND_API_KEY` secret in Attnd-iOS and Attnd-Android. It's
 heroku config:set API_KEY=$(openssl rand -hex 32) -a attnd-web
 ```
 The old key is public in iOS git history. The server already rejects it, but this gives you a fresh one. Production app builds don't use this key at all, because they authenticate with App Attest or Play Integrity.
+
+**Check the new key works:**
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(heroku config:get API_KEY -a attnd-web)" "https://attnd.app/api/v1/events/lookup/?q=FWFM2026"
+```
+- `200` or `404` means the key works. A 404 just means that test event doesn't exist in production.
+- `401` means the key didn't take.
+
+Requests with the old key now get `401`. Once this release is on `main`, the server also blocks the old key permanently by its hash.
 
 ## 2. Heroku (15 min)
 
@@ -41,20 +64,27 @@ The old key is public in iOS git history. The server already rejects it, but thi
    ```
 
 ### Dev (`attnd-dev`)
-Add the same Scheduler job as production on `attnd-dev`. Then:
-```bash
-heroku create attnd-dev
-heroku addons:create heroku-postgresql:essential-0 -a attnd-dev
-heroku addons:create scheduler:standard -a attnd-dev
-heroku config:set -a attnd-dev \
-  SECRET_KEY=$(openssl rand -hex 32) API_KEY=$(openssl rand -hex 32) \
-  ATTESTATION_JWT_SECRET=$(openssl rand -hex 32) OPENAI_API_KEY=sk-... \
-  APPLE_APP_BUNDLE_ID=com.arcu.Attnd APPLE_TEAM_ID=GQQX4L6TE2 \
-  ANDROID_PACKAGE_NAME=com.arcu.attnd \
-  GOOGLE_SERVICE_ACCOUNT_JSON="$(cat play-integrity-service-account.json)"
-```
-- Copy `GOOGLE_PLACES_API_KEY` from production if you use it.
-- Leave `APPLE_ATTEST_ENVIRONMENT` unset. TestFlight builds use production App Attest.
+1. Create the app and its add-ons:
+   ```bash
+   heroku create attnd-dev
+   heroku addons:create heroku-postgresql:essential-0 -a attnd-dev
+   heroku addons:create scheduler:standard -a attnd-dev
+   ```
+   If `attnd-dev` is already taken, pick another name and use it everywhere below, including `HEROKU_APP` and `ATTND_SERVER`.
+2. Set its config. This generates fresh secrets and copies the OpenAI, Play Integrity and Places keys from production, so there's nothing to fill in by hand:
+   ```bash
+   heroku config:set -a attnd-dev \
+     SECRET_KEY=$(openssl rand -hex 32) API_KEY=$(openssl rand -hex 32) \
+     ATTESTATION_JWT_SECRET=$(openssl rand -hex 32) \
+     OPENAI_API_KEY="$(heroku config:get OPENAI_API_KEY -a attnd-web)" \
+     GOOGLE_PLACES_API_KEY="$(heroku config:get GOOGLE_PLACES_API_KEY -a attnd-web)" \
+     GOOGLE_SERVICE_ACCOUNT_JSON="$(heroku config:get GOOGLE_SERVICE_ACCOUNT_JSON -a attnd-web)" \
+     APPLE_APP_BUNDLE_ID=com.arcu.Attnd APPLE_TEAM_ID=GQQX4L6TE2 \
+     ANDROID_PACKAGE_NAME=com.arcu.attnd
+   ```
+   - Leave `APPLE_ATTEST_ENVIRONMENT` unset. TestFlight builds use production App Attest.
+   - The dev `API_KEY` is what goes in the `ATTND_API_KEY` GitHub secrets and in your local dev config (section 5). Print it with `heroku config:get API_KEY -a attnd-dev`.
+3. Run `heroku addons:open scheduler -a attnd-dev` and add the same job as production: every 10 minutes, `python manage.py run_scheduled_tasks`. Do this after the first deploy to dev (the first push to `develop` once step "Let GitHub deploy to Heroku" is done).
 
 ### Let GitHub deploy to Heroku
 ```bash
