@@ -1,6 +1,8 @@
 # Attnd setup checklist
 
 Do these steps once, in order. Each step says which values go where.
+
+Note: paste only the lines inside the command boxes. zsh doesn't treat `#` as a comment by default, so the boxes contain no comments.
 - **GH-web**, **GH-ios** and **GH-android** mean that repo's GitHub page, under **Settings → Secrets and variables → Actions**.
 - **Heroku prod** is the app `attnd-web`. **Heroku dev** is the new app `attnd-dev`.
 - Once everything is set up, pushing to `develop` deploys all three apps to dev and beta, and merging `develop` → `main` releases to production.
@@ -27,18 +29,23 @@ The old key is public in iOS git history. The server already rejects it, but thi
 ## 2. Heroku (15 min)
 
 ### Production (`attnd-web`)
-```bash
-heroku addons:create scheduler:standard -a attnd-web
-heroku addons:open scheduler -a attnd-web
-#   → Add job: "python manage.py run_scheduled_tasks", every 10 minutes
-heroku config:set -a attnd-web OPENAI_API_KEY=sk-...        # if not already set
-```
+1. Scheduler: if `heroku addons:create scheduler:standard -a attnd-web` says the add-on already exists, that's fine. Open it with `heroku addons:open scheduler -a attnd-web` and choose **Create job**:
+   - **Schedule:** Every 10 minutes
+   - **Command:** `python manage.py run_scheduled_tasks`
+   - **Dyno size:** the smallest available (Eco/Basic)
+
+   Add this job **after the first release to `main`**. The command doesn't exist on production until then, so it would just fail every 10 minutes.
+2. OpenAI key: check it with `heroku config:get OPENAI_API_KEY -a attnd-web`. Only if that prints nothing:
+   ```bash
+   heroku config:set -a attnd-web OPENAI_API_KEY=sk-your-real-key
+   ```
 
 ### Dev (`attnd-dev`)
+Add the same Scheduler job as production on `attnd-dev`. Then:
 ```bash
 heroku create attnd-dev
 heroku addons:create heroku-postgresql:essential-0 -a attnd-dev
-heroku addons:create scheduler:standard -a attnd-dev   # same job as production
+heroku addons:create scheduler:standard -a attnd-dev
 heroku config:set -a attnd-dev \
   SECRET_KEY=$(openssl rand -hex 32) API_KEY=$(openssl rand -hex 32) \
   ATTESTATION_JWT_SECRET=$(openssl rand -hex 32) OPENAI_API_KEY=sk-... \
@@ -51,8 +58,9 @@ heroku config:set -a attnd-dev \
 
 ### Let GitHub deploy to Heroku
 ```bash
-heroku authorizations:create -d "GitHub Actions"   # copy the token
+heroku authorizations:create -d "GitHub Actions"
 ```
+Copy the token it prints.
 | Where | Name | Value |
 |---|---|---|
 | GH-web secret | `HEROKU_API_KEY` | that token |
