@@ -168,10 +168,27 @@ SUPPORTED_API_VERSIONS = [int(v) for v in os.getenv('SUPPORTED_API_VERSIONS', '1
 # Production should set STATIC_API_KEY_ENABLED=0 so only attested official apps can call the API.
 STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', 'false', 'False')
 
-EMAIL_HOST = 'smtp.mailgun.org'
-EMAIL_PORT = 587
-EMAIL_HOST_USER = os.getenv('MAILGUN_SMTP_LOGIN')
-EMAIL_HOST_PASSWORD = os.getenv('MAILGUN_SMTP_PASSWORD')
+# Public base URL of this deployment, for links in emails (dev sets its herokuapp URL).
+SITE_URL = os.getenv('SITE_URL', 'https://attnd.app').rstrip('/')
+
+# Email: Mailgun SMTP (Heroku add-on; SETUP.md step 11). Production sends from mg.attnd.app; dev uses its
+# own Mailgun sandbox, which only delivers to authorized recipients. EMAIL_HOST_USER/PASSWORD are the
+# domain's SMTP credentials (the add-on doesn't provide a password). Without a password, mail is printed
+# to the log instead of sent.
+EMAIL_HOST = os.getenv('MAILGUN_SMTP_SERVER', 'smtp.mailgun.org')
+EMAIL_PORT = int(os.getenv('MAILGUN_SMTP_PORT', '587'))
+EMAIL_USE_TLS = True
+EMAIL_TIMEOUT = 15
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER') or os.getenv('MAILGUN_SMTP_LOGIN', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD') or os.getenv('MAILGUN_SMTP_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Attnd <noreply@mg.attnd.app>')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# Comma-separated; these get server error emails.
+ADMINS = [('Attnd admin', e.strip()) for e in os.getenv('ADMIN_EMAILS', '').split(',') if e.strip()]
+# Comma-separated addresses or @domains; when set, mail to anyone else is logged and dropped (use on dev).
+EMAIL_ALLOWED_RECIPIENTS = [e.strip().lower() for e in os.getenv('EMAIL_ALLOWED_RECIPIENTS', '').split(',') if e.strip()]
+EMAIL_BACKEND = ('console.mail.AllowListSMTPBackend' if EMAIL_HOST_PASSWORD
+                 else 'django.core.mail.backends.console.EmailBackend')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

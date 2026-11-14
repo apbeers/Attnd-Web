@@ -17,6 +17,7 @@
           <input class="form-control" type="text" name="username" id="id_username" autocomplete="username" autofocus required></div>
         <div class="mb-3"><label class="form-label" for="id_password">Password</label>
           <input class="form-control" type="password" name="password" id="id_password" autocomplete="current-password" required></div>
+        <p class="small text-end mt-n2 mb-3"><a href="{% url 'password_reset' %}">Forgot your password?</a></p>
         <div class="d-grid"><button class="btn btn-primary">Sign in</button></div>
       </form>
       <p class="text-center small text-muted mt-3 mb-0">New here? <a href="{% url 'console:signup' %}">Create an account</a></p>

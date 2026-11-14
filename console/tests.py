@@ -493,3 +493,71 @@ class LiveEditingTests(ConsoleTests):
         self.event.refresh_from_db()
         self.assertGreater(self.event.content_version, before)
         self.assertContains(self.client.get(self.url('display')), 'Live on your phone')
+
+
+# ---------------------------------------------------------------------------
+# Email (SETUP.md step 11)
+# ---------------------------------------------------------------------------
+from django.conf import settings as django_settings  # noqa: E402
+from django.core import mail  # noqa: E402
+from django.test import override_settings  # noqa: E402
+
+from console.mail import AllowListSMTPBackend, allowed  # noqa: E402
+
+
+class EmailTests(ConsoleTests):
+    def test_smtp_uses_tls(self):
+        self.assertTrue(django_settings.EMAIL_USE_TLS)
+
+    @override_settings(EMAIL_HOST_PASSWORD='x', SITE_URL='https://dev.example.com',
+                       DEFAULT_FROM_EMAIL='Attnd <noreply@mg.example.com>')
+    def test_invite_email_links_to_this_site_from_the_default_sender(self):
+        self.client.post(self.url('team'), {'action': 'invite', 'email': 'helper@example.com', 'role': 'admin'})
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.from_email, 'Attnd <noreply@mg.example.com>')
+        self.assertEqual(message.to, ['helper@example.com'])
+        self.assertIn('https://dev.example.com/console/signup/', message.body)
+        self.assertNotIn('https://attnd.app', message.body)
+
+    def test_no_invite_email_without_credentials(self):
+        with override_settings(EMAIL_HOST_PASSWORD=''):
+            self.client.post(self.url('team'), {'action': 'invite', 'email': 'helper@example.com', 'role': 'admin'})
+        self.assertEqual(mail.outbox, [])
+
+    def test_password_reset_flow(self):
+        self.client.logout()
+        self.assertContains(self.client.get(reverse('login')), 'Forgot your password?')
+        r = self.client.post(reverse('password_reset'), {'email': self.owner.email.upper()}, follow=True)
+        self.assertContains(r, 'Check your email')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].subject, 'Reset your Attnd password')
+        link = next(line for line in mail.outbox[0].body.splitlines() if '/accounts/reset/' in line)
+        r = self.client.get(link.replace('http://testserver', ''), follow=True)
+        self.assertContains(r, 'Choose a new password')
+        r = self.client.post(r.redirect_chain[-1][0], {'new_password1': 'a-new-strong-pass-42',
+                                                       'new_password2': 'a-new-strong-pass-42'}, follow=True)
+        self.assertContains(r, 'Your new password is set')
+        self.assertTrue(self.client.login(username=self.owner.email, password='a-new-strong-pass-42'))
+
+    def test_password_reset_for_unknown_email_sends_nothing(self):
+        self.client.logout()
+        self.client.post(reverse('password_reset'), {'email': 'nobody@example.com'})
+        self.assertEqual(mail.outbox, [])
+
+    def test_allow_list(self):
+        self.assertTrue(allowed('Me <me@example.com>', ['me@example.com']))
+        self.assertTrue(allowed('anyone@team.example', ['@team.example']))
+        self.assertFalse(allowed('else@example.com', ['me@example.com', '@team.example']))
+
+    @override_settings(EMAIL_ALLOWED_RECIPIENTS=['me@example.com'])
+    def test_allow_list_backend_drops_other_recipients(self):
+        sent = []
+        with patch('django.core.mail.backends.smtp.EmailBackend.send_messages',
+                   lambda self, messages: sent.extend(messages) or len(messages)):
+            backend = AllowListSMTPBackend()
+            a = mail.EmailMessage('one', 'x', to=['me@example.com', 'other@example.com'])
+            b = mail.EmailMessage('two', 'x', to=['other@example.com'])
+            self.assertEqual(backend.send_messages([a, b]), 1)
+        self.assertEqual([m.subject for m in sent], ['one'])
+        self.assertEqual(sent[0].to, ['me@example.com'])

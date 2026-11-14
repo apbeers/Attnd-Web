@@ -206,8 +206,12 @@ Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and
 | `DATABASE_URL` | Prod | PostgreSQL connection string |
 | `CLOUDINARY_URL` | Prod | Cloudinary connection string |
 | `GOOGLE_PLACES_API_KEY` | No | Location image fetching during scrape |
-| `MAILGUN_SMTP_LOGIN` | No | Email sending |
-| `MAILGUN_SMTP_PASSWORD` | No | Email sending |
+| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Email | Mailgun SMTP credentials for the sending domain (`postmaster@mg.attnd.app` on prod; dev uses its sandbox). No password = mail goes to the log |
+| `DEFAULT_FROM_EMAIL` | No | Default `Attnd <noreply@mg.attnd.app>` |
+| `SITE_URL` | No | Base URL for links in emails, default `https://attnd.app` (dev sets its herokuapp URL) |
+| `ADMIN_EMAILS` | No | Comma-separated; get server error emails |
+| `EMAIL_ALLOWED_RECIPIENTS` | No | Comma-separated addresses/@domains; when set, nobody else is emailed (for dev) |
+| `MAILGUN_*` | — | Set by the Mailgun add-on (SMTP server/port, API key, sandbox domain) |
 | `APPLE_APP_BUNDLE_ID` | Prod | For App Attest verification |
 | `APPLE_TEAM_ID` | Prod | For App Attest verification |
 | `APPLE_ATTEST_ENVIRONMENT` | No | `production` (default) or `development` |

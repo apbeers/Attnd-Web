@@ -257,14 +257,16 @@ def _email_owner(event, changeset, pending):
     recipients = [u.email for u in ([event.user] if event.user else []) if u.email]
     recipients += list(event.members.filter(role=EventMember.ROLE_ADMIN).exclude(user__email='')
                        .values_list('user__email', flat=True))
-    if not recipients or not getattr(settings, 'EMAIL_HOST_PASSWORD', None):
+    from django.urls import reverse
+    from console.mail import email_enabled, site_url
+    if not recipients or not email_enabled():
         return
     try:
         send_mail(
             subject=f'{pending} suggested update(s) for {event.name}',
             message=(f'Attnd checked your event sources and found: {changeset.summary}.\n\n'
-                     f'Review them: https://attnd.app/console/changes/{changeset.id}/\n'),
-            from_email='Attnd <noreply@attnd.app>',
+                     f'Review them: {site_url(reverse("console:changeset", args=[changeset.id]))}\n'),
+            from_email=None,
             recipient_list=sorted(set(recipients)),
             fail_silently=True,
         )

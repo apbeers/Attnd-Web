@@ -16,7 +16,7 @@ they land on Heroku's temporary disk and are **lost on every restart or deploy**
 - Also: upload limits and validation (type, size), cleanup of replaced/deleted files, and separate
   dev vs prod buckets/accounts.
 
-### Sending email
+### Sending email (mostly done: see SETUP.md step 11)
 Needed for team invites (`EventInvite`), password reset, sign-up confirmation and task/ingest notices.
 - Today: SMTP settings point at Mailgun (`MAILGUN_SMTP_LOGIN` / `MAILGUN_SMTP_PASSWORD`, `attnd/settings.py`),
   but no credentials are configured, so nothing is actually sent.
