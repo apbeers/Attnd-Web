@@ -426,3 +426,47 @@ class AppleRootCertificateTests(unittest.TestCase):
         self.assertEqual(
             cert.fingerprint(hashes.SHA256()).hex(),
             '1cb9823ba28ba6ad2d33a006941de2ae4f513ef1d4e831b9f7e0fa7b6242c932')
+
+
+class CertChainTests(unittest.TestCase):
+    """A chain shaped like Apple's: a P-384 root signing with SHA384, an intermediate signing with SHA256."""
+
+    @staticmethod
+    def _cert(subject, issuer, key, issuer_key, algorithm, ca, days=365):
+        from datetime import datetime, timedelta, timezone
+
+        from cryptography import x509 as cx509
+        from cryptography.x509.oid import NameOID
+        now = datetime.now(timezone.utc)
+        return (cx509.CertificateBuilder()
+                .subject_name(cx509.Name([cx509.NameAttribute(NameOID.COMMON_NAME, subject)]))
+                .issuer_name(cx509.Name([cx509.NameAttribute(NameOID.COMMON_NAME, issuer)]))
+                .public_key(key.public_key()).serial_number(cx509.random_serial_number())
+                .not_valid_before(now - timedelta(days=1)).not_valid_after(now + timedelta(days=days))
+                .add_extension(cx509.BasicConstraints(ca=ca, path_length=None), critical=True)
+                .sign(issuer_key, algorithm))
+
+    def setUp(self):
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+        root_key, int_key, leaf_key = ec.generate_private_key(ec.SECP384R1()), ec.generate_private_key(ec.SECP384R1()), ec.generate_private_key(ec.SECP256R1())
+        self.root = self._cert('Root', 'Root', root_key, root_key, hashes.SHA384(), True)
+        self.intermediate = self._cert('Intermediate', 'Root', int_key, root_key, hashes.SHA384(), True)
+        self.leaf = self._cert('Leaf', 'Intermediate', leaf_key, int_key, hashes.SHA256(), False)
+        self.other_root_key = ec.generate_private_key(ec.SECP384R1())
+
+    def test_mixed_hash_chain_verifies(self):
+        from attestation.ios_attest import _verify_cert_chain
+        _verify_cert_chain(self.leaf, self.intermediate, self.root)
+
+    def test_wrong_root_and_expired_are_rejected(self):
+        from datetime import datetime, timedelta, timezone
+
+        from cryptography.hazmat.primitives import hashes
+
+        from attestation.ios_attest import AttestationError, _verify_cert_chain
+        impostor = self._cert('Root', 'Root', self.other_root_key, self.other_root_key, hashes.SHA384(), True)
+        with self.assertRaises(AttestationError):
+            _verify_cert_chain(self.leaf, self.intermediate, impostor)
+        with self.assertRaises(AttestationError):
+            _verify_cert_chain(self.leaf, self.intermediate, self.root, now=datetime.now(timezone.utc) + timedelta(days=400))

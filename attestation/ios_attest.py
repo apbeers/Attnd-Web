@@ -44,6 +44,8 @@ import struct
 from dataclasses import dataclass
 
 import cbor2
+from datetime import datetime, timezone
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.ec import ECDSA
@@ -281,23 +283,24 @@ def _matching_app_id(rp_id_hash: bytes, team_id: str, bundle_id) -> str | None:
     return None
 
 
-def _verify_cert_chain(leaf: x509.Certificate, intermediate: x509.Certificate, root: x509.Certificate):
-    """Verify leaf → intermediate → root chain using signature checks."""
+def _verify_cert_chain(leaf: x509.Certificate, intermediate: x509.Certificate, root: x509.Certificate,
+                       now=None):
+    """Verify leaf → intermediate → root: signatures, issuer names and validity periods.
+
+    Each certificate is checked with its own signature algorithm. Apple's root is P-384 and signs the
+    intermediate with ECDSA-SHA384, while the intermediate signs the leaf with SHA256, so a fixed hash
+    algorithm can never verify the whole chain.
+    """
+    now = now or datetime.now(timezone.utc)
     try:
-        # intermediate signed by root
-        root.public_key().verify(
-            intermediate.signature,
-            intermediate.tbs_certificate_bytes,
-            ECDSA(hashes.SHA256()),
-        )
-        # leaf signed by intermediate
-        intermediate.public_key().verify(
-            leaf.signature,
-            leaf.tbs_certificate_bytes,
-            ECDSA(hashes.SHA256()),
-        )
+        intermediate.verify_directly_issued_by(root)
+        leaf.verify_directly_issued_by(intermediate)
     except Exception as exc:
-        raise AttestationError(f"Certificate chain verification failed: {exc}") from exc
+        raise AttestationError(f"Certificate chain verification failed: {type(exc).__name__} {exc}".strip()) from exc
+    for cert in (leaf, intermediate, root):
+        if not (cert.not_valid_before_utc <= now <= cert.not_valid_after_utc):
+            raise AttestationError(f"Certificate chain verification failed: {cert.subject.rfc4514_string()} "
+                                   f"is not valid at {now:%Y-%m-%d %H:%M} UTC")
 
 
 def _extract_nonce_from_extension(raw: bytes) -> bytes:
