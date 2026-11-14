@@ -60,26 +60,11 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
   `pg:backups` before real data exists.
 - Error alerting: today errors only reach Heroku logs. At minimum, email admins on server errors
   (Django `ADMINS` + email, once email works) and a log drain or Heroku alerting.
-- Load: the 5 s poll is ~200 req/s per 1,000 open apps on one Basic dyno (gthread, 4 threads). Either build
-  the silent-push live updates below first, or size dynos for the first big event.
+- Load: since API-007 open apps poll every 5 min (60 s without a push token), but each content push makes
+  every open app with an older `content_version` fetch the full bundle within ~10 s (random 0–10 s delay: ~100 req/s per 1,000
+  open apps, briefly). Older builds still poll every 5 s until they update. Load-test or size dynos before
+  the first big event.
 - Revisit the "push straight to develop" rule (branch protection, PRs) once there are real users.
 
 ## Future
 
-### Live updates via silent push instead of 5 s polling (would be API-007)
-Open apps poll `bundle/` every 5 s: ~200 req/s per 1,000 attendees with the app open, too much for one
-Basic dyno (gthread, 4 threads). Plan, explored Nov 14, 2026:
-- **Push is the primary signal.** Every device registers for push at launch: iOS silent pushes need no
-  user permission; Android FCM data messages never do. The notification opt-in only controls visible
-  alerts. The server sends `content_updated` (with `content_version`) to *all* devices in the event, not
-  only `subscribed` ones (`events/push.py` `deliver`/`_recipients`).
-- **Faster, collapsible pushes.** Debounce ~2–3 s instead of `CONTENT_PUSH_MIN_INTERVAL` 60 s, with
-  `apns-collapse-id` / FCM `collapse_key` so only the latest is delivered. Background delivery stays
-  best-effort (iOS throttles it); foreground delivery is immediate.
-- **Apps.** On `content_updated`: fetch only if the pushed `content_version` is newer, after a random
-  0–3 s delay so 1,000 phones don't refresh at once.
-- **Safety net.** Refresh on resume, plus a 60 s conditional poll while open (catches lost pushes, Doze,
-  Low Power Mode, force-quit). App Clip (no push): poll every 15–30 s.
-- **Not now:** SSE/WebSockets or long-polling (each open app would hold a connection; needs an ASGI
-  server and dependencies).
-- Additive change: old app builds keep polling. Track as API-007 in `API_CHANGES.md` when started.

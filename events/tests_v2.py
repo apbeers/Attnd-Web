@@ -1,6 +1,7 @@
 """Tests for API v2, display resolution, version bumping and push delivery."""
 
 import json
+import time
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
@@ -210,6 +211,81 @@ class PushTests(V2Base):
         result = push.send_apns(['a', 'b'], {'aps': {}})
         self.assertEqual((result.delivered, result.invalid_tokens), (1, ['b']))
         self.assertEqual(client.post.call_args.kwargs['headers']['apns-topic'], 'com.arcu.attnd')
+
+
+    @patch('events.push.send_fcm')
+    @patch('events.push.send_apns')
+    def test_content_updated_reaches_every_device_with_a_token(self, apns, fcm):
+        """API-007: silent pushes ignore `subscribed`, alerts don't."""
+        apns.return_value = fcm.return_value = push.SendResult()
+        Device.objects.create(id='i2', event=self.event, platform='ios', push_token='tok-ios-off', subscribed=False)
+        Device.objects.create(id='i3', event=self.event, platform='ios', push_token='')
+        Device.objects.create(id='other', platform='android', push_token='elsewhere', subscribed=True)
+        push.notify_content_updated(self.event)
+        self.assertCountEqual(apns.call_args.args[0], ['tok-ios', 'tok-ios-off'])
+        self.assertCountEqual(fcm.call_args.args[0], ['tok-and', 'x'])
+        payload = apns.call_args.args[1]
+        self.assertEqual((payload['type'], payload['aps']), ('content_updated', {'content-available': 1}))
+        self.assertEqual(payload['content_version'], self.event.content_version)
+        self.assertEqual(apns.call_args.kwargs['push_type'], 'background')
+        self.assertEqual(apns.call_args.kwargs['priority'], '5')
+        self.assertEqual(apns.call_args.kwargs['collapse_id'], f'content-{self.event.id}')
+        self.assertAlmostEqual(apns.call_args.kwargs['expiration'], time.time() + 3600, delta=60)
+        self.assertEqual(fcm.call_args.kwargs['priority'], 'normal')
+        self.assertEqual(fcm.call_args.kwargs['collapse_key'], f'content_{self.event.id}')
+        self.assertEqual(fcm.call_args.kwargs['ttl'], 3600)
+        self.assertIsNone(fcm.call_args.kwargs.get('notification'))
+
+        push.deliver(self.event, alert={'title': 't', 'body': 'b'}, data={'type': 'notification'})
+        self.assertEqual(apns.call_args.args[0], ['tok-ios'])
+        self.assertEqual(fcm.call_args.args[0], ['tok-and'])
+        self.assertNotIn('collapse_id', apns.call_args.kwargs)
+        self.assertNotIn('priority', fcm.call_args.kwargs)  # default 'high'
+
+    @override_settings(APNS_AUTH_KEY='k', APNS_KEY_ID='KID', APNS_TEAM_ID='TEAM', APNS_TOPIC='com.arcu.attnd')
+    @patch('events.push._apns_token', return_value='jwt')
+    @patch('events.push.httpx.Client')
+    def test_apns_collapse_and_expiration_headers(self, client_cls, _tok):
+        client = client_cls.return_value.__enter__.return_value
+        client.post.return_value = MagicMock(status_code=200)
+        push.send_apns(['a'], {'aps': {'content-available': 1}}, push_type='background', priority='5',
+                       collapse_id='content-7', expiration=1800000000.7)
+        headers = client.post.call_args.kwargs['headers']
+        self.assertEqual(headers['apns-collapse-id'], 'content-7')
+        self.assertEqual(headers['apns-expiration'], '1800000000')
+        self.assertEqual((headers['apns-push-type'], headers['apns-priority']), ('background', '5'))
+        push.send_apns(['a'], {'aps': {}})
+        headers = client.post.call_args.kwargs['headers']
+        self.assertNotIn('apns-collapse-id', headers)
+        self.assertNotIn('apns-expiration', headers)
+        self.assertEqual((headers['apns-push-type'], headers['apns-priority']), ('alert', '10'))
+
+    @patch('events.push._fcm_access_token', return_value=('at', 'proj'))
+    @patch('events.push.httpx.Client')
+    def test_fcm_collapse_key_priority_and_ttl(self, client_cls, _tok):
+        client = client_cls.return_value.__enter__.return_value
+        client.post.return_value = MagicMock(status_code=200)
+        push.send_fcm(['t'], {'type': 'content_updated', 'content_version': 3}, priority='normal',
+                      collapse_key='content_7', ttl=3600)
+        message = client.post.call_args.kwargs['json']['message']
+        self.assertEqual(message['android'], {'priority': 'normal', 'collapse_key': 'content_7', 'ttl': '3600s'})
+        self.assertEqual(message['data'], {'type': 'content_updated', 'content_version': '3'})
+        self.assertNotIn('notification', message)
+        push.send_fcm(['t'], {'type': 'notification'}, notification={'title': 't', 'body': 'b'})
+        message = client.post.call_args.kwargs['json']['message']
+        self.assertEqual(message['android'], {'priority': 'high'})
+        self.assertEqual(message['notification'], {'title': 't', 'body': 'b'})
+
+    def test_content_push_debounce_defaults(self):
+        from django.conf import settings
+        self.assertEqual((settings.CONTENT_PUSH_DELAY, settings.CONTENT_PUSH_MIN_INTERVAL), (3, 15))
+
+    def test_devices_stores_push_token_when_not_subscribed(self):
+        resp = self.post('/api/v2/devices/', {'device_id': 'quiet', 'platform': 'ios',
+                                              'push_token': 'silent-tok', 'subscribed': False})
+        self.assertEqual(resp.json()['subscribed'], False)
+        device = Device.objects.get(pk='quiet')
+        self.assertEqual((device.push_token, device.subscribed), ('silent-tok', False))
 
 
 class RevokedKeyTests(V2Base):

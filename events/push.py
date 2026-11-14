@@ -69,7 +69,9 @@ def _apns_token(cfg):
     return token
 
 
-def send_apns(tokens, payload, push_type='alert', priority='10'):
+def send_apns(tokens, payload, push_type='alert', priority='10', collapse_id=None, expiration=None):
+    """Send one payload to iOS tokens. ``collapse_id`` → ``apns-collapse-id`` (APNs keeps only the latest
+    with the same id); ``expiration`` (UNIX seconds) → ``apns-expiration``."""
     result = SendResult()
     cfg = _apns_config()
     if cfg is None:
@@ -83,6 +85,10 @@ def send_apns(tokens, payload, push_type='alert', priority='10'):
         'apns-push-type': push_type,
         'apns-priority': priority,
     }
+    if collapse_id:
+        headers['apns-collapse-id'] = collapse_id[:64]
+    if expiration is not None:
+        headers['apns-expiration'] = str(int(expiration))
     body = json.dumps(payload)
     with httpx.Client(http2=True, timeout=10) as client:
         for token in tokens:
@@ -133,7 +139,9 @@ def _fcm_access_token():
     return creds.token, project
 
 
-def send_fcm(tokens, data, notification=None):
+def send_fcm(tokens, data, notification=None, priority='high', collapse_key=None, ttl=None):
+    """Send one message to Android tokens. ``priority`` is the Android delivery priority ('high' or
+    'normal'); ``collapse_key`` makes FCM keep only the latest; ``ttl`` is in seconds."""
     result = SendResult()
     try:
         access_token, project = _fcm_access_token()
@@ -147,10 +155,15 @@ def send_fcm(tokens, data, notification=None):
         return result
     url = f'https://fcm.googleapis.com/v1/projects/{project}/messages:send'
     headers = {'Authorization': f'Bearer {access_token}'}
+    android = {'priority': priority}
+    if collapse_key:
+        android['collapse_key'] = collapse_key
+    if ttl is not None:
+        android['ttl'] = f'{int(ttl)}s'
     with httpx.Client(timeout=10) as client:
         for token in tokens:
             message = {'token': token, 'data': {k: str(v) for k, v in data.items()},
-                       'android': {'priority': 'high'}}
+                       'android': dict(android)}
             if notification:
                 message['notification'] = notification
             try:
@@ -175,8 +188,17 @@ def send_fcm(tokens, data, notification=None):
 # High level
 # ---------------------------------------------------------------------------
 
-def _recipients(event):
-    devices = Device.objects.filter(event=event, subscribed=True).exclude(push_token='')
+# Silent content pushes are dropped by APNs / FCM after this long: a stale "content changed" is useless,
+# the app refreshes on resume anyway.
+CONTENT_PUSH_TTL = 3600
+
+
+def _recipients(event, silent=False):
+    """Push tokens per platform. Visible alerts go only to devices that opted in (``subscribed``);
+    silent ``content_updated`` pushes go to every device in the event with a token (API-007)."""
+    devices = Device.objects.filter(event=event).exclude(push_token='')
+    if not silent:
+        devices = devices.filter(subscribed=True)
     ios = [d.push_token for d in devices if d.platform == 'ios']
     android = [d.push_token for d in devices if d.platform == 'android']
     return ios, android
@@ -188,17 +210,24 @@ def _forget(tokens):
 
 
 def deliver(event, alert=None, data=None, silent=False):
-    """Send one message to every subscribed device in the event. Returns a merged SendResult."""
+    """Send one message to the event's devices. Returns a merged SendResult.
+
+    Alerts go to subscribed devices only. Silent pushes go to every device with a token, collapse per
+    event (only the latest is delivered) and expire after ``CONTENT_PUSH_TTL``.
+    """
     data = {'event_id': event.id, **(data or {})}
-    ios, android = _recipients(event)
+    ios, android = _recipients(event, silent=silent)
 
     if silent:
         apns_payload = {'aps': {'content-available': 1}, **data}
-        r1 = send_apns(ios, apns_payload, push_type='background', priority='5')
+        r1 = send_apns(ios, apns_payload, push_type='background', priority='5',
+                       collapse_id=f'content-{event.id}', expiration=time.time() + CONTENT_PUSH_TTL)
+        r2 = send_fcm(android, data, priority='normal', collapse_key=f'content_{event.id}',
+                      ttl=CONTENT_PUSH_TTL)
     else:
         apns_payload = {'aps': {'alert': alert, 'sound': 'default'}, **data}
         r1 = send_apns(ios, apns_payload)
-    r2 = send_fcm(android, data, notification=None if silent else alert)
+        r2 = send_fcm(android, data, notification=alert)
 
     _forget(r1.invalid_tokens + r2.invalid_tokens)
     return SendResult(
@@ -249,10 +278,11 @@ def notify_content_updated(event):
 # ---------------------------------------------------------------------------
 # Live updates: a silent push whenever attendee-visible content changes
 # ---------------------------------------------------------------------------
-# Apps that are open poll the bundle every few seconds; this wakes the ones in the background.
-# Edits come in bursts (an organizer typing, an AI update applying many changes), so pushes are
-# debounced per event: one push CONTENT_PUSH_DELAY seconds after the last change, and at most one
-# per CONTENT_PUSH_MIN_INTERVAL seconds. iOS throttles silent pushes anyway, so more is pointless.
+# Push is the primary live-update signal (API-007): it goes to every device in the event with a token,
+# and apps refetch only when the pushed content_version is newer. Edits come in bursts (an organizer
+# typing, an AI update applying many changes), so pushes are debounced per event: one push
+# CONTENT_PUSH_DELAY seconds after the last change, and at most one per CONTENT_PUSH_MIN_INTERVAL
+# seconds. The pushes collapse per event, so a device that was offline only gets the latest.
 
 _timers = {}
 _last_sent = {}
@@ -267,8 +297,8 @@ def content_changed(event_id):
 
 
 def _schedule(event_id):
-    delay = getattr(settings, 'CONTENT_PUSH_DELAY', 5)
-    min_interval = getattr(settings, 'CONTENT_PUSH_MIN_INTERVAL', 60)
+    delay = getattr(settings, 'CONTENT_PUSH_DELAY', 3)
+    min_interval = getattr(settings, 'CONTENT_PUSH_MIN_INTERVAL', 15)
     with _timers_lock:
         if event_id in _timers:
             _timers[event_id].cancel()

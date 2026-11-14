@@ -34,10 +34,15 @@ Returns everything the app shows, in one response.
   - on join
   - when the app comes to the foreground
   - on pull-to-refresh
-  - when a `content_updated` push arrives (sent a few seconds after any change, at most about once a minute per event)
-  - **every 5 seconds while the app is open (foreground) and in an event** (API-006), so organizers editing on the web see the
-    app change live. With `If-None-Match` an unchanged bundle is a bodiless `304`. Don't show a spinner or an error for these
-    polls. The App Clip, which has no push, relies on this.
+  - when a `content_updated` push arrives (API-007), **only if its `content_version` is newer than the bundle you have**, after
+    a random 0–10 s delay so every phone in the event doesn't refresh at the same moment. The server sends it about 3 s after the
+    last change, at most once every 15 s per event, and collapses it per event (an offline device gets only the latest).
+  - **while the app is open (foreground) and in an event, as a safety poll** (catches lost or throttled pushes):
+    - every **60 seconds** when the device has **no push token** (push unavailable or not granted, the iOS App Clip);
+    - every **5 minutes** when it has one.
+
+    With `If-None-Match` an unchanged bundle is a bodiless `304`. Don't show a spinner or an error for these refreshes.
+    (Builds before API-007 poll every 5 s; the server still supports that.)
 ```json
 {
   "schema_version": 2,
@@ -67,6 +72,11 @@ Hidden locations and items are already filtered out. `locations` are already in 
 
 ### `POST devices/`
 Registers or updates a device. Call it on launch, and whenever the push token or the notification preference changes.
+
+**Always register for push and send `push_token`, even when notifications are off** (API-007): the token is stored whatever
+`subscribed` says and is used for silent `content_updated` pushes (live updates). `subscribed` only controls visible organizer
+alerts. iOS silent pushes need no notification permission (`registerForRemoteNotifications()` alone); Android FCM data messages
+never need `POST_NOTIFICATIONS`. Send `"push_token": ""` only to clear a token you no longer have.
 ```json
 { "device_id": "uuid", "platform": "ios", "push_token": "…", "app_version": "2.0.0", "subscribed": true }
 ```
@@ -187,10 +197,9 @@ Client defaults when `display` or a key is missing:
 
 ## Push notifications
 
-The server sends pushes through APNs (iOS) and FCM HTTP v1 (Android) to devices that meet all of these:
-- they joined the event
-- they have `subscribed == true`
-- they have a `push_token`
+The server sends pushes through APNs (iOS) and FCM HTTP v1 (Android) to devices that joined the event and have a `push_token`:
+- **Organizer notifications** (visible) only to devices with `subscribed == true`.
+- **Content updated** (silent) to **every** such device, `subscribed` or not (API-007).
 
 ### Payloads
 - **Organizer notification:**
@@ -199,10 +208,11 @@ The server sends pushes through APNs (iOS) and FCM HTTP v1 (Android) to devices 
   - iOS: the custom keys are top-level in the APNs payload, next to `aps`.
   - Android: they're in the FCM `data` map, as strings.
 - **Content updated:**
-  - Silent push, sent when the organizer publishes changes and has chosen to notify attendees.
-  - Custom data: `type = "content_updated"`, `event_id`, `content_version`.
-  - iOS: `content-available: 1`, with no alert.
-  - Android: data-only message.
-  - The app should refetch the bundle.
+  - Silent push, sent about 3 s after any attendee-visible change (at most once every 15 s per event).
+  - Custom data: `type = "content_updated"`, `event_id`, `content_version` (on Android all strings, as for every data value).
+  - iOS: `content-available: 1`, no alert; `apns-push-type: background`, priority 5, `apns-collapse-id: content-<event_id>`,
+    expires after about an hour. Background delivery is best-effort (iOS throttles it); in the foreground it arrives at once.
+  - Android: data-only message, priority `normal`, `collapse_key: content_<event_id>`, TTL 1 hour.
+  - The app refetches the bundle only if `content_version` is newer than its own, after a random 0–10 s delay (see `bundle/`).
 
 When the app is opened from a notification, it should open the Notifications tab for that event.

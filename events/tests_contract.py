@@ -128,7 +128,7 @@ class ApiContractTests(TestCase):
             payloads[f"apns:{payload['type']}"] = payload
             return push.SendResult()
 
-        def fcm(tokens, data, notification=None):
+        def fcm(tokens, data, notification=None, **kwargs):
             payloads[f"fcm:{data['type']}"] = {'data': data, 'notification': notification}
             return push.SendResult()
 

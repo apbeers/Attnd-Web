@@ -132,8 +132,8 @@ if TESTING:
 
 # Silent "content_updated" push whenever attendee-visible content changes (events.push.content_changed).
 CONTENT_PUSH_ENABLED = not TESTING and os.getenv('CONTENT_PUSH_ENABLED', '1') not in ('0', 'false', 'False')
-CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '5'))
-CONTENT_PUSH_MIN_INTERVAL = int(os.getenv('CONTENT_PUSH_MIN_INTERVAL', '60'))
+CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '3'))
+CONTENT_PUSH_MIN_INTERVAL = int(os.getenv('CONTENT_PUSH_MIN_INTERVAL', '15'))
 
 # Rate limits (attnd.ratelimit) and other per-process counters (scrape/'s "try it" limit) live here.
 # LocMemCache is shared by the gthread threads of one process, and Heroku runs a single web process

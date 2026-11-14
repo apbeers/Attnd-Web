@@ -55,11 +55,37 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 | API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages (5-minute buckets) | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 | API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-007 | Live updates via silent push to every device; slow safety poll; offline caching | additive (behaviour only, no shape change) | ✅ dev · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-007: live updates via silent push
+**Why:** the 5 s foreground poll (API-006) is ~200 req/s per 1,000 open apps, too much for one Basic dyno. Push becomes the primary live-update signal; polling is only a slow safety net.
+**Server (additive, no contract shape change):**
+- `content_updated` silent pushes go to **every device in the event with a `push_token`**, whatever `subscribed` says. Visible organizer notifications (`type=notification`) still go only to `subscribed` devices.
+- Payload unchanged: `{type: "content_updated", event_id, content_version}` (FCM data values are strings, as before).
+- Debounce: 3 s after the last change, at most one per 15 s per event (`CONTENT_PUSH_DELAY` / `CONTENT_PUSH_MIN_INTERVAL`, env-overridable).
+- Collapsible and short-lived: APNs `apns-push-type: background`, priority 5, `apns-collapse-id: content-<event_id>`, `apns-expiration` now + 1 h. FCM `collapse_key: content_<event_id>`, Android priority `normal`, TTL 3600 s. Alerts are unchanged (APNs priority 10, FCM `high`).
+- `POST devices/` stores `push_token` regardless of `subscribed` (it already did; now documented and tested).
+
+**iOS:**
+- Always register for push at launch: `registerForRemoteNotifications()` without asking for alert permission (silent pushes need none; the `remote-notification` background mode is already on). Ask for alert authorization only when the user turns notifications on in Options.
+- Always send the APNs token with `POST devices/`, with `subscribed` = the notification preference (visible alerts only).
+- On `content_updated` (foreground or background): refetch `bundle/` only if the pushed `content_version` is newer than the current bundle's, after a random 0–10 s delay.
+- Refresh on foreground and pull-to-refresh as today. Replace the 5 s poll: every **60 s** while active only when there is no push token (push unavailable, App Clip), otherwise a **5 min** safety poll while active. Drop the separate "every 5 min on event days" timer if it duplicates this.
+- Offline caching: persist the raw bundle to disk (atomic write) and start from it offline; persist downloaded images to disk and prefetch the bundle's images (location images, logo, flyer) after each new bundle.
+
+**Android:**
+- Always fetch the FCM token at launch when Firebase is configured (data messages need no `POST_NOTIFICATIONS`); request `POST_NOTIFICATIONS` only when the user turns notifications on in Options.
+- Always send the token with `POST devices/`, with `subscribed` = the notification preference. Data `type=notification` still shows an alert only when notifications are enabled.
+- On `content_updated`: refetch only if `content_version` is newer than the current bundle's, after a random 0–10 s delay.
+- Refresh on resume and pull-to-refresh as today. Replace the 5 s live poll: every **60 s** while resumed only without a push token (no Firebase / no token), otherwise a **5 min** safety poll. Keep the "offline notice after 3 failed polls" rule.
+- Offline caching: the bundle is already cached on disk; add a disk cache for images (behind the in-memory `LruCache` in `RemoteImage`) and prefetch the bundle's images after each new bundle.
+
+Old builds keep polling every 5 s and keep working; nothing is removed from the contract.
 
 ### API-006: live updates
 **Why:** organizers scan their event's QR code, keep the app open and edit on the web: the phone should change within seconds.
