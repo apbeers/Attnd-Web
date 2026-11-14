@@ -19,6 +19,10 @@ Attnd is an event attendance app. This repo is the single backend for both mobil
 
 Current mobile apps use **API v2** (`/api/v2/`, see `API_V2.md`): one `bundle/` request returns the event, locations, schedule, notifications and the server-resolved **display config**. `/api/v1/events/` stays for older app builds (shapes unchanged; drafts, hidden rows and location-less items are filtered out for them). There is no Django REST Framework — all API views are plain Django views returning `JsonResponse`.
 
+## iPhone Duo
+
+iPhone Duo is brand new (released late Oct 2026). For anything Duo-related in any of the three repos, always check online for the latest Apple docs and App Store Connect behaviour instead of relying on model training data (see attnd-ios `CLAUDE.md` → iPhone Duo for the current facts).
+
 ## Cross-repo coordination (this repo leads)
 
 attnd-web is the coordinating repo for all three. Any feature that touches the API starts here. Follow `API_CHANGES.md`:
