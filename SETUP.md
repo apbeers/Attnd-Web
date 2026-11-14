@@ -276,7 +276,11 @@ Check it afterwards: `curl -s https://attnd.app/.well-known/assetlinks.json` sho
    - **Save**. It can take a few minutes to apply.
 4. Test: open the map in the next internal-testing build. A grey map with no streets means a fingerprint or package is wrong.
 
-**4. Keystore backup (required).** The upload keystore secrets are already in GitHub and work: CI built a signed bundle. Make sure the `.jks` file and its three values (store password, key alias, key password, from `signing.properties`) are in your password manager. If the upload key is ever lost, Play support can reset it, but that takes days.
+**4. Keystore backup (required).** The upload keystore secrets are already in GitHub and work: CI built a signed bundle. GitHub won't give them back, though, so keep your own copy. This command finds your `signing.properties` with Spotlight and copies one bundle to the clipboard: the passwords and alias, plus the keystore file as text. Paste it into a new secure note in your password manager:
+```bash
+P=$(mdfind -name signing.properties | grep -i attnd-android | head -1); S=$(grep '^STORE_FILE=' "$P" | cut -d= -f2-); case "$S" in /*) J="$S";; *) J="$(dirname "$P")/$S";; esac; { echo "Attnd Android upload keystore - backed up $(date +%F)"; echo; cat "$P"; echo; echo "Keystore file: $(basename "$J")"; echo "To restore: copy everything below this line, then run: pbpaste | base64 -D > upload.jks"; base64 -i "$J"; } | pbcopy && echo "Copied $(basename "$J") + signing.properties - paste into a secure note"
+```
+If it prints nothing useful, Spotlight didn't find the file. Run it from your Attnd-Android folder with `P=signing.properties` in place of the `mdfind …` part.
 
 | Where | Name | Value |
 |---|---|---|
