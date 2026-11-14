@@ -256,13 +256,17 @@ Check it afterwards: `curl -s https://attnd.app/.well-known/assetlinks.json` sho
 1. Find the key: [Cloud console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials). Its value matches the `MAPS_API_KEY` in your `local.properties`. Check the project switcher at the top, because it may be in an older project.
 2. Make sure **Maps SDK for Android** is enabled in that project (APIs & Services → Library).
 3. Open the key:
-   - **Application restrictions → Android apps → Add**:
-     - `com.arcu.attnd` + **App signing key SHA-1**: Play Store and internal-testing installs
-     - `com.arcu.attnd` + **Upload key SHA-1**: builds you sign yourself
-     - `com.arcu.attnd.debug` + your **debug SHA-1**: Android Studio builds. Get it with:
-       ```bash
-       keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1
-       ```
+   - **Application restrictions → Android apps → Add**, one row per signing certificate:
+
+     | Package | Fingerprint | Used by | Where to get the SHA-1 |
+     |---|---|---|---|
+     | `com.arcu.attnd` | **App signing key** SHA-1 | Everything installed from Google Play, including internal testing | Play Console → **Protected with Play** → ▾ **Play Store protection** → **Play App Signing** → *App signing key certificate* → **SHA-1 certificate fingerprint** |
+     | `com.arcu.attnd` | **Upload key** SHA-1 | Release builds signed with your `.jks` and installed directly (not through Play) | The same Play page → *Upload key certificate* → **SHA-1**. Or from the keystore (it asks for the store password): `keytool -list -v -keystore /path/to/upload.jks -alias YOUR_KEY_ALIAS \| grep SHA1` |
+     | `com.arcu.attnd.debug` | **Debug** SHA-1 | Builds run from Android Studio on your Mac | `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android \| grep SHA1`. Android Studio creates this keystore on the first debug build. |
+
+     A shortcut for the last two: in the Attnd-Android folder, run `./gradlew signingReport`. It prints the SHA-1 for the debug build, and for the release build when `signing.properties` is present.
+
+     The debug SHA-1 is specific to each Mac. If you build on another computer, add that computer's debug SHA-1 as another `com.arcu.attnd.debug` row.
    - **API restrictions → Restrict key → Maps SDK for Android**.
    - **Save**. It can take a few minutes to apply.
 4. Test: open the map in the next internal-testing build. A grey map with no streets means a fingerprint or package is wrong.
