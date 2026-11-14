@@ -149,6 +149,9 @@ gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
 | GH-ios secret | `ASC_ISSUER_ID` | Issuer ID |
 | GH-ios secret | `ASC_KEY_P8` | full contents of the `.p8` file |
 
+### 3b-2. App Clip App ID
+The App Clip (`com.arcu.Attnd.clip`) ships inside the app and now uses App Attest too. In [Identifiers](https://developer.apple.com/account/resources/identifiers/list), open **com.arcu.Attnd.clip** and tick **App Attest**. Leave the rest as is, then **Save**.
+
 ### 3c. TestFlight
 1. ✅ The internal group already exists: **App Store Connect Users**, with you as a tester and TestFlight installed on your iPhone. New CI builds get added to this group.
 2. Set the pipeline variables:
