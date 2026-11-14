@@ -470,3 +470,17 @@ class CertChainTests(unittest.TestCase):
             _verify_cert_chain(self.leaf, self.intermediate, impostor)
         with self.assertRaises(AttestationError):
             _verify_cert_chain(self.leaf, self.intermediate, self.root, now=datetime.now(timezone.utc) + timedelta(days=400))
+
+
+class KeyIdTests(unittest.TestCase):
+    def test_key_id_hashes_the_raw_point(self):
+        import base64
+        import hashlib
+
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        from attestation.ios_attest import key_id_for
+        key = ec.generate_private_key(ec.SECP256R1()).public_key()
+        nums = key.public_numbers()
+        point = b'\x04' + nums.x.to_bytes(32, 'big') + nums.y.to_bytes(32, 'big')
+        self.assertEqual(key_id_for(key), base64.b64encode(hashlib.sha256(point).digest()).decode())

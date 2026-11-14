@@ -158,11 +158,7 @@ def verify_attestation(
         raise AttestationError("Nonce mismatch — challenge has been tampered with or replayed")
 
     # Step 4 — verify public key hash matches key_id
-    pub_key_der = cred_cert.public_key().public_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    pub_key_hash_b64 = base64.b64encode(hashlib.sha256(pub_key_der).digest()).decode()
+    pub_key_hash_b64 = key_id_for(cred_cert.public_key())
     if pub_key_hash_b64 != key_id and _b64url_to_b64(key_id) != pub_key_hash_b64:
         raise AttestationError(
             f"key_id mismatch: got {key_id!r}, expected hash of cert public key"
@@ -250,14 +246,15 @@ def verify_assertion(
             f"sign_count replay: stored={stored_sign_count}, received={sign_count}"
         )
 
-    # Verify signature over authData || SHA-256(clientData)
+    # The device signs nonce = SHA-256(authenticatorData || SHA-256(clientData)) with ECDSA-SHA256,
+    # so the signature is checked against the nonce (which ECDSA-SHA256 hashes once more).
     client_data_hash = hashlib.sha256(client_data).digest()
-    signed_data = auth_data + client_data_hash
+    nonce = hashlib.sha256(auth_data + client_data_hash).digest()
 
     try:
         from cryptography.hazmat.primitives.serialization import load_pem_public_key
         pub_key = load_pem_public_key(stored_public_key_pem.encode())
-        pub_key.verify(signature, signed_data, ECDSA(hashes.SHA256()))
+        pub_key.verify(signature, nonce, ECDSA(hashes.SHA256()))
     except Exception as exc:
         raise AttestationError(f"Assertion signature verification failed: {exc}") from exc
 
@@ -268,6 +265,14 @@ def verify_assertion(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def key_id_for(public_key) -> str:
+    """App Attest key identifier: base64 SHA-256 of the raw public key point (X9.62 uncompressed,
+    65 bytes), not of the DER SubjectPublicKeyInfo."""
+    point = public_key.public_bytes(encoding=serialization.Encoding.X962,
+                                    format=serialization.PublicFormat.UncompressedPoint)
+    return base64.b64encode(hashlib.sha256(point).digest()).decode()
+
 
 def bundle_ids(bundle_id) -> list[str]:
     """The app and its App Clip (`<bundle>.clip`) both attest with their own bundle ID."""
