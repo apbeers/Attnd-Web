@@ -408,3 +408,21 @@ class AppClipBundleTests(TestCase):
         other = hashlib.sha256(f'{team}.com.evil.app'.encode()).digest()
         self.assertEqual(_matching_app_id(clip, team, 'com.arcu.Attnd'), f'{team}.com.arcu.Attnd.clip')
         self.assertIsNone(_matching_app_id(other, team, 'com.arcu.Attnd'))
+
+
+class AppleRootCertificateTests(unittest.TestCase):
+    """The embedded Apple App Attestation Root CA must be the real, intact certificate."""
+
+    def test_root_loads_and_is_self_signed(self):
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        from attestation.ios_attest import _APPLE_ROOT_CA_PEM
+
+        cert = x509.load_pem_x509_certificate(_APPLE_ROOT_CA_PEM)
+        self.assertIn('CN=Apple App Attestation Root CA', cert.subject.rfc4514_string())
+        cert.public_key().verify(cert.signature, cert.tbs_certificate_bytes, ec.ECDSA(cert.signature_hash_algorithm))
+        self.assertEqual(
+            cert.fingerprint(hashes.SHA256()).hex(),
+            '1cb9823ba28ba6ad2d33a006941de2ae4f513ef1d4e831b9f7e0fa7b6242c932')
