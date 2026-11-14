@@ -10,7 +10,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, Scheduler jobs and GitHub deploy settings. **Still to do:** add Cloudinary on both apps so uploads survive restarts, and set `CONTACT_EMAIL` on production. |
 | 3. Apple | ⏳ ✅ App ID capabilities checked. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. **Next:** 3b, the App Store Connect key (`Z43S25BCS9`, downloaded) goes into GitHub, then 3c (TestFlight group). |
-| 4. Google / Android | ⏳ ✅ 4a: both Firebase Android apps added, `GOOGLE_SERVICES_JSON` in GitHub, Play Integrity linked with all responses on, and the server key (`attnd-df28e`) on both Heroku apps. **Next:** delete the old service-account keys (4a.4 step 6), then 4b: invite the Play publisher account. |
+| 4. Google / Android | ⏳ ✅ 4a Firebase and the server key are done. ✅ 4b: the Play publisher account is created, invited, and stored in GitHub. **Next:** 4c, the signing fingerprints and Maps key restriction. |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. Waiting on: iOS (3b/3c), Android (step 4), and the first release to `main`. |
 
@@ -226,19 +226,48 @@ The new release also changes behaviour reviewers and users will notice:
    gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON -R apbeers/Attnd-Android < /Users/andrewbeers/Downloads/attnd-df28e-51b6a4e6e951.json
    rm /Users/andrewbeers/Downloads/attnd-df28e-51b6a4e6e951.json
    ```
-3. In **Play Console → Users and permissions → Invite new users**, enter that service account's email. Under App permissions → Attnd, grant **Release apps to testing tracks**, **Release to production**, and **Manage testing tracks**.
-4. In Play Console → Attnd → **Testing → Internal testing → Testers**, add yourself, then open the **opt-in link** on your Android phone once.
+3. ✅ In **Play Console → Users and permissions → Invite new users**, enter that service account's email. Under App permissions → Attnd, grant **Release apps to testing tracks**, **Release to production**, and **Manage testing tracks**.
+4. ✅ In Play Console → Attnd → **Testing → Internal testing → Testers**, add yourself, then open the **opt-in link** on your Android phone once.
 
-### 4c. Signing and keys
-- Upload keystore: use the same `.jks` and passwords as your current `signing.properties`.
-- Maps key: in Cloud console → APIs & Services → Credentials, restrict the Maps key to Android apps:
-  - `com.arcu.attnd` with the **App signing key** SHA-1 (Play Console → **Protected with Play** / App integrity)
-  - `com.arcu.attnd` with the upload key SHA-1
-  - `com.arcu.attnd.debug` with your debug SHA-1
-- App Links: set the Play **App signing** SHA-256 on both Heroku apps so `/.well-known/assetlinks.json` is valid:
-  ```bash
-  heroku config:set -a attnd-web ANDROID_SHA256_FINGERPRINT=AA:BB:...
-  ```
+### 4c. Signing fingerprints and the Maps key
+
+Android apps are identified by their package name **plus the certificate they're signed with**. Two different certificates matter:
+- **Upload key:** your `.jks`. CI signs bundles with it before uploading.
+- **App signing key:** Google holds this one and re-signs every build Play delivers to phones. It's what's on users' devices.
+
+Three things need these fingerprints.
+
+**1. Look up the fingerprints.** Play Console → Attnd → **Test and release → Setup → App signing** (also reachable from **Protected with Play**). Note four values:
+- **App signing key certificate:** SHA-256 and SHA-1
+- **Upload key certificate:** SHA-1 (and SHA-256, for reference)
+
+**2. App links and the signing-certificate pin (server).** Put the **App signing key SHA-256** on both Heroku apps:
+```bash
+heroku config:set -a attnd-web ANDROID_SHA256_FINGERPRINT=AA:BB:CC:...
+heroku config:set -a attnd-dev ANDROID_SHA256_FINGERPRINT=AA:BB:CC:...
+```
+This one value does two jobs:
+- `https://attnd.app/.well-known/assetlinks.json` lists it, so `attnd.app/join/<code>` links open the app directly instead of the browser.
+- The device check rejects any Android app not signed with this certificate, even if its package name matches.
+
+Check it afterwards: `curl -s https://attnd.app/.well-known/assetlinks.json` should show your fingerprint.
+
+**3. Restrict the Maps API key.** Right now anyone who extracts the key from the app could use it and bill your account. Restricting it means only your signed app can use it.
+1. Find the key: [Cloud console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials). Its value matches the `MAPS_API_KEY` in your `local.properties`. Check the project switcher at the top, because it may be in an older project.
+2. Make sure **Maps SDK for Android** is enabled in that project (APIs & Services → Library).
+3. Open the key:
+   - **Application restrictions → Android apps → Add**:
+     - `com.arcu.attnd` + **App signing key SHA-1**: Play Store and internal-testing installs
+     - `com.arcu.attnd` + **Upload key SHA-1**: builds you sign yourself
+     - `com.arcu.attnd.debug` + your **debug SHA-1**: Android Studio builds. Get it with:
+       ```bash
+       keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1
+       ```
+   - **API restrictions → Restrict key → Maps SDK for Android**.
+   - **Save**. It can take a few minutes to apply.
+4. Test: open the map in the next internal-testing build. A grey map with no streets means a fingerprint or package is wrong.
+
+**4. Keystore backup (required).** The upload keystore secrets are already in GitHub and work: CI built a signed bundle. Make sure the `.jks` file and its three values (store password, key alias, key password, from `signing.properties`) are in your password manager. If the upload key is ever lost, Play support can reset it, but that takes days.
 
 | Where | Name | Value |
 |---|---|---|
