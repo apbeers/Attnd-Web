@@ -84,7 +84,12 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
   heroku config:set -a attnd-dev OPENAI_API_KEY="$(heroku config:get OPENAI_API_KEY -a attnd-web)" GOOGLE_PLACES_API_KEY="$(heroku config:get GOOGLE_PLACES_API_KEY -a attnd-web)"
   ```
 - ✅ The Scheduler job is added on `attnd-dev`.
-- The dev `API_KEY` is what goes in the `ATTND_API_KEY` GitHub secrets and in your local dev config. Print it with `heroku config:get API_KEY -a attnd-dev`.
+- The dev `API_KEY` is what goes in the `ATTND_API_KEY` GitHub secrets and in your local dev config. These commands send it straight to GitHub without showing it:
+  ```bash
+  heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-iOS
+  heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-Android
+  ```
+  To see the key itself (for example for local dev config), run `heroku config:get API_KEY -a attnd-dev`.
 
 ### Let GitHub deploy to Heroku
 ```bash
