@@ -7,7 +7,8 @@
   <svg viewBox="0 0 {{ c.width }} {{ c.height }}" role="img" preserveAspectRatio="none">
     <title>{{ label }}</title>
     <line x1="0" y1="{{ c.height }}" x2="{{ c.width }}" y2="{{ c.height }}" class="axis"/>
-    {% for s in c.series %}<polyline class="line-{{ s.cls }}" points="{{ s.points }}" vector-effect="non-scaling-stroke"/>{% endfor %}
+    {% for s in c.series %}<polyline class="line-{{ s.cls }}" points="{{ s.points }}" vector-effect="non-scaling-stroke"/>
+      {% for d in s.dots %}<line class="dot-{{ s.cls }}" x1="{{ d.x }}" y1="{{ d.y }}" x2="{{ d.x }}" y2="{{ d.y }}" vector-effect="non-scaling-stroke"/>{% endfor %}{% endfor %}
     {% for h in c.hover %}<rect class="hover" x="{{ h.x }}" y="0" width="{{ h.w }}" height="{{ c.height }}"><title>{{ h.title }}</title></rect>{% endfor %}
   </svg>
   <div class="usage-ticks">{% for t in c.ticks %}<span style="left:{{ t.left }}%">{{ t.label }}</span>{% endfor %}</div>

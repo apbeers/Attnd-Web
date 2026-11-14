@@ -40,8 +40,11 @@ def line_chart(series, tz, *, start=None, end=None):
     stamps = [t for s in series for t in s['points']]
     if not stamps:
         return None
-    start = start or min(stamps)
-    end = end or max(stamps)
+    # Always show some context: at least 6 hours, up to `end` (e.g. now while the event runs).
+    start = min([start or min(stamps), min(stamps)])
+    end = max([end or max(stamps), max(stamps)])
+    if end - start < timedelta(hours=6):
+        start = end - timedelta(hours=6)
     span = end - start
     step, fmt = next((st, f) for limit, st, f in _STEPS if limit is None or span <= limit)
     keys, cursor = [], _floor(start, step, tz)
@@ -62,14 +65,16 @@ def line_chart(series, tz, *, start=None, end=None):
             running += per_step.get(k, 0)
             values.append(running if s.get('cumulative') else per_step.get(k, 0))
         top = max(values) or 1
-        coords = []
+        coords, dots = [], []
         for i, v in enumerate(values):
             x = 0 if n == 1 else round(i / (n - 1) * CHART_W, 1)
             y = round(CHART_H - 4 - v / top * (CHART_H - 14), 1)
             coords.append(f'{x},{y}')
+            if not s.get('cumulative') and v and sum(1 for value in values if value) <= 40:
+                dots.append({'x': x, 'y': y})  # sparse data: mark each point so a single one is visible
         if n == 1:
             coords.append(f'{CHART_W},{coords[0].split(",")[1]}')
-        out.append({'label': s['label'], 'cls': s['cls'], 'points': ' '.join(coords), 'values': values,
+        out.append({'label': s['label'], 'cls': s['cls'], 'points': ' '.join(coords), 'dots': dots, 'values': values,
                     'max': max(values), 'last': values[-1], 'cumulative': bool(s.get('cumulative'))})
     every = max(1, n // 6)
     ticks = [{'left': 0 if n == 1 else round(i / (n - 1) * 100, 2), 'label': keys[i].astimezone(tz).strftime(fmt)}
@@ -97,6 +102,8 @@ def _named(event_rows, model, event):
 
 def event_usage(event, tz):
     rows = UsageCount.objects.filter(event=event)
+    # Charts run up to now while the event is on (quiet stretches show as zero), and stop after it.
+    chart_end = min(timezone.now(), event.effective_end + timedelta(days=1))
     totals = dict(rows.values_list('metric').annotate(n=Sum('count')).values_list('metric', 'n'))
     by_detail = defaultdict(list)
     for metric, detail, n in (rows.exclude(detail='').values_list('metric', 'detail')
@@ -131,11 +138,11 @@ def event_usage(event, tz):
         'top_notifications': _named(by_detail['notification_open'], Notification, event)[:10],
         'platforms': {'ios': platforms.get('ios', 0), 'android': platforms.get('android', 0)},
         'busiest': {'hour': busiest[0].astimezone(tz), 'count': busiest[1]} if busiest else None,
-        'activity_chart': line_chart([{'label': 'Interactions', 'cls': 'new', 'points': activity}], tz),
+        'activity_chart': line_chart([{'label': 'Interactions', 'cls': 'new', 'points': activity}], tz, end=chart_end),
         'joins_chart': line_chart([
             {'label': 'Total joined', 'cls': 'total', 'points': joins, 'cumulative': True},
             {'label': 'Joined in that time', 'cls': 'new', 'points': joins},
-        ], tz),
+        ], tz, end=chart_end),
     }
 
 
@@ -175,12 +182,13 @@ def app_usage(tz, days=30):
         'installs_chart': line_chart([
             {'label': 'Total installs', 'cls': 'total', 'points': series['install'], 'cumulative': True, 'base': installs_before},
             {'label': 'New installs', 'cls': 'new', 'points': series['install']},
-        ], tz),
+        ], tz, end=timezone.now()),
         'joins_chart': line_chart([
             {'label': 'Total joins', 'cls': 'total', 'points': series['join'], 'cumulative': True, 'base': joins_before},
             {'label': 'Joins in that time', 'cls': 'new', 'points': series['join']},
-        ], tz),
-        'activity_chart': line_chart([{'label': 'Interactions', 'cls': 'new', 'points': series['activity']}], tz),
+        ], tz, end=timezone.now()),
+        'activity_chart': line_chart([{'label': 'Interactions', 'cls': 'new', 'points': series['activity']}], tz,
+                                     end=timezone.now()),
         'events': event_rows,
         'versions': list(versions[:40]),
     }

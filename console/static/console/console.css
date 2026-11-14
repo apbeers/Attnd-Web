@@ -217,3 +217,9 @@ input[type=file].form-control { padding: .35rem; }
 .place-autocomplete-target { font-size: .85rem; color: var(--muted); }
 .task-tray[hidden] { display: none; }
 .live-phone img { display: block; margin: 0 auto; }
+.nav-events { color: var(--text); font-weight: 600; text-decoration: none; }
+.nav-events.active, .nav-events:hover { color: var(--primary); }
+.back-link { display: inline-block; margin-bottom: .35rem; color: var(--muted); text-decoration: none; }
+.back-link:hover { color: var(--primary); }
+.line-chart line[class^="dot-"] { stroke-width: 7; stroke-linecap: round; }
+.line-chart .dot-new { stroke: var(--primary-mid); } .line-chart .dot-total { stroke: var(--primary); }

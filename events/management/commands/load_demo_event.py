@@ -82,7 +82,7 @@ class Command(BaseCommand):
 
         start = (now - timedelta(hours=6)).replace(minute=0, second=0, microsecond=0)
         fields = dict(
-            name='Fort Worth Food & Music Festival', user=owner_user,
+            name='Demo: Fort Worth Food & Music Festival', user=owner_user,
             description='Three days of Texas food, live music and local makers along the Trinity River. '
                         'Free entry; food and drink tickets at the gate.',
             address='Panther Island, Fort Worth, TX 76102', latitude=CENTER[0], longitude=CENTER[1],
