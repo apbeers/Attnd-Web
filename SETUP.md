@@ -11,9 +11,8 @@ Do these steps once, in order. Each step says which values go where.
 
 1. In **Attnd-iOS** and **Attnd-Android**, set the default branch to `main`: Settings → General → Default branch → switch icon → `main`. Attnd-Web is already on `main`.
 2. Optional cleanup:
-   - **Attnd-Android:** you can delete `master`, a single 2021 commit that was archived first as the tag `archive/android-master-2021`.
-   - **Attnd-Web:** `master` is an old side line that is not part of `main`. Glance at it before deleting.
-   - Web's old 2021 `develop` was replaced by the current code. It's saved as the tag `archive/web-develop-2021`.
+   - **Attnd-Android:** `master` is a single 2021 "initial commit" and can be deleted. The real code now lives on `main` and `develop`.
+   - **Attnd-Web:** `master` is an old side line that is not part of `main`. Glance at it before deleting. Web's old 2021 `develop` history is still reachable, because it was merged into the new `develop` without its content.
 3. In each of the three repos, create two environments under Settings → Environments: **`dev`** and **`production`**. On `production` you can also add yourself as a required reviewer if you want a one-tap approval before each production deploy.
 
 ## 1. Rotate the leaked API key (2 min) — required
