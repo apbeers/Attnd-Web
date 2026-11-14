@@ -9,13 +9,19 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, `CONTACT_EMAIL`, Scheduler jobs and GitHub deploy settings. ✅ Stack heroku-26 and Python 3.15. **Still to do:** check Postgres and upgrade to 18 (commands under "Keeping Heroku current"), and add Cloudinary on both apps so uploads survive restarts. |
-| 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ✅ 3b: `ASC_ISSUER_ID` re-set; CI signs, uploads and reaches TestFlight (iOS run 100). ❌ **3d: CI signing certificate**: Apple's certificate limit is full (iOS run 101); revoke the "Created via API" certificates and store one certificate (step 3d). |
+| 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ✅ 3b: `ASC_ISSUER_ID` re-set; CI signs, uploads and reaches TestFlight (iOS run 100). ⬜ **3e: CI signing certificate (owner, on the Mac — reminder pending)**: until it's stored, CI revokes and re-creates a "Created via API" certificate on every iOS build (works, but noisy). Nov 14: certificate created in Xcode (expires Nov 14, 2027); export stopped because .p12 was greyed out — see the Keychain tip in step 3e. |
 | 4. Google / Android | ⬜ 4e: exclude tablets in Play Console. ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⏳ ✅ **Web dev** deploys from `develop`. ✅ **Android** publishes to Play internal testing. ✅ **iOS** builds reach TestFlight, and on Nov 14 a real iPhone passed App Attest against dev and joined an event (lookup, join, bundle, 304s). Waiting on: the first release to `main`. |
 | 11. Email | ⏳ ✅ Mailgun Starter (free) add-ons on attnd-web (`mailgun-spherical-62131`) and attnd-dev (`mailgun-silhouetted-37822`; separate account, Mailgun can't be shared between apps; dev stays on its sandbox, which only mails authorized recipients). ✅ `mg.attnd.app` added (tracking off), Namecheap SPF/DKIM/DMARC added, **verified** by Mailgun. ✅ SMTP credentials (`postmaster@…`) set on both apps as `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD` + `DEFAULT_FROM_EMAIL`; dev `SITE_URL` set. ✅ Code: TLS, from address, per-site links, allow-list, password reset. ✅ `ADMIN_EMAILS` (both apps) and dev `EMAIL_ALLOWED_RECIPIENTS` = the owner's address; owner authorized on dev's sandbox; Nov 14 dev test emails (plain + `--admins`) **delivered** to iCloud. ✅ MX records for `mg` added; production-domain test from `noreply@mg.attnd.app` **delivered** to iCloud (Nov 14). ⬜ The production app itself sends once develop is released to main. |
 | 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then set up two-factor sign-in at the first admin sign-in (dev, then production) and save the recovery codes. |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
+
+**Open owner tasks (remind the owner at the start of each working session until done):**
+- [ ] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets).
+- [ ] Database backups: `heroku pg:backups:schedule DATABASE_URL --at '03:00 America/Chicago' -a attnd-web` (and `-a attnd-dev`), then `heroku pg:backups:capture -a attnd-web`.
+- [ ] Protect `main` in all three repos (GitHub ruleset blocking force-push and deletion; command in the chat log of Nov 14 / ask Claude).
+- [ ] Sign in to the dev console and enroll two-factor (staff accounts must, step 12).
 
 Notes:
 - If the Heroku CLI says an update is available, run `heroku update` first. It's optional.
@@ -217,12 +223,13 @@ The new release also changes behaviour reviewers and users will notice:
   - **Users can request data deletion:** Yes, through the contact on the privacy page.
 - Optional: refresh the App Store screenshots and description to show the new layouts and push updates. Set the release notes with `gh variable set WHATS_NEW -e production -b "…" -R apbeers/Attnd-iOS` (Android: `RELEASE_NOTES` on Attnd-Android).
 
-### 3d. Signing certificate for CI (one-time, renew yearly)
+### 3e. Signing certificate for CI (one-time, renew yearly)
 Each CI run on a fresh Mac used to create a new "Created via API" Apple Development certificate, and Apple's limit filled up (iOS run 101 failed with "maximum number of certificates"). CI now reuses one stored certificate.
 
 1. Free the slots: [developer.apple.com → Certificates](https://developer.apple.com/account/resources/certificates/list), revoke every **Apple Development** certificate named **"Created via API"**. This doesn't affect shipped apps or TestFlight builds.
 2. Create one certificate: Xcode → Settings → Accounts → your team → **Manage Certificates…** → **+** → **Apple Development**.
 3. Export it: Keychain Access → My Certificates → the new "Apple Development: …" certificate (with its private key) → right-click → **Export…** → save as `attnd-dev.p12` with a strong password. Save the `.p12` and password in the password manager.
+   - **If `.p12` is greyed out** you exported from *All Items*/*Certificates*, where the certificate and its key are separate rows. Use the **My Certificates** tab (login keychain), or in All Items ⌘-click the certificate *and* the key row under it, then **Export 2 items…**. If the certificate isn't in My Certificates at all, its private key isn't on this Mac: create a new one in Xcode.
 4. Add both to GitHub (the second command asks for the password):
    ```
    base64 -i attnd-dev.p12 | gh secret set IOS_DEV_CERT_P12_BASE64 -R apbeers/Attnd-iOS
