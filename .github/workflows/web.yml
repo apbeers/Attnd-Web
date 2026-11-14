@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: dev
-      url: https://attnd-dev-7ab893f37020.herokuapp.com/
+      url: https://dev.attnd.app/
     steps:
       - uses: actions/checkout@v7
         with:
@@ -119,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      ATTND_IT_SERVER: attnd-dev-7ab893f37020.herokuapp.com
+      ATTND_IT_SERVER: dev.attnd.app
       ATTND_IT_KEY: ${{ secrets.ATTND_DEV_API_KEY }}
     steps:
       - uses: actions/checkout@v7

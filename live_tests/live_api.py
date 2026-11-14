@@ -2,7 +2,7 @@
 
 Standard library only (urllib). Not collected by `manage.py test` (no __init__.py, files named live_*.py).
 
-    ATTND_IT_SERVER=attnd-dev-7ab893f37020.herokuapp.com ATTND_IT_KEY=<key> python3 live_tests/run.py
+    ATTND_IT_SERVER=dev.attnd.app ATTND_IT_KEY=<key> python3 live_tests/run.py
 
 ATTND_IT_SERVER is a host (or an https:// URL); ATTND_IT_KEY a bearer key the server accepts: the dev static key,
 or a production CI key (API-008: DEMO event only). Without both, every test is skipped.

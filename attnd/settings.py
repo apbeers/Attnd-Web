@@ -230,11 +230,11 @@ STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', '
 # (lookup, nearby, its bundle/join/leave/usage) and for `ci-…` device ids; usage they post is discarded.
 CI_API_KEYS = [k.strip() for k in os.getenv('CI_API_KEYS', '').split(',') if k.strip()]
 
-# Public base URL of this deployment, for links in emails (dev sets its herokuapp URL).
+# Public base URL of this deployment, for links in emails (dev: https://dev.attnd.app).
 SITE_URL = os.getenv('SITE_URL', 'https://attnd.app').rstrip('/')
 
 # Passkeys (WebAuthn, console.webauthn). A passkey belongs to one domain (the relying party ID): passkeys
-# made on the dev app (its herokuapp host) don't work on attnd.app and the other way round.
+# made on the dev app (dev.attnd.app) don't work on attnd.app and the other way round.
 # WEBAUTHN_RP_ID defaults to SITE_URL's host; WEBAUTHN_ORIGINS (comma-separated) to SITE_URL's origin, plus
 # http://localhost:8000 with DEBUG (pages served from localhost then use the RP ID "localhost"; WebAuthn
 # doesn't work on IP addresses such as 127.0.0.1).
@@ -245,8 +245,8 @@ WEBAUTHN_RP_ID = os.getenv('WEBAUTHN_RP_ID', '').strip().lower() or (_site.hostn
 WEBAUTHN_RP_NAME = os.getenv('WEBAUTHN_RP_NAME', 'Attnd')
 WEBAUTHN_ORIGINS = [o.strip().rstrip('/') for o in os.getenv('WEBAUTHN_ORIGINS', '').split(',') if o.strip()] or [
     f'{_site.scheme}://{_site.netloc}']
-# The site also answers at www.<host> (Heroku domain www.attnd.app); a passkey for the RP ID attnd.app works there too.
-if _site.hostname and not _site.hostname.startswith('www.') and '.' in _site.hostname and 'herokuapp' not in _site.hostname:
+# Production also answers at www.attnd.app (a Heroku domain); a passkey for the RP ID attnd.app works there too.
+if _site.hostname == 'attnd.app':
     WEBAUTHN_ORIGINS += [o for o in (f'{_site.scheme}://www.{_site.netloc}',) if o not in WEBAUTHN_ORIGINS]
 if DEBUG:
     WEBAUTHN_ORIGINS += [o for o in ('http://localhost:8000',) if o not in WEBAUTHN_ORIGINS]

@@ -45,7 +45,7 @@ Notes:
 
 Never keep keys only on your Mac. Once a key is in the password manager and wherever it's used, delete the downloaded file (`.p8`, `.jks`, `.json`).
 
-The Claude environment allows `api.heroku.com`, `attnd.app` and `attnd-dev-7ab893f37020.herokuapp.com`. To give Claude access to another API later, add its token there as a network secret. Claude asks for these through a secure form, never in chat.
+The Claude environment allows `api.heroku.com`, `attnd.app` and `dev.attnd.app`. To give Claude access to another API later, add its token there as a network secret. Claude asks for these through a secure form, never in chat.
 
 ---
 
@@ -95,7 +95,7 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
    That sets `CLOUDINARY_URL`, and the server switches to it automatically.
 
 ### Dev (`attnd-dev`) — created by Claude
-- ✅ App `attnd-dev` at `https://attnd-dev-7ab893f37020.herokuapp.com/`. Heroku now gives new apps a random hostname, so use this exact host wherever this guide says `ATTND_SERVER`.
+- ✅ App `attnd-dev` at **`https://dev.attnd.app/`** (custom domain, Nov 14, 2026: Namecheap CNAME `dev` → the app's herokudns target, Heroku ACM certificate; `SITE_URL=https://dev.attnd.app`). Use `dev.attnd.app` wherever this guide says `ATTND_SERVER`. The Heroku hostname `attnd-dev-7ab893f37020.herokuapp.com` still works, but nothing should depend on it: the custom domain survives replacing the Heroku app, so dev passkeys keep working.
 - ✅ Postgres (essential-0), Scheduler, and generated `SECRET_KEY`, `API_KEY` and `ATTESTATION_JWT_SECRET`.
 - ✅ The OpenAI and Places keys have been copied from production. For reference, the command was:
   ```bash
@@ -121,7 +121,7 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
   ```bash
   heroku pg:upgrade:run DATABASE_URL -a attnd-dev --confirm attnd-dev
   heroku pg:upgrade:wait DATABASE_URL -a attnd-dev
-  curl -s https://attnd-dev-7ab893f37020.herokuapp.com/health/
+  curl -s https://dev.attnd.app/health/
   ```
   ```bash
   heroku pg:backups:capture -a attnd-web
@@ -189,16 +189,16 @@ The App Clip (`com.arcu.Attnd.clip`) ships inside the app and now uses App Attes
 2. Set the pipeline variables:
    ```bash
    gh variable set TESTFLIGHT_GROUP -e dev -b "App Store Connect Users" -R apbeers/Attnd-iOS
-   gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-iOS
-   gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-Android
+   gh variable set ATTND_SERVER -e dev -b dev.attnd.app -R apbeers/Attnd-iOS
+   gh variable set ATTND_SERVER -e dev -b dev.attnd.app -R apbeers/Attnd-Android
    ```
 3. Add to GitHub:
 
 | Where | Name | Value |
 |---|---|---|
-| GH-ios env `dev` variable | `ATTND_SERVER` | `attnd-dev-7ab893f37020.herokuapp.com` |
+| GH-ios env `dev` variable | `ATTND_SERVER` | `dev.attnd.app` |
 | GH-ios env `dev` variable | `TESTFLIGHT_GROUP` | `App Store Connect Users` |
-| GH-ios secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev-7ab893f37020.herokuapp.com` | turns on the live API tests in CI |
+| GH-ios secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=dev.attnd.app` | turns on the live API tests in CI |
 | GH-ios env `production` variable (optional) | `WHATS_NEW` | release notes for the next App Store version |
 
 ### 3d. Before the first App Store release from CI
@@ -340,8 +340,8 @@ If it prints nothing useful, Spotlight didn't find the file. Run it from your At
 | GH-android secret | `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` | from `signing.properties` |
 | GH-android secret | `MAPS_API_KEY` | Maps key |
 | GH-android secret | `GOOGLE_SERVICES_JSON` | contents of `google-services.json` |
-| GH-android secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev-7ab893f37020.herokuapp.com` | turns on the live API tests in CI |
-| GH-android env `dev` variable | `ATTND_SERVER` | `attnd-dev-7ab893f37020.herokuapp.com` |
+| GH-android secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=dev.attnd.app` | turns on the live API tests in CI |
+| GH-android env `dev` variable | `ATTND_SERVER` | `dev.attnd.app` |
 | GH-android env `production` variable (optional) | `PLAY_ROLLOUT` | e.g. `0.2` for a 20% staged rollout (default: 100%) |
 | GH-android env `production` variable (optional) | `RELEASE_NOTES` | text shown in Play |
 
@@ -379,8 +379,8 @@ Limits to know about:
 
 | App | File (gitignored) | Contents |
 |---|---|---|
-| iOS | `Attnd-iOS/Config/Secrets.xcconfig` | `ATTND_API_KEY = <attnd-dev API_KEY>` and `ATTND_SERVER = attnd-dev-7ab893f37020.herokuapp.com` |
-| Android | `Attnd-Android/local.properties` | `ATTND_API_KEY=…`, `MAPS_API_KEY=…`, `ATTND_SERVER=attnd-dev-7ab893f37020.herokuapp.com` |
+| iOS | `Attnd-iOS/Config/Secrets.xcconfig` | `ATTND_API_KEY = <attnd-dev API_KEY>` and `ATTND_SERVER = dev.attnd.app` |
+| Android | `Attnd-Android/local.properties` | `ATTND_API_KEY=…`, `MAPS_API_KEY=…`, `ATTND_SERVER=dev.attnd.app` |
 | Web | your shell | `DEBUG=1 API_KEY=dev-key uv run python manage.py runserver` |
 
 **Web needs Docker** for its database: the local server and tests use PostgreSQL 18 (the same as Heroku and CI), started by a script. One-time install on your Mac, then start it:
@@ -448,7 +448,7 @@ Builds that still use the retired version are then shown the update screen.
 The console uses Google Maps for address suggestions and a draggable pin when `GOOGLE_MAPS_BROWSER_KEY` is set; without it, it keeps the plain address field and the OpenStreetMap pin map. This must be a **new browser key**, restricted to our sites: browser keys are visible to anyone, so never reuse the server or Android keys. Create it (Maps JavaScript API + Places API (New), referrer-restricted) and set it on dev:
 ```bash
 gcloud services enable maps-backend.googleapis.com places.googleapis.com --project attnd-df28e
-gcloud services api-keys create --project attnd-df28e --display-name "Attnd web (browser)" --allowed-referrers "https://attnd.app/*,https://attnd-dev-7ab893f37020.herokuapp.com/*" --api-target service=maps-backend.googleapis.com --api-target service=places.googleapis.com
+gcloud services api-keys create --project attnd-df28e --display-name "Attnd web (browser)" --allowed-referrers "https://attnd.app/*,https://dev.attnd.app/*" --api-target service=maps-backend.googleapis.com --api-target service=places.googleapis.com
 gcloud services api-keys list --project attnd-df28e --filter "displayName='Attnd web (browser)'" --format "value(name)"
 heroku config:set -a attnd-dev GOOGLE_MAPS_BROWSER_KEY="$(gcloud services api-keys get-key-string NAME_FROM_PREVIOUS_LINE --project attnd-df28e --format 'value(keyString)')"
 ```
@@ -535,7 +535,7 @@ The console and admin now have sign-in rate limits, two-factor sign-in for staff
    heroku config:set -a attnd-web ADMIN_URL_PATH=<something-private>/
    ```
 2. **Secure each admin account with a passkey (or an authenticator app).** Sign in with your password at `/accounts/login/` on dev (and on production after the release). You are sent to "Secure your admin account": choose **Add a passkey** (Face ID / Touch ID / your password manager), or scan the QR code with an authenticator app (iOS Passwords, 1Password, Google Authenticator …) and enter the code. Then **save the 10 recovery codes** in your password manager. Every staff/superuser account does this at its next sign-in. Afterwards "Sign in with a passkey" on the sign-in page (or the email field's autofill) signs you in with no password or code.
-   - **Passkeys are per domain.** A passkey made on the dev app (`attnd-dev-7ab893f37020.herokuapp.com`) only works there; production (`attnd.app`) needs its own, made after you sign in there. Your password manager will list two "Attnd" passkeys, one per domain. The domain comes from `SITE_URL` (dev already sets its herokuapp URL); `WEBAUTHN_RP_ID` overrides it. Don't change either on production later: existing passkeys would stop working (sign in with the password + authenticator/recovery code, then add a new passkey).
+   - **Passkeys are per domain.** A passkey made on the dev app (`dev.attnd.app`) only works there; production (`attnd.app`) needs its own, made after you sign in there. Your password manager will list two "Attnd" passkeys, one per domain. The domain comes from `SITE_URL` (dev sets `https://dev.attnd.app`); `WEBAUTHN_RP_ID` overrides it. Don't change either on production later: existing passkeys would stop working (sign in with the password + authenticator/recovery code, then add a new passkey).
    - Add a second passkey or the authenticator app as a backup from **Account** (`/console/account/`), so losing one device doesn't mean using recovery codes.
 3. **Locked out?** (lost passkeys/phone and recovery codes; removes every second factor):
    ```
@@ -588,14 +588,14 @@ gh variable set HEROKU_APP -e dev -b attnd-dev -R apbeers/Attnd-Web
 gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
 heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-iOS
 heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-Android
-gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-iOS
-gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-Android
+gh variable set ATTND_SERVER -e dev -b dev.attnd.app -R apbeers/Attnd-iOS
+gh variable set ATTND_SERVER -e dev -b dev.attnd.app -R apbeers/Attnd-Android
 gh variable set TESTFLIGHT_GROUP -e dev -b "App Store Connect Users" -R apbeers/Attnd-iOS
 ```
 
 **Optional:** run the live API tests against dev in CI:
 ```bash
-for r in Attnd-iOS Attnd-Android; do gh variable set LIVE_API_TESTS -b true -R apbeers/$r; gh variable set LIVE_API_SERVER -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/$r; done
+for r in Attnd-iOS Attnd-Android; do gh variable set LIVE_API_TESTS -b true -R apbeers/$r; gh variable set LIVE_API_SERVER -b dev.attnd.app -R apbeers/$r; done
 ```
 
 **Secrets that come from downloaded files.** Run each one from the folder the file is in, then delete the file:
@@ -705,7 +705,7 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
 - **Password manager:** required (attach the `.p8`).
 - **If leaked:** revoke it on the same page and create a new one.
 
-**`ATTND_SERVER`** (Attnd-iOS and Attnd-Android, `dev` environment variable): `attnd-dev-7ab893f37020.herokuapp.com`. On `production`, leave it unset; it defaults to `attnd.app`.
+**`ATTND_SERVER`** (Attnd-iOS and Attnd-Android, `dev` environment variable): `dev.attnd.app`. On `production`, leave it unset; it defaults to `attnd.app`.
 
 **`TESTFLIGHT_GROUP`** (Attnd-iOS, `dev` environment variable): `App Store Connect Users`. It has to match your TestFlight group's name exactly.
 
@@ -738,7 +738,7 @@ DEMO event and register `ci-` test devices.
 **`ATTND_DEV_API_KEY`** (Attnd-Web repo secret): the **dev** app's `API_KEY`, for the web repo's **Integration · dev** job
 (step 13). Same value as `ATTND_API_KEY` in the app repos.
 
-**`ATTND_API_KEY`** (Attnd-iOS and Attnd-Android repo secrets): the **dev** app's `API_KEY`, used only for the optional live API tests. **Replace the old value**, which is likely the leaked production key. To turn the live tests on, also add the repo variables `LIVE_API_TESTS=true` and `LIVE_API_SERVER=attnd-dev-7ab893f37020.herokuapp.com`.
+**`ATTND_API_KEY`** (Attnd-iOS and Attnd-Android repo secrets): the **dev** app's `API_KEY`, used only for the optional live API tests. **Replace the old value**, which is likely the leaked production key. To turn the live tests on, also add the repo variables `LIVE_API_TESTS=true` and `LIVE_API_SERVER=dev.attnd.app`.
 
 ---
 

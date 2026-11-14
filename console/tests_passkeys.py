@@ -199,7 +199,7 @@ class WebAuthnVerificationTests(SimpleTestCase):
         cases = {
             'wrong origin': {'origin': 'https://evil.example'},
             'wrong challenge': {'challenge': new_challenge_b64()},
-            'credential of another rp': {'rp_id': 'attnd-dev-7ab893f37020.herokuapp.com'},
+            'credential of another rp': {'rp_id': 'dev.attnd.app'},
             'no user verification': {'flags': FLAG_UP},
         }
         for name, kwargs in cases.items():
@@ -379,7 +379,7 @@ class PasskeyFlowTests(TestCase):
         auth = self.enroll_passkey(self.staff)
         cases = {
             'wrong origin': {'origin': 'https://evil.example'},
-            'credential of another rp': {'rp_id': 'attnd-dev-7ab893f37020.herokuapp.com'},
+            'credential of another rp': {'rp_id': 'dev.attnd.app'},
             'no user verification': {'flags': FLAG_UP},
             'unknown credential': {'credential_id': os.urandom(32)},
             'no user handle': {'user_handle': None},
