@@ -117,7 +117,11 @@ gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
 1. ✅ Go to [developer.apple.com](https://developer.apple.com) → Certificates, IDs & Profiles → **Identifiers** → `com.arcu.Attnd`. Check that **Push Notifications**, **App Attest** and **Associated Domains** are enabled. All three are.
    - Push shows **"Certificates (0)"**. That's expected. Attnd sends pushes with a token-based APNs **key** (step 2), not certificates, so don't click **Configure**.
    - Leave **Broadcast Capability** unticked. It's for live-broadcast push channels, which Attnd doesn't use.
-2. Go to **Keys → +**, name the key "Attnd APNs", tick **Apple Push Notifications service (APNs)**, then download `AuthKey_XXXXXXXXXX.p8`. Apple only lets you download it once, so keep it safe.
+2. Go to **Keys → +**, name the key "Attnd APNs", tick **Apple Push Notifications service (APNs)**, and click **Configure**. Set:
+   - **Environment:** **Sandbox & Production**. This can't be changed after saving. TestFlight and App Store builds use Production; Sandbox is only for builds run from Xcode.
+   - **Key Restriction:** **Team Scoped (All Topics)**.
+
+   Save, then **Continue → Register → Download** `AuthKey_XXXXXXXXXX.p8`. Apple only lets you download it once, so put it in your password manager right away. The **Key ID** is shown on the key's page.
 3. Set it on **both** Heroku apps:
    ```bash
    for app in attnd-web attnd-dev; do
