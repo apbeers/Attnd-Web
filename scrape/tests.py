@@ -1,69 +1,59 @@
 """
-Tests for the scrape app.
-
-httpx and openai are mocked — no real network calls.
+Tests for AI import / refresh. OpenAI, httpx and Google Places are mocked — no network calls.
 """
 
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.test import TestCase, Client
-
 from django.core.management import call_command
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone as django_timezone
 
-from events.models import Event, Location, ScheduledItem
-from django.contrib.auth.models import User
+from events.content import restore
+from events.models import Event, EventRevision, Location, ScheduledItem
+from scrape import diff, jobs
+from scrape.models import Change, ChangeSet, IngestJob
+from scrape.service import _model_kwargs, _normalize, scrape_event
 
 
 def _sample_data(**overrides):
-    """Return a fresh deep copy of sample extracted data, with optional overrides."""
     base = {
         "name": "Test County Fair",
         "description": "The best fair in the county.",
         "address": "123 Fair Ln, Testville, TX 75001",
         "latitude": 32.7767,
         "longitude": -96.7970,
-        "start_time": "2026-07-04T18:00:00+00:00",
+        "timezone": "America/Chicago",
+        "start_time": "2026-07-04T18:00:00",
+        "end_time": "2026-07-04T23:00:00",
         "locations": [
-            {
-                "name": "Main Stage",
-                "snippet": "Live music all day long.",
-                "description": "The main performance area with seating for 500.",
-                "website": "https://example.com/stage",
-                "image_url": "https://example.com/stage.jpg",
-                "address": "123 Fair Ln, Testville, TX 75001",
-                "latitude": 32.7768,
-                "longitude": -96.7971,
-                "scheduled_items": [
-                    {
-                        "name": "Opening Act",
-                        "description": "Kick off the fair with live music.",
-                        "start_time": "2026-07-04T18:00:00+00:00",
-                    }
-                ],
-            },
-            {
-                "name": "Food Court",
-                "snippet": "All your favourite fair foods.",
-                "description": "Over 30 food vendors serving local favourites.",
-                "website": None,
-                "image_url": None,
-                "address": "124 Fair Ln, Testville, TX 75001",
-                "latitude": 32.7769,
-                "longitude": -96.7972,
-                "scheduled_items": [],
-            },
+            {"existing_id": None, "name": "Main Stage", "snippet": "Live music all day long.",
+             "description": "The main performance area.", "category": "Stage",
+             "website": "https://example.com/stage", "image_url": "https://example.com/stage.jpg",
+             "address": "123 Fair Ln", "latitude": 32.7768, "longitude": -96.7971},
+            {"existing_id": None, "name": "Food Court", "snippet": "All your favourite fair foods.",
+             "description": "Over 30 vendors.", "category": "Food", "website": None, "image_url": None,
+             "address": "", "latitude": None, "longitude": None},
         ],
+        "schedule": [
+            {"existing_id": None, "name": "Opening Act", "description": "Kick off the fair.",
+             "start_time": "2026-07-04T18:00:00", "end_time": "2026-07-04T19:00:00",
+             "location_name": "Main Stage", "tags": ["Music"]},
+            {"existing_id": None, "name": "Welcome", "description": "",
+             "start_time": "2026-07-04T17:30:00", "end_time": None, "location_name": None, "tags": []},
+        ],
+        "removed_location_ids": [],
+        "removed_item_ids": [],
+        "notes": "",
     }
     base.update(overrides)
     return base
 
 
 def _mock_openai_response(data: dict):
-    """Return a mock openai ChatCompletion response that yields data as JSON."""
     choice = MagicMock()
     choice.message.content = json.dumps(data)
     resp = MagicMock()
@@ -71,217 +61,360 @@ def _mock_openai_response(data: dict):
     return resp
 
 
-class ScrapeViewTests(TestCase):
+class RunJobsInline:
+    """Mixin: run queued jobs synchronously when the transaction commits."""
+
+    def run_queued(self, fn, *args, **kwargs):
+        with patch("scrape.jobs._start_background", side_effect=lambda jid: jobs.run_job(jid)):
+            with self.captureOnCommitCallbacks(execute=True):
+                return fn(*args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Public trial endpoints
+# ---------------------------------------------------------------------------
+
+class TrialImportTests(RunJobsInline, TestCase):
     def setUp(self):
         self.client = Client()
-        self.url = "/scrape/"
-        # Rate limit uses Django's cache — clear it so tests don't bleed into each other.
         cache.clear()
 
     def _post(self, payload):
-        resp = self.client.post(
-            self.url,
-            data=json.dumps(payload),
-            content_type="application/json",
-            secure=True,
-        )
-        # StreamingHttpResponse has no .content — consume the generator so DB writes
-        # happen synchronously and resp.json() works in tests.
-        if hasattr(resp, 'streaming_content'):
-            raw = b"".join(resp.streaming_content)
-            resp._streamed_body = raw
-            resp.status_code = resp.status_code  # already set
-            # Provide .json() compatible with how tests use it
-            resp.json = lambda: json.loads(raw.strip())
-        return resp
+        return self.client.post("/scrape/", data=json.dumps(payload), content_type="application/json", secure=True)
 
-    def _patch_service(self, return_value=None, side_effect=None):
-        """Patch scrape_event at the view import level."""
-        kwargs = {}
-        if side_effect:
-            kwargs["side_effect"] = side_effect
-        else:
-            kwargs["return_value"] = return_value if return_value is not None else _sample_data()
-        return patch("scrape.views.scrape_event", **kwargs)
-
-    # ------------------------------------------------------------------ tests
+    def _post_and_run(self, payload, data=None, side_effect=None):
+        kwargs = {"side_effect": side_effect} if side_effect else {"return_value": data or _sample_data()}
+        with patch("scrape.jobs.scrape_event", **kwargs):
+            return self.run_queued(self._post, payload)
 
     def test_missing_url_returns_400(self):
-        resp = self._post({})
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("error", resp.json())
+        self.assertEqual(self._post({"url": ""}).status_code, 400)
 
     def test_invalid_scheme_returns_400(self):
-        resp = self._post({"url": "ftp://example.com"})
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(self._post({"url": "ftp://x"}).status_code, 400)
 
     def test_invalid_json_body_returns_400(self):
-        resp = self.client.post(self.url, data="not json", content_type="application/json", secure=True)
+        resp = self.client.post("/scrape/", data="nope", content_type="application/json", secure=True)
         self.assertEqual(resp.status_code, 400)
 
-    def test_happy_path_creates_event_and_locations(self):
-        with self._patch_service():
-            resp = self._post({"url": "https://example.com"})
-
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertIn("event_code", data)
-        self.assertEqual(data["location_count"], 2)
-
-        event = Event.objects.get(event_code=data["event_code"])
-        self.assertEqual(event.name, "Test County Fair")
+    def test_happy_path_creates_unlisted_published_trial_event(self):
+        resp = self._post_and_run({"url": "https://example.com", "timezone": "America/Chicago"})
+        self.assertEqual(resp.status_code, 202)
+        job = IngestJob.objects.get(pk=resp.json()["job_id"])
+        self.assertEqual(job.status, IngestJob.DONE)
+        event = job.event
         self.assertEqual(event.user.username, "trialuser")
+        self.assertEqual(event.status, Event.STATUS_PUBLISHED)
+        self.assertFalse(event.public)
         self.assertFalse(event.paid)
-        self.assertTrue(event.public)  # trial events are public so users can test the app
-        self.assertEqual(Location.objects.filter(event=event).count(), 2)
+        self.assertEqual(event.timezone, "America/Chicago")
+        self.assertEqual(event.location_set.count(), 2)
+        self.assertEqual(event.scheduleditem_set.count(), 2)
+        self.assertEqual(EventRevision.objects.filter(event=event).count(), 1)
 
-    def test_trialuser_created_with_unusable_password(self):
-        with self._patch_service():
-            self._post({"url": "https://example.com"})
+    def test_naive_times_are_event_local(self):
+        resp = self._post_and_run({"url": "https://example.com", "timezone": "UTC"})
+        event = IngestJob.objects.get(pk=resp.json()["job_id"]).event
+        # 18:00 in Chicago (CDT, UTC-5) == 23:00 UTC
+        self.assertEqual(event.start_time.astimezone(django_timezone.UTC).hour, 23)
 
-        user = User.objects.get(username="trialuser")
-        self.assertFalse(user.has_usable_password())
+    def test_unknown_coordinates_stay_null(self):
+        resp = self._post_and_run({"url": "https://example.com"})
+        event = IngestJob.objects.get(pk=resp.json()["job_id"]).event
+        food = event.location_set.get(name="Food Court")
+        self.assertIsNone(food.latitude)
 
-    def test_scrape_value_error_returns_error_body(self):
-        with self._patch_service(side_effect=ValueError("No content found.")):
-            resp = self._post({"url": "https://example.com"})
+    def test_item_without_location_is_kept(self):
+        resp = self._post_and_run({"url": "https://example.com"})
+        event = IngestJob.objects.get(pk=resp.json()["job_id"]).event
+        self.assertIsNone(event.scheduleditem_set.get(name="Welcome").location)
+        self.assertEqual(event.scheduleditem_set.get(name="Opening Act").location.name, "Main Stage")
 
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("No content found", resp.json()["error"])
+    def test_status_endpoint_returns_result(self):
+        resp = self._post_and_run({"url": "https://example.com"})
+        status = self.client.get(resp.json()["status_url"], secure=True).json()
+        self.assertEqual(status["status"], "done")
+        self.assertEqual(status["event_name"], "Test County Fair")
+        self.assertEqual(status["location_count"], 2)
+        self.assertTrue(status["qr_code"].startswith("data:image/png;base64,"))
+        self.assertIn(status["event_code"], status["join_url"])
+        self.assertIn("claim=", status["claim_url"])
 
-    def test_scrape_unexpected_error_returns_error_body(self):
-        with self._patch_service(side_effect=RuntimeError("boom")):
-            resp = self._post({"url": "https://example.com"})
+    def test_missing_start_time_falls_back_to_first_item_and_notes_it(self):
+        resp = self._post_and_run({"url": "https://example.com"}, data=_sample_data(start_time=None))
+        job = IngestJob.objects.get(pk=resp.json()["job_id"])
+        self.assertIn("start time", job.result["notes"])
+        self.assertEqual(job.event.start_time, job.event.scheduleditem_set.order_by("start_time").first().start_time)
 
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("error", resp.json())
+    def test_value_error_marks_job_failed(self):
+        resp = self._post_and_run({"url": "https://example.com"}, side_effect=ValueError("No content found."))
+        status = self.client.get(resp.json()["status_url"], secure=True).json()
+        self.assertEqual(status["status"], "failed")
+        self.assertIn("No content", status["error"])
 
-    def test_event_code_is_unique(self):
-        """Two requests produce two different event codes."""
-        with self._patch_service(return_value=_sample_data(name="Fair One")):
-            r1 = self._post({"url": "https://example.com"})
-
-        with self._patch_service(return_value=_sample_data(name="Fair Two")):
-            r2 = self._post({"url": "https://other.com"})
-
-        self.assertEqual(r1.status_code, 200)
-        self.assertEqual(r2.status_code, 200)
-        self.assertNotEqual(r1.json()["event_code"], r2.json()["event_code"])
-
-    def test_null_start_time_uses_default(self):
-        with self._patch_service(return_value=_sample_data(start_time=None)):
-            resp = self._post({"url": "https://example.com"})
-
-        self.assertEqual(resp.status_code, 200)
-        event = Event.objects.get(event_code=resp.json()["event_code"])
-        # Should be roughly 30 days in the future
-        delta = event.start_time - datetime.now(timezone.utc)
-        self.assertGreater(delta.days, 25)
-
-    def test_naive_start_time_made_aware_with_user_timezone(self):
-        """A naive start_time string is interpreted in the user's local timezone."""
-        data = _sample_data(start_time="2026-07-04T18:00:00")  # no tz offset
-        with self._patch_service(return_value=data):
-            resp = self._post({"url": "https://example.com", "timezone": "America/Chicago"})
-
-        self.assertEqual(resp.status_code, 200)
-        event = Event.objects.get(event_code=resp.json()["event_code"])
-        # America/Chicago is UTC-5 in July (CDT), so 18:00 local = 23:00 UTC
-        self.assertIsNotNone(event.start_time.tzinfo)
-        self.assertEqual(event.start_time.hour, 23)  # 18:00 CDT = 23:00 UTC
+    def test_unexpected_error_marks_job_failed(self):
+        resp = self._post_and_run({"url": "https://example.com"}, side_effect=RuntimeError("boom"))
+        job = IngestJob.objects.get(pk=resp.json()["job_id"])
+        self.assertEqual(job.status, IngestJob.FAILED)
 
     def test_rate_limit(self):
-        """After 5 requests from the same IP, the 6th is rejected."""
-        # Use distinct names to avoid the Event.name unique constraint.
-        for i in range(5):
-            with self._patch_service(return_value=_sample_data(name=f"Rate Limit Fair {i}")):
-                resp = self._post({"url": "https://example.com"})
-            self.assertNotEqual(resp.status_code, 429, f"Request {i+1} was unexpectedly rate-limited")
-
-        # 6th request — rate limiter fires before scrape_event is even called
-        resp = self._post({"url": "https://example.com"})
-        self.assertEqual(resp.status_code, 429)
-
-    def test_happy_path_response_fields(self):
-        """Response must include event_code, event_name, location_count, qr_code, join_url."""
-        with self._patch_service():
-            resp = self._post({"url": "https://example.com"})
-
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        for field in ("event_code", "event_name", "location_count", "qr_code", "join_url"):
-            self.assertIn(field, data, f"Missing field: {field}")
-        self.assertTrue(data["qr_code"].startswith("data:image/png;base64,"))
-        self.assertIn("/join/", data["join_url"])
-
-    def test_happy_path_creates_scheduled_items(self):
-        """Scheduled items nested inside a location are created in the DB."""
-        with self._patch_service():
-            resp = self._post({"url": "https://example.com"})
-
-        self.assertEqual(resp.status_code, 200)
-        event = Event.objects.get(event_code=resp.json()["event_code"])
-        # Sample data has 1 scheduled item on Main Stage
-        self.assertEqual(ScheduledItem.objects.filter(event=event).count(), 1)
-        item = ScheduledItem.objects.filter(event=event).first()
-        self.assertEqual(item.name, "Opening Act")
-
-    def test_location_image_url_stored(self):
-        """image_url from scraped data is persisted on the Location record."""
-        with self._patch_service():
-            resp = self._post({"url": "https://example.com"})
-
-        event = Event.objects.get(event_code=resp.json()["event_code"])
-        stage = Location.objects.get(event=event, name="Main Stage")
-        self.assertEqual(stage.image_url, "https://example.com/stage.jpg")
-
-    def test_location_with_null_image_url(self):
-        """A location without an image_url stores None gracefully."""
-        with self._patch_service():
-            resp = self._post({"url": "https://example.com"})
-
-        event = Event.objects.get(event_code=resp.json()["event_code"])
-        court = Location.objects.get(event=event, name="Food Court")
-        self.assertIsNone(court.image_url)
+        with patch("scrape.jobs._start_background"):
+            for _ in range(5):
+                self.assertEqual(self._post({"url": "https://example.com"}).status_code, 202)
+            self.assertEqual(self._post({"url": "https://example.com"}).status_code, 429)
 
 
-class ScrapeServiceTests(TestCase):
-    """Unit tests for service.py internals (crawl + extract)."""
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
 
-    @patch("scrape.service._crawl", return_value="## Source: https://example.com\n\n# Test Event\n\nSome content.")
+class ServiceTests(TestCase):
+    @patch("scrape.service._crawl", return_value="Some event page text")
     @patch("scrape.service.OpenAI")
-    def test_scrape_event_returns_dict(self, mock_openai_cls, mock_crawl):
-        data = _sample_data()
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(data)
-        mock_openai_cls.return_value = mock_client
+    def test_scrape_event_returns_normalized_dict(self, mock_openai_cls, _crawl):
+        mock_openai_cls.return_value.chat.completions.create.return_value = _mock_openai_response(_sample_data())
+        data = scrape_event("https://example.com")
+        self.assertEqual(data["name"], "Test County Fair")
+        self.assertEqual(len(data["schedule"]), 2)
 
-        from scrape.service import scrape_event
-        result = scrape_event("https://example.com")
+    @patch("scrape.service._crawl", return_value="text")
+    @patch("scrape.service.OpenAI")
+    def test_refresh_sends_current_state(self, mock_openai_cls, _crawl):
+        create = mock_openai_cls.return_value.chat.completions.create
+        create.return_value = _mock_openai_response(_sample_data())
+        scrape_event(urls=["https://example.com"], current={"event": {"name": "X"}, "locations": [], "schedule": []})
+        messages = create.call_args.kwargs["messages"]
+        self.assertIn("REFRESHING", messages[0]["content"])
+        self.assertIn("CURRENT DATA", messages[1]["content"][0]["text"])
 
-        self.assertEqual(result["name"], "Test County Fair")
-        self.assertEqual(len(result["locations"]), 2)
+    @patch("scrape.service.OpenAI")
+    def test_attachments_are_sent_as_image_and_file_parts(self, mock_openai_cls):
+        create = mock_openai_cls.return_value.chat.completions.create
+        create.return_value = _mock_openai_response(_sample_data())
+        scrape_event(attachments=[{"name": "a.png", "mime": "image/png", "data": b"x"},
+                                  {"name": "b.pdf", "mime": "application/pdf", "data": b"y"}])
+        types = [p["type"] for p in create.call_args.kwargs["messages"][1]["content"]]
+        self.assertEqual(types, ["image_url", "file"])
 
     @patch("scrape.service._crawl", return_value="")
-    def test_empty_crawl_raises_value_error(self, mock_crawl):
-        from scrape.service import scrape_event
-        with self.assertRaises(ValueError):
-            scrape_event("https://empty.com")
-
-    @patch("scrape.service._crawl", return_value="## Source: https://example.com\n\nSome content.")
-    @patch("scrape.service.OpenAI")
-    def test_bad_openai_json_raises_value_error(self, mock_openai_cls, mock_crawl):
-        mock_client = MagicMock()
-        bad_choice = MagicMock()
-        bad_choice.message.content = "not valid json {{{"
-        bad_resp = MagicMock()
-        bad_resp.choices = [bad_choice]
-        mock_client.chat.completions.create.return_value = bad_resp
-        mock_openai_cls.return_value = mock_client
-
-        from scrape.service import scrape_event
+    def test_empty_crawl_raises_value_error(self, _crawl):
         with self.assertRaises(ValueError):
             scrape_event("https://example.com")
+
+    @patch("scrape.service._crawl", return_value="text")
+    @patch("scrape.service.OpenAI")
+    def test_bad_openai_json_raises_value_error(self, mock_openai_cls, _crawl):
+        choice = MagicMock()
+        choice.message.content = "not json"
+        mock_openai_cls.return_value.chat.completions.create.return_value = MagicMock(choices=[choice])
+        with self.assertRaises(ValueError):
+            scrape_event("https://example.com")
+
+    def test_normalize_accepts_legacy_nested_items_and_zero_coords(self):
+        data = _normalize({"name": "X", "latitude": 0, "longitude": 0, "locations": [
+            {"name": "Stage", "latitude": 0, "longitude": 0,
+             "scheduled_items": [{"name": "Act", "description": "", "start_time": ""}]}]})
+        self.assertIsNone(data["latitude"])
+        self.assertIsNone(data["locations"][0]["latitude"])
+        self.assertEqual(data["schedule"][0]["location_name"], "Stage")
+        self.assertIsNone(data["schedule"][0]["start_time"])
+
+    def test_model_kwargs(self):
+        self.assertEqual(_model_kwargs("gpt-5-mini"), {"reasoning_effort": "low"})
+        self.assertEqual(_model_kwargs("gpt-4o-mini"), {"temperature": 0})
+
+
+# ---------------------------------------------------------------------------
+# Diff / apply / rollback
+# ---------------------------------------------------------------------------
+
+class DiffTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("org", "org@example.com", "pw")
+        self.event, _ = diff.create_event_from_extraction(
+            _sample_data(), self.user, status=Event.STATUS_PUBLISHED, public=True)
+        self.stage = self.event.location_set.get(name="Main Stage")
+        self.food = self.event.location_set.get(name="Food Court")
+        self.act = self.event.scheduleditem_set.get(name="Opening Act")
+
+    def _refreshed(self, **overrides):
+        data = _sample_data(**overrides)
+        for loc in data["locations"]:
+            loc["existing_id"] = {"Main Stage": self.stage.id, "Food Court": self.food.id}.get(loc["name"])
+        return data
+
+    def test_identical_extraction_produces_no_changes(self):
+        self.assertEqual(diff.compute_changes(self.event, self._refreshed()), [])
+
+    def test_time_change_is_proposed_and_not_minor(self):
+        data = self._refreshed()
+        data["schedule"][0]["existing_id"] = self.act.id
+        data["schedule"][0]["start_time"] = "2026-07-04T18:30:00"
+        changes = diff.compute_changes(self.event, data)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["op"], "update")
+        self.assertIn("start_time", changes[0]["data"])
+        self.assertFalse(changes[0]["minor"])
+
+    def test_description_change_is_minor(self):
+        data = self._refreshed()
+        data["locations"][0]["description"] = "Now with more seating."
+        (change,) = diff.compute_changes(self.event, data)
+        self.assertTrue(change["minor"])
+
+    def test_empty_values_never_blank_existing_data(self):
+        data = self._refreshed()
+        data["locations"][0]["website"] = None
+        data["locations"][0]["description"] = ""
+        self.assertEqual(diff.compute_changes(self.event, data), [])
+
+    def test_locked_field_is_a_conflict(self):
+        self.stage.description = "Hand-written"
+        self.stage.locked_fields = ["description"]
+        self.stage.save()
+        (change,) = diff.compute_changes(self.event, self._refreshed())
+        self.assertEqual(change["conflict_fields"], ["description"])
+
+    def test_new_location_and_item_linked_by_ref(self):
+        data = self._refreshed()
+        data["locations"].append({"existing_id": None, "name": "Kids Zone", "snippet": "", "description": "",
+                                  "category": "Kids", "website": None, "image_url": None, "address": "",
+                                  "latitude": None, "longitude": None})
+        data["schedule"].append({"existing_id": None, "name": "Face painting", "description": "",
+                                 "start_time": "2026-07-04T19:00:00", "end_time": None,
+                                 "location_name": "Kids Zone", "tags": []})
+        changes = diff.compute_changes(self.event, data)
+        cs = diff.save_changeset(self.event, None, changes)
+        self.assertEqual(cs.summary, "1 new location, 1 new schedule item")
+        applied = diff.apply_changeset(cs, diff.default_decisions(cs), user=self.user)
+        self.assertEqual(applied, 2)
+        item = self.event.scheduleditem_set.get(name="Face painting")
+        self.assertEqual(item.location.name, "Kids Zone")
+        cs.refresh_from_db()
+        self.assertEqual(cs.status, ChangeSet.APPLIED)
+
+    def test_rejecting_new_location_leaves_item_unlinked(self):
+        data = self._refreshed()
+        data["locations"].append({"existing_id": None, "name": "Kids Zone", "snippet": "", "description": "",
+                                  "category": None, "website": None, "image_url": None, "address": "",
+                                  "latitude": None, "longitude": None})
+        data["schedule"].append({"existing_id": None, "name": "Face painting", "description": "",
+                                 "start_time": "2026-07-04T19:00:00", "end_time": None,
+                                 "location_name": "Kids Zone", "tags": []})
+        cs = diff.save_changeset(self.event, None, diff.compute_changes(self.event, data))
+        item_change = cs.changes.get(entity="item")
+        diff.apply_changeset(cs, {item_change.id: {"accept": True, "fields": None}})
+        self.assertIsNone(self.event.scheduleditem_set.get(name="Face painting").location)
+        self.assertFalse(self.event.location_set.filter(name="Kids Zone").exists())
+
+    def test_removal_requires_evidence_and_applies(self):
+        data = self._refreshed(removed_location_ids=[{"id": self.food.id, "reason": "Listed as cancelled"}])
+        data["locations"] = [data["locations"][0]]
+        changes = diff.compute_changes(self.event, data)
+        (change,) = changes
+        self.assertEqual(change["op"], "delete")
+        cs = diff.save_changeset(self.event, None, changes)
+        diff.apply_changeset(cs, diff.default_decisions(cs))
+        self.assertFalse(Location.objects.filter(pk=self.food.pk).exists())
+
+    def test_field_level_accept(self):
+        data = self._refreshed()
+        data["locations"][0]["description"] = "New description"
+        data["locations"][0]["snippet"] = "New snippet"
+        cs = diff.save_changeset(self.event, None, diff.compute_changes(self.event, data))
+        ch = cs.changes.get()
+        diff.apply_changeset(cs, {ch.id: {"accept": True, "fields": ["snippet"]}})
+        self.stage.refresh_from_db()
+        self.assertEqual(self.stage.snippet, "New snippet")
+        self.assertEqual(self.stage.description, "The main performance area.")
+
+    def test_apply_bumps_version_once_and_saves_revision(self):
+        before = self.event.content_version
+        data = self._refreshed()
+        data["locations"][0]["description"] = "A"
+        data["locations"][1]["description"] = "B"
+        cs = diff.save_changeset(self.event, None, diff.compute_changes(self.event, data))
+        diff.apply_changeset(cs, diff.default_decisions(cs))
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.content_version, before + 1)
+        self.assertEqual(self.event.revisions.count(), 2)
+
+    def test_restore_revision(self):
+        revision = self.event.revisions.get()
+        self.stage.delete()
+        self.event.scheduleditem_set.all().delete()
+        restore(revision)
+        self.assertEqual(self.event.location_set.count(), 2)
+        self.assertEqual(self.event.scheduleditem_set.count(), 2)
+        self.assertEqual(self.event.scheduleditem_set.get(name="Opening Act").location.name, "Main Stage")
+
+
+class RefreshJobTests(RunJobsInline, TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("org", "org@example.com", "pw")
+        self.event, _ = diff.create_event_from_extraction(
+            _sample_data(), self.user, status=Event.STATUS_PUBLISHED, public=True,
+            source_urls=["https://example.com"])
+        self.stage = self.event.location_set.get(name="Main Stage")
+
+    def _run_refresh(self, data):
+        job = IngestJob.objects.create(kind=IngestJob.KIND_REFRESH, event=self.event)
+        with patch("scrape.jobs.scrape_event", return_value=data):
+            self.run_queued(jobs.enqueue, job)
+        job.refresh_from_db()
+        return job
+
+    def test_refresh_creates_changeset(self):
+        data = _sample_data()
+        data["locations"][0]["existing_id"] = self.stage.id
+        data["locations"][0]["description"] = "Updated"
+        job = self._run_refresh(data)
+        self.assertEqual(job.status, IngestJob.DONE)
+        cs = ChangeSet.objects.get(pk=job.result["changeset_id"])
+        self.assertEqual(cs.status, ChangeSet.PENDING)
+        self.assertEqual(job.result["pending"], 1)
+
+    def test_auto_accept_minor(self):
+        self.event.auto_accept_minor = True
+        self.event.save()
+        data = _sample_data()
+        data["locations"][0]["existing_id"] = self.stage.id
+        data["locations"][0]["description"] = "Updated"
+        data["schedule"][0]["start_time"] = "2026-07-04T20:00:00"  # not minor → stays pending
+        job = self._run_refresh(data)
+        self.stage.refresh_from_db()
+        self.assertEqual(self.stage.description, "Updated")
+        self.assertEqual(job.result["auto_applied"], 1)
+        self.assertEqual(job.result["pending"], 1)
+
+    def test_refresh_without_sources_fails_cleanly(self):
+        self.event.source_urls = []
+        self.event.save()
+        job = IngestJob.objects.create(kind=IngestJob.KIND_REFRESH, event=self.event)
+        jobs.run_job(job.pk)
+        job.refresh_from_db()
+        self.assertEqual(job.status, IngestJob.FAILED)
+
+    def test_scheduled_refresh_queues_when_due(self):
+        Event.objects.filter(pk=self.event.pk).update(
+            refresh_schedule=Event.REFRESH_DAILY, last_refreshed_at=django_timezone.now() - timedelta(days=2),
+            start_time=django_timezone.now() + timedelta(days=3), end_time=None)
+        with patch("scrape.jobs._start_background"):
+            self.assertEqual(jobs.queue_scheduled_refreshes(), 1)
+            self.assertEqual(jobs.queue_scheduled_refreshes(), 0)  # already queued
+
+    def test_stale_jobs_are_requeued_then_failed(self):
+        job = IngestJob.objects.create(kind=IngestJob.KIND_REFRESH, event=self.event, status=IngestJob.RUNNING,
+                                       started_at=django_timezone.now() - timedelta(hours=1))
+        with patch("scrape.jobs._start_background"):
+            jobs.recover_stale()
+            job.refresh_from_db()
+            self.assertEqual(job.status, IngestJob.QUEUED)
+            IngestJob.objects.filter(pk=job.pk).update(status=IngestJob.RUNNING,
+                                                       started_at=django_timezone.now() - timedelta(hours=1))
+            jobs.recover_stale()
+            job.refresh_from_db()
+            self.assertEqual(job.status, IngestJob.FAILED)
 
 
 # ---------------------------------------------------------------------------

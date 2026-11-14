@@ -216,7 +216,8 @@
                         <div class="spinner-border text-primary mb-3" role="status" style="width:3rem;height:3rem;">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="text-muted">Scanning your event site… this usually takes 30–60 seconds.</p>
+                        <p class="text-muted mb-1">Scanning your event site… this usually takes 30–90 seconds.</p>
+                        <p class="text-muted small" id="scrape-progress"></p>
                     </div>
 
                     <!-- Success card (hidden by default) -->
@@ -296,27 +297,31 @@
         btn.disabled = true;
 
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutes
-
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-            const resp = await fetch('/scrape/', {
+            const start = await fetch('/scrape/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, timezone }),
-                signal: controller.signal,
             });
-            clearTimeout(timeoutId);
+            let data = await start.json().catch(() => ({ error: 'Unexpected response from server.' }));
 
-            // Response is streamed — read full text then parse.
-            // Leading newlines are keepalive bytes sent to prevent proxy timeouts.
-            const text = await resp.text();
-            let data;
-            try {
-                data = JSON.parse(text.trim());
-            } catch (_) {
-                throw new Error('Unexpected response from server.');
+            // The import runs in the background — poll until it finishes (up to ~5 minutes).
+            if (!data.error && data.status_url) {
+                const progressText = document.getElementById('scrape-progress');
+                const deadline = Date.now() + 5 * 60 * 1000;
+                while (true) {
+                    await new Promise(r => setTimeout(r, 2500));
+                    const resp = await fetch(data.status_url);
+                    const status = await resp.json();
+                    if (status.progress && progressText) progressText.textContent = status.progress;
+                    if (status.status === 'done') { data = status; break; }
+                    if (status.status === 'failed') { data = { error: status.error }; break; }
+                    if (Date.now() > deadline) {
+                        data = { error: 'This is taking longer than expected. Please try again in a moment.' };
+                        break;
+                    }
+                }
             }
 
             hide(loading);
@@ -328,7 +333,7 @@
                     ? '1 location'
                     : `${data.location_count} locations`;
                 resultSummary.textContent = `"${data.event_name}" — ${locText} imported.`;
-                claimBtn.href = `{% url 'console:signup' %}?claim=${encodeURIComponent(data.event_code)}`;
+                claimBtn.href = data.claim_url || `{% url 'console:signup' %}?claim=${encodeURIComponent(data.event_code)}`;
                 show(success);
             } else {
                 errorMsg.textContent = data.error || 'Something went wrong. Please try again.';
