@@ -62,7 +62,7 @@ jobs:
 
   deploy-dev:
     name: Deploy → Heroku dev
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
     needs: test
     runs-on: ubuntu-latest
     environment:
@@ -80,7 +80,7 @@ jobs:
 
   deploy-prod:
     name: Deploy → Heroku production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     environment:
