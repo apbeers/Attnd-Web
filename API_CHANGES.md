@@ -50,7 +50,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 
 | ID | Change | Type | Web | iOS | Android |
 |----|--------|------|-----|-----|---------|
-| API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | 🚧 dev (TestFlight) · ⬜ prod | ✅ dev · ⬜ prod |
+| API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | ✅ dev (TestFlight, App Attest verified on a real iPhone) · ⬜ prod | ✅ dev · ⬜ prod |
 | API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ⬜ prod | — | — |
 | API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ⬜ prod | ⬜ | ⬜ |
 | API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages | additive | ✅ dev · ⬜ prod | ⬜ | ⬜ |
