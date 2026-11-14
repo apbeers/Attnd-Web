@@ -368,11 +368,17 @@ class RefreshJobTests(RunJobsInline, TestCase):
         data = _sample_data()
         data["locations"][0]["existing_id"] = self.stage.id
         data["locations"][0]["description"] = "Updated"
+        Event.objects.filter(pk=self.event.pk).update(update_mode=Event.UPDATE_REVIEW)
+        self.event.refresh_from_db()
         job = self._run_refresh(data)
         self.assertEqual(job.status, IngestJob.DONE)
         cs = ChangeSet.objects.get(pk=job.result["changeset_id"])
         self.assertEqual(cs.status, ChangeSet.PENDING)
         self.assertEqual(job.result["pending"], 1)
+
+    def test_new_events_watch_and_apply_automatically_by_default(self):
+        event = Event.objects.create(name="New", event_code="DEFLT1", start_time=django_timezone.now(), user=self.event.user)
+        self.assertEqual((event.refresh_schedule, event.update_mode), (Event.REFRESH_WATCH, Event.UPDATE_AUTO))
 
     def test_auto_accept_minor(self):
         self.event.update_mode = Event.UPDATE_MINOR

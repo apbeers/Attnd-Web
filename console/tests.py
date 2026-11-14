@@ -451,3 +451,45 @@ class AccountPageTests(TestCase):
         boss = User.objects.get(email='boss@example.com')
         self.assertTrue(boss.is_superuser)
         self.assertNotIn('@', boss.username)
+
+
+class BackgroundTaskTests(ConsoleTests):
+    def test_refresh_in_the_background_returns_a_task_and_the_feed_lists_it(self):
+        from unittest.mock import patch
+        self.event.source_urls = ['https://example.com/']
+        self.event.save()
+        with patch('scrape.jobs._start_background'):
+            r = self.client.post(self.url('event_refresh'), {}, HTTP_ACCEPT='application/json')
+        self.assertEqual(r.status_code, 202)
+        task = r.json()['task']
+        self.assertEqual(task['status'], 'queued')
+        self.assertIn('Checking Art Walk', task['title'])
+        feed = self.client.get(reverse('console:tasks')).json()
+        self.assertEqual(feed['active'], 1)
+        self.assertEqual(feed['tasks'][0]['id'], task['id'])
+        # Other people don't see it.
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(reverse('console:tasks')).json()['tasks'], [])
+
+    def test_errors_come_back_as_json(self):
+        r = self.client.post(self.url('event_refresh'), {}, HTTP_ACCEPT='application/json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('source website', r.json()['error'])
+
+    def test_service_worker_and_manifest(self):
+        sw = self.client.get(reverse('console:service_worker'))
+        self.assertEqual(sw['Service-Worker-Allowed'], '/console/')
+        self.assertIn('application/javascript', sw['Content-Type'])
+        self.assertEqual(self.client.get(reverse('console:manifest')).json()['theme_color'], '#431f86')
+
+
+class LiveEditingTests(ConsoleTests):
+    def test_layout_autosaves_and_bumps_the_version_apps_poll(self):
+        before = self.event.content_version
+        r = self.client.post(self.url('display'), {'preset': 'festival', 'locations_style': 'list'},
+                             HTTP_ACCEPT='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()['saved'])
+        self.event.refresh_from_db()
+        self.assertGreater(self.event.content_version, before)
+        self.assertContains(self.client.get(self.url('display')), 'Live on your phone')

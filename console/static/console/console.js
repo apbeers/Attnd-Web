@@ -104,4 +104,135 @@
     window.addEventListener('resize', render);
     render();
   };
+
+  // ---------------------------------------------------------------------------
+  // Background tasks (AI imports and updates)
+  // Forms with data-background submit with fetch instead of navigating. The service worker (/console/sw.js)
+  // watches running tasks and sends updates here; without one, this page polls the same feed itself.
+  // A tray in the corner lists running and recently finished tasks.
+  // ---------------------------------------------------------------------------
+  const tray = document.getElementById('task-tray');
+  if (tray) {
+    const FEED = '/console/tasks/';
+    const buttonsByTask = {};   // task id -> the button that started it
+    let lastTasks = [];
+    let fallbackTimer = null;
+    const seenDone = new Set(JSON.parse(sessionStorage.getItem('attnd.tasksSeen') || '[]'));
+
+    const escapeHtml = (text) => String(text || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function render(tasks) {
+      lastTasks = tasks;
+      const active = tasks.filter((t) => t.status === 'queued' || t.status === 'running');
+      const toggle = tray.querySelector('.task-toggle');
+      const list = tray.querySelector('.task-list');
+      tray.hidden = tasks.length === 0;
+      toggle.querySelector('.task-count').textContent = active.length
+        ? `${active.length} running` : `${tasks.length} finished`;
+      toggle.classList.toggle('is-active', active.length > 0);
+      list.innerHTML = tasks.map((t) => {
+        const running = t.status === 'queued' || t.status === 'running';
+        const status = running ? `<span class="spinner"></span>${escapeHtml(t.progress || 'Working…')}`
+          : t.status === 'failed' ? `<span class="text-danger">${escapeHtml(t.error || 'Failed')}</span>`
+          : escapeHtml(t.summary || 'Done');
+        const link = !running && t.url ? `<a href="${escapeHtml(t.url)}">Open</a>` : '';
+        return `<li class="task-item task-${t.status}"><div class="task-title">${escapeHtml(t.title)}</div>
+                <div class="task-status">${status} ${link}</div></li>`;
+      }).join('');
+      tasks.forEach((t) => {
+        const button = buttonsByTask[t.id];
+        if (button && t.status !== 'queued' && t.status !== 'running') {
+          setBusy(button, false);
+          const note = button.parentElement.querySelector('.task-inline-result') || document.createElement('span');
+          note.className = 'task-inline-result small ms-2';
+          note.innerHTML = t.status === 'failed' ? `<span class="text-danger">${escapeHtml(t.error)}</span>`
+            : `${escapeHtml(t.summary)}${t.url ? ` · <a href="${escapeHtml(t.url)}">view</a>` : ''}`;
+          button.after(note);
+          delete buttonsByTask[t.id];
+        }
+        if ((t.status === 'done' || t.status === 'failed') && !seenDone.has(t.id) && tray.dataset.ready) {
+          seenDone.add(t.id);
+          sessionStorage.setItem('attnd.tasksSeen', JSON.stringify([...seenDone].slice(-50)));
+          toast(t);
+        } else if (t.status === 'done' || t.status === 'failed') {
+          seenDone.add(t.id);
+        }
+      });
+      tray.dataset.ready = '1';
+      if (!active.length && fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null; }
+    }
+
+    function toast(t) {
+      const el = document.createElement('div');
+      el.className = 'task-toast' + (t.status === 'failed' ? ' is-failed' : '');
+      el.innerHTML = `<strong>${escapeHtml(t.title)}</strong><div>${escapeHtml(t.status === 'failed' ? t.error : t.summary)}</div>
+        ${t.url ? `<a href="${escapeHtml(t.url)}">Open</a>` : ''}`;
+      document.body.appendChild(el);
+      setTimeout(() => el.classList.add('is-leaving'), 7000);
+      setTimeout(() => el.remove(), 7600);
+    }
+
+    function setBusy(button, busy, label) {
+      if (busy) {
+        button.dataset.label = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = `<span class="spinner"></span> ${escapeHtml(label || 'Working…')}`;
+      } else if (button.dataset.label) {
+        button.disabled = false;
+        button.innerHTML = button.dataset.label;
+      }
+    }
+
+    async function poll() {
+      try {
+        const response = await fetch(FEED, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        if (response.ok) render((await response.json()).tasks);
+      } catch (e) { /* offline: try again next tick */ }
+    }
+
+    function watch() {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'watch' });
+      } else if (!fallbackTimer) {
+        fallbackTimer = setInterval(poll, 2500);
+      }
+      poll();
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/console/sw.js', { scope: '/console/' }).catch(() => {});
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'tasks') render(e.data.tasks);
+      });
+    }
+    tray.querySelector('.task-toggle').addEventListener('click', () => tray.classList.toggle('is-open'));
+    poll().then(() => { if (lastTasks.some((t) => t.status === 'queued' || t.status === 'running')) watch(); });
+
+    document.addEventListener('submit', async (e) => {
+      const form = e.target.closest('form[data-background]');
+      if (!form) return;
+      e.preventDefault();
+      const button = e.submitter || form.querySelector('button[type=submit], button:not([type])');
+      if (button) setBusy(button, true, form.dataset.busyLabel);
+      form.querySelector('.task-inline-result')?.remove();
+      try {
+        const response = await fetch(form.action, { method: 'POST', body: new FormData(form, e.submitter),
+                                                     headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.task) throw new Error(data.error || 'Something went wrong. Please try again.');
+        if (button) buttonsByTask[data.task.id] = button;
+        render([data.task, ...lastTasks.filter((t) => t.id !== data.task.id)]);
+        tray.classList.add('is-open');
+        if (form.dataset.afterStart === 'reset') form.reset();
+        if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+        watch();
+      } catch (err) {
+        if (button) setBusy(button, false);
+        const note = document.createElement('span');
+        note.className = 'task-inline-result small ms-2 text-danger';
+        note.textContent = err.message;
+        (button || form).after(note);
+      }
+    });
+  }
 })();

@@ -15,6 +15,7 @@ Configuration (all optional; a platform with no credentials is skipped and logge
 
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -243,3 +244,51 @@ def send_due_notifications(now=None):
 def notify_content_updated(event):
     return deliver(event, data={'type': 'content_updated', 'content_version': event.content_version},
                    silent=True)
+
+
+# ---------------------------------------------------------------------------
+# Live updates: a silent push whenever attendee-visible content changes
+# ---------------------------------------------------------------------------
+# Apps that are open poll the bundle every few seconds; this wakes the ones in the background.
+# Edits come in bursts (an organizer typing, an AI update applying many changes), so pushes are
+# debounced per event: one push CONTENT_PUSH_DELAY seconds after the last change, and at most one
+# per CONTENT_PUSH_MIN_INTERVAL seconds. iOS throttles silent pushes anyway, so more is pointless.
+
+_timers = {}
+_last_sent = {}
+_timers_lock = threading.Lock()
+
+
+def content_changed(event_id):
+    """Schedule a debounced silent 'content_updated' push for the event (after the transaction commits)."""
+    if not getattr(settings, 'CONTENT_PUSH_ENABLED', True):
+        return
+    transaction.on_commit(lambda: _schedule(event_id))
+
+
+def _schedule(event_id):
+    delay = getattr(settings, 'CONTENT_PUSH_DELAY', 5)
+    min_interval = getattr(settings, 'CONTENT_PUSH_MIN_INTERVAL', 60)
+    with _timers_lock:
+        if event_id in _timers:
+            _timers[event_id].cancel()
+        since_last = time.monotonic() - _last_sent.get(event_id, -10 ** 9)
+        timer = threading.Timer(max(delay, min_interval - since_last), _send_content_push, args=[event_id])
+        timer.daemon = True
+        _timers[event_id] = timer
+        timer.start()
+
+
+def _send_content_push(event_id):
+    from django.db import close_old_connections
+    with _timers_lock:
+        _timers.pop(event_id, None)
+        _last_sent[event_id] = time.monotonic()
+    try:
+        event = Event.objects.filter(pk=event_id).exclude(status=Event.STATUS_DRAFT).first()
+        if event is not None:
+            notify_content_updated(event)
+    except Exception:
+        logger.exception('Content push for event %s failed', event_id)
+    finally:
+        close_old_connections()

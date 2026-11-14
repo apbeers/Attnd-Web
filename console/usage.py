@@ -1,6 +1,6 @@
 """Summaries of anonymous usage counts (API-005) for the console's Usage pages."""
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.db.models import Count, Sum
 from django.utils import timezone
@@ -11,40 +11,75 @@ TAB_LABELS = {'map': 'Map', 'locations': 'Locations', 'schedule': 'Schedule', 'f
               'notifications': 'Updates', 'options': 'Options'}
 INTERACTIONS = ('app_open', 'tab_view', 'location_view', 'schedule_item_view', 'notification_open', 'search', 'refresh')
 
-CHART_W, CHART_H = 720, 160
+CHART_W, CHART_H = 720, 170
+
+# (longest span, step, label format). Up to 2 days of data: 5-minute steps; up to 2 weeks: hourly; else daily.
+_STEPS = [
+    (timedelta(days=2), timedelta(minutes=5), '%a %-I:%M %p'),
+    (timedelta(days=14), timedelta(hours=1), '%a %-I %p'),
+    (None, timedelta(days=1), '%a %b %-d'),
+]
 
 
-def chart(points, tz, *, max_bars=72):
-    """Bars for an inline SVG: hourly when the data spans up to `max_bars` hours, otherwise daily.
+def _floor(dt, step, tz):
+    if step >= timedelta(days=1):
+        local = dt.astimezone(tz)
+        return local.replace(hour=0, minute=0, second=0, microsecond=0)
+    seconds = int(step.total_seconds())
+    epoch = int(dt.timestamp())
+    return datetime.fromtimestamp(epoch - epoch % seconds, tz=dt_timezone.utc)
 
-    `points` maps a UTC hour to a value. Hours step in UTC (so daylight-saving changes don't skip or
-    repeat bars) and are labelled in the event's time zone; days are the event's local days.
-    Returns {'bars': [...], 'unit': 'hour'|'day', 'max': n, ...} or None when there's no data.
+
+def line_chart(series, tz, *, start=None, end=None):
+    """Lines for an inline SVG (console/_linechart.html).
+
+    `series`: [{'label', 'cls', 'points': {utc datetime: n}, 'cumulative': bool, 'base': n}]. A cumulative
+    series shows the running total (starting from `base`); others show the count per step. Every
+    series has its own vertical scale, so a running total and a per-5-minute count share one chart.
     """
-    if not points:
+    stamps = [t for s in series for t in s['points']]
+    if not stamps:
         return None
-    first, last = min(points), max(points)
-    hourly = (last - first) <= timedelta(hours=max_bars - 1)
-    buckets = defaultdict(int)
-    for hour, value in points.items():
-        buckets[hour if hourly else hour.astimezone(tz).date()] += value
-    step = timedelta(hours=1) if hourly else timedelta(days=1)
-    keys, cursor, end = [], min(buckets), max(buckets)
-    while cursor <= end and len(keys) < 400:
+    start = start or min(stamps)
+    end = end or max(stamps)
+    span = end - start
+    step, fmt = next((st, f) for limit, st, f in _STEPS if limit is None or span <= limit)
+    keys, cursor = [], _floor(start, step, tz)
+    last = _floor(end, step, tz)
+    while cursor <= last and len(keys) < 2000:
         keys.append(cursor)
-        cursor += step
-    top = max(buckets.values()) or 1
-    width = CHART_W / len(keys)
-    bars = []
-    for i, key in enumerate(keys):
-        value = buckets.get(key, 0)
-        height = round(value / top * (CHART_H - 20), 1)
-        label = key.astimezone(tz).strftime('%a %-I %p') if hourly else key.strftime('%a %b %-d')
-        bars.append({'x': round(i * width + 1, 1), 'w': round(max(width - 2, 1), 1), 'h': height,
-                     'y': round(CHART_H - height, 1), 'value': value, 'label': label,
-                     'left': round(i / len(keys) * 100, 2),
-                     'tick': i % max(1, len(keys) // 6) == 0})
-    return {'bars': bars, 'unit': 'hour' if hourly else 'day', 'max': top, 'width': CHART_W, 'height': CHART_H}
+        cursor = cursor + step
+        if step >= timedelta(days=1):
+            cursor = cursor.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    n = len(keys)
+    out = []
+    for s in series:
+        per_step = defaultdict(int)
+        for t, v in s['points'].items():
+            per_step[_floor(t, step, tz)] += v
+        values, running = [], s.get('base', 0)
+        for k in keys:
+            running += per_step.get(k, 0)
+            values.append(running if s.get('cumulative') else per_step.get(k, 0))
+        top = max(values) or 1
+        coords = []
+        for i, v in enumerate(values):
+            x = 0 if n == 1 else round(i / (n - 1) * CHART_W, 1)
+            y = round(CHART_H - 4 - v / top * (CHART_H - 14), 1)
+            coords.append(f'{x},{y}')
+        if n == 1:
+            coords.append(f'{CHART_W},{coords[0].split(",")[1]}')
+        out.append({'label': s['label'], 'cls': s['cls'], 'points': ' '.join(coords), 'values': values,
+                    'max': max(values), 'last': values[-1], 'cumulative': bool(s.get('cumulative'))})
+    every = max(1, n // 6)
+    ticks = [{'left': 0 if n == 1 else round(i / (n - 1) * 100, 2), 'label': keys[i].astimezone(tz).strftime(fmt)}
+             for i in range(0, n, every)]
+    width = CHART_W / max(n, 1)
+    hover = [{'x': round(i * width, 1), 'w': round(width, 1),
+              'title': keys[i].astimezone(tz).strftime(fmt) + ': ' + ', '.join(f"{s['label']} {s['values'][i]}" for s in out)}
+             for i in range(n)]
+    step_label = {300: '5 minutes', 3600: 'hour', 86400: 'day'}[int(step.total_seconds())]
+    return {'series': out, 'ticks': ticks, 'hover': hover, 'width': CHART_W, 'height': CHART_H, 'step': step_label}
 
 
 def _named(event_rows, model, event):
@@ -69,15 +104,18 @@ def event_usage(event, tz):
         by_detail[metric].append((detail, n))
 
     activity, joins = defaultdict(int), defaultdict(int)
-    for metric, hour, n in rows.values_list('metric', 'hour').annotate(n=Sum('count')).values_list('metric', 'hour', 'n'):
+    for metric, bucket, n in rows.values_list('metric', 'bucket').annotate(n=Sum('count')).values_list('metric', 'bucket', 'n'):
         if metric in INTERACTIONS:
-            activity[hour] += n
+            activity[bucket] += n
         elif metric == 'join':
-            joins[hour] += n
+            joins[bucket] += n
+    hourly = defaultdict(int)
+    for bucket, n in activity.items():
+        hourly[bucket.replace(minute=0)] += n
 
     platforms = dict(rows.filter(metric__in=INTERACTIONS).values_list('platform').annotate(n=Sum('count'))
                      .values_list('platform', 'n'))
-    busiest = max(activity.items(), key=lambda kv: kv[1]) if activity else None
+    busiest = max(hourly.items(), key=lambda kv: kv[1]) if hourly else None
     return {
         'has_data': bool(totals),
         'joins': totals.get('join', 0),
@@ -93,19 +131,25 @@ def event_usage(event, tz):
         'top_notifications': _named(by_detail['notification_open'], Notification, event)[:10],
         'platforms': {'ios': platforms.get('ios', 0), 'android': platforms.get('android', 0)},
         'busiest': {'hour': busiest[0].astimezone(tz), 'count': busiest[1]} if busiest else None,
-        'activity_chart': chart(activity, tz),
-        'joins_chart': chart(joins, tz),
+        'activity_chart': line_chart([{'label': 'Interactions', 'cls': 'new', 'points': activity}], tz),
+        'joins_chart': line_chart([
+            {'label': 'Total joined', 'cls': 'total', 'points': joins, 'cumulative': True},
+            {'label': 'Joined in that time', 'cls': 'new', 'points': joins},
+        ], tz),
     }
 
 
 def app_usage(tz, days=30):
     since = timezone.now() - timedelta(days=days)
-    rows = UsageCount.objects.filter(hour__gte=since)
-    daily = {m: defaultdict(int) for m in ('install', 'join', 'activity')}
-    for metric, hour, n in rows.values_list('metric', 'hour').annotate(n=Sum('count')).values_list('metric', 'hour', 'n'):
+    rows = UsageCount.objects.filter(bucket__gte=since)
+    series = {m: defaultdict(int) for m in ('install', 'join', 'activity')}
+    for metric, bucket, n in rows.values_list('metric', 'bucket').annotate(n=Sum('count')).values_list('metric', 'bucket', 'n'):
         key = 'activity' if metric in INTERACTIONS else metric
-        if key in daily:
-            daily[key][hour] += n
+        if key in series:
+            series[key][bucket] += n
+    earlier = UsageCount.objects.filter(bucket__lt=since)
+    installs_before = earlier.filter(metric='install').aggregate(n=Sum('count'))['n'] or 0
+    joins_before = earlier.filter(metric='join').aggregate(n=Sum('count'))['n'] or 0
     totals = dict(rows.values_list('metric').annotate(n=Sum('count')).values_list('metric', 'n'))
 
     per_event = defaultdict(lambda: {'joins': 0, 'activity': 0})
@@ -128,9 +172,15 @@ def app_usage(tz, days=30):
         'joins': totals.get('join', 0),
         'activity': sum(totals.get(m, 0) for m in INTERACTIONS),
         'active_devices': seen.count(),
-        'installs_chart': chart(daily['install'], tz, max_bars=0),
-        'joins_chart': chart(daily['join'], tz, max_bars=0),
-        'activity_chart': chart(daily['activity'], tz, max_bars=0),
+        'installs_chart': line_chart([
+            {'label': 'Total installs', 'cls': 'total', 'points': series['install'], 'cumulative': True, 'base': installs_before},
+            {'label': 'New installs', 'cls': 'new', 'points': series['install']},
+        ], tz),
+        'joins_chart': line_chart([
+            {'label': 'Total joins', 'cls': 'total', 'points': series['join'], 'cumulative': True, 'base': joins_before},
+            {'label': 'Joins in that time', 'cls': 'new', 'points': series['join']},
+        ], tz),
+        'activity_chart': line_chart([{'label': 'Interactions', 'cls': 'new', 'points': series['activity']}], tz),
         'events': event_rows,
         'versions': list(versions[:40]),
     }

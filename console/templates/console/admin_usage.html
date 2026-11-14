@@ -43,11 +43,9 @@
   </div>
 </div></div>
 
-<div class="row g-4 mb-4">
-  <div class="col-lg-4"><div class="card h-100"><div class="card-body"><h2 class="h6">Activity per day</h2>{% include 'console/_chart.html' with c=usage.activity_chart label="Activity per day" %}</div></div></div>
-  <div class="col-lg-4"><div class="card h-100"><div class="card-body"><h2 class="h6">Joins per day</h2>{% include 'console/_chart.html' with c=usage.joins_chart label="Joins per day" %}</div></div></div>
-  <div class="col-lg-4"><div class="card h-100"><div class="card-body"><h2 class="h6">New installs per day</h2>{% include 'console/_chart.html' with c=usage.installs_chart label="Installs per day" %}</div></div></div>
-</div>
+<div class="card mb-4"><div class="card-body"><h2 class="h6">App installs</h2>{% include 'console/_linechart.html' with c=usage.installs_chart label="Installs" %}</div></div>
+<div class="card mb-4"><div class="card-body"><h2 class="h6">People joining events</h2>{% include 'console/_linechart.html' with c=usage.joins_chart label="Joins" %}</div></div>
+<div class="card mb-4"><div class="card-body"><h2 class="h6">App activity</h2>{% include 'console/_linechart.html' with c=usage.activity_chart label="Activity" %}</div></div>
 
 <div class="row g-4">
   <div class="col-lg-7"><div class="card"><div class="card-body">

@@ -114,7 +114,11 @@ def event_new(request):
                                  created_by=request.user,
                                  timezone=request.POST.get('browser_tz', '')[:64])
             jobs.enqueue(job)
+            if _wants_json(request):
+                return JsonResponse({'task': task_json(job), 'redirect': reverse('console:dashboard')}, status=202)
             return redirect('console:job', job_id=job.pk)
+        if _wants_json(request):
+            return JsonResponse({'error': ' '.join(e for errs in ai_form.errors.values() for e in errs)}, status=400)
     elif request.method == 'POST' and mode == 'blank':
         tz_name = request.POST.get('blank-timezone') or 'UTC'
         try:
@@ -151,6 +155,79 @@ def job_detail(request, job_id):
             messages.info(request, f"AI notes: {job.result['notes']}")
         return redirect('console:event', event_id=job.event_id)
     return render(request, 'console/job.html', {'job': job, 'event': job.event})
+
+
+# ---------------------------------------------------------------------------
+# Background tasks (AI imports and updates): a feed for the corner tray and the service worker
+# ---------------------------------------------------------------------------
+
+def _wants_json(request):
+    return 'application/json' in request.headers.get('Accept', '')
+
+
+def task_json(job):
+    """One background task as the console's task tray shows it."""
+    event_name = job.event.name if job.event_id else (job.result or {}).get('event_name') or 'your event'
+    if job.kind == IngestJob.KIND_CREATE:
+        title = f'Importing {event_name}' if job.status != IngestJob.DONE else f'Imported {event_name}'
+    elif job.trigger == IngestJob.TRIGGER_WATCH:
+        title = f'Website changed: updating {event_name}'
+    else:
+        title = f'Checking {event_name} for updates'
+    result, url = (job.result or {}), None
+    summary = ''
+    if job.status == IngestJob.DONE:
+        if job.kind == IngestJob.KIND_REFRESH:
+            pending, applied = result.get('pending', 0), result.get('auto_applied', 0)
+            summary = ', '.join(filter(None, [
+                f'{applied} change{"s" if applied != 1 else ""} applied' if applied else '',
+                f'{pending} to review' if pending else ''])) or 'Everything is up to date'
+            url = (reverse('console:changeset', args=[result['changeset_id']]) if pending and result.get('changeset_id')
+                   else reverse('console:event', args=[job.event_id]))
+        else:
+            summary = f"{result.get('location_count', 0)} locations, {result.get('item_count', 0)} schedule items"
+            url = reverse('console:event', args=[job.event_id]) if job.event_id else None
+    return {
+        'id': str(job.pk), 'kind': job.kind, 'title': title, 'status': job.status,
+        'progress': job.progress or ('Waiting to start…' if job.status == IngestJob.QUEUED else ''),
+        'summary': summary, 'error': job.error if job.status == IngestJob.FAILED else '',
+        'url': url, 'event_id': job.event_id,
+        'finished_at': job.finished_at.isoformat() if job.finished_at else None,
+    }
+
+
+@login_required
+def tasks_feed(request):
+    """Running background tasks for this person, plus ones that finished in the last 10 minutes."""
+    recent = timezone.now() - timedelta(minutes=10)
+    visible_events = events_for_user(request.user).values('id')
+    qs = (IngestJob.objects.filter(Q(created_by=request.user) | Q(event__in=visible_events,
+                                                                   trigger=IngestJob.TRIGGER_WATCH))
+          .filter(Q(status__in=[IngestJob.QUEUED, IngestJob.RUNNING]) | Q(finished_at__gte=recent))
+          .select_related('event').order_by('-created_at')[:20])
+    tasks = [task_json(j) for j in qs]
+    return JsonResponse({'tasks': tasks, 'active': sum(t['status'] in ('queued', 'running') for t in tasks)})
+
+
+def service_worker(request):
+    """The console's service worker, served from /console/ so it can control every console page."""
+    from django.contrib.staticfiles import finders
+    path = finders.find('console/sw.js')
+    with open(path, encoding='utf-8') as f:
+        response = HttpResponse(f.read(), content_type='application/javascript')
+    response['Service-Worker-Allowed'] = '/console/'
+    response['Cache-Control'] = 'no-cache'
+    return response
+
+
+def manifest(request):
+    from django.templatetags.static import static
+    return JsonResponse({
+        'name': 'Attnd Console', 'short_name': 'Attnd', 'start_url': '/console/', 'scope': '/console/',
+        'display': 'standalone', 'background_color': '#ffffff', 'theme_color': '#431f86',
+        'icons': [{'src': static(f'console/icons/icon-{n}.png'), 'sizes': f'{n}x{n}', 'type': 'image/png',
+                   'purpose': 'any maskable'} for n in (192, 512)],
+    }, content_type='application/manifest+json')
 
 
 # ---------------------------------------------------------------------------
@@ -241,15 +318,21 @@ def event_sources(request, event):
 @require_POST
 def event_refresh(request, event):
     form = RefreshForm(request.POST, request.FILES)
+    error = None
     if not form.is_valid():
-        messages.error(request, ' '.join(e for errs in form.errors.values() for e in errs))
-        return redirect('console:event', event_id=event.pk)
-    if not (event.source_urls or form.cleaned_data.get('text') or form.cleaned_data.get('upload')):
-        messages.error(request, 'Add a source website first (below), or paste text / upload a file.')
+        error = ' '.join(e for errs in form.errors.values() for e in errs)
+    elif not (event.source_urls or form.cleaned_data.get('text') or form.cleaned_data.get('upload')):
+        error = 'Add a source website first (below), or paste text / upload a file.'
+    if error:
+        if _wants_json(request):
+            return JsonResponse({'error': error}, status=400)
+        messages.error(request, error)
         return redirect('console:event', event_id=event.pk)
     job = _job_from_form(form, kind=IngestJob.KIND_REFRESH, trigger=IngestJob.TRIGGER_CONSOLE,
                          event=event, created_by=request.user, timezone=event.timezone)
     jobs.enqueue(job)
+    if _wants_json(request):
+        return JsonResponse({'task': task_json(job)}, status=202)
     return redirect('console:job', job_id=job.pk)
 
 
@@ -473,13 +556,16 @@ def display_settings(request, event):
         if request.POST.get('accent_default'):
             event.accent_color = ''
         event.save(update_fields=['display_config', 'accent_color'])
-        messages.success(request, 'App layout saved. Attendees get it on their next refresh.')
+        if _wants_json(request):
+            return JsonResponse({'saved': True, 'resolved': resolve_display(event, event_stats(event))})
+        messages.success(request, 'App layout saved. Open apps update within a few seconds.')
         return redirect('console:display', event_id=event.pk)
     stats = event_stats(event)
     resolved = resolve_display(event, stats)
+    if request.method == 'POST' and _wants_json(request):
+        return JsonResponse({'saved': False, 'errors': form.errors}, status=400)
     return render(request, 'console/display.html', _ctx(
-        event, 'display', form=form, resolved=resolved, stats=stats, labels=LABELS,
-        preview=_preview_html(event, resolved)))
+        event, 'display', form=form, resolved=resolved, stats=stats, labels=LABELS))
 
 
 @event_view

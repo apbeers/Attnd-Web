@@ -1,6 +1,6 @@
 """Anonymous usage counting (API-005).
 
-Counts are bucketed per event, UTC hour, metric, detail and platform. Nothing identifying is
+Counts are bucketed per event, UTC 5-minute window, metric, detail and platform. Nothing identifying is
 stored: callers pass no device ID, and the ingest endpoint never reads one.
 """
 from datetime import timedelta, timezone as dt_timezone
@@ -31,16 +31,23 @@ MAX_ENTRIES = 200
 MAX_COUNT = 500
 
 
-def hour_bucket(dt=None):
-    dt = dt or timezone.now()
-    return dt.astimezone(dt_timezone.utc).replace(minute=0, second=0, microsecond=0)
+BUCKET_MINUTES = 5
+
+
+def bucket_start(dt=None):
+    """Start of the UTC 5-minute window containing dt."""
+    dt = (dt or timezone.now()).astimezone(dt_timezone.utc)
+    return dt.replace(minute=dt.minute - dt.minute % BUCKET_MINUTES, second=0, microsecond=0)
+
+
+hour_bucket = bucket_start  # old name
 
 
 def record(event, metric, *, detail='', platform='', count=1, at=None):
     """Add `count` to one bucket. Safe under concurrency (update, else create, else update)."""
     if count <= 0:
         return
-    key = {'event': event, 'hour': hour_bucket(at), 'metric': metric, 'detail': str(detail or '')[:32],
+    key = {'event': event, 'bucket': bucket_start(at), 'metric': metric, 'detail': str(detail or '')[:32],
            'platform': platform if platform in ('ios', 'android') else ''}
     if UsageCount.objects.filter(**key).update(count=F('count') + count):
         return
@@ -104,9 +111,9 @@ def ingest(event, platform, entries, now=None):
         at = parse_datetime(str(entry.get('at') or '')) if entry.get('at') else None
         if at is None or timezone.is_naive(at) or not (now - timedelta(days=7) <= at <= now + timedelta(minutes=10)):
             at = now
-        key = (metric, detail, hour_bucket(at))
+        key = (metric, detail, bucket_start(at))
         totals[key] = min(totals.get(key, 0) + count, MAX_COUNT)
         accepted += 1
-    for (metric, detail, hour), count in totals.items():
-        record(event, metric, detail=detail, platform=platform, count=count, at=hour)
+    for (metric, detail, bucket), count in totals.items():
+        record(event, metric, detail=detail, platform=platform, count=count, at=bucket)
     return accepted

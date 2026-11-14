@@ -310,3 +310,20 @@ class UsageTests(V2Base):
         self.assertEqual(counts[('join', '', 'android')], 1)
         self.assertEqual(counts[('leave', '', 'android')], 1)
         self.assertEqual(self.counts(event=None)[('install', '', 'android')], 1)
+
+
+class ContentPushTests(V2Base):
+    def test_changes_schedule_one_debounced_push(self):
+        from events import push
+        with self.settings(CONTENT_PUSH_ENABLED=True, CONTENT_PUSH_DELAY=60, CONTENT_PUSH_MIN_INTERVAL=0), \
+                patch('events.push.threading.Timer') as timer, self.captureOnCommitCallbacks(execute=True):
+            self.loc.name = 'Main Stage'
+            self.loc.save()
+            self.item.name = 'Headliner'
+            self.item.save()
+        self.assertEqual(timer.call_count, 2)
+        self.assertEqual(timer.return_value.cancel.call_count, 1)  # the second change replaced the first timer
+        self.assertEqual(timer.call_args.args[1], push._send_content_push)
+        with patch('events.push.notify_content_updated') as notify:
+            push._send_content_push(self.event.id)
+        notify.assert_called_once()

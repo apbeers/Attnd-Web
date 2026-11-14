@@ -1,0 +1,16 @@
+{% comment %}Inline SVG line chart from console.usage.line_chart(). Expects `c` and `label`.{% endcomment %}
+{% if c %}
+<figure class="line-chart mb-0" aria-label="{{ label }}">
+  <div class="line-legend">{% for s in c.series %}
+    <span class="legend-{{ s.cls }}"><i></i>{{ s.label }} <strong>{% if s.cumulative %}{{ s.last }}{% else %}peak {{ s.max }}{% endif %}</strong></span>
+  {% endfor %}</div>
+  <svg viewBox="0 0 {{ c.width }} {{ c.height }}" role="img" preserveAspectRatio="none">
+    <title>{{ label }}</title>
+    <line x1="0" y1="{{ c.height }}" x2="{{ c.width }}" y2="{{ c.height }}" class="axis"/>
+    {% for s in c.series %}<polyline class="line-{{ s.cls }}" points="{{ s.points }}" vector-effect="non-scaling-stroke"/>{% endfor %}
+    {% for h in c.hover %}<rect class="hover" x="{{ h.x }}" y="0" width="{{ h.w }}" height="{{ c.height }}"><title>{{ h.title }}</title></rect>{% endfor %}
+  </svg>
+  <div class="usage-ticks">{% for t in c.ticks %}<span style="left:{{ t.left }}%">{{ t.label }}</span>{% endfor %}</div>
+  <figcaption class="small text-muted">Per {{ c.step }}. {% if c.series|length > 1 %}Each line has its own scale. {% endif %}Hover for values.</figcaption>
+</figure>
+{% else %}<p class="text-muted small mb-0">No data yet.</p>{% endif %}

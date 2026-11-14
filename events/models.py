@@ -97,8 +97,9 @@ class Event(CoordinatesMixin, models.Model):
     # AI sources & refresh
     source_urls = models.JSONField(default=list, blank=True)
     source_text = models.TextField(blank=True)
-    refresh_schedule = models.CharField(max_length=16, choices=REFRESH_CHOICES, default=REFRESH_OFF)
-    update_mode = models.CharField(max_length=8, choices=UPDATE_MODE_CHOICES, default=UPDATE_REVIEW)
+    # New events stay in sync with their website by default (organizers can turn it off).
+    refresh_schedule = models.CharField(max_length=16, choices=REFRESH_CHOICES, default=REFRESH_WATCH)
+    update_mode = models.CharField(max_length=8, choices=UPDATE_MODE_CHOICES, default=UPDATE_AUTO)
     last_refreshed_at = models.DateTimeField(null=True, blank=True)
     sources_checked_at = models.DateTimeField(null=True, blank=True)  # last cheap website check
     locked_fields = models.JSONField(default=list, blank=True,
@@ -112,12 +113,26 @@ class Event(CoordinatesMixin, models.Model):
     def is_live(self):
         return self.status != self.STATUS_DRAFT
 
+    @property
+    def effective_end(self):
+        return self.end_time or (self.start_time + timedelta(hours=12))
+
+    @property
+    def timing(self):
+        """'upcoming', 'now' or 'ended', from the event's start and end."""
+        now = dj_tz.now()
+        if now < self.start_time:
+            return 'upcoming'
+        return 'now' if now <= self.effective_end else 'ended'
+
     def bump_version(self, save=True):
         Event.objects.filter(pk=self.pk).update(
             content_version=models.F('content_version') + 1,
             content_updated_at=dj_tz.now(),
         )
         self.refresh_from_db(fields=['content_version', 'content_updated_at'])
+        from events import push
+        push.content_changed(self.pk)  # apps in the background update too (debounced silent push)
 
     @property
     def auto_accept_minor(self):
@@ -358,14 +373,14 @@ def events_for_user(user):
 
 
 class UsageCount(models.Model):
-    """Anonymous hourly usage totals (API-005).
+    """Anonymous usage totals per 5 minutes (API-005).
 
     Apps report how often features were used. The server keeps only these counters: no device ID,
     IP address or anything that identifies a person is ever stored with them. `event` is null for
     app-wide counts that happen outside an event (new app installs).
     """
     event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='usage')
-    hour = models.DateTimeField()  # UTC, truncated to the hour
+    bucket = models.DateTimeField()  # UTC, start of the 5-minute window
     metric = models.CharField(max_length=32)
     detail = models.CharField(max_length=32, blank=True)  # a tab name, or a location / schedule item / notification id
     platform = models.CharField(max_length=12, blank=True)
@@ -373,10 +388,10 @@ class UsageCount(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['event', 'hour', 'metric', 'detail', 'platform'], name='usage_bucket_unique',
+            models.UniqueConstraint(fields=['event', 'bucket', 'metric', 'detail', 'platform'], name='usage_bucket_unique',
                                     nulls_distinct=False),
         ]
-        indexes = [models.Index(fields=['event', 'hour']), models.Index(fields=['hour'])]
+        indexes = [models.Index(fields=['event', 'bucket']), models.Index(fields=['bucket'])]
 
     def __str__(self):
-        return f'{self.event_id} {self.hour:%Y-%m-%d %H}h {self.metric}:{self.detail} {self.platform} = {self.count}'
+        return f'{self.event_id} {self.bucket:%Y-%m-%d %H:%M} {self.metric}:{self.detail} {self.platform} = {self.count}'

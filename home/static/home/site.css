@@ -1,7 +1,7 @@
 /* attnd.app public site — hand-written, no frameworks or web fonts. */
 :root {
-  --attnd: #ff5a1f; --attnd-dark: #e2440c; --ink: #15171c; --muted: #5f6672; --line: #e5e7eb;
-  --bg: #ffffff; --soft: #f6f7f9; --blue: #2463eb; --ok: #198754; --bad: #c62828;
+  --attnd: #431f86; --attnd-dark: #32166a; --attnd-mid: #7b4fd6; --attnd-soft: #efe9fa; --ink: #15171c; --muted: #5f6672; --line: #e5e7eb;
+  --bg: #ffffff; --soft: #f6f7f9; --blue: #431f86; --ok: #198754; --bad: #c62828;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --wrap: 1120px; --radius: 14px;
@@ -54,7 +54,7 @@ p { margin: 0 0 1em; }
 
 /* Hero */
 .hero { background: radial-gradient(circle at 80% 10%, #ffb08f 0, transparent 40%),
-  linear-gradient(135deg, #ff5a1f 0%, #c2185b 100%); color: #fff; padding: 72px 0 80px; overflow: hidden; }
+  linear-gradient(135deg, #431f86 0%, #7b4fd6 100%); color: #fff; padding: 72px 0 80px; overflow: hidden; }
 .hero .wrap { display: grid; grid-template-columns: 1.2fr .8fr; gap: 48px; align-items: center; }
 .hero p.lead { font-size: 1.2rem; opacity: .95; max-width: 34em; }
 .hero .actions { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 1.6rem; }

@@ -24,11 +24,11 @@
 {% else %}
 <div class="card mb-4"><div class="card-body">
   <h2 class="h6">Activity over time</h2>
-  {% include 'console/_chart.html' with c=usage.activity_chart label="App activity" %}
+  {% include 'console/_linechart.html' with c=usage.activity_chart label="App activity" %}
 </div></div>
 <div class="card mb-4"><div class="card-body">
   <h2 class="h6">People joining</h2>
-  {% include 'console/_chart.html' with c=usage.joins_chart label="Joins" %}
+  {% include 'console/_linechart.html' with c=usage.joins_chart label="People joining" %}
 </div></div>
 
 <div class="row g-4">

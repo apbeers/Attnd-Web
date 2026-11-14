@@ -119,8 +119,14 @@ STORAGES = {
 
 # Tests render templates without running collectstatic first
 import sys  # noqa: E402
-if len(sys.argv) > 1 and sys.argv[1] == 'test':
+TESTING = len(sys.argv) > 1 and sys.argv[1] == 'test'
+if TESTING:
     STORAGES['staticfiles']['BACKEND'] = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# Silent "content_updated" push whenever attendee-visible content changes (events.push.content_changed).
+CONTENT_PUSH_ENABLED = not TESTING and os.getenv('CONTENT_PUSH_ENABLED', '1') not in ('0', 'false', 'False')
+CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '5'))
+CONTENT_PUSH_MIN_INTERVAL = int(os.getenv('CONTENT_PUSH_MIN_INTERVAL', '60'))
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/console/'

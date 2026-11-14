@@ -40,19 +40,19 @@
           <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.enable_search.label }}</label>{{ form.enable_search }}</div>
           <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.group_by_category.label }}</label>{{ form.group_by_category }}</div>
           <div class="col-md-6"><label class="form-label small fw-semibold">Accent color</label>
-            <div class="d-flex align-items-center gap-2"><input type="color" name="accent_color" class="form-control form-control-color" value="{{ event.accent_color|default:'#ff5a1f' }}">
+            <div class="d-flex align-items-center gap-2"><input type="color" name="accent_color" class="form-control form-control-color" value="{{ event.accent_color|default:'#431f86' }}">
               <div class="form-check"><input class="form-check-input" type="checkbox" name="accent_default" id="accent_default" {% if not event.accent_color %}checked{% endif %}>
                 <label class="form-check-label small" for="accent_default">Use Attnd default</label></div></div></div>
         </div>
       </div></div>
-      <button class="btn btn-primary">Save layout</button>
+      <div class="d-flex align-items-center gap-3">
+        <button class="btn btn-primary">Save layout</button>
+        <span id="autosave-status" class="small text-muted">Changes save automatically and appear in the app within seconds.</span>
+      </div>
     </form>
   </div>
   <div class="col-lg-5">
-    <div class="position-sticky" style="top:1rem">
-      <div class="muted-label text-center mb-2">Preview</div>
-      <div id="preview">{{ preview|safe }}</div>
-    </div>
+    <div class="position-sticky" style="top:1rem">{% include 'console/_live_phone.html' %}</div>
   </div>
 </div>
 {% endblock %}
@@ -71,18 +71,25 @@
   custom.addEventListener('change', toggleTabs); toggleTabs();
   makeSortable(list, {handle: '.drag-handle', onEnd: () => { syncOrder(); refresh(); }});
   syncOrder();
+  // Auto-save: every change is saved right away, so a phone with the event open updates live.
   let timer;
+  const status = document.getElementById('autosave-status');
   async function refresh() {
     syncOrder();
-    const body = new FormData(form);
-    const r = await fetch('{% url "console:display_preview" event.id %}', {method: 'POST', body});
-    if (!r.ok) return;
-    const d = await r.json();
-    document.getElementById('preview').innerHTML = d.html;
-    document.getElementById('resolved-reason').innerHTML =
-      `Currently using <strong>${d.resolved.resolved_preset[0].toUpperCase() + d.resolved.resolved_preset.slice(1)}</strong> — ${d.resolved.reason}.`;
+    status.innerHTML = '<span class="spinner"></span>Saving…';
+    try {
+      const r = await fetch(form.action || location.href, {method: 'POST', body: new FormData(form),
+                                                          headers: {Accept: 'application/json'}});
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      document.getElementById('resolved-reason').innerHTML =
+        `Currently using <strong>${d.resolved.resolved_preset[0].toUpperCase() + d.resolved.resolved_preset.slice(1)}</strong> — ${d.resolved.reason}.`;
+      status.textContent = 'Saved. Open apps update within a few seconds.';
+    } catch (e) {
+      status.innerHTML = '<span class="text-danger">Couldn’t save. Check your connection and try again.</span>';
+    }
   }
-  form.addEventListener('change', () => { clearTimeout(timer); timer = setTimeout(refresh, 150); });
+  form.addEventListener('change', () => { clearTimeout(timer); timer = setTimeout(refresh, 300); });
 })();
 </script>
 {% endblock %}

@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Console{% endblock %} — Attnd</title>
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
+  <link rel="manifest" href="{% url 'console:manifest' %}">
+  <meta name="theme-color" content="#431f86">
+  <link rel="apple-touch-icon" href="{% static 'console/icons/icon-192.png' %}">
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -29,10 +32,7 @@
   {% if event and section %}
     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
       <h1 class="h3 mb-0 me-2">{{ event.name }}</h1>
-      {% if event.status == 'draft' %}<span class="badge text-bg-warning">Draft</span>
-      {% elif event.status == 'archived' %}<span class="badge text-bg-secondary">Archived</span>
-      {% else %}<span class="badge text-bg-success">Live</span>{% endif %}
-      {% if not event.paid %}<span class="badge text-bg-light border" title="Attendees see a Demo Event banner">Demo</span>{% endif %}
+      {% include 'console/_status_badges.html' with e=event %}
       {% if event.public %}<span class="badge text-bg-light border">{% icon "pin" %} Listed nearby</span>{% endif %}
       <span class="text-muted ms-1 font-monospace">{{ event.event_code }}</span>
     </div>
@@ -58,6 +58,12 @@
     {% block content %}{% endblock %}
   {% endif %}
 </div>
+{% if user.is_authenticated %}
+<div id="task-tray" class="task-tray" hidden aria-live="polite">
+  <button type="button" class="task-toggle"><span class="spinner"></span><span class="task-count"></span></button>
+  <div class="task-panel"><div class="task-panel-title">Background tasks</div><ul class="task-list"></ul></div>
+</div>
+{% endif %}
 <script src="{% static 'console/console.js' %}"></script>
 {% block scripts %}{% endblock %}
 </body>
