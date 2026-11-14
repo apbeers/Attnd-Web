@@ -1,6 +1,6 @@
 # Attnd setup checklist
 
-Do these steps once, in order. Each step says which values go where.
+Do these steps once, in order. Each step says which values go where. For any single key, see the **Key reference** at the end. It explains where to create the key and exactly where it goes.
 
 ## Progress
 
@@ -144,12 +144,7 @@ Copy the token it prints into **GH-web secret `HEROKU_API_KEY`** and into your p
 1. In the [Firebase console](https://console.firebase.google.com), create a project or reuse your Google Cloud project.
 2. Add Android apps for **`com.arcu.attnd`** and **`com.arcu.attnd.debug`**, then download `google-services.json`. It contains both apps.
 3. Put the file at `Attnd-Android/app/google-services.json` for local builds. It's gitignored.
-4. Set up the server's sending account. In Firebase → Project settings → **Service accounts** → *Generate new private key*, or use a Cloud service account with the **Firebase Cloud Messaging API Admin** role. Then:
-   ```bash
-   for app in attnd-web attnd-dev; do
-     heroku config:set -a $app FCM_PROJECT_ID=<firebase-project-id> FCM_SERVICE_ACCOUNT_JSON="$(cat fcm-sa.json)"
-   done
-   ```
+4. Set up the server's Google service account, which covers both push and Play Integrity. See **Key reference → `GOOGLE_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`**.
 
 ### 4b. Google Play publishing from CI
 1. In [Google Cloud console](https://console.cloud.google.com), using the same project, enable the **Google Play Android Developer API**.
@@ -217,3 +212,139 @@ Note: the app now requires **Android 15 or later**. Play will stop offering upda
 - Dependencies:
   - Python: **Upgrade dependencies** runs every Monday (or run it by hand) and opens a PR into `develop`.
   - GitHub Actions and Gradle: Dependabot handles these.
+
+---
+
+## Key reference
+
+For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.
+
+### How to store a key in each place
+
+**GitHub repository secret** (used by every workflow in that repo):
+Repo → **Settings → Secrets and variables → Actions → Secrets tab → New repository secret**. Paste the name and value, then **Add secret**. To paste a file's contents without opening it, use `pbcopy < file` in Terminal, then ⌘V in the browser.
+
+**GitHub environment secret or variable** (used only by deploys to that environment):
+Repo → **Settings → Environments → `dev` or `production`** → **Add environment secret** for anything sensitive, or **Add environment variable** for plain settings like app names and hosts.
+
+**Heroku config var** (used by the running server):
+- From the Mac, without saving anything locally: `heroku config:set -a <app> NAME="value"`.
+- From a file: `NAME="$(cat file)"`, then delete the file.
+- Dashboard: app → **Settings → Reveal Config Vars → Add**.
+
+Setting a config var restarts the app (a few seconds).
+
+**Claude cloud environment** (gives Claude API access without showing it the value):
+When Claude needs one, it opens a secure form for you; never paste keys into chat. To add one yourself: claude.ai → Claude Code → environment menu → **Attnd Cloud Environment → Edit → Network secrets**.
+
+**Password manager:** add an entry named after the key, and attach the file if there is one (`.p8`, `.jks`, `.json`).
+
+---
+
+### Server keys (Heroku: `attnd-web` = production, `attnd-dev` = dev)
+
+**`SECRET_KEY`, `ATTESTATION_JWT_SECRET`**: Django signing and app-token signing.
+- **Create:** generate it inline with `$(openssl rand -hex 32)`. You never need to see it.
+- **Put:** both Heroku apps, with a different value on each. See step 2.
+- **If lost or leaked:** set a new value. Web sessions sign out and the apps re-attest automatically.
+- **Password manager:** not needed.
+
+**`API_KEY`**: static key for dev builds, CI and simulators.
+- **Create:** `openssl rand -hex 32`. Already set on both apps.
+- **Put:** Heroku (both apps). Also put the **dev** value in the `ATTND_API_KEY` repo secret in Attnd-iOS and Attnd-Android, and in your local dev config (step 5). Get it with `heroku config:get API_KEY -a attnd-dev | pbcopy`.
+- **If leaked:** set a new value and update the GitHub secrets. To block a leaked value permanently, add its SHA-256 to `REVOKED_API_KEY_SHA256` in `events/apis.py`.
+
+**`OPENAI_API_KEY`**: AI event import and refresh.
+- **Create:** [platform.openai.com](https://platform.openai.com) → **API keys → Create new secret key**. Name it "Attnd server", pick the project, and set permissions to "Restricted" with Model capabilities = Write. Optionally set a monthly budget under Settings → Limits.
+- **Put:** both Heroku apps. Use one key for both, or create a separate "Attnd dev" key to keep spending apart.
+- **If leaked:** revoke it on the same page and create a new one.
+
+**`GOOGLE_PLACES_API_KEY`**: map pins and photos for AI-imported locations.
+- **Create:** [Google Cloud console](https://console.cloud.google.com) → APIs & Services → **Library**: enable **Places API (New)** and **Geocoding API**. Then **Credentials → Create credentials → API key → Edit**:
+  - **API restrictions:** restrict the key to those two APIs.
+  - **Application restrictions:** None. Heroku has no fixed IP address.
+- **Put:** both Heroku apps.
+
+**`APNS_KEY_ID`, `APNS_AUTH_KEY`**: iPhone push notifications.
+- **Create:** [developer.apple.com](https://developer.apple.com/account/resources/authkeys/list) → **Keys → +**, name it "Attnd APNs", tick **Apple Push Notifications service (APNs)**, then **Continue → Register → Download**. The Key ID is shown on that page.
+- **Put:** both Heroku apps:
+  ```bash
+  heroku config:set -a attnd-web APNS_KEY_ID=ABC123DEFG APNS_AUTH_KEY="$(cat AuthKey_ABC123DEFG.p8)"
+  heroku config:set -a attnd-dev APNS_KEY_ID=ABC123DEFG APNS_AUTH_KEY="$(cat AuthKey_ABC123DEFG.p8)"
+  ```
+- **Password manager:** required. Attach the `.p8`, because Apple only lets you download it once.
+- **If lost:** revoke it and create a new key; an account can have two APNs keys at a time.
+
+**`GOOGLE_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`**: Android device check (Play Integrity) **and** Android push (FCM). One service account covers both.
+1. **Pick the Google Cloud project:** the one linked to Play: **Play Console → Test and release → App integrity → Play Integrity API → Link a Cloud project**. Use the same project for Firebase in the next step.
+2. **Firebase:** [console.firebase.google.com](https://console.firebase.google.com) → **Add project → choose that existing Cloud project**. Then **Project settings → General → Your apps → Add app → Android**, twice: `com.arcu.attnd` and `com.arcu.attnd.debug`. `FCM_PROJECT_ID` is the **Project ID** shown on that page.
+3. **Enable the APIs:** Cloud console → APIs & Services → Library → **Google Play Integrity API** and **Firebase Cloud Messaging API**.
+4. **Service account:** Cloud console → **IAM & Admin → Service accounts → Create**. Name it "attnd-server" and give it the role **Firebase Cloud Messaging API Admin**. Then open it → **Keys → Add key → JSON**, which downloads the file.
+5. **Put:**
+   ```bash
+   heroku config:set -a attnd-web FCM_PROJECT_ID=<project-id> GOOGLE_SERVICE_ACCOUNT_JSON="$(cat attnd-server.json)"
+   heroku config:set -a attnd-dev FCM_PROJECT_ID=<project-id> GOOGLE_SERVICE_ACCOUNT_JSON="$(cat attnd-server.json)"
+   ```
+   The server uses this one account for push too, so you don't need a separate `FCM_SERVICE_ACCOUNT_JSON`.
+- **If leaked:** delete the key under the service account's **Keys** tab and add a new one.
+
+**`ANDROID_SHA256_FINGERPRINT`**: makes `attnd.app/join/…` links open the Android app.
+- **Where:** Play Console → Attnd → **Test and release → App integrity → App signing** → *App signing key certificate* → **SHA-256 certificate fingerprint**.
+- **Put:** both Heroku apps. This value is public, not secret.
+
+---
+
+### GitHub keys
+
+**`HEROKU_API_KEY`** (Attnd-Web repo secret): lets the pipeline deploy.
+- **Create:** `heroku authorizations:create -d "GitHub Actions"`, then copy the **Token**.
+- **Put:** Attnd-Web repository secret.
+- **If leaked:** `heroku authorizations` lists tokens; remove one with `heroku authorizations:revoke <id>`.
+
+**`HEROKU_APP`** (Attnd-Web environment variable): `attnd-dev` on `dev`, `attnd-web` on `production`.
+
+**`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`** (Attnd-iOS repo secrets): signing and App Store uploads.
+- **Create:** [App Store Connect](https://appstoreconnect.apple.com/access/integrations/api) → **Users and Access → Integrations → App Store Connect API → Team Keys → +**. Name it "GitHub CI" with access **Admin**, then **Generate → Download** (one time only).
+  - The **Issuer ID** is shown above the list of keys.
+  - The **Key ID** is in the key's row.
+- **Put:** the three Attnd-iOS repository secrets. For `ASC_KEY_P8`, paste the whole file including the BEGIN/END lines (`pbcopy < AuthKey_XXXX.p8`).
+- **Password manager:** required (attach the `.p8`).
+- **If leaked:** revoke it on the same page and create a new one.
+
+**`ATTND_SERVER`** (Attnd-iOS and Attnd-Android, `dev` environment variable): `attnd-dev-7ab893f37020.herokuapp.com`. On `production`, leave it unset; it defaults to `attnd.app`.
+
+**`TESTFLIGHT_GROUP`** (Attnd-iOS, `dev` environment variable): `Internal`. It has to match your TestFlight group's name exactly.
+
+**`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`** (Attnd-Android repo secret): uploads builds to Play.
+- **Status:** this secret already exists and signs in, but its account isn't invited in Play Console.
+- **Find the account's email:** GitHub can't show you the secret. Look under Cloud console → IAM & Admin → **Service accounts**. If you can't tell which account it is, create a new one as below and replace the secret.
+- **Create:** Cloud console → APIs & Services → Library → enable **Google Play Android Developer API**. Then IAM & Admin → **Service accounts → Create**, name it "github-play-publisher" (no roles needed), then **Keys → Add key → JSON**.
+- **Grant access:** **Play Console → Users and permissions → Invite new users** → paste the service account's email → **App permissions → Add app → Attnd** → tick **Release apps to testing tracks**, **Release to production, exclude devices, and use Play App Signing**, and **Manage testing tracks and edit tester lists** → **Invite user**.
+- **Put:** the Attnd-Android repository secret.
+
+**`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`** (Attnd-Android repo secrets): the upload key.
+- **Status:** ✅ these already exist and work; CI built a signed bundle.
+- **Password manager:** **required.** Attach the `.jks` and save all three values. Losing this key means asking Google support to reset it, which takes days.
+- **If you ever need to re-add it:** `base64 -i upload.jks | pbcopy`, then paste into `ANDROID_KEYSTORE_BASE64`.
+
+**`MAPS_API_KEY`** (Attnd-Android repo secret): Google Maps in the Android app.
+- **Status:** ✅ it already exists.
+- **Restrict it:** Cloud console → Credentials → that key:
+  - **API restrictions:** Maps SDK for Android.
+  - **Application restrictions:** Android apps. Add `com.arcu.attnd` with the **App signing** SHA-1 and the **Upload** SHA-1, both from Play Console → App integrity. Add `com.arcu.attnd.debug` with your debug SHA-1.
+
+**`GOOGLE_SERVICES_JSON`** (Attnd-Android repo secret): Firebase configuration for the Android app (push).
+- **Where:** Firebase → Project settings → General → Your apps → Android app → **google-services.json** download. Both Android apps are in the same file.
+- **Put:** `pbcopy < google-services.json`, then paste into the Attnd-Android repository secret. This file isn't truly secret, but keeping it out of git keeps the repo clean.
+
+**`ATTND_API_KEY`** (Attnd-iOS and Attnd-Android repo secrets): the **dev** app's `API_KEY`, used only for the optional live API tests. **Replace the old value**, which is likely the leaked production key. To turn the live tests on, also add the repo variables `LIVE_API_TESTS=true` and `LIVE_API_SERVER=attnd-dev-7ab893f37020.herokuapp.com`.
+
+---
+
+### Claude cloud environment keys
+
+| Network secret | Host | Status |
+|---|---|---|
+| Heroku API token ("Heroku API token (Claude)") | `api.heroku.com` | ✅ saved; Claude can manage both Heroku apps |
+
+Revoke it any time with `heroku authorizations` / `heroku authorizations:revoke <id>`, or from the environment's settings.
