@@ -200,7 +200,9 @@ The new release also changes behaviour reviewers and users will notice:
    ```
 3. ✅ Put the file at `Attnd-Android/app/google-services.json` for local builds. It's gitignored.
 4. **Give the server one Google key that covers both Android push and the Play Integrity device check.**
-   1. **Check that Play Integrity uses this project.** Go to Play Console → Attnd → **Test and release → App integrity → Play Integrity API**. The linked Cloud project should be the Firebase **Attnd** project. If it's a different project, or none, click **Link a Cloud project** and choose it.
+   1. **Check that Play Integrity uses this project.** Go to Play Console → Attnd → **Protected with Play** (the shield icon). On the **Play Integrity API** row, click **Manage**. The linked Google Cloud project shown there should be the Firebase **Attnd** project. If it's a different project, or none, link the Attnd project.
+      - **Automatic protection** (1 of 1 active) is fine to leave on. It blocks unofficial installs, which fits the server's rules.
+      - The other optional Play Integrity services, such as the app access risk and Play Protect verdicts, aren't used by the server. You don't need to turn them on.
    2. **Turn on the two APIs.** Open each link, choose the **Attnd** project at the top, and click **Enable**. If it says *Manage*, the API is already on.
       - https://console.cloud.google.com/apis/library/playintegrity.googleapis.com
       - https://console.cloud.google.com/apis/library/fcm.googleapis.com
@@ -226,7 +228,7 @@ The new release also changes behaviour reviewers and users will notice:
 ### 4c. Signing and keys
 - Upload keystore: use the same `.jks` and passwords as your current `signing.properties`.
 - Maps key: in Cloud console → APIs & Services → Credentials, restrict the Maps key to Android apps:
-  - `com.arcu.attnd` with the **App signing key** SHA-1 (Play Console → Test and release → App integrity)
+  - `com.arcu.attnd` with the **App signing key** SHA-1 (Play Console → **Protected with Play** / App integrity)
   - `com.arcu.attnd` with the upload key SHA-1
   - `com.arcu.attnd.debug` with your debug SHA-1
 - App Links: set the Play **App signing** SHA-256 on both Heroku apps so `/.well-known/assetlinks.json` is valid:
@@ -409,7 +411,7 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
 - **If lost:** revoke it and create a new key; an account can have two APNs keys at a time.
 
 **`GOOGLE_SERVICE_ACCOUNT_JSON`, `FCM_PROJECT_ID`**: Android device check (Play Integrity) **and** Android push (FCM). One service account covers both.
-1. **Pick the Google Cloud project:** the one linked to Play: **Play Console → Test and release → App integrity → Play Integrity API → Link a Cloud project**. Use the same project for Firebase in the next step.
+1. **Pick the Google Cloud project:** the one linked to Play: **Play Console → **Protected with Play** / App integrity → Play Integrity API → Link a Cloud project**. Use the same project for Firebase in the next step.
 2. **Firebase:** [console.firebase.google.com](https://console.firebase.google.com) → **Add project → choose that existing Cloud project**. Then **Project settings → General → Your apps → Add app → Android**, twice: `com.arcu.attnd` and `com.arcu.attnd.debug`. `FCM_PROJECT_ID` is the **Project ID** shown on that page.
 3. **Enable the APIs:** Cloud console → APIs & Services → Library → **Google Play Integrity API** and **Firebase Cloud Messaging API**.
 4. **Service account:** Cloud console → **IAM & Admin → Service accounts → Create**. Name it "attnd-server" and give it the role **Firebase Cloud Messaging API Admin**. Then open it → **Keys → Add key → JSON**, which downloads the file.
