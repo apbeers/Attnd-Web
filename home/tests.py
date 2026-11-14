@@ -17,4 +17,5 @@ class PrivacyPageTests(TestCase):
         response = self.client.get(reverse('home:privacy'), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'home/privacy.html')
-        self.assertContains(response, 'Attnd does not collect, store, or share any personal user data.')
+        self.assertContains(response, 'A random app ID.')
+        self.assertContains(response, 'We don\'t sell or share personal information.')
