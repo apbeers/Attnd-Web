@@ -1,6 +1,7 @@
 import secrets
 import string
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
@@ -198,6 +199,25 @@ class ScheduledItem(models.Model):
         return f'{self.name} @ {self.location.name if self.location else "—"}'
 
 
+# Scheduled notifications go out from `run_scheduled_tasks`, which Heroku Scheduler runs every
+# 10 minutes, so scheduled send times must sit on a 10-minute mark (:00, :10, :20 …).
+SEND_SLOT_MINUTES = 10
+
+
+def next_send_slot(after=None):
+    """The first 10-minute mark at or after `after` (default: now)."""
+    after = after or dj_tz.now()
+    slot = after.replace(second=0, microsecond=0)
+    if after.second or after.microsecond or slot.minute % SEND_SLOT_MINUTES:
+        slot += timedelta(minutes=SEND_SLOT_MINUTES - slot.minute % SEND_SLOT_MINUTES)
+    return slot
+
+
+def is_send_slot(value):
+    local = dj_tz.localtime(value) if dj_tz.is_aware(value) else value
+    return local.minute % SEND_SLOT_MINUTES == 0 and local.second == 0 and local.microsecond == 0
+
+
 class Notification(models.Model):
     title = models.CharField(max_length=60)
     body = models.CharField(max_length=256)
@@ -213,6 +233,13 @@ class Notification(models.Model):
         indexes = [
             models.Index(fields=['event', 'user'])
         ]
+
+    def clean(self):
+        # "Send now" sends immediately and skips this; only scheduled sends are restricted.
+        if not self.sent and self.send_time and not is_send_slot(self.send_time):
+            from django.core.exceptions import ValidationError
+            raise ValidationError({'send_time': f'Pick a time on a {SEND_SLOT_MINUTES}-minute mark '
+                                                f'(e.g. 6:00, 6:10, 6:20) — that is when scheduled updates go out.'})
 
     def get_absolute_url(self):
         return reverse('events:get_single_notification', args=[self.event.id, self.id])

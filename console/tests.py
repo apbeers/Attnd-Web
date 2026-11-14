@@ -254,3 +254,47 @@ class ConsoleTests(TestCase):
         n = Notification.objects.get()
         self.assertTrue(n.sent)
         self.assertEqual(n.delivered_count, 3)
+
+
+class NotificationSlotTests(ConsoleTests):
+    """Scheduled notifications must land on the 10-minute marks Heroku Scheduler runs at."""
+
+    def _schedule(self, when):
+        return self.client.post(self.url('notifications'), {
+            'title': 'Doors', 'body': 'Open soon', 'when': 'later', 'send_time': when}, secure=True)
+
+    def test_off_slot_time_is_rejected(self):
+        resp = self._schedule('2030-07-04T18:05')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '10-minute mark')
+        self.assertFalse(Notification.objects.exists())
+
+    def test_on_slot_time_is_saved_in_event_timezone(self):
+        resp = self._schedule('2030-07-04T18:10')
+        self.assertEqual(resp.status_code, 302)
+        n = Notification.objects.get()
+        self.assertEqual(n.send_time.astimezone(datetime.timezone.utc).strftime('%H:%M'), '23:10')
+
+    def test_past_time_is_rejected(self):
+        self.assertEqual(self._schedule('2020-01-01T10:00').status_code, 200)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_picker_only_offers_slots_and_default_is_a_slot(self):
+        page = self.client.get(self.url('notifications'), secure=True)
+        self.assertContains(page, 'step="600"')
+        initial = page.context['form'].initial['send_time']
+        self.assertEqual((initial.minute % 10, initial.second), (0, 0))
+
+    def test_model_validation_applies_to_admin_too(self):
+        from django.core.exceptions import ValidationError
+        n = Notification(event=self.event, user=self.owner, title='t', body='b',
+                         send_time=timezone.now().replace(minute=7, second=0, microsecond=0))
+        with self.assertRaises(ValidationError):
+            n.full_clean()
+
+    def test_next_send_slot(self):
+        from events.models import next_send_slot
+        base = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        self.assertEqual(next_send_slot(base), base)
+        self.assertEqual(next_send_slot(base + datetime.timedelta(minutes=1)).minute, 10)
+        self.assertEqual(next_send_slot(base + datetime.timedelta(minutes=59, seconds=1)).hour, 11)

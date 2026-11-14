@@ -5,7 +5,9 @@ from decimal import Decimal
 from django import forms
 
 from events.display import (LABELS, LOCATIONS_STYLES, PRESETS, SCHEDULE_STYLES, SECONDARY_PANES, TABS)
-from events.models import Event, Location, Notification, ScheduledItem
+from django.utils import timezone
+
+from events.models import Event, Location, Notification, ScheduledItem, is_send_slot
 
 DT_WIDGET = forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}, format='%Y-%m-%dT%H:%M')
 DT_FORMATS = ['%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M']
@@ -229,7 +231,12 @@ class NotificationForm(BootstrapMixin, forms.ModelForm):
     WHEN_NOW, WHEN_LATER = 'now', 'later'
     when = forms.ChoiceField(choices=[(WHEN_NOW, 'Send now'), (WHEN_LATER, 'Schedule for later')],
                              initial=WHEN_NOW, widget=forms.RadioSelect(attrs={'class': 'form-check-input'}))
-    send_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS, required=False)
+    send_time = forms.DateTimeField(
+        required=False, input_formats=DT_FORMATS,
+        # step is in seconds: the picker only offers 10-minute marks
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control', 'step': 600},
+                                   format='%Y-%m-%dT%H:%M'),
+        help_text='Scheduled updates go out in 10-minute slots (:00, :10, :20 …).')
 
     class Meta:
         model = Notification
@@ -239,8 +246,14 @@ class NotificationForm(BootstrapMixin, forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        if data.get('when') == self.WHEN_LATER and not data.get('send_time'):
-            self.add_error('send_time', 'Pick a time.')
+        send_time = data.get('send_time')
+        if data.get('when') == self.WHEN_LATER:
+            if not send_time:
+                self.add_error('send_time', 'Pick a time.')
+            elif not is_send_slot(send_time):
+                self.add_error('send_time', 'Pick a time on a 10-minute mark (e.g. 6:00, 6:10, 6:20).')
+            elif send_time <= timezone.now():
+                self.add_error('send_time', 'Pick a time in the future, or choose “Send now”.')
         return data
 
 

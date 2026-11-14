@@ -8,7 +8,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 |---|---|
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
-| 2. Heroku | ⏳ The dev app `attnd-dev` was created by Claude (Postgres, Scheduler and generated secrets are set). **You still need to:** set the two production secrets (below), add the OpenAI key to dev, and add the GitHub deploy token. |
+| 2. Heroku | ⏳ ✅ `attnd-dev` is created and configured, including the OpenAI and Places keys and its Scheduler job (which starts working after the first dev deploy). **Still to do:** the two production secrets (step 2), then the one-time GitHub setup under **GitHub from the command line**. |
 | 3. Apple | ⬜ CI builds and tests pass. Upload waits for the `ASC_*` secrets (3b). |
 | 4. Google / Android | ⏳ CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
 | 5. Local dev keys | ⬜ |
@@ -79,11 +79,11 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
 ### Dev (`attnd-dev`) — created by Claude
 - ✅ App `attnd-dev` at `https://attnd-dev-7ab893f37020.herokuapp.com/`. Heroku now gives new apps a random hostname, so use this exact host wherever this guide says `ATTND_SERVER`.
 - ✅ Postgres (essential-0), Scheduler, and generated `SECRET_KEY`, `API_KEY` and `ATTESTATION_JWT_SECRET`.
-- **You:** copy the third-party keys over from production. The values never touch disk:
+- ✅ The OpenAI and Places keys have been copied from production. For reference, the command was:
   ```bash
   heroku config:set -a attnd-dev OPENAI_API_KEY="$(heroku config:get OPENAI_API_KEY -a attnd-web)" GOOGLE_PLACES_API_KEY="$(heroku config:get GOOGLE_PLACES_API_KEY -a attnd-web)"
   ```
-- After the first deploy to dev, add the same Scheduler job on `attnd-dev` (`heroku addons:open scheduler -a attnd-dev`).
+- ✅ The Scheduler job is added on `attnd-dev`.
 - The dev `API_KEY` is what goes in the `ATTND_API_KEY` GitHub secrets and in your local dev config. Print it with `heroku config:get API_KEY -a attnd-dev`.
 
 ### Let GitHub deploy to Heroku
@@ -220,6 +220,45 @@ Note: the app now requires **Android 15 or later**. Play will stop offering upda
 For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.
 
 ### How to store a key in each place
+
+### GitHub from the command line (`gh`)
+
+Run `gh auth login` once. After that, every GitHub setting in this guide can be set from Terminal. `gh secret set` reads the value from a pipe, so keys go straight from Heroku (or a file) into GitHub without being shown or saved.
+
+**One-time GitHub setup.** Paste the whole block:
+```bash
+for r in Attnd-Web Attnd-iOS Attnd-Android; do gh api -X PUT repos/apbeers/$r/environments/dev >/dev/null; gh api -X PUT repos/apbeers/$r/environments/production >/dev/null; done
+heroku authorizations:create -d "GitHub Actions" -S | gh secret set HEROKU_API_KEY -R apbeers/Attnd-Web
+gh variable set HEROKU_APP -e dev -b attnd-dev -R apbeers/Attnd-Web
+gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
+heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-iOS
+heroku config:get API_KEY -a attnd-dev | gh secret set ATTND_API_KEY -R apbeers/Attnd-Android
+gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-iOS
+gh variable set ATTND_SERVER -e dev -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/Attnd-Android
+gh variable set TESTFLIGHT_GROUP -e dev -b Internal -R apbeers/Attnd-iOS
+```
+
+**Optional:** run the live API tests against dev in CI:
+```bash
+for r in Attnd-iOS Attnd-Android; do gh variable set LIVE_API_TESTS -b true -R apbeers/$r; gh variable set LIVE_API_SERVER -b attnd-dev-7ab893f37020.herokuapp.com -R apbeers/$r; done
+```
+
+**Secrets that come from downloaded files.** Run each one from the folder the file is in, then delete the file:
+```bash
+gh secret set ASC_KEY_P8 -R apbeers/Attnd-iOS < AuthKey_XXXXXXXXXX.p8
+gh secret set ASC_KEY_ID -b XXXXXXXXXX -R apbeers/Attnd-iOS
+gh secret set ASC_ISSUER_ID -b 00000000-0000-0000-0000-000000000000 -R apbeers/Attnd-iOS
+gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON -R apbeers/Attnd-Android < github-play-publisher.json
+gh secret set GOOGLE_SERVICES_JSON -R apbeers/Attnd-Android < google-services.json
+```
+
+**Check what's set** (names only; values are never shown):
+```bash
+for r in Attnd-Web Attnd-iOS Attnd-Android; do echo "== $r"; gh secret list -R apbeers/$r; gh variable list -R apbeers/$r; for e in dev production; do gh secret list -e $e -R apbeers/$r; gh variable list -e $e -R apbeers/$r; done; done
+```
+
+**In the browser instead:**
+
 
 **GitHub repository secret** (used by every workflow in that repo):
 Repo → **Settings → Secrets and variables → Actions → Secrets tab → New repository secret**. Paste the name and value, then **Add secret**. To paste a file's contents without opening it, use `pbcopy < file` in Terminal, then ⌘V in the browser.

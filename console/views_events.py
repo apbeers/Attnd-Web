@@ -32,7 +32,7 @@ from events import push
 from events.content import mark_locked, restore, save_revision
 from events.display import LABELS, clean_overrides, event_stats, resolve_display
 from events.models import (Device, Event, EventMember, EventRevision, Location, Notification, ScheduledItem,
-                           events_for_user, generate_event_code)
+                           events_for_user, generate_event_code, next_send_slot)
 from scrape import diff, jobs
 from scrape.models import Change, ChangeSet, IngestJob
 
@@ -407,7 +407,8 @@ def item_action(request, event, item_id):
 
 @event_view
 def notifications(request, event):
-    form = NotificationForm(request.POST or None, initial={'send_time': timezone.now() + timedelta(hours=1)})
+    form = NotificationForm(request.POST or None,
+                            initial={'send_time': next_send_slot(timezone.now() + timedelta(hours=1))})
     if request.method == 'POST' and form.is_valid():
         n = form.save(commit=False)
         n.event = event
