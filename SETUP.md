@@ -9,10 +9,10 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, Scheduler jobs and GitHub deploy settings. **Still to do:** add Cloudinary on both apps so uploads survive restarts, and set `CONTACT_EMAIL` on production. |
-| 3. Apple | ⏳ ✅ App ID capabilities checked. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. **Next:** 3b, the App Store Connect key (`Z43S25BCS9`, downloaded) goes into GitHub, then 3c (TestFlight group). |
-| 4. Google / Android | ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. The first Play internal-testing upload is running. 4d (production lock-down) waits for the first release. |
+| 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ❌ 3b: the CI key check (iOS run 78) reports that the `ASC_ISSUER_ID` secret is not the Issuer ID UUID. Re-set it with the command under 3b, then re-run the iOS workflow. |
+| 4. Google / Android | ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
-| 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. Waiting on: iOS (3b/3c), Android (step 4), and the first release to `main`. |
+| 6. Check it all works | ⏳ ✅ **Web dev works:** pushes to `develop` deploy to attnd-dev automatically. Health is OK with the database connected, migrations ran, and the console and API respond. ✅ **Android:** `develop` publishes to Play internal testing. Waiting on: iOS (3b `ASC_ISSUER_ID`) and the first release to `main`. |
 
 Notes:
 - If the Heroku CLI says an update is available, run `heroku update` first. It's optional.
