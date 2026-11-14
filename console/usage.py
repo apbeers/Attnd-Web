@@ -110,12 +110,18 @@ def event_usage(event, tz):
                               .annotate(n=Sum('count')).order_by('-n').values_list('metric', 'detail', 'n')):
         by_detail[metric].append((detail, n))
 
+    link_opens = defaultdict(int)  # QR code / join link opens, by device kind
+    for detail, n in rows.filter(metric='link_open').values_list('detail').annotate(n=Sum('count')).values_list('detail', 'n'):
+        link_opens[detail] += n
+    opens_series = defaultdict(int)
     activity, joins = defaultdict(int), defaultdict(int)
     for metric, bucket, n in rows.values_list('metric', 'bucket').annotate(n=Sum('count')).values_list('metric', 'bucket', 'n'):
         if metric in INTERACTIONS:
             activity[bucket] += n
         elif metric == 'join':
             joins[bucket] += n
+        elif metric == 'link_open':
+            opens_series[bucket] += n
     hourly = defaultdict(int)
     for bucket, n in activity.items():
         hourly[bucket.replace(minute=0)] += n
@@ -143,6 +149,12 @@ def event_usage(event, tz):
             {'label': 'Total joined', 'cls': 'total', 'points': joins, 'cumulative': True},
             {'label': 'Joined in that time', 'cls': 'new', 'points': joins},
         ], tz, end=chart_end),
+        'link_opens': {'total': sum(link_opens.values()), 'ios': link_opens.get('ios', 0),
+                       'android': link_opens.get('android', 0), 'desktop': link_opens.get('desktop', 0)},
+        'link_chart': line_chart([
+            {'label': 'Total QR / link opens', 'cls': 'total', 'points': opens_series, 'cumulative': True},
+            {'label': 'Opens in that time', 'cls': 'new', 'points': opens_series},
+        ], tz, end=chart_end),
     }
 
 
@@ -159,11 +171,13 @@ def app_usage(tz, days=30):
     joins_before = earlier.filter(metric='join').aggregate(n=Sum('count'))['n'] or 0
     totals = dict(rows.values_list('metric').annotate(n=Sum('count')).values_list('metric', 'n'))
 
-    per_event = defaultdict(lambda: {'joins': 0, 'activity': 0})
+    per_event = defaultdict(lambda: {'joins': 0, 'activity': 0, 'link_opens': 0})
     for event_id, metric, n in (rows.exclude(event=None).values_list('event', 'metric').annotate(n=Sum('count'))
                                 .values_list('event', 'metric', 'n')):
         if metric == 'join':
             per_event[event_id]['joins'] += n
+        elif metric == 'link_open':
+            per_event[event_id]['link_opens'] += n
         elif metric in INTERACTIONS:
             per_event[event_id]['activity'] += n
     events = {e.id: e for e in Event.objects.filter(id__in=per_event)}
@@ -178,6 +192,7 @@ def app_usage(tz, days=30):
         'installs': totals.get('install', 0),
         'joins': totals.get('join', 0),
         'activity': sum(totals.get(m, 0) for m in INTERACTIONS),
+        'link_opens': totals.get('link_open', 0),
         'active_devices': seen.count(),
         'installs_chart': line_chart([
             {'label': 'Total installs', 'cls': 'total', 'points': series['install'], 'cumulative': True, 'base': installs_before},

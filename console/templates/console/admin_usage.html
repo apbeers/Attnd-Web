@@ -50,9 +50,9 @@
 <div class="row g-4">
   <div class="col-lg-7"><div class="card"><div class="card-body">
     <h2 class="h6">Events by activity</h2>
-    <table class="table table-sm mb-0"><thead><tr><th>Event</th><th class="text-end">Joins</th><th class="text-end">Interactions</th></tr></thead><tbody>
-      {% for r in usage.events %}<tr><td><a href="{% url 'console:usage' r.event.id %}">{{ r.event.name }}</a></td><td class="text-end">{{ r.joins }}</td><td class="text-end">{{ r.activity }}</td></tr>
-      {% empty %}<tr><td colspan="3" class="text-muted">No activity yet.</td></tr>{% endfor %}
+    <table class="table table-sm mb-0"><thead><tr><th>Event</th><th class="text-end">QR opens</th><th class="text-end">Joins</th><th class="text-end">Interactions</th></tr></thead><tbody>
+      {% for r in usage.events %}<tr><td><a href="{% url 'console:usage' r.event.id %}">{{ r.event.name }}</a></td><td class="text-end">{{ r.link_opens }}</td><td class="text-end">{{ r.joins }}</td><td class="text-end">{{ r.activity }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="text-muted">No activity yet.</td></tr>{% endfor %}
     </tbody></table>
   </div></div></div>
   <div class="col-lg-5"><div class="card"><div class="card-body">

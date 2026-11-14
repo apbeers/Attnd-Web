@@ -27,6 +27,12 @@
   {% include 'console/_linechart.html' with c=usage.activity_chart label="App activity" %}
 </div></div>
 <div class="card mb-4"><div class="card-body">
+  <h2 class="h6">QR code &amp; join link opens</h2>
+  <p class="small text-muted mb-2">{{ usage.link_opens.total }} opens: {{ usage.link_opens.ios }} iPhone, {{ usage.link_opens.android }} Android,
+    {{ usage.link_opens.desktop }} computer. iPhones and Android phones that already have the app open it directly, so those don't show up here.</p>
+  {% include 'console/_linechart.html' with c=usage.link_chart label="QR and link opens" %}
+</div></div>
+<div class="card mb-4"><div class="card-body">
   <h2 class="h6">People joining</h2>
   {% include 'console/_linechart.html' with c=usage.joins_chart label="People joining" %}
 </div></div>

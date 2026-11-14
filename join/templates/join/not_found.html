@@ -1,0 +1,30 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Event not found · Attnd</title>
+  <meta name="theme-color" content="#431f86">
+  <link rel="stylesheet" href="{% static 'home/site.css' %}">
+  <link rel="icon" type="image/png" href="{% static 'home/img/favicon.png' %}">
+  <style>
+    .join-page { min-height: 100vh; background: linear-gradient(135deg, #431f86 0%, #7b4fd6 100%); padding: 32px 16px; display: grid; place-items: center; }
+    .join-card { background: #fff; border-radius: 22px; max-width: 460px; width: 100%; padding: 36px; text-align: center; box-shadow: 0 30px 80px rgba(20,5,50,.35); }
+    .join-card form { display: flex; gap: 8px; margin-top: 18px; }
+    .join-card input { flex: 1; font: inherit; font-family: var(--mono); text-transform: uppercase; padding: .7rem .9rem; border: 1px solid var(--line); border-radius: 10px; }
+  </style>
+</head>
+<body>
+<main class="join-page">
+  <div class="join-card">
+    <a class="brand" href="/">attnd<span>.</span></a>
+    <h1 style="font-size:1.6rem;margin:18px 0 8px">We couldn't find that event</h1>
+    <p class="muted">{% if code %}No event uses the code <strong class="mono">{{ code }}</strong>.{% endif %} Check the code on the poster or with the organizers.</p>
+    <form onsubmit="event.preventDefault(); const c = this.code.value.trim(); if (c) location.href = '/join/' + encodeURIComponent(c.toUpperCase()) + '/';">
+      <input name="code" placeholder="Event code" autocomplete="off" autocapitalize="characters" aria-label="Event code">
+      <button class="btn btn-primary">Go</button>
+    </form>
+  </div>
+</main>
+</body>
+</html>

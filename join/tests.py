@@ -40,13 +40,15 @@ class JoinEventRedirectTests(TestCase):
     def setUp(self):
         self.client = Client()
 
-    def test_ios_redirects_to_app_store(self):
+    def test_ios_gets_the_app_clip_banner_not_a_redirect(self):
         response = self.client.get(
             reverse('join:join_event', args=['testevt']),
             HTTP_USER_AGENT=IOS_UA,
         )
-        self.assertEqual(response.status_code, 302)
-        self.assertIn('apps.apple.com', response['Location'])
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="apple-itunes-app" content="app-id=123, app-clip-bundle-id=')
+        self.assertContains(response, 'app-clip-display=card')
+        self.assertContains(response, 'https://apps.apple.com/app/id123')
 
     def test_android_redirects_to_play_store(self):
         response = self.client.get(
@@ -95,14 +97,26 @@ class JoinEventRedirectTests(TestCase):
         )
         self.assertEqual(response['Cache-Control'], 'no-cache')
 
-    def test_ipad_redirects_to_app_store(self):
-        ipad_ua = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)'
-        response = self.client.get(
-            reverse('join:join_event', args=['testevt']),
-            HTTP_USER_AGENT=ipad_ua,
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertIn('apps.apple.com', response['Location'])
+    def test_codes_are_case_insensitive_and_drafts_are_hidden(self):
+        self.assertEqual(self.client.get('/join/TESTEVT/', HTTP_USER_AGENT=DESKTOP_UA).status_code, 200)
+        Event.objects.filter(pk=self.event.pk).update(status=Event.STATUS_DRAFT)
+        response = self.client.get('/join/testevt/', HTTP_USER_AGENT=DESKTOP_UA)
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, "couldn't find that event", status_code=404)
+
+    def test_desktop_page_shows_a_qr_code(self):
+        response = self.client.get('/join/testevt/', HTTP_USER_AGENT=DESKTOP_UA)
+        self.assertContains(response, '/join/testevt/qr.svg')
+        svg = self.client.get('/join/testevt/qr.svg')
+        self.assertEqual(svg['Content-Type'], 'image/svg+xml')
+        self.assertIn(b'<svg', svg.content)
+
+    def test_opens_are_counted_by_device_and_bots_are_ignored(self):
+        from events.models import UsageCount
+        for ua in (IOS_UA, ANDROID_UA, ANDROID_UA, DESKTOP_UA, 'Slackbot-LinkExpanding 1.0', 'facebookexternalhit/1.1'):
+            self.client.get('/join/testevt/', HTTP_USER_AGENT=ua)
+        counts = {u.detail: u.count for u in UsageCount.objects.filter(event=self.event, metric='link_open')}
+        self.assertEqual(counts, {'ios': 1, 'android': 2, 'desktop': 1})
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, IOS_APP_STORE_URL="https://apps.apple.com/app/id123")
@@ -122,6 +136,12 @@ class WellKnownTests(TestCase):
     def test_aasa_has_no_cache_header(self):
         response = self.client.get('/.well-known/apple-app-site-association')
         self.assertEqual(response['Cache-Control'], 'no-cache')
+
+    def test_aasa_only_claims_join_links(self):
+        data = self.client.get('/.well-known/apple-app-site-association').json()
+        paths = [c['/'] for c in data['applinks']['details'][0]['components']]
+        self.assertNotIn('/*', paths)
+        self.assertIn('/join/*', paths)
 
     def test_aasa_structure(self):
         response = self.client.get('/.well-known/apple-app-site-association')

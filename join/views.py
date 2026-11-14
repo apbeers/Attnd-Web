@@ -1,40 +1,94 @@
 import os
+import re
 from urllib.parse import quote
 
 from django.conf import settings
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404, HttpResponse, JsonResponse
+from django.shortcuts import redirect, render
 from django.views import View
 
 from events.models import Event
 
 
 
+_BOTS = ('bot', 'crawler', 'spider', 'preview', 'facebookexternalhit', 'slackbot', 'whatsapp', 'telegram',
+         'discord', 'embedly', 'skypeuripreview', 'headless')
+
+
+def client_kind(user_agent):
+    """'ios', 'android', 'desktop' or 'bot' from a User-Agent (good enough for routing and counting)."""
+    ua = (user_agent or '').lower()
+    if any(b in ua for b in _BOTS):
+        return 'bot'
+    if 'iphone' in ua or 'ipad' in ua or 'ipod' in ua:
+        return 'ios'
+    if 'android' in ua:
+        return 'android'
+    return 'desktop'
+
+
+def _app_store_id():
+    m = re.search(r'id(\d+)', settings.IOS_APP_STORE_URL or '')
+    return m.group(1) if m else ''
+
+
+def play_url(event_code):
+    # The install referrer carries the code, so the app joins the event on first launch.
+    return (f'https://play.google.com/store/apps/details?id={settings.ANDROID_PACKAGE_NAME}'
+            f'&referrer={quote(f"event_code={event_code}")}')
+
+
 class JoinEventRedirect(View):
+    """/join/<code>/: the one link (and QR code) for every device.
+
+    - iPhone with the app: iOS opens the app directly (Universal Links); this page isn't loaded.
+    - iPhone without it: scanning with the Camera shows the App Clip card. If the page does load (e.g. in
+      Safari), it shows the App Clip banner, an Open button and the App Store link. It doesn't auto-redirect
+      to the App Store, which would dismiss the App Clip card.
+    - Android with the app: Android opens it directly (App Links); without: redirect to Play with the
+      code as install referrer, so the app joins the event on first launch.
+    - Desktop: an event page with a QR code to scan with a phone.
+    Every open is counted anonymously (UsageCount link_open, detail ios/android/desktop).
+    """
 
     def get(self, request, event_code):
-        event = get_object_or_404(Event, event_code=event_code)
-        ua = request.headers.get('User-Agent', '').lower()
+        code = (event_code or '').strip().upper()
+        event = Event.objects.filter(event_code__iexact=code).exclude(status=Event.STATUS_DRAFT).first()
+        kind = client_kind(request.headers.get('User-Agent'))
+        if event is None:
+            response = render(request, 'join/not_found.html', {'code': code}, status=404)
+            response['Cache-Control'] = 'no-cache'
+            return response
+        if kind != 'bot':
+            from events import usage
+            usage.record(event, 'link_open', detail=kind)
 
-        android_url = (
-            f'https://play.google.com/store/apps/details'
-            f'?id={settings.ANDROID_PACKAGE_NAME}'
-            f'&referrer={quote(f"event_code={event_code}")}'
-        )
-
-        if ('iphone' in ua or 'ipad' in ua or 'ipod' in ua) and settings.IOS_APP_STORE_URL:
-            response = redirect(settings.IOS_APP_STORE_URL)
-        elif 'android' in ua:
-            response = redirect(android_url)
+        join_url = f'https://attnd.app/join/{event.event_code}/'  # exactly what the QR code encodes
+        if kind == 'android':
+            response = redirect(play_url(event.event_code))
         else:
-            return render(request, 'join/landing.html', {
-                'event': event,
-                'ios_url': settings.IOS_APP_STORE_URL,
-                'android_url': android_url,
+            response = render(request, 'join/landing.html', {
+                'event': event, 'kind': kind, 'join_url': join_url,
+                'ios_url': settings.IOS_APP_STORE_URL, 'android_url': play_url(event.event_code),
+                'app_store_id': _app_store_id(),
+                'clip_bundle_id': f"{os.getenv('APPLE_APP_BUNDLE_ID', 'com.arcu.Attnd')}.clip",
             })
-
         response['Cache-Control'] = 'no-cache'
         return response
+
+
+def join_qr(request, event_code):
+    """SVG QR code for the join link (the desktop page shows it)."""
+    import qrcode
+    import qrcode.image.svg
+    event = Event.objects.filter(event_code__iexact=event_code).exclude(status=Event.STATUS_DRAFT).first()
+    if event is None:
+        raise Http404
+    img = qrcode.make(f'https://attnd.app/join/{event.event_code}/', image_factory=qrcode.image.svg.SvgPathImage,
+                      box_size=12, border=2)
+    response = HttpResponse(img.to_string(), content_type='image/svg+xml')
+    response['Cache-Control'] = 'public, max-age=3600'
+    return response
 
 
 class AppleAppSiteAssociation(View):
@@ -52,8 +106,8 @@ class AppleAppSiteAssociation(View):
                 'details': [{
                     'appIDs': [app_id, clip_id],
                     'components': [
-                        {'/' : '/join/*', 'comment': 'Join event links'},
-                        {'/' : '/*'},
+                        {'/': '/join/*/qr.svg', 'exclude': True, 'comment': 'QR images stay on the web'},
+                        {'/': '/join/*', 'comment': 'Join event links open the app (or the App Clip)'},
                     ],
                 }],
             },
