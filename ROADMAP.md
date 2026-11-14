@@ -67,3 +67,10 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
 
 ## Future
 
+### Android: move FCM to the Firebase Installation ID registration API (would be API-008)
+firebase-messaging 25.1.0 (June 2026) deprecated `FirebaseMessaging.getToken()` / `onNewToken` in favour of
+`register()` / `onRegistered`, which hands out a Firebase Installation ID instead of an FCM token. The app
+currently suppresses the deprecation (`PushNotifications.kt`, `AttndMessagingService.kt`). Moving needs a tracker
+entry: what `push_token` carries, how `events/push.py` sends to it (FCM HTTP v1 target), and a transition where
+the server accepts both. Do it before the old API is removed.
+
