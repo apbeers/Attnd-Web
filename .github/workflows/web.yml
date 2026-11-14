@@ -3,7 +3,7 @@
 #   push to develop      → deploy to the Heroku dev app        (environment: dev)
 #   push to main         → deploy to the Heroku production app (environment: production)
 #
-# Setup: see DEPLOYMENT.md. Uses only GitHub's own actions.
+# Setup: see SETUP.md. Uses only GitHub's own actions.
 name: Web
 
 on:

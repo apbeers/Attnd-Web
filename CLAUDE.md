@@ -2,6 +2,12 @@
 
 Django 6.0 backend serving the REST API consumed by the iOS and Android apps, plus a web console for event organizers. Deployed on Heroku.
 
+
+## Branching (initial development)
+
+- `main` = production (default branch), `develop` = dev/beta. Pushing to `develop` deploys to the dev server / TestFlight / Play internal testing; pushing to `main` deploys to production.
+- **While there are no real users yet, commit and push straight to `develop`** — no feature branches or PRs needed. Merge `develop` → `main` to release. Revisit this once the apps have users.
+
 ## System Overview
 
 Attnd is an event attendance app. This repo is the single backend for both mobile clients:
@@ -185,7 +191,7 @@ Tests live in `<app>/tests.py`, `events/tests_v2.py` (v2 API, display, push) and
 
 ## Deployment
 
-CI/CD for all three repos (develop → dev, main → production) is documented in `DEPLOYMENT.md`.
+CI/CD for all three repos (develop → dev, main → production) is documented in `SETUP.md`.
 
 Heroku `Procfile`:
 ```
