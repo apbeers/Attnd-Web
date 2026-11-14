@@ -9,8 +9,8 @@ Do these steps once, in order. Each step says which values go where.
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
 | 2. Heroku | ⏳ The dev app `attnd-dev` was created by Claude (Postgres, Scheduler and generated secrets are set). **You still need to:** set the two production secrets (below), add the OpenAI key to dev, and add the GitHub deploy token. |
-| 3. Apple | ⬜ |
-| 4. Google / Android | ⬜ |
+| 3. Apple | ⬜ CI builds and tests pass. Upload waits for the `ASC_*` secrets (3b). |
+| 4. Google / Android | ⏳ CI already builds a **signed** bundle, so the keystore secrets in GitHub work. `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` exists and signs in, but Play returns *permission denied*: invite that service account in Play Console (4b, step 3). |
 | 5. Local dev keys | ⬜ |
 | 6. Check it all works | ⬜ |
 
