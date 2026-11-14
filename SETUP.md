@@ -17,6 +17,8 @@ Do these steps once, in order. Each step says which values go where.
 
 ## 1. Rotate the leaked API key (2 min) — required
 
+Also replace the old `ATTND_API_KEY` secret in Attnd-iOS and Attnd-Android. It's probably the leaked key. Use the dev app's new key (see section 5).
+
 ```bash
 heroku config:set API_KEY=$(openssl rand -hex 32) -a attnd-web
 ```
@@ -91,7 +93,7 @@ heroku authorizations:create -d "GitHub Actions"   # copy the token
 |---|---|---|
 | GH-ios env `dev` variable | `ATTND_SERVER` | `attnd-dev.herokuapp.com` |
 | GH-ios env `dev` variable | `TESTFLIGHT_GROUP` | `Internal` |
-| GH-ios secret (optional) | `ATTND_API_KEY` | attnd-dev's `API_KEY`; this turns on the live API tests in CI |
+| GH-ios secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev.herokuapp.com` | turns on the live API tests in CI |
 | GH-ios env `production` variable (optional) | `WHATS_NEW` | release notes for the next App Store version |
 
 ### 3d. Before the first App Store submission from CI
@@ -135,7 +137,7 @@ heroku authorizations:create -d "GitHub Actions"   # copy the token
 | GH-android secret | `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` | from `signing.properties` |
 | GH-android secret | `MAPS_API_KEY` | Maps key |
 | GH-android secret | `GOOGLE_SERVICES_JSON` | contents of `google-services.json` |
-| GH-android secret (optional) | `ATTND_API_KEY` | attnd-dev's `API_KEY`, for the live API tests |
+| GH-android secret + variables (optional) | `ATTND_API_KEY` secret = attnd-dev's `API_KEY`; variables `LIVE_API_TESTS=true`, `LIVE_API_SERVER=attnd-dev.herokuapp.com` | turns on the live API tests in CI |
 | GH-android env `dev` variable | `ATTND_SERVER` | `attnd-dev.herokuapp.com` |
 | GH-android env `production` variable (optional) | `PLAY_ROLLOUT` | e.g. `0.2` for a 20% staged rollout (default: 100%) |
 | GH-android env `production` variable (optional) | `RELEASE_NOTES` | text shown in Play |
