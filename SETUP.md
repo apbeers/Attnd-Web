@@ -385,7 +385,7 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
 
 **`ATTND_SERVER`** (Attnd-iOS and Attnd-Android, `dev` environment variable): `attnd-dev-7ab893f37020.herokuapp.com`. On `production`, leave it unset; it defaults to `attnd.app`.
 
-**`TESTFLIGHT_GROUP`** (Attnd-iOS, `dev` environment variable): `Internal`. It has to match your TestFlight group's name exactly.
+**`TESTFLIGHT_GROUP`** (Attnd-iOS, `dev` environment variable): `App Store Connect Users`. It has to match your TestFlight group's name exactly.
 
 **`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`** (Attnd-Android repo secret): uploads builds to Play.
 - **Status:** this secret already exists and signs in, but its account isn't invited in Play Console.
