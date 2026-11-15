@@ -32,7 +32,7 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
 ### Go-live checklist (everything else flagged so far)
 **Release + production config** (production changes need the user's go-ahead)
 - ✅ First web release: `develop` → `main` on Nov 15, 2026 (release v110): new join page, AASA, passkeys, email, security headers, own design system. Later web releases: fast-forward `main` to `develop`.
-- Production config: `GOOGLE_MAPS_BROWSER_KEY`, `IOS_APP_STORE_URL`; `APNS_USE_SANDBOX` off;
+- Production config: ✅ `GOOGLE_MAPS_BROWSER_KEY`, `IOS_APP_STORE_URL` (Nov 15, 2026); `APNS_USE_SANDBOX` off;
   `APPLE_ATTEST_ENVIRONMENT=production`.
 - ✅ Production DEMO event loaded (Nov 15, 2026; the prod integration tests pass against it). Still to do: the App Review account (`create_review_account`); both stores' review notes tell reviewers to use code DEMO on attnd.app.
 - Production cleanup (SETUP step 7): list users and demo events, delete with a go-ahead.
