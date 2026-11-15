@@ -81,6 +81,7 @@ join/           # /join/<code>/ redirect + AASA & assetlinks well-known files
 scrape/         # AI import/refresh: crawl + OpenAI extraction, jobs, diff/changesets
 attestation/    # Apple App Attest + Google Play Integrity + JWT issuance
 diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, request log middleware, staff panel
+studio/         # Attnd Studio (beta): AI-designed event websites hosted on SITES_HOST, flyer art, app look
 static/         # Project-level static assets
 public/         # Files served at root by Whitenoise (robots.txt, etc.)
 ```
@@ -133,6 +134,43 @@ event name the apps may log are in **`LOG_EVENTS.md`** (add a row there before a
   with paste-and-retrace, API-014 performance buckets. App text is untrusted: templates escape it, the JS only uses
   `textContent`; no inline scripts.
 - **API-014:** `perf_*` usage metrics with bucket details (`events/usage.py` `PERF_METRICS`); not interactions.
+
+## Attnd Studio (invite-only beta; `studio/`, spec `docs/specs/studio_spec.md`)
+
+A second tier (`Event.plan`: `standard` = import/manage, `studio` = Studio; no checkout yet, Stripe later): the
+organizer chats with an AI that writes the event's **website** (raw multi-page HTML/CSS/JS), makes **flyer art** and
+sets the **app's look**; Attnd hosts the site.
+- **Access** (`studio/access.py`): staff/superusers, emails in `STUDIO_BETA_EMAILS` (default `apbeers@icloud.com`) or a
+  `StudioAccess` row (case-insensitive, works before sign-up). Everyone else gets 404 on every Studio URL and sees no
+  entry point (sidenav "Studio", the AI-import checkbox). Staff: `/console/studio/access/` (invite/remove) and
+  `/console/studio/reports/` (abuse reports, take down/restore). Team roles as today: any member edits drafts;
+  owner/admins switch the plan, publish, unpublish and change the address.
+- **Models** (`studio/models.py`): `Site` (1:1 event, slug, `draft`/`published` → `SiteVersion`, suspended,
+  preview secret), `SiteVersion` (files `{path: text}`, app look, flyer asset; every AI run, code save and restore makes
+  one), `StudioAsset` (UUID, Cloudinary *raw* storage when configured), `StudioRun` (one AI turn, working copy),
+  `StudioMessage`, `StudioUsage` (cost per call), `FormSubmission`, `SiteReport`.
+- **Hosting/security** (`studio/middleware.py`, first in `MIDDLEWARE`; `studio/hosting.py`): sites live on a separate
+  registrable domain, path-based `https://<SITES_HOST>/<slug>/` (default: the Heroku app's herokuapp.com hostname, on
+  the Public Suffix List; `127.0.0.1:8000` with `DEBUG`, so use localhost:8000 for the console). On that host only
+  `studio/urls_sites.py` exists (console/admin/API/static → 404), no cookies, no X-Frame-Options, the sites CSP (inline
+  scripts allowed, `connect-src 'self'`, `worker-src 'none'`, `frame-ancestors` = console origins), no service workers
+  (`Service-Worker: script` → 404). attnd.app never routes site paths. Pages get `<base href>` + an Attnd footer with
+  "Report this site". Drafts: `/<slug>/_preview/<signed token>/` (2 h in the editor's sandboxed iframe, 7-day private
+  links, "Reset preview links" revokes), with the selection bridge (`site_static/bridge.js`, postMessage).
+- **Data library** (`site_static/attnd.js`, `/<slug>/_attnd/data.json` from the bundle serializers, draft events leak
+  nothing): `<attnd-schedule|lineup|locations|map|updates|countdown|app-badge|event>` (light DOM, `attnd-*__*` classes,
+  `--attnd-*` custom properties, OpenStreetMap tiles, no Google key) and `<form data-attnd-form>` → `/<slug>/_attnd/forms/<name>`
+  (honeypot, 2 s time trap, `studio_form_ip`/`studio_form_site` rate limits, email to owner+admins, CSV export).
+- **AI** (`studio/ai.py`, `agent.py`, `prompts.py`): provider layer (OpenAI SDK; Anthropic Messages API over urllib when
+  `ANTHROPIC_API_KEY` is set), agent loop with tools write/edit/delete/read file, set_app_look, generate_image,
+  set_flyer, in a background thread (like AI import); the editor polls `runs/<id>/` (no WebSockets) and the preview
+  reloads on every file change. Defaults: `gpt-5.5` → `gpt-5` fallback, `claude-opus-5-5`, images `gpt-image-2` →
+  `gpt-image-1`. Daily spend cap per event (`STUDIO_DAILY_SPEND_CAP_USD`, $5) over `StudioUsage`; vision describes
+  uploads. "Bring into Studio" (`importer.py`, urllib with an SSRF guard, only the event's `source_urls`) copies a
+  site's look/images/fonts and rebuilds it; also a checkbox on AI import (`IngestJob.studio_import`).
+- **Publishing** (`publishing.py`): publish = site serves that version + its app look (accent, logo, display) and flyer
+  are copied onto the event + `content_version` bump; the bundle's `event.website_url` (API-016) is the live URL.
+- Custom domains are designed (spec §13), not built.
 
 ## Accounts
 
@@ -256,7 +294,7 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy) and `events/tests_integration.py`.
+Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer) and `events/tests_integration.py`.
 
 Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (no `staticfiles/` needed), `django.request` logs only errors (tests hit 4xx on purpose), and a 32+ byte test JWT secret. CI also runs `manage.py check` with `-W error::DeprecationWarning`; run the whole suite that way when upgrading Django/Python.
 
@@ -306,9 +344,16 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `DIAGNOSTICS_MAX_SYMBOL_FILES` | No | Android R8 mappings kept, default `20` |
 | `GITHUB_SYMBOLICATE_TOKEN` | No | Fine-grained GitHub token (Attnd-iOS, Actions: read and write) for the panel's Symbolicate (SETUP.md step 14) |
 | `GITHUB_SYMBOLICATE_REPO` / `GITHUB_SYMBOLICATE_REF` | No | Default `apbeers/Attnd-iOS` / `main` |
+| `SITES_HOST` | No | Attnd Studio's sites domain (no scheme), e.g. `attndsites.com`. Default: the Heroku app's herokuapp.com hostname for attnd.app / dev.attnd.app, `127.0.0.1:8000` with `DEBUG` |
+| `STUDIO_BETA_EMAILS` | No | Comma-separated emails with Studio access (besides staff and the staff page's list), default `apbeers@icloud.com` |
+| `ANTHROPIC_API_KEY` | No | Studio uses Claude (`STUDIO_ANTHROPIC_MODEL`, default `claude-opus-5-5`) when set; `STUDIO_AI_PROVIDER=auto/openai/anthropic` |
+| `STUDIO_OPENAI_MODEL` / `STUDIO_OPENAI_FALLBACK_MODEL` | No | Default `gpt-5.5` / `gpt-5` |
+| `STUDIO_IMAGE_MODEL` / `STUDIO_IMAGE_FALLBACK_MODEL` / `STUDIO_VISION_MODEL` | No | Default `gpt-image-2` / `gpt-image-1` / `OPENAI_MODEL` |
+| `STUDIO_DAILY_SPEND_CAP_USD` | No | Studio AI spend per event per UTC day, default `5` |
+| `STUDIO_MAX_STEPS` / `STUDIO_PREVIEW_LINK_DAYS` | No | Model calls per AI run (24) / private preview link lifetime (7 days) |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |
-| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60) |
+| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60), `STUDIO_FORM_IP` (10/600, form posts per IP per site), `STUDIO_FORM_SITE` (300/3600), `STUDIO_REPORT_IP` (5/3600) |
 | `RATE_LIMIT_TRUST_X_FORWARDED_FOR` | No | Default `1` (behind Heroku's router); `0` = use the socket address |
 | `TWO_FACTOR_ISSUER` | No | Name shown in authenticator apps, default `Attnd` |
 | `WEBAUTHN_RP_ID` | No | Passkey domain (relying party ID), default `SITE_URL`'s host (`attnd.app`; dev: `dev.attnd.app`). Changing it makes existing passkeys stop working |

@@ -34,7 +34,8 @@
             "paid": "boolean",
             "start_time": "string",
             "status": "string",
-            "timezone": "string"
+            "timezone": "string",
+            "website_url": "string"
           },
           "starts_in_hours": "number"
         }
@@ -59,7 +60,8 @@
         "paid": "boolean",
         "start_time": "string",
         "status": "string",
-        "timezone": "string"
+        "timezone": "string",
+        "website_url": "string"
       }
     },
     "GET events/<id>/bundle/": {
@@ -112,7 +114,8 @@
         "paid": "boolean",
         "start_time": "string",
         "status": "string",
-        "timezone": "string"
+        "timezone": "string",
+        "website_url": "string"
       },
       "locations": [
         {

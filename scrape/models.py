@@ -36,6 +36,8 @@ class IngestJob(models.Model):
     upload_type = models.CharField(max_length=128, blank=True)
     upload_data = models.BinaryField(null=True, blank=True)
     timezone = models.CharField(max_length=64, blank=True)
+    # Attnd Studio: when the import finishes, also bring the first source website into Studio (studio.importer).
+    studio_import = models.BooleanField(default=False)
 
     # Progress / output
     progress = models.CharField(max_length=256, blank=True)

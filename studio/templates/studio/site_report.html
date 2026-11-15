@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>{% include 'studio/_site_page_head.html' %}<title>Report this site — Attnd</title></head>
+<body>
+<main>
+  {% if done %}
+    <h1>Thank you</h1>
+    <p>Attnd's team will look at this site. If it breaks our rules, we take it down.</p>
+    <a class="button" href="./">Back to the site</a>
+  {% else %}
+    <h1>Report this site</h1>
+    <p class="muted">This site was made by an event organizer with Attnd Studio. Tell us if something is wrong with it.</p>
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" action="_attnd/report">
+      <label for="reason">What's wrong?</label>
+      <select id="reason" name="reason" required>
+        <option value="">Choose one…</option>
+        {% for value, label in reasons %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+      <label for="details">Details (optional)</label>
+      <textarea id="details" name="details" rows="4" maxlength="2000"></textarea>
+      <label for="email">Your email (optional, if we may contact you)</label>
+      <input id="email" name="email" type="email" autocomplete="email" maxlength="254">
+      <input type="hidden" name="page" value="{{ page }}">
+      <div class="hp" aria-hidden="true"><label for="hp">Leave this empty</label><input id="hp" name="_hp" tabindex="-1" autocomplete="off"></div>
+      <button type="submit">Send report</button>
+    </form>
+  {% endif %}
+</main>
+</body>
+</html>

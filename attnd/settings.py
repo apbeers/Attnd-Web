@@ -55,9 +55,12 @@ INSTALLED_APPS = [
     'scrape.apps.ScrapeConfig',
     'attestation.apps.AttestationConfig',
     'diagnostics.apps.DiagnosticsConfig',
+    'studio.apps.StudioConfig',
 ]
 
 MIDDLEWARE = [
+    # Attnd Studio's hosted sites (SITES_HOST): only site routes there, no cookies, the sites' own CSP.
+    'studio.middleware.SitesHostMiddleware',
     # First, so it times the whole request: one JSON line per /api/ request + X-Request-Id (API-013).
     'diagnostics.middleware.RequestLogMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -88,6 +91,7 @@ TEMPLATES = [
                 'django.template.context_processors.csp',
                 'console.context_processors.maps',
                 'console.context_processors.store_links',
+                'studio.context_processors.studio',
             ],
         },
     },
@@ -181,6 +185,9 @@ RATE_LIMITS = {
     'csp_report_ip': _rate('csp_report_ip', '60/60'),  # CSP violation reports logged per IP, 1 min
     'diagnostics_ip': _rate('diagnostics_ip', '600/600'),  # debug log uploads per IP, 10 min (API-013)
     'diagnostics_reports_ip': _rate('diagnostics_reports_ip', '60/3600'),  # crash/hang report uploads per IP
+    'studio_form_ip': _rate('studio_form_ip', '10/600'),       # Studio site form posts per IP per site, 10 min
+    'studio_form_site': _rate('studio_form_site', '300/3600'),  # Studio site form posts per site, 1 hour
+    'studio_report_ip': _rate('studio_report_ip', '5/3600'),    # "Report this site" per IP, 1 hour
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
@@ -306,6 +313,48 @@ MAILERS = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ---------------------------------------------------------------------------
+# Attnd Studio (studio/, docs/specs/studio_spec.md): AI-designed event websites hosted by Attnd
+# ---------------------------------------------------------------------------
+# Hosted sites live on a SEPARATE registrable domain, path-based: https://<SITES_HOST>/<slug>/. Until a domain is
+# bought, each Heroku app's own herokuapp.com hostname is used (herokuapp.com is on the Public Suffix List, so it is a
+# different site from attnd.app and can never read its cookies). Empty = no hosting (the editor still works).
+_HEROKU_SITES_HOSTS = {'attnd.app': 'attnd-web-7a02b020850d.herokuapp.com',
+                       'dev.attnd.app': 'attnd-dev-7ab893f37020.herokuapp.com'}
+SITES_HOST = os.getenv('SITES_HOST', '').strip().lower().rstrip('/') or (
+    '127.0.0.1:8000' if DEBUG else _HEROKU_SITES_HOSTS.get(_site.hostname or '', ''))
+if SITES_HOST and '*' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(SITES_HOST.split(':')[0])  # a bought sites domain isn't under .attnd.app/.herokuapp.com
+SITES_ORIGIN = f"{'http' if DEBUG and SITES_HOST.startswith(('127.0.0.1', 'localhost')) else 'https'}://{SITES_HOST}"
+# Console origins allowed to frame hosted pages (the editor's preview); nobody else may frame them.
+STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))
+# Invite-only beta: these emails (comma-separated) always have Studio access, plus staff and StudioAccess rows.
+STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', 'apbeers@icloud.com').split(',')
+                      if e.strip()]
+# AI: auto = Anthropic when ANTHROPIC_API_KEY is set, else OpenAI (the existing OPENAI_API_KEY).
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+STUDIO_AI_PROVIDER = os.getenv('STUDIO_AI_PROVIDER', 'auto').strip().lower()
+STUDIO_OPENAI_MODEL = os.getenv('STUDIO_OPENAI_MODEL', 'gpt-5.5')
+STUDIO_OPENAI_FALLBACK_MODEL = os.getenv('STUDIO_OPENAI_FALLBACK_MODEL', 'gpt-5')
+STUDIO_ANTHROPIC_MODEL = os.getenv('STUDIO_ANTHROPIC_MODEL', 'claude-opus-5-5')
+STUDIO_IMAGE_MODEL = os.getenv('STUDIO_IMAGE_MODEL', 'gpt-image-2')
+STUDIO_IMAGE_FALLBACK_MODEL = os.getenv('STUDIO_IMAGE_FALLBACK_MODEL', 'gpt-image-1')
+STUDIO_VISION_MODEL = os.getenv('STUDIO_VISION_MODEL', '') or os.getenv('OPENAI_MODEL', 'gpt-5-mini')
+# AI spend per event per UTC day (all Studio calls: chat, images, asset descriptions). 0 = no Studio AI.
+STUDIO_DAILY_SPEND_CAP_USD = float(os.getenv('STUDIO_DAILY_SPEND_CAP_USD', '5'))
+STUDIO_MAX_STEPS = int(os.getenv('STUDIO_MAX_STEPS', '24'))
+STUDIO_PREVIEW_LINK_DAYS = int(os.getenv('STUDIO_PREVIEW_LINK_DAYS', '7'))
+# USD per 1M input / output tokens, and per generated image. Conservative estimates (check the providers' price
+# pages); a model missing here is priced at STUDIO_PRICES['default'] so the cap errs on the safe side.
+STUDIO_PRICES = {
+    'default': (10.0, 40.0),
+    'gpt-5.5': (5.0, 30.0),
+    'gpt-5': (1.25, 10.0),
+    'gpt-5-mini': (0.25, 2.0),
+    'claude-opus-5-5': (4.0, 20.0),
+    'image': 0.25,
+}
+
+# ---------------------------------------------------------------------------
 # Content Security Policy (Django's built-in CSP middleware)
 # ---------------------------------------------------------------------------
 # CSP_MODE=enforce (default) | report (Content-Security-Policy-Report-Only: browsers only report) | off.
@@ -332,10 +381,11 @@ CSP_POLICY = {
     # https: because organizers can point location images and event logos at any website (image_url,
     # logo_url); Cloudinary (res.cloudinary.com), OpenStreetMap tiles (tile.openstreetmap.org, console.js)
     # and Google Maps tiles are covered by it. data: = generated QR codes, blob: = Maps.
-    'img-src': [CSP.SELF, 'data:', 'blob:', 'https:'],
+    'img-src': [CSP.SELF, 'data:', 'blob:', 'https:', *([SITES_ORIGIN] if SITES_HOST else [])],  # + Studio assets
     'font-src': [CSP.SELF, *(['https://fonts.gstatic.com'] if _MAPS else [])],
     'connect-src': [CSP.SELF, *_MAPS_CONNECT],
-    'frame-src': ['*.google.com'] if _MAPS else [CSP.SELF],
+    # Studio's draft previews come from the sites host (a separate site), always in a sandboxed iframe.
+    'frame-src': (['*.google.com'] if _MAPS else [CSP.SELF]) + ([SITES_ORIGIN] if SITES_HOST else []),
     'worker-src': [CSP.SELF, 'blob:'],  # /console/sw.js; Maps uses blob: workers
     'frame-ancestors': [CSP.NONE],
     'base-uri': [CSP.SELF],

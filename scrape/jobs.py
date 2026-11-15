@@ -179,6 +179,21 @@ def _run_create(job):
         'notes': ' '.join(filter(None, [data.get('notes', '')] + notes)),
     }
     job.save()
+    if job.studio_import and job.urls and job.created_by_id:
+        _bring_into_studio(job, event)
+
+
+def _bring_into_studio(job, event):
+    """Attnd Studio (beta): the organizer asked to also bring the imported website into Studio."""
+    try:
+        from studio import importer, publishing
+        publishing.switch_plan(event, Event.PLAN_STUDIO)
+        site = publishing.ensure_site(event, job.created_by)
+        importer.start_import(site, job.urls[0], job.created_by)
+        job.result = {**job.result, 'studio_import': True}
+        job.save(update_fields=['result'])
+    except Exception:
+        logger.exception('Could not bring %s into Studio', job.urls[0])
 
 
 def _run_refresh(job):

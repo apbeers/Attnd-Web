@@ -62,7 +62,8 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-011 | Urgent announcements: `Notification.priority`, `priority` in notification pushes, urgent = every device + time-sensitive/high priority; iOS Live Activity push via `POST devices/` `live_activity_token` | additive (new keys, new optional request field, new push variant) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (b3cb181, d688ed0) | ✅ dev (d491c93) |
 | API-013 | Diagnostics: debug log upload (`POST diagnostics/logs/`), crash/hang reports, `X-Request-Id` / `X-Diag-Session`, Android R8 symbols + retrace, iOS symbolication workflow, staff Diagnostics panel | additive (new endpoints, new request headers) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
 | API-014 | Anonymous performance metrics: `perf_*` usage names with bucket details | additive (new usage names) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
-| API-015 | Shared plan links `/p/<EVENT_CODE>/<payload>` (web page + store routing like `/join/`), claimed in apple-app-site-association (app + App Clip) and opened by the apps | additive (new web route, new app link paths; no API endpoint) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
+| API-015 | Shared plan links `/p/<EVENT_CODE>/<payload>` (web page + store routing like `/join/`), claimed in apple-app-site-association (app + App Clip) and opened by the apps | additive (new web route, new app link paths; no API endpoint) | ✅ dev · ⬜ prod | ✅ | ✅ |
+| API-016 | Attnd Studio: `event.website_url` (the event's Studio-hosted website, or null) in every v2 event object | additive (new key) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -70,6 +71,28 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-016: event website link (Attnd Studio)
+**Why:** Attnd Studio (invite-only beta, `docs/specs/studio_spec.md`) lets an organizer design the event's website
+with AI, and Attnd hosts it. The apps should link to it. Additive: one new nullable key; nothing else changes.
+**Server (attnd-web):**
+- Every v2 event object (`bundle/`, `lookup/`, `nearby/`) has `website_url`: `https://<SITES_HOST>/<slug>/` while
+  the event is on the Studio plan and its site is published and not taken down, else `null`. Publishing,
+  unpublishing, a takedown, changing the address or the plan bump `content_version`, so apps refetch the bundle.
+- The site lives on a separate registrable domain (`SITES_HOST`, a herokuapp.com hostname until a domain is bought),
+  never on attnd.app. Documented in `API_V2.md` → Event; contract snapshot updated; tests in `studio/tests.py`
+  (`DataTests.test_bundle_website_url_api_016`).
+
+**iOS:**
+- Decode `website_url` leniently (`String?`, missing = nil; ignore values that aren't `https` URLs).
+- When set, show a **Website** row in Options (event header) and in `EventInfoView` (search's event result), opening
+  it with `openURL` (Safari, not in-app). No `X-Device-Id`, tokens or cookies go to it. Not in the App Clip's tab bar.
+- App Intents: `EventEntity` may expose it as a URL property (optional).
+
+**Android:**
+- Decode `website_url` (`String? = null`, ignore non-`https`).
+- When set, show a **Website** item in Options (event section) and on the search screen's event detail, opened with
+  `Intent.ACTION_VIEW` (the browser / Custom Tab, not a WebView). Nothing from the app is sent to it.
 
 ### API-015: shared plan links
 **Why:** the event assistant (assistant spec §7, Nov 15, 2026) shares a plan or an item as a link that opens the

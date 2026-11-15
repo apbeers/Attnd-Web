@@ -101,6 +101,12 @@ class Event(CoordinatesMixin, models.Model):
                                 help_text='IANA time zone, e.g. America/Chicago')
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PUBLISHED)
     paid = models.BooleanField(default=False)
+    # Tier (no checkout yet): standard = import/manage the event; studio = Attnd Studio (AI designs the site, flyer
+    # and app look; Attnd hosts the site). See studio/ and docs/specs/studio_spec.md.
+    PLAN_STANDARD = 'standard'
+    PLAN_STUDIO = 'studio'
+    PLAN_CHOICES = [(PLAN_STANDARD, 'Standard'), (PLAN_STUDIO, 'Studio')]
+    plan = models.CharField(max_length=16, choices=PLAN_CHOICES, default=PLAN_STANDARD)
     public = models.BooleanField(default=False, help_text='Listed in nearby search')
     flyer = models.FileField(upload_to=get_file_path, blank=True)
     address = models.CharField(max_length=512, blank=True)

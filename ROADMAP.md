@@ -103,3 +103,24 @@ currently suppresses the deprecation (`PushNotifications.kt`, `AttndMessagingSer
 entry: what `push_token` carries, how `events/push.py` sends to it (FCM HTTP v1 target), and a transition where
 the server accepts both. Do it before the old API is removed.
 
+## Attnd Studio (after the beta)
+
+### Stripe checkout for the two tiers
+Stripe Checkout (the expected exception to the dependency policy) for the two event tiers: **Standard** (import and
+manage an existing event) and **Studio** (AI designs the site, flyer and app look; Attnd hosts the site). `Event.plan`
+already exists and staff/beta users switch it by hand; checkout would set it (and `paid`) from a webhook. Prices
+(owner, Nov 15, 2026): **$299 per event** = bring an event in, **$499 per event** = Studio + ticketing. The home page
+already says "$299 per event, flat"; add the $499 tier there when Studio leaves beta.
+
+### Studio custom domains
+Let organizers use their own domain for their Studio site (spec §13): `Site.custom_domain` + DNS verification, add it
+with the Heroku Platform API (`POST /apps/attnd-web/domains`, ACM certificate), show the DNS target, serve the site at
+`/` on that host (same relative links, `<base href="/">`). One origin per site also removes the path-based hosting's
+shared-origin limitation. Check Heroku's domain limits per app first.
+
+### Studio later
+- A real CDN or cache in front of hosted pages and assets before big events (today: Heroku + Cloudinary redirects).
+- Server-side flyer rendering (an HTML flyer layout → PNG/PDF) if image-model flyers aren't enough.
+
+## Tickets (planned, not built)
+- Eventbrite-style ticketing on the website via Stripe Checkout + Connect (payouts held until after the event), buyers pay the processing fee (all-in prices), offline door scanning, Apple/Google Wallet passes, AI drafting with review. Plan: `docs/specs/tickets_spec.md`. Pricing: $299 bring an event in, $499 Studio + ticketing.

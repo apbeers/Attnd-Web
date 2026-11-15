@@ -80,7 +80,14 @@ def event_v2(event, request=None):
         'logo_url': event.logo_url or None,
         'content_version': event.content_version,
         'join_url': f'https://attnd.app/join/{event.event_code}/',
+        # API-016: the event's Attnd Studio website while it is published, else null.
+        'website_url': _website_url(event),
     }
+
+
+def _website_url(event):
+    from studio.publishing import website_url
+    return website_url(event)
 
 
 def location_v2(location, request=None):

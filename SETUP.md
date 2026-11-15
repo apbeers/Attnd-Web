@@ -17,6 +17,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then add a passkey (or an authenticator app) at the first admin sign-in, on dev and again on production (passkeys are per domain), and save the recovery codes. |
 | 13. CI keys (live tests) | ✅ Nov 15, 2026: `CI_API_KEYS` set on production (release v109; takes effect once API-008 is released to `main`), `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web. |
 | 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
+| 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15); optional `ANTHROPIC_API_KEY`. |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
@@ -33,6 +34,9 @@ Do these steps once, in order. Each step says which values go where. For any sin
       **App Groups** → description "Attnd", identifier `group.com.arcu.Attnd` → Register. Then open the App IDs
       `com.arcu.Attnd` and `com.arcu.Attnd.widgets`: tick **App Groups** → **Configure** → select `group.com.arcu.Attnd`
       → Save (confirm the profile warning). CI regenerates the profiles on the next archive.
+- [ ] Attnd Studio (step 15): buy a separate domain for hosted event sites (not a subdomain of attnd.app), then
+      `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
+      with a go-ahead; until then sites are served on the Heroku hostnames. Optional: `ANTHROPIC_API_KEY`.
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
@@ -621,6 +625,37 @@ Optional settings (defaults are fine): `GITHUB_SYMBOLICATE_REPO` (`apbeers/Attnd
 token: its CI uploads R8 mappings with the CI key / dev static key (`POST /api/diagnostics/symbols/`).
 
 To rotate or if leaked: revoke it on the same GitHub page, make a new one and run step 2 again.
+
+## 15. Attnd Studio: the sites domain (15 min, optional until real customers)
+
+Attnd Studio (invite-only beta, `docs/specs/studio_spec.md`) hosts event websites at `https://<SITES_HOST>/<slug>/`.
+They must live on a **different registrable domain** from attnd.app (never `sites.attnd.app`): the sites run the
+organizers' own JavaScript, and a separate site keeps it away from the console's cookies.
+
+**Today, nothing to do:** without `SITES_HOST`, production serves sites at `attnd-web-7a02b020850d.herokuapp.com` and
+dev at `attnd-dev-7ab893f37020.herokuapp.com` (herokuapp.com is on the Public Suffix List, so each is its own site).
+On those hostnames the app serves only the sites (console, admin and API are 404 there).
+
+**When you buy a domain** (e.g. at Namecheap; something short like `attnd.site` or `attndsites.com`):
+1. Add it to the production app and point DNS at Heroku (the command prints the DNS target; use a CNAME/ALIAS at
+   Namecheap), then turn on the certificate:
+   ```bash
+   heroku domains:add attndsites.com -a attnd-web
+   heroku certs:auto:enable -a attnd-web
+   ```
+2. Once `heroku domains -a attnd-web` shows the certificate, switch Studio to it (a production config change):
+   ```bash
+   heroku config:set -a attnd-web SITES_HOST=attndsites.com
+   ```
+   Published sites move to the new address (the apps get the new `website_url` with the next refresh). Optionally do the
+   same for dev with a second domain or a subdomain of it (`dev.attndsites.com`, `-a attnd-dev`).
+
+**Optional settings:** `ANTHROPIC_API_KEY` (Studio then uses Claude, `claude-opus-5-5`; otherwise OpenAI `gpt-5.5`
+with `gpt-5` as fallback), `STUDIO_DAILY_SPEND_CAP_USD` (default 5), `STUDIO_BETA_EMAILS` (default
+`apbeers@icloud.com`; more people can be invited from the console's **Studio beta** page).
+```bash
+heroku config:set -a attnd-dev ANTHROPIC_API_KEY=sk-ant-PASTE_HERE
+```
 
 ## Key reference
 

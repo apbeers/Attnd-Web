@@ -68,8 +68,8 @@ class NotificationInline(admin.TabularInline):
 
 class EventAdmin(UserScopedAdminMixin, admin.ModelAdmin):
     inlines = [LocationInline, NotificationInline]
-    list_display = ['name', 'event_code', 'start_time', 'address', 'paid', 'user']
-    list_filter = ['paid', 'user']
+    list_display = ['name', 'event_code', 'start_time', 'address', 'paid', 'plan', 'user']
+    list_filter = ['paid', 'plan', 'user']
     search_fields = ['name', 'event_code', 'address']
     date_hierarchy = 'start_time'
 

@@ -38,6 +38,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         sent = push.send_due_notifications()
         recovered = jobs.recover_stale()
+        from studio.agent import recover_stale as recover_studio_runs
+        recover_studio_runs()  # Studio AI runs interrupted by a restart
         watched, queued = watch.check_watched_events()
         from attestation.views import purge_expired_nonces
         purge_expired_nonces()

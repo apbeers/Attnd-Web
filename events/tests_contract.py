@@ -72,7 +72,7 @@ def diff(old, new, path='$'):
     return breaking, additive
 
 
-@override_settings(API_KEY='contract-key')
+@override_settings(API_KEY='contract-key', SITES_HOST='sites.example')
 class ApiContractTests(TestCase):
     """Builds a fully populated event so every field has a real (non-null) value."""
 
@@ -83,7 +83,11 @@ class ApiContractTests(TestCase):
             name='Contract Fair', event_code='CONTRACT', description='Desc', address='1 Main St',
             latitude=32.75, longitude=-97.33, start_time=start, end_time=start + timedelta(hours=8),
             timezone='America/Chicago', user=user, public=True, paid=True, accent_color='#FF6600',
-            logo_url='https://example.com/logo.png')
+            logo_url='https://example.com/logo.png', plan=Event.PLAN_STUDIO)
+        # API-016: a published Attnd Studio site, so event.website_url is a string in the sample.
+        from studio import publishing
+        site = publishing.ensure_site(self.event, user)
+        publishing.publish(site, publishing.new_version(site, user, files={'index.html': '<h1>Fair</h1>'}), user)
         loc = Location.objects.create(
             event=self.event, user=user, name='Stage', snippet='Main stage', description='Big',
             category='Stage', website='https://example.com', image_url='https://example.com/s.jpg',

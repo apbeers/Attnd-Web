@@ -1,0 +1,25 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Studio beta access{% endblock %}
+{% block content %}
+<div class="column stack stack--loose">
+  <div class="cluster"><h1>{% icon "brush" %} Studio beta access</h1><a class="button button--secondary button--small push" href="{% url 'studio:reports' %}">Site reports</a></div>
+  <p class="muted">People with these emails can use Attnd Studio (staff always can). It works before they have an account: they get access when they sign up or sign in with the email.</p>
+  <form method="post" class="panel cluster">{% csrf_token %}
+    <label class="field__label" for="access-email">Email</label>
+    <input id="access-email" name="email" type="email" required class="grow" autocomplete="off">
+    <button class="button button--primary">{% icon "plus" %} Invite to Studio</button>
+  </form>
+  <div class="panel panel--flush">
+    <ul class="list">
+      {% for e in setting_emails %}<li class="cluster"><span class="grow">{{ e }}</span><span class="badge badge--neutral">STUDIO_BETA_EMAILS setting</span></li>{% endfor %}
+      {% for row in rows %}
+        <li class="cluster"><span class="grow">{{ row.email }}{% if not row.has_account %} <span class="small muted">(no account yet)</span>{% endif %}</span>
+          <span class="small muted">{% if row.invited_by %}by {{ row.invited_by.email }} · {% endif %}{{ row.created_at|date:"M j, Y" }}</span>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="email" value="{{ row.email }}">
+            <button class="button button--ghost button--small tone-danger" data-confirm="Remove Studio access for {{ row.email }}?">Remove</button></form></li>
+      {% empty %}<li class="muted">Nobody invited yet.</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

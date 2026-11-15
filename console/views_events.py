@@ -110,9 +110,13 @@ def event_new(request):
     if request.method == 'POST' and mode == 'ai':
         ai_form = AIImportForm(request.POST, request.FILES, prefix='ai')
         if ai_form.is_valid():
+            from studio.access import has_studio_access
             job = _job_from_form(ai_form, kind=IngestJob.KIND_CREATE, trigger=IngestJob.TRIGGER_CONSOLE,
                                  created_by=request.user,
-                                 timezone=request.POST.get('browser_tz', '')[:64])
+                                 timezone=request.POST.get('browser_tz', '')[:64],
+                                 # Attnd Studio (beta): also bring the first website into Studio when done.
+                                 studio_import=bool(request.POST.get('studio_import') and ai_form.cleaned_data.get('urls')
+                                                    and has_studio_access(request.user)))
             jobs.enqueue(job)
             if _wants_json(request):
                 return JsonResponse({'task': task_json(job), 'redirect': reverse('console:dashboard')}, status=202)

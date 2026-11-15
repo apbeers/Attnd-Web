@@ -341,10 +341,14 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
   "flyer_url": "https://…" | null,
   "accent_color": "#FF5A1F" | null, "logo_url": "https://…" | null,
   "content_version": 15,
-  "join_url": "https://attnd.app/join/FWFM2026/"
+  "join_url": "https://attnd.app/join/FWFM2026/",
+  "website_url": "https://sites.attnd-example.com/fw-fair/" | null
 }
 ```
 - `is_demo == true`: show the prominent **Demo Event** banner.
+- `website_url` (API-016): the event's website hosted by Attnd Studio while it is published, else `null` (missing in
+  older responses = `null`). Apps show a **Website** link (opens in the browser). It is on a separate domain from
+  attnd.app (`SITES_HOST`), so never send credentials or the device id to it.
 - `status == "archived"`: show an "This event has ended" banner. The content is still viewable.
 
 ### Location
