@@ -90,6 +90,8 @@ jobs:
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
           HEROKU_APP: ${{ vars.HEROKU_APP }}
+          # Not the herokuapp.com hostname: that host serves only Studio sites (SITES_HOST).
+          HEALTH_URL: https://dev.attnd.app/health/
         run: bash scripts/ci/heroku_deploy.sh
 
   deploy-prod:
