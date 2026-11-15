@@ -8,7 +8,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 |---|---|
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
-| 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, `CONTACT_EMAIL`, Scheduler jobs and GitHub deploy settings. ✅ Stack heroku-26 and Python 3.15. **Still to do:** check Postgres and upgrade to 18 (commands under "Keeping Heroku current"), and add Cloudinary on both apps so uploads survive restarts. |
+| 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, `CONTACT_EMAIL`, Scheduler jobs and GitHub deploy settings. ✅ Stack heroku-26 and Python 3.15. **Still to do:** check Postgres and upgrade to 18 (commands under "Keeping Heroku current"). ✅ Cloudinary on both apps (step 5). |
 | 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ✅ 3b: `ASC_ISSUER_ID` re-set; CI signs, uploads and reaches TestFlight (iOS run 100). ✅ **3e: CI signing certificate** stored as `IOS_DEV_CERT_P12_BASE64` / `IOS_DEV_CERT_PASSWORD` (re-set Nov 15, 2026 after the first copy was saved empty; CI signs as "Apple Development: Andrew Beers"; renew before Nov 14, 2027). |
 | 4. Google / Android | ⬜ 4e: exclude tablets in Play Console. ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
@@ -16,21 +16,19 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 11. Email | ⏳ ✅ Mailgun Starter (free) add-ons on attnd-web (`mailgun-spherical-62131`) and attnd-dev (`mailgun-silhouetted-37822`; separate account, Mailgun can't be shared between apps; dev stays on its sandbox, which only mails authorized recipients). ✅ `mg.attnd.app` added (tracking off), Namecheap SPF/DKIM/DMARC added, **verified** by Mailgun. ✅ SMTP credentials (`postmaster@…`) set on both apps as `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD` + `DEFAULT_FROM_EMAIL`; dev `SITE_URL` set. ✅ Code: TLS, from address, per-site links, allow-list, password reset. ✅ `ADMIN_EMAILS` (both apps) and dev `EMAIL_ALLOWED_RECIPIENTS` = the owner's address; owner authorized on dev's sandbox; Nov 14 dev test emails (plain + `--admins`) **delivered** to iCloud. ✅ MX records for `mg` added; production-domain test from `noreply@mg.attnd.app` **delivered** to iCloud (Nov 14). ⬜ The production app itself sends once develop is released to main. |
 | 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then add a passkey (or an authenticator app) at the first admin sign-in, on dev and again on production (passkeys are per domain), and save the recovery codes. |
 | 13. CI keys (live tests) | ✅ Nov 15, 2026: `CI_API_KEYS` set on production (release v109; takes effect once API-008 is released to `main`), `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web. |
-| 14. Diagnostics (API-013) | ⬜ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
+| 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
 - [x] Protect `main` in all three repos: ruleset "Protect main" blocks force-push and deletion (Nov 14, 2026). Add "require status checks" once releases go through pull requests.
-- [ ] Step 13: CI keys for the live integration tests (`CI_API_KEYS` on attnd-web, `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web).
+- [x] Step 13: CI keys for the live integration tests (`CI_API_KEYS` on attnd-web, `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web).
 - [ ] API-010/011 data (after the server reaches each app): reload DEMO so it has the new tags and the urgent
       "Set time change" (`heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com`, then the
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
-- [ ] Step 14 (API-013 diagnostics): create the `GITHUB_SYMBOLICATE_TOKEN` fine-grained token and set it on both Heroku
-      apps, so the Diagnostics panel's **Symbolicate** button can run attnd-ios's `symbolicate.yml`.
 
 Notes:
 - If the Heroku CLI says an update is available, run `heroku update` first. It's optional.
@@ -95,7 +93,7 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
 4. **Play Integrity isn't configured on production** (there's no `GOOGLE_SERVICE_ACCOUNT_JSON`), so Android builds from the Play Store can't attest. Old Android builds fell back to the static key, which is now rotated, so the current Play Store version can't reach the API until this is set (step 4) and a new build ships. iOS builds use App Attest, which is configured.
 
 5. ✅ **File uploads: Cloudinary** (Nov 15, 2026). The free `cloudinary:starter` add-on is on both apps (`cloudinary-fluffy-65757` on attnd-dev, `cloudinary-metric-01769` on attnd-web; separate Cloudinary accounts, like Mailgun). It sets `CLOUDINARY_URL` and the server stores uploads there automatically. Checked on dev: images upload and are served (200).
-   - ⬜ **Owner: allow PDF delivery on both accounts.** Free Cloudinary accounts refuse to serve PDFs (dev check: 401) until it's allowed. Open each dashboard, then Settings → Security → tick **"Allow delivery of PDF and ZIP files"** → Save:
+   - ✅ **PDF delivery allowed on both accounts** (Nov 15, 2026; dev re-checked: a test PDF is served with 200). Free Cloudinary accounts refuse to serve PDFs (401) until it's allowed. Open each dashboard, then Settings → Security → tick **"Allow delivery of PDF and ZIP files"** → Save:
      ```
      heroku addons:open cloudinary -a attnd-dev
      heroku addons:open cloudinary -a attnd-web
