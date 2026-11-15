@@ -39,7 +39,7 @@ def _app_store_id():
 
 def play_url(event_code):
     # The install referrer carries the code, so the app joins the event on first launch.
-    return (f'https://play.google.com/store/apps/details?id={settings.ANDROID_PACKAGE_NAME}'
+    return (f'{settings.ANDROID_PLAY_STORE_URL}'
             f'&referrer={quote(f"event_code={event_code}")}')
 
 

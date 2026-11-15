@@ -31,7 +31,7 @@ def _older(version, than):
 def update_url(platform):
     if platform == 'ios':
         return settings.IOS_APP_STORE_URL or 'https://attnd.app/'
-    return f'https://play.google.com/store/apps/details?id={settings.ANDROID_PACKAGE_NAME}'
+    return settings.ANDROID_PLAY_STORE_URL
 
 
 def app_status(platform, version, api=None):

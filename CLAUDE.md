@@ -284,7 +284,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `APPLE_TEAM_ID` | Prod | For App Attest verification |
 | `APPLE_ATTEST_ENVIRONMENT` | No | `production` (default) or `development` |
 | `ANDROID_PACKAGE_NAME` | No | Default `com.arcu.attnd`; Play Integrity, Play links |
-| `IOS_APP_STORE_URL` | Prod | `https://apps.apple.com/app/id1470627406`; join links and the update screen |
+| `IOS_APP_STORE_URL` | No | Default `https://apps.apple.com/us/app/attnd/id1470627406`; join links, download badges, the update screen. Google Play is `https://play.google.com/store/apps/details?id=<ANDROID_PACKAGE_NAME>` (`ANDROID_PLAY_STORE_URL`); both are in every template's context (`console.context_processors.store_links`) |
 | `APP_MIN_VERSION_IOS` / `_ANDROID` | No | Older builds get the blocking update screen (API-003) |
 | `APP_LATEST_VERSION_IOS` / `_ANDROID` | No | Older builds get a dismissible "update available" banner |
 | `APP_UPDATE_MESSAGE` | No | Custom text for the update screen and banner |

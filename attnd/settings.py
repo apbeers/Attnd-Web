@@ -87,6 +87,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.csp',
                 'console.context_processors.maps',
+                'console.context_processors.store_links',
             ],
         },
     },
@@ -217,8 +218,9 @@ GOOGLE_MAPS_MAP_ID = os.getenv('GOOGLE_MAPS_MAP_ID', 'DEMO_MAP_ID')
 DEMO_EVENT_CODE = os.getenv('DEMO_EVENT_CODE', 'DEMO')
 
 # Store links, used by /join/<code>/ and the apps' update prompt (/api/app-status/).
-IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', '')  # https://apps.apple.com/app/id<numeric Apple ID>
+IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', 'https://apps.apple.com/us/app/attnd/id1470627406')
 ANDROID_PACKAGE_NAME = os.getenv('ANDROID_PACKAGE_NAME', 'com.arcu.attnd')
+ANDROID_PLAY_STORE_URL = f'https://play.google.com/store/apps/details?id={ANDROID_PACKAGE_NAME}'
 
 # Update prompt (API_CHANGES.md, API-003). Builds older than APP_MIN_VERSION_<PLATFORM> must update;
 # builds older than APP_LATEST_VERSION_<PLATFORM> are told an update is available. Empty = no prompt.
