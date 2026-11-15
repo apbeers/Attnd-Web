@@ -37,6 +37,10 @@ Do these steps once, in order. Each step says which values go where. For any sin
 - [ ] Attnd Studio (step 15): buy a separate domain for hosted event sites (not a subdomain of attnd.app), then
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
       with a go-ahead; until then sites are served on the Heroku hostnames. Optional: `ANTHROPIC_API_KEY`.
+- [ ] Tickets prep (Wallet passes, not payments; nothing built yet): Apple Pass Type ID `pass.com.arcu.attnd.tickets`
+      + Pass Type ID certificate (key + PEM kept in the password manager), and a Google Pay & Wallet Console business
+      profile with its Issuer ID, the Google Wallet API enabled in `attnd-df28e` and a service account
+      `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` added as a Developer user. Plan: `docs/specs/tickets_spec.md`.
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:

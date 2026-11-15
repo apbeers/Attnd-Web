@@ -16,7 +16,7 @@ Goal: Eventbrite-style ticketing inside Attnd, so an organizer runs the whole ev
   mandatory fees to be shown first, so every price display (web list, Studio sites, apps' "Get tickets") shows the
   all-in price per ticket, with the fee itemised at checkout. Per-ticket all-in = gross-up of that ticket alone;
   the order total is recomputed for the cart (never more than the sum shown).
-- Refunds (default, open question): ticket price refunded; the processing fee refunded only when the event is
+- Refunds (owner agreed): ticket price refunded; the processing fee refunded only when the event is
   cancelled (Stripe keeps its fee, Attnd absorbs it then).
 - **Stripe for all money**; our code never handles card data or holds funds. Stripe Checkout (hosted) wherever
   possible; Stripe Connect onboarding (hosted) for organizer payouts.
