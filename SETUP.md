@@ -91,12 +91,12 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
 3. ✅ The OpenAI and Places keys are already set on production.
 4. **Play Integrity isn't configured on production** (there's no `GOOGLE_SERVICE_ACCOUNT_JSON`), so Android builds from the Play Store can't attest. Old Android builds fell back to the static key, which is now rotated, so the current Play Store version can't reach the API until this is set (step 4) and a new build ships. iOS builds use App Attest, which is configured.
 
-5. **File uploads need permanent storage.** Production has no `CLOUDINARY_URL`, so flyers and location photos uploaded in the console are saved on Heroku's temporary disk and **lost on every restart or deploy**. Add Cloudinary's free plan to both apps:
-   ```bash
-   heroku addons:create cloudinary:starter -a attnd-web
-   heroku addons:create cloudinary:starter -a attnd-dev
-   ```
-   That sets `CLOUDINARY_URL`, and the server switches to it automatically.
+5. ✅ **File uploads: Cloudinary** (Nov 15, 2026). The free `cloudinary:starter` add-on is on both apps (`cloudinary-fluffy-65757` on attnd-dev, `cloudinary-metric-01769` on attnd-web; separate Cloudinary accounts, like Mailgun). It sets `CLOUDINARY_URL` and the server stores uploads there automatically. Checked on dev: images upload and are served (200).
+   - ⬜ **Owner: allow PDF delivery on both accounts.** Free Cloudinary accounts refuse to serve PDFs (dev check: 401) until it's allowed. Open each dashboard, then Settings → Security → tick **"Allow delivery of PDF and ZIP files"** → Save:
+     ```
+     heroku addons:open cloudinary -a attnd-dev
+     heroku addons:open cloudinary -a attnd-web
+     ```
 
 ### Dev (`attnd-dev`) — created by Claude
 - ✅ App `attnd-dev` at **`https://dev.attnd.app/`** (custom domain, Nov 14, 2026: Namecheap CNAME `dev` → the app's herokudns target, Heroku ACM certificate; `SITE_URL=https://dev.attnd.app`). Use `dev.attnd.app` wherever this guide says `ATTND_SERVER`. The Heroku hostname `attnd-dev-7ab893f37020.herokuapp.com` still works, but nothing should depend on it: the custom domain survives replacing the Heroku app, so dev passkeys keep working. ✅ The `dev` environment variable `ATTND_SERVER` = `dev.attnd.app` in Attnd-iOS and Attnd-Android (Nov 15, 2026).

@@ -5,16 +5,9 @@ it's picked up, then delete it from here.
 
 ## Needed before release
 
-### File storage for uploads (images, PDFs)
-Organizers upload flyers (image/PDF), location photos and logos in the console. Without permanent storage
-they land on Heroku's temporary disk and are **lost on every restart or deploy**.
-- Today: `django-cloudinary-storage` is wired in `attnd/settings.py`: it switches on when `CLOUDINARY_URL`
-  is set, and neither Heroku app has it yet (see SETUP.md step 2/5).
-- To decide: stay with Cloudinary (already integrated; free plan; image transforms) or move to S3-compatible
-  storage (e.g. Cloudflare R2 / AWS S3; needs a storage backend). Check PDF handling, file size limits, cost
-  at scale and delivery URLs/caching for the apps.
-- Also: upload limits and validation (type, size), cleanup of replaced/deleted files, and separate
-  dev vs prod buckets/accounts.
+### File storage for uploads (done: Cloudinary, Nov 15, 2026)
+Cloudinary free add-on on both apps (SETUP.md step 5); only the PDF delivery setting is left for the owner. Later:
+upload limits/validation (type, size), cleanup of replaced/deleted files, and a paid plan if storage or bandwidth grows.
 
 ### Sending email (mostly done: see SETUP.md step 11)
 Needed for team invites (`EventInvite`), password reset, sign-up confirmation and task/ingest notices.
