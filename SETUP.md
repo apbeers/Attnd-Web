@@ -95,7 +95,7 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
    That sets `CLOUDINARY_URL`, and the server switches to it automatically.
 
 ### Dev (`attnd-dev`) — created by Claude
-- ✅ App `attnd-dev` at **`https://dev.attnd.app/`** (custom domain, Nov 14, 2026: Namecheap CNAME `dev` → the app's herokudns target, Heroku ACM certificate; `SITE_URL=https://dev.attnd.app`). Use `dev.attnd.app` wherever this guide says `ATTND_SERVER`. The Heroku hostname `attnd-dev-7ab893f37020.herokuapp.com` still works, but nothing should depend on it: the custom domain survives replacing the Heroku app, so dev passkeys keep working.
+- ✅ App `attnd-dev` at **`https://dev.attnd.app/`** (custom domain, Nov 14, 2026: Namecheap CNAME `dev` → the app's herokudns target, Heroku ACM certificate; `SITE_URL=https://dev.attnd.app`). Use `dev.attnd.app` wherever this guide says `ATTND_SERVER`. The Heroku hostname `attnd-dev-7ab893f37020.herokuapp.com` still works, but nothing should depend on it: the custom domain survives replacing the Heroku app, so dev passkeys keep working. ✅ The `dev` environment variable `ATTND_SERVER` = `dev.attnd.app` in Attnd-iOS and Attnd-Android (Nov 15, 2026).
 - ✅ Postgres (essential-0), Scheduler, and generated `SECRET_KEY`, `API_KEY` and `ATTESTATION_JWT_SECRET`.
 - ✅ The OpenAI and Places keys have been copied from production. For reference, the command was:
   ```bash
