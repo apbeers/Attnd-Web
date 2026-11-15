@@ -28,6 +28,11 @@ Do these steps once, in order. Each step says which values go where. For any sin
       "Set time change" (`heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com`, then the
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
+- [ ] iOS App Group (widget, Nov 15, 2026): CI's App Store Connect key can't create App Groups, so archives fail with
+      "Authentication failed" until it exists. developer.apple.com → Certificates, IDs & Profiles → Identifiers → **+** →
+      **App Groups** → description "Attnd", identifier `group.com.arcu.Attnd` → Register. Then open the App IDs
+      `com.arcu.Attnd` and `com.arcu.Attnd.widgets`: tick **App Groups** → **Configure** → select `group.com.arcu.Attnd`
+      → Save (confirm the profile warning). CI regenerates the profiles on the next archive.
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
