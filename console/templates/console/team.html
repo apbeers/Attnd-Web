@@ -2,71 +2,73 @@
 {% load console_tags %}
 {% block title %}Team · {{ event.name }}{% endblock %}
 {% block event_content %}
-<p class="text-muted">Everyone here can edit the event's details, locations, schedule and notifications and review AI updates.
+<div class="stack stack--loose">
+<p class="muted">Everyone here can edit the event's details, locations, schedule and notifications and review AI updates.
   <strong>Admins</strong> can also add and remove people and change event settings. Only the <strong>owner</strong> can delete the event or hand it to someone else.</p>
 
 {% if not event.user %}
-<div class="card mb-4 border-start border-warning border-4"><div class="card-body">
+<div class="panel panel--warning">
   <strong>This event is unassigned.</strong> Its owner's account was deleted. It's still live for attendees.
   {% if user.is_superuser %}Assign it to someone below.{% endif %}
-</div></div>
+</div>
 {% endif %}
 
-<div class="card mb-4"><ul class="list-group list-group-flush">
-  <li class="list-group-item d-flex align-items-center">
-    <span class="me-auto">{% if event.user %}{{ event.user.email }}{% else %}<span class="text-muted">No owner</span>{% endif %}</span>
-    <span class="badge text-bg-dark">Owner</span>
+<div class="panel panel--flush"><ul class="list">
+  <li class="cluster">
+    <span class="grow">{% if event.user %}{{ event.user.email }}{% else %}<span class="muted">No owner</span>{% endif %}</span>
+    <span class="badge badge--dark">Owner</span>
   </li>
   {% for m in members %}
-  <li class="list-group-item d-flex align-items-center gap-2">
-    <span class="me-auto">{{ m.user.email }}{% if m.user_id == user.id %} <span class="text-muted small">(you)</span>{% endif %}</span>
+  <li class="cluster">
+    <span class="grow">{{ m.user.email }}{% if m.user_id == user.id %} <span class="muted small">(you)</span>{% endif %}</span>
     {% if is_owner %}
-      <form method="post" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="action" value="role"><input type="hidden" name="member" value="{{ m.id }}">
-        <select name="role" class="form-select form-select-sm" data-autosubmit>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="role"><input type="hidden" name="member" value="{{ m.id }}">
+        <select name="role" class="small" data-autosubmit aria-label="Role">
           <option value="admin" {% if m.role == 'admin' %}selected{% endif %}>Admin</option>
           <option value="contributor" {% if m.role == 'contributor' %}selected{% endif %}>Contributor</option>
         </select></form>
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="transfer"><input type="hidden" name="member" value="{{ m.id }}">
-        <button class="btn btn-sm btn-link" data-confirm="Make {{ m.user.email }} the owner? You stay on the team as an admin.">Make owner</button></form>
+        <button class="button button--ghost button--small" data-confirm="Make {{ m.user.email }} the owner? You stay on the team as an admin.">Make owner</button></form>
     {% else %}
-      <span class="badge text-bg-light border">{{ m.get_role_display }}</span>
+      <span class="badge badge--neutral">{{ m.get_role_display }}</span>
     {% endif %}
     {% if is_owner or can_manage and m.role == 'contributor' %}
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="member" value="{{ m.id }}">
-        <button class="btn btn-sm btn-link text-danger">Remove</button></form>
+        <button class="button button--ghost button--small tone-danger">Remove</button></form>
     {% elif m.user_id == user.id %}
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="leave">
-        <button class="btn btn-sm btn-link text-danger" data-confirm="Leave this event?">Leave</button></form>
+        <button class="button button--ghost button--small tone-danger" data-confirm="Leave this event?">Leave</button></form>
     {% endif %}
   </li>{% endfor %}
   {% for i in invites %}
-  <li class="list-group-item d-flex align-items-center gap-2">
-    <span class="me-auto">{{ i.email }} <span class="text-muted small">· invited, hasn't signed up yet</span></span>
-    <span class="badge text-bg-light border">{{ i.get_role_display }}</span>
+  <li class="cluster">
+    <span class="grow">{{ i.email }} <span class="muted small">· invited, hasn't signed up yet</span></span>
+    <span class="badge badge--neutral">{{ i.get_role_display }}</span>
     {% if can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="cancel_invite"><input type="hidden" name="invite" value="{{ i.id }}">
-      <button class="btn btn-sm btn-link text-danger">Cancel</button></form>{% endif %}
+      <button class="button button--ghost button--small tone-danger">Cancel</button></form>{% endif %}
   </li>{% endfor %}
 </ul></div>
 
 {% if can_manage %}
-<div class="card mb-4"><div class="card-body">
-  <h2 class="h6">{% icon "people" %} Add someone</h2>
-  <p class="small text-muted mb-2">Enter their email. If they don't have an Attnd account yet, they get access as soon as they sign up with that email
+<div class="panel">
+  <h2 class="title-4">{% icon "people" %} Add someone</h2>
+  <p class="small muted">Enter their email. If they don't have an Attnd account yet, they get access as soon as they sign up with that email
     at <code>{{ signup_url }}</code>.</p>
-  <form method="post" class="d-flex flex-wrap gap-2">{% csrf_token %}<input type="hidden" name="action" value="invite">
-    <div style="flex:1 1 16rem">{{ form.email }}</div>
+  <form method="post" class="cluster">{% csrf_token %}<input type="hidden" name="action" value="invite">
+    <div class="grow">{{ form.email }}</div>
     {% if is_owner %}<div>{{ form.role }}</div>{% endif %}
-    <button class="btn btn-primary text-nowrap">Add</button></form>
-</div></div>
+    <button class="button button--primary">Add</button></form>
+</div>
 {% endif %}
 
 {% if user.is_superuser %}
-<div class="card"><div class="card-body">
-  <h2 class="h6">Site admin: {% if event.user %}reassign the owner{% else %}assign an owner{% endif %}</h2>
-  <form method="post" class="d-flex gap-2" style="max-width:32rem">{% csrf_token %}<input type="hidden" name="action" value="assign_owner">
-    <input name="email" type="email" class="form-control" placeholder="New owner's email" required>
-    <button class="btn btn-outline-primary text-nowrap">Make owner</button></form>
-  <p class="small text-muted mb-0 mt-2">The current owner, if any, stays on the team as an admin.</p>
-</div></div>
+<div class="panel stack stack--tight">
+  <h2 class="title-4">Site admin: {% if event.user %}reassign the owner{% else %}assign an owner{% endif %}</h2>
+  <form method="post" class="cluster cluster--nowrap inline-form">{% csrf_token %}<input type="hidden" name="action" value="assign_owner">
+    <input name="email" type="email" class="grow" placeholder="New owner's email" aria-label="New owner's email" required>
+    <button class="button button--outline">Make owner</button></form>
+  <p class="small muted">The current owner, if any, stays on the team as an admin.</p>
+</div>
 {% endif %}
+</div>
 {% endblock %}

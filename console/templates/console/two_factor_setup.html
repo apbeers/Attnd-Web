@@ -5,62 +5,60 @@
   <title>{% if done %}Recovery codes{% else %}Set up two-factor sign-in{% endif %} — Attnd</title>
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
 </head>
-<body class="bg-light">
-<div class="d-flex justify-content-center align-items-center min-vh-100 py-4">
-  <div class="card shadow-sm" style="width:100%;max-width:480px;">
-    <div class="card-body p-4">
-      {% if done %}
-        <h2 class="card-title mb-3 text-center">Two-factor sign-in is on</h2>
-        {% if recovery_codes %}{% include 'console/_recovery_codes.html' %}{% endif %}
-        <div class="d-grid"><a class="btn btn-primary" href="{{ next }}">{% if recovery_codes %}I’ve saved them — continue{% else %}Continue{% endif %}</a></div>
-      {% else %}
-        <h2 class="card-title mb-3 text-center">{% if offer_passkey %}Secure your admin account{% else %}Set up an authenticator app{% endif %}</h2>
-        {% if required %}<p class="small">Admin accounts need a passkey or an authenticator app. Set one up once to continue.</p>{% endif %}
+<body>
+<main class="page page--centered">
+  <div class="panel panel--narrow panel--wide stack">
+    {% if done %}
+      <h1 class="auth-title">Two-factor sign-in is on</h1>
+      {% if recovery_codes %}<div>{% include 'console/_recovery_codes.html' %}</div>{% endif %}
+      <a class="button button--primary button--block" href="{{ next }}">{% if recovery_codes %}I’ve saved them — continue{% else %}Continue{% endif %}</a>
+    {% else %}
+      <h1 class="auth-title">{% if offer_passkey %}Secure your admin account{% else %}Set up an authenticator app{% endif %}</h1>
+      {% if required %}<p class="small">Admin accounts need a passkey or an authenticator app. Set one up once to continue.</p>{% endif %}
 
-        {% if offer_passkey %}
-        <section data-passkey-ui data-passkey-scope hidden aria-labelledby="passkey_heading" class="mb-4">
-          <h3 class="h6" id="passkey_heading">{% icon "key" %} Add a passkey (recommended)</h3>
-          <p class="small text-muted">Sign in with Face ID, Touch ID, Windows Hello or your phone’s screen lock: no password or code to type. It works as both steps at once.</p>
-          <div class="alert alert-danger py-2" role="alert" data-passkey-error hidden></div>
-          <div class="mb-3"><label class="form-label small" for="id_passkey_name">Name for this passkey</label>
-            <input class="form-control" id="id_passkey_name" maxlength="64" value="{{ passkey_name }}"></div>
-          <div class="d-grid"><button type="button" class="btn btn-primary" data-passkey-register
-                  data-options-url="{% url 'passkey_register_options' %}" data-verify-url="{% url 'passkey_register' %}"
-                  data-next="{{ next }}" data-name-input="#id_passkey_name">{% icon "key" %} Add a passkey</button></div>
-          <hr>
-          <p class="small text-muted mb-0">Or use an authenticator app instead:</p>
-        </section>
-        {% endif %}
+      {% if offer_passkey %}
+      <section data-passkey-ui data-passkey-scope hidden aria-labelledby="passkey_heading">
+        <h2 class="title-4" id="passkey_heading">{% icon "key" %} Add a passkey (recommended)</h2>
+        <p class="small muted">Sign in with Face ID, Touch ID, Windows Hello or your phone’s screen lock: no password or code to type. It works as both steps at once.</p>
+        <div class="notice notice--error notice--compact" role="alert" data-passkey-error hidden></div>
+        <div class="field"><label class="field__label" for="id_passkey_name">Name for this passkey</label>
+          <input id="id_passkey_name" maxlength="64" value="{{ passkey_name }}"></div>
+        <button type="button" class="button button--primary button--block" data-passkey-register
+                data-options-url="{% url 'passkey_register_options' %}" data-verify-url="{% url 'passkey_register' %}"
+                data-next="{{ next }}" data-name-input="#id_passkey_name">{% icon "key" %} Add a passkey</button>
+        <hr>
+        <p class="small muted">Or use an authenticator app instead:</p>
+      </section>
+      {% endif %}
 
-        <section aria-label="Authenticator app">
-        <ol class="small" style="padding-left:1.2rem">
+      <section aria-label="Authenticator app">
+        <ol class="small">
           <li>Open an authenticator app (Google Authenticator, 1Password, iOS Passwords, Authy …) and scan this code.</li>
           <li>Enter the 6-digit code it shows.</li>
         </ol>
-        <div class="text-center mb-2 two-factor-qr" style="max-width:220px;margin:0 auto">{{ qr_svg }}</div>
-        <p class="small text-muted mb-1">Can’t scan? Enter this key in the app (time-based):</p>
-        <p class="font-monospace text-center mb-2" style="word-break:break-all">{{ secret_groups }}</p>
-        <details class="small text-muted mb-3"><summary>Setup link</summary>
-          <code style="word-break:break-all">{{ otpauth_uri }}</code></details>
-        {% if error %}<div class="alert alert-danger py-2" role="alert">{{ error }}</div>{% endif %}
+        <div class="two-factor-qr">{{ qr_svg }}</div>
+        <p class="small muted">Can’t scan? Enter this key in the app (time-based):</p>
+        <p class="mono center break">{{ secret_groups }}</p>
+        <details class="small muted field"><summary>Setup link</summary>
+          <code>{{ otpauth_uri }}</code></details>
+        {% if error %}<div class="notice notice--error notice--compact" role="alert">{{ error }}</div>{% endif %}
         <form method="post">{% csrf_token %}
           <input type="hidden" name="next" value="{{ next }}">
-          <div class="mb-3"><label class="form-label" for="id_code">Code from the app</label>
-            <input class="form-control font-monospace" type="text" name="code" id="id_code" inputmode="numeric"
+          <div class="field"><label class="field__label" for="id_code">Code from the app</label>
+            <input class="mono" type="text" name="code" id="id_code" inputmode="numeric"
                    autocomplete="one-time-code" maxlength="10" {% if not offer_passkey %}autofocus{% endif %} required></div>
-          <div class="d-grid"><button class="btn {% if offer_passkey %}btn-outline-primary{% else %}btn-primary{% endif %}">Turn on</button></div>
+          <button class="button {% if offer_passkey %}button--outline{% else %}button--primary{% endif %} button--block">Turn on</button>
         </form>
-        </section>
-        {% if required %}
-          <form method="post" action="{% url 'logout' %}" class="text-center mt-3 mb-0">{% csrf_token %}
-            <button class="btn btn-sm btn-link text-muted">Sign out</button></form>
-        {% else %}
-          <p class="text-center small mt-3 mb-0"><a href="{% url 'console:account' %}">Cancel</a></p>
-        {% endif %}
+      </section>
+      {% if required %}
+        <form method="post" action="{% url 'logout' %}" class="center">{% csrf_token %}
+          <button class="button button--ghost button--small muted">Sign out</button></form>
+      {% else %}
+        <p class="center small"><a href="{% url 'console:account' %}">Cancel</a></p>
       {% endif %}
-    </div>
+    {% endif %}
   </div>
-</div>
+</main>
 <script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>

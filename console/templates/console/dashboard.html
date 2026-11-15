@@ -2,30 +2,32 @@
 {% load console_tags %}
 {% block title %}Your events{% endblock %}
 {% block content %}
-<div class="d-flex align-items-center mb-3">
-  <h1 class="h3 mb-0">Your events</h1>
-</div>
+<h1>Your events</h1>
 {% for job in running_jobs %}
-  <div class="alert alert-info d-flex align-items-center">
-    <div class="spinner-border spinner-border-sm me-2"></div>
-    Importing {{ job.urls|first|default:job.upload_name|default:"your event" }}…
-    <a class="ms-auto" href="{% url 'console:job' job.pk %}">View</a>
+  <div class="notice notice--info cluster">
+    <span class="spinner"></span>
+    <span class="grow">Importing {{ job.urls|first|default:job.upload_name|default:"your event" }}…</span>
+    <a href="{% url 'console:job' job.pk %}">View</a>
   </div>
 {% endfor %}
 {% if not upcoming and not past %}
-  <div class="card p-5 text-center">
-    {% icon "stars" "display-5 text-primary" %}
-    <h2 class="h4 mt-3">Create your first event</h2>
-    <p class="text-muted">Paste your event website or upload a flyer — the AI builds the locations and schedule for you to review.</p>
-    <div><a class="btn btn-primary btn-lg" href="{% url 'console:event_new' %}">Create an event</a></div>
+  <div class="panel panel--empty stack">
+    <div>{% icon "stars" "icon--xl tone-brand" %}</div>
+    <h2 class="title-2">Create your first event</h2>
+    <p class="muted">Paste your event website or upload a flyer — the AI builds the locations and schedule for you to review.</p>
+    <div><a class="button button--primary button--large" href="{% url 'console:event_new' %}">Create an event</a></div>
   </div>
 {% endif %}
 {% if upcoming %}
-<h2 class="h6 muted-label mt-4">Upcoming &amp; live</h2>
-<div class="row g-3">{% for e in upcoming %}{% include 'console/_event_card.html' %}{% endfor %}</div>
+<section class="section">
+  <h2 class="eyebrow">Upcoming &amp; live</h2>
+  <div class="grid grid--cards">{% for e in upcoming %}{% include 'console/_event_card.html' %}{% endfor %}</div>
+</section>
 {% endif %}
 {% if past %}
-<h2 class="h6 muted-label mt-5">Past</h2>
-<div class="row g-3">{% for e in past %}{% include 'console/_event_card.html' %}{% endfor %}</div>
+<section class="section">
+  <h2 class="eyebrow">Past</h2>
+  <div class="grid grid--cards">{% for e in past %}{% include 'console/_event_card.html' %}{% endfor %}</div>
+</section>
 {% endif %}
 {% endblock %}

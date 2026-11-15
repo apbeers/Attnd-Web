@@ -2,58 +2,53 @@
 {% load console_tags %}
 {% block title %}App layout · {{ event.name }}{% endblock %}
 {% block event_content %}
-<div class="row g-4">
-  <div class="col-lg-7">
-    <form method="post" id="display-form">{% csrf_token %}
-      <div class="card mb-4"><div class="card-body p-4">
-        <h2 class="h5">Layout style</h2>
-        <p class="small text-muted">Your event has {{ stats.location_count }} location{{ stats.location_count|pluralize }} and {{ stats.item_count }} schedule item{{ stats.item_count|pluralize }}{% if stats.spread_km %}, spread over {{ stats.spread_km }} km{% endif %}. Automatic picks a style to match and adjusts as your event grows.</p>
-        {% for radio in form.preset %}
-          <div class="form-check mb-1">{{ radio.tag }}<label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label></div>
-        {% endfor %}
-        <div class="alert alert-light border small mt-3 mb-0" id="resolved-reason">Currently using <strong>{{ resolved.resolved_preset|capfirst }}</strong> — {{ resolved.reason }}.</div>
-      </div></div>
+<div class="split">
+  <form method="post" id="display-form" class="split__main stack stack--loose">{% csrf_token %}
+    <div class="panel panel--roomy">
+      <h2>Layout style</h2>
+      <p class="small muted">Your event has {{ stats.location_count }} location{{ stats.location_count|pluralize }} and {{ stats.item_count }} schedule item{{ stats.item_count|pluralize }}{% if stats.spread_km %}, spread over {{ stats.spread_km }} km{% endif %}. Automatic picks a style to match and adjusts as your event grows.</p>
+      <div class="choices">{% for radio in form.preset %}
+        <label class="check" for="{{ radio.id_for_label }}">{{ radio.tag }} {{ radio.choice_label }}</label>
+      {% endfor %}</div>
+      <div class="notice notice--neutral small" id="resolved-reason">Currently using <strong>{{ resolved.resolved_preset|capfirst }}</strong> — {{ resolved.reason }}.</div>
+    </div>
 
-      <div class="card mb-4"><div class="card-body p-4">
-        <h2 class="h5">Tabs</h2>
-        <div class="form-check form-switch mb-2">{{ form.customize_tabs }}<label class="form-check-label" for="{{ form.customize_tabs.id_for_label }}">{{ form.customize_tabs.label }}</label></div>
-        <ul class="list-group mb-3" id="tab-list">
-          {% for cb in form.tabs %}
-          <li class="list-group-item d-flex align-items-center gap-2" data-tab="{{ cb.data.value }}">
-            {% icon "grip" "drag-handle" %}{{ cb.tag }}<label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
-          </li>{% endfor %}
-        </ul>
-        {{ form.tab_order }}
-        <label class="form-label small fw-semibold">Opens on</label>{{ form.default_tab }}
-      </div></div>
+    <div class="panel panel--roomy">
+      <h2>Tabs</h2>
+      <label class="check field" for="{{ form.customize_tabs.id_for_label }}">{{ form.customize_tabs }} {{ form.customize_tabs.label }}</label>
+      <ul class="list list--boxed field" id="tab-list">
+        {% for cb in form.tabs %}
+        <li class="cluster" data-tab="{{ cb.data.value }}">
+          {% icon "grip" "drag-handle" %}<label class="check" for="{{ cb.id_for_label }}">{{ cb.tag }} {{ cb.choice_label }}</label>
+        </li>{% endfor %}
+      </ul>
+      {{ form.tab_order }}
+      <div class="field field--small field--bare"><label class="field__label" for="{{ form.default_tab.id_for_label }}">Opens on</label>{{ form.default_tab }}</div>
+    </div>
 
-      <div class="card mb-4"><div class="card-body p-4">
-        <h2 class="h5">Details</h2>
-        <div class="row g-3">
-          <div class="col-md-6"><label class="form-label small fw-semibold">Locations list</label>{{ form.locations_style }}</div>
-          <div class="col-md-6"><label class="form-label small fw-semibold">Schedule</label>{{ form.schedule_style }}</div>
-          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.secondary_pane.label }}</label>{{ form.secondary_pane }}
-            <div class="form-text">Unfolded foldable phones — iPhone Duo and Android foldables.</div></div>
-          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.map_clustering.label }}</label>{{ form.map_clustering }}</div>
-          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.map_fit_all.label }}</label>{{ form.map_fit_all }}</div>
-          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.show_location_images.label }}</label>{{ form.show_location_images }}</div>
-          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.enable_search.label }}</label>{{ form.enable_search }}</div>
-          <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.group_by_category.label }}</label>{{ form.group_by_category }}</div>
-          <div class="col-md-6"><label class="form-label small fw-semibold">Accent color</label>
-            <div class="d-flex align-items-center gap-2"><input type="color" name="accent_color" class="form-control form-control-color" value="{{ event.accent_color|default:'#431f86' }}">
-              <div class="form-check"><input class="form-check-input" type="checkbox" name="accent_default" id="accent_default" {% if not event.accent_color %}checked{% endif %}>
-                <label class="form-check-label small" for="accent_default">Use Attnd default</label></div></div></div>
-        </div>
-      </div></div>
-      <div class="d-flex align-items-center gap-3">
-        <button class="btn btn-primary">Save layout</button>
-        <span id="autosave-status" class="small text-muted">Changes save automatically and appear in the app within seconds.</span>
+    <div class="panel panel--roomy">
+      <h2>Details</h2>
+      <div class="grid grid--2">
+        <div class="field field--small field--bare"><label class="field__label" for="{{ form.locations_style.id_for_label }}">Locations list</label>{{ form.locations_style }}</div>
+        <div class="field field--small field--bare"><label class="field__label" for="{{ form.schedule_style.id_for_label }}">Schedule</label>{{ form.schedule_style }}</div>
+        <div class="field field--small field--bare"><label class="field__label" for="{{ form.secondary_pane.id_for_label }}">{{ form.secondary_pane.label }}</label>{{ form.secondary_pane }}
+          <div class="field__help">Unfolded foldable phones — iPhone Duo and Android foldables.</div></div>
+        <div class="field field--small field--bare"><label class="field__label" for="{{ form.map_clustering.id_for_label }}">{{ form.map_clustering.label }}</label>{{ form.map_clustering }}</div>
+        <div class="field field--small field--bare"><label class="field__label" for="{{ form.map_fit_all.id_for_label }}">{{ form.map_fit_all.label }}</label>{{ form.map_fit_all }}</div>
+        <div class="field field--small field--bare"><label class="field__label" for="{{ form.show_location_images.id_for_label }}">{{ form.show_location_images.label }}</label>{{ form.show_location_images }}</div>
+        <div class="field field--small field--bare"><label class="field__label" for="{{ form.enable_search.id_for_label }}">{{ form.enable_search.label }}</label>{{ form.enable_search }}</div>
+        <div class="field field--small field--bare"><label class="field__label" for="{{ form.group_by_category.id_for_label }}">{{ form.group_by_category.label }}</label>{{ form.group_by_category }}</div>
+        <div class="field field--small field--bare"><label class="field__label" for="id_accent_color">Accent color</label>
+          <div class="cluster"><input type="color" name="accent_color" id="id_accent_color" value="{{ event.accent_color|default:'#431f86' }}">
+            <label class="check small" for="accent_default"><input type="checkbox" name="accent_default" id="accent_default" {% if not event.accent_color %}checked{% endif %}> Use Attnd default</label></div></div>
       </div>
-    </form>
-  </div>
-  <div class="col-lg-5">
-    <div class="position-sticky" style="top:1rem">{% include 'console/_live_phone.html' %}</div>
-  </div>
+    </div>
+    <div class="cluster cluster--loose">
+      <button class="button button--primary">Save layout</button>
+      <span id="autosave-status" class="small muted grow">Changes save automatically and appear in the app within seconds.</span>
+    </div>
+  </form>
+  <div class="split__aside sticky">{% include 'console/_live_phone.html' %}</div>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -86,7 +81,7 @@
         `Currently using <strong>${d.resolved.resolved_preset[0].toUpperCase() + d.resolved.resolved_preset.slice(1)}</strong> — ${d.resolved.reason}.`;
       status.textContent = 'Saved. Open apps update within a few seconds.';
     } catch (e) {
-      status.innerHTML = '<span class="text-danger">Couldn’t save. Check your connection and try again.</span>';
+      status.innerHTML = '<span class="tone-danger">Couldn’t save. Check your connection and try again.</span>';
     }
   }
   form.addEventListener('change', () => { clearTimeout(timer); timer = setTimeout(refresh, 300); });

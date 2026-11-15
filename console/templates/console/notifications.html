@@ -2,40 +2,39 @@
 {% load console_tags %}
 {% block title %}Notifications · {{ event.name }}{% endblock %}
 {% block event_content %}
-<div class="row g-4">
-  <div class="col-lg-5">
-    <div class="card"><div class="card-body p-4">
-      <h2 class="h5">Send an update</h2>
-      <p class="small text-muted">Pushes to {{ reach }} device{{ reach|pluralize }} with notifications on, and shows in everyone’s Updates tab.</p>
-      <form method="post">{% csrf_token %}
-        {% include 'console/_field.html' with field=form.title %}
-        {% include 'console/_field.html' with field=form.body %}
-        <div class="mb-3">{% for radio in form.when %}<div class="form-check form-check-inline">{{ radio.tag }}
-          <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label></div>{% endfor %}</div>
-        <div id="send-time">{% include 'console/_field.html' with field=form.send_time %}</div>
-        <button class="btn btn-primary">{% icon "send" %} Send</button>
-      </form>
-    </div></div>
+<div class="split">
+  <div class="split__aside panel panel--roomy">
+    <h2>Send an update</h2>
+    <p class="small muted">Pushes to {{ reach }} device{{ reach|pluralize }} with notifications on, and shows in everyone’s Updates tab.</p>
+    <form method="post">{% csrf_token %}
+      {% include 'console/_field.html' with field=form.title %}
+      {% include 'console/_field.html' with field=form.body %}
+      <div class="choices choices--inline">{% for radio in form.when %}<label class="check" for="{{ radio.id_for_label }}">{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}</div>
+      <div id="send-time">{% include 'console/_field.html' with field=form.send_time %}</div>
+      <button class="button button--primary">{% icon "send" %} Send</button>
+    </form>
   </div>
-  <div class="col-lg-7">
-    <div class="card"><ul class="list-group list-group-flush">
+  <div class="split__main panel panel--flush">
+    <ul class="list list--roomy">
     {% for n in notifications %}
-      <li class="list-group-item py-3">
-        <div class="d-flex">
-          <strong class="me-auto">{{ n.title }}</strong>
-          {% if n.sent %}<span class="small text-muted">Sent {{ n.sent_at|default:n.send_time|date:"M j, g:i A" }} · {{ n.delivered_count }} delivered</span>
-          {% else %}<span class="badge text-bg-info">Scheduled {{ n.send_time|date:"M j, g:i A" }}</span>{% endif %}
+      <li class="stack stack--tight">
+        <div>
+        <div class="cluster">
+          <strong class="grow">{{ n.title }}</strong>
+          {% if n.sent %}<span class="small muted">Sent {{ n.sent_at|default:n.send_time|date:"M j, g:i A" }} · {{ n.delivered_count }} delivered</span>
+          {% else %}<span class="badge badge--info">Scheduled {{ n.send_time|date:"M j, g:i A" }}</span>{% endif %}
         </div>
-        <div class="text-muted">{{ n.body }}</div>
+        <div class="muted">{{ n.body }}</div>
+        </div>
         {% if not n.sent %}
-        <form method="post" action="{% url 'console:notification_action' event.id n.id %}" class="mt-2 d-flex gap-2">{% csrf_token %}
-          <button name="action" value="send" class="btn btn-sm btn-outline-primary">Send now</button>
-          <button name="action" value="delete" class="btn btn-sm btn-outline-danger">Delete</button>
+        <form method="post" action="{% url 'console:notification_action' event.id n.id %}" class="cluster">{% csrf_token %}
+          <button name="action" value="send" class="button button--outline button--small">Send now</button>
+          <button name="action" value="delete" class="button button--danger button--small">Delete</button>
         </form>
         {% endif %}
       </li>
-    {% empty %}<li class="list-group-item text-muted text-center py-5">No notifications yet.</li>{% endfor %}
-    </ul></div>
+    {% empty %}<li class="list__empty">No notifications yet.</li>{% endfor %}
+    </ul>
   </div>
 </div>
 {% endblock %}

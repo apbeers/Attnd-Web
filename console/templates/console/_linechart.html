@@ -1,6 +1,6 @@
 {% comment %}Inline SVG line chart from console.usage.line_chart(). Expects `c` and `label`.{% endcomment %}
 {% if c %}
-<figure class="line-chart mb-0" aria-label="{{ label }}">
+<figure class="line-chart" aria-label="{{ label }}">
   <div class="line-legend">{% for s in c.series %}
     <span class="legend-{{ s.cls }}"><i></i>{{ s.label }} <strong>{% if s.cumulative %}{{ s.last }}{% else %}peak {{ s.max }}{% endif %}</strong></span>
   {% endfor %}</div>
@@ -12,6 +12,6 @@
     {% for h in c.hover %}<rect class="hover" x="{{ h.x }}" y="0" width="{{ h.w }}" height="{{ c.height }}"><title>{{ h.title }}</title></rect>{% endfor %}
   </svg>
   <div class="usage-ticks">{% for t in c.ticks %}<span style="left:{{ t.left }}%">{{ t.label }}</span>{% endfor %}</div>
-  <figcaption class="small text-muted">Per {{ c.step }}. {% if c.series|length > 1 %}Each line has its own scale. {% endif %}Hover for values.</figcaption>
+  <figcaption class="small muted">Per {{ c.step }}. {% if c.series|length > 1 %}Each line has its own scale. {% endif %}Hover for values.</figcaption>
 </figure>
-{% else %}<p class="text-muted small mb-0">No data yet.</p>{% endif %}
+{% else %}<p class="muted small">No data yet.</p>{% endif %}

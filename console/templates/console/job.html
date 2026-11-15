@@ -2,25 +2,25 @@
 {% load console_tags %}
 {% block title %}Working…{% endblock %}
 {% block content %}
-<div class="row justify-content-center"><div class="col-lg-6">
-  <div class="card text-center p-5" id="job-card">
+<div class="column column--small">
+  <div class="panel panel--empty stack" id="job-card">
     {% if job.status == 'failed' %}
-      {% icon "warning" "display-5 text-danger" %}
-      <h1 class="h4 mt-3">That didn’t work</h1>
-      <p class="text-muted">{{ job.error }}</p>
-      <div><a class="btn btn-primary" href="{% if event %}{% url 'console:event' event.id %}{% else %}{% url 'console:event_new' %}{% endif %}">Try again</a></div>
+      <div>{% icon "warning" "icon--xl tone-danger" %}</div>
+      <h1 class="title-2">That didn’t work</h1>
+      <p class="muted">{{ job.error }}</p>
+      <div><a class="button button--primary" href="{% if event %}{% url 'console:event' event.id %}{% else %}{% url 'console:event_new' %}{% endif %}">Try again</a></div>
     {% elif job.status == 'done' and event %}
-      {% icon "check-circle" "display-5 text-success" %}
-      <h1 class="h4 mt-3">{{ job.result.summary|default:"Done" }}</h1>
-      <div class="mt-2"><a class="btn btn-primary" href="{% url 'console:event' event.id %}">Back to event</a></div>
+      <div>{% icon "check-circle" "icon--xl tone-success" %}</div>
+      <h1 class="title-2">{{ job.result.summary|default:"Done" }}</h1>
+      <div><a class="button button--primary" href="{% url 'console:event' event.id %}">Back to event</a></div>
     {% else %}
-      <div class="spinner-border text-primary mx-auto" style="width:3rem;height:3rem"></div>
-      <h1 class="h4 mt-4">{% if job.kind == 'refresh' %}Checking for updates{% else %}Building your event{% endif %}</h1>
-      <p class="text-muted mb-0" id="progress">{{ job.progress|default:"Queued…" }}</p>
-      <p class="text-muted small mt-3">You can leave this page — the work continues in the background.</p>
+      <div class="spinner spinner--large" role="status"></div>
+      <h1 class="title-2">{% if job.kind == 'refresh' %}Checking for updates{% else %}Building your event{% endif %}</h1>
+      <p class="muted" id="progress">{{ job.progress|default:"Queued…" }}</p>
+      <p class="muted small">You can leave this page — the work continues in the background.</p>
     {% endif %}
   </div>
-</div></div>
+</div>
 {% endblock %}
 {% block scripts %}{% if not job.is_finished %}
 <script nonce="{{ csp_nonce }}">

@@ -11,40 +11,15 @@
   <meta name="theme-color" content="#431f86">
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
   <link rel="icon" type="image/png" href="{% static 'home/img/favicon.png' %}">
-  <style>
-    .join-page { min-height: 100vh; background: linear-gradient(135deg, #431f86 0%, #7b4fd6 100%); padding: 32px 16px;
-      display: grid; place-items: center; }
-    .join-card { background: #fff; border-radius: 22px; box-shadow: 0 30px 80px rgba(20, 5, 50, .35); width: 100%;
-      max-width: 860px; display: grid; grid-template-columns: 1.15fr 1fr; overflow: hidden; }
-    .join-info { padding: 40px; }
-    .join-qr { background: #f6f3fd; padding: 40px 32px; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; text-align: center; gap: 14px; }
-    .join-qr img { width: 100%; max-width: 280px; background: #fff; border-radius: 16px; padding: 10px; box-shadow: 0 8px 30px rgba(67, 31, 134, .15); }
-    .join-info h1 { font-size: 2rem; line-height: 1.15; margin: 18px 0 8px; letter-spacing: -.02em; }
-    .join-meta { color: var(--muted); margin: 0 0 18px; }
-    .join-code { display: inline-block; font-family: var(--mono); font-size: 1.6rem; font-weight: 800; letter-spacing: .12em;
-      color: #431f86; background: #efe9fa; border-radius: 10px; padding: .2rem .7rem; }
-    .join-steps { margin: 22px 0 0; padding-left: 1.2rem; color: var(--ink); }
-    .join-steps li { margin: .35rem 0; }
-    .join-buttons { display: grid; gap: 10px; margin-top: 22px; }
-    .join-buttons .btn { width: 100%; }
-    .live-pill { display: inline-flex; align-items: center; gap: .4em; background: #431f86; color: #fff; border-radius: 999px;
-      padding: .15rem .65rem; font-size: .8rem; font-weight: 600; }
-    .live-pill i { width: .45em; height: .45em; border-radius: 50%; background: #fff; animation: pulse 1.4s infinite; }
-    @keyframes pulse { 50% { opacity: .35; } }
-    .ended-pill { display: inline-block; background: #eee; color: #555; border-radius: 999px; padding: .15rem .65rem; font-size: .8rem; }
-    @media (max-width: 760px) { .join-card { grid-template-columns: 1fr; } .join-info { padding: 28px; } }
-    .join-card.single { grid-template-columns: 1fr; max-width: 480px; }
-  </style>
 </head>
 <body>
 <main class="join-page">
-  <div class="join-card{% if kind == 'ios' %} single{% endif %}">
+  <div class="join-card{% if kind == 'ios' %} join-card--single{% endif %}">
     <section class="join-info">
       <a class="brand" href="/">attnd<span>.</span></a>
       {% with t=event.timing %}
-        {% if t == 'now' and event.status != 'archived' %}<div style="margin-top:18px"><span class="live-pill"><i></i>Happening now</span></div>
-        {% elif t == 'ended' or event.status == 'archived' %}<div style="margin-top:18px"><span class="ended-pill">This event has ended</span></div>{% endif %}
+        {% if t == 'now' and event.status != 'archived' %}<div class="join-status"><span class="pill pill--live"><i></i>Happening now</span></div>
+        {% elif t == 'ended' or event.status == 'archived' %}<div class="join-status"><span class="pill">This event has ended</span></div>{% endif %}
       {% endwith %}
       <h1>{{ event.name }}</h1>
       {% timezone event.timezone|default:"UTC" %}
@@ -52,7 +27,7 @@
         {% if event.address %}<br>{{ event.address }}{% endif %}</p>
       {% endtimezone %}
       {% if event.description %}<p>{{ event.description|truncatechars:240 }}</p>{% endif %}
-      <p style="margin:18px 0 6px" class="muted small">Event code</p>
+      <p class="eyebrow">Event code</p>
       <span class="join-code">{{ event.event_code }}</span>
 
       {% if kind == 'ios' %}
@@ -61,7 +36,7 @@
           <li>Or get the full app, then open this link again or enter the code.</li>
         </ol>
         <div class="join-buttons">
-          {% if ios_url %}<a href="{{ ios_url }}" class="btn btn-dark">Get Attnd on the App Store</a>{% endif %}
+          {% if ios_url %}<a href="{{ ios_url }}" class="button button--dark button--block">Get Attnd on the App Store</a>{% endif %}
         </div>
       {% else %}
         <ol class="join-steps">
@@ -70,8 +45,8 @@
           <li>Follow the map, the schedule and live updates from the organizers.</li>
         </ol>
         <div class="join-buttons">
-          {% if ios_url %}<a href="{{ ios_url }}" class="btn btn-dark">Download on the App Store</a>{% endif %}
-          <a href="{{ android_url }}" class="btn btn-green">Get it on Google Play</a>
+          {% if ios_url %}<a href="{{ ios_url }}" class="button button--dark button--block">Download on the App Store</a>{% endif %}
+          <a href="{{ android_url }}" class="button button--play button--block">Get it on Google Play</a>
         </div>
       {% endif %}
     </section>
@@ -79,7 +54,7 @@
     <section class="join-qr">
       <img src="{% url 'join:join_qr' event.event_code %}" alt="QR code for {{ join_url }}" width="280" height="280">
       <strong>Scan with your phone</strong>
-      <span class="muted small" style="word-break:break-all">{{ join_url }}</span>
+      <span class="muted small break">{{ join_url }}</span>
     </section>
     {% endif %}
   </div>

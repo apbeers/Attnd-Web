@@ -105,8 +105,6 @@ def account(request):
     """Change the email you sign in with, or your password. The account (and its events) stays the same."""
     email_form = EmailChangeForm(request.user, prefix='email')
     password_form = PasswordChangeForm(request.user, prefix='pw')
-    for field in password_form.fields.values():
-        field.widget.attrs['class'] = 'form-control'
     recovery_codes = None
     action = request.POST.get('action') if request.method == 'POST' else None
     if action in ('2fa_disable', '2fa_codes', 'email_codes_on', 'email_codes_off'):
@@ -125,8 +123,6 @@ def account(request):
             return redirect('console:account')
     elif request.method == 'POST' and request.POST.get('action') == 'password':
         password_form = PasswordChangeForm(request.user, request.POST, prefix='pw')
-        for field in password_form.fields.values():
-            field.widget.attrs['class'] = 'form-control'
         if password_form.is_valid():
             user = password_form.save()
             update_session_auth_hash(request, user)

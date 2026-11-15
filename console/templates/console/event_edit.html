@@ -2,41 +2,43 @@
 {% load console_tags %}
 {% block title %}Details · {{ event.name }}{% endblock %}
 {% block event_content %}
-<div class="card mb-4"><div class="card-body p-4">
+<div class="stack stack--loose">
+<div class="panel panel--roomy">
   <form method="post" enctype="multipart/form-data">{% csrf_token %}
     {% with locked=event.locked_fields %}
     {% include 'console/_field.html' with field=form.name %}
     {% include 'console/_field.html' with field=form.description %}
-    <div class="row">
-      <div class="col-md-4">{% include 'console/_field.html' with field=form.start_time %}</div>
-      <div class="col-md-4">{% include 'console/_field.html' with field=form.end_time %}</div>
-      <div class="col-md-4">{% include 'console/_field.html' with field=form.timezone %}</div>
+    <div class="grid grid--3">
+      {% include 'console/_field.html' with field=form.start_time %}
+      {% include 'console/_field.html' with field=form.end_time %}
+      {% include 'console/_field.html' with field=form.timezone %}
     </div>
-    <p class="form-text mt-n2 mb-3">Times are in the event’s time zone ({{ event.timezone }}).</p>
+    <p class="form-note">Times are in the event’s time zone ({{ event.timezone }}).</p>
     {% include 'console/_field.html' with field=form.address %}
-    <div class="row">
-      <div class="col-md-6">{% include 'console/_field.html' with field=form.latitude %}</div>
-      <div class="col-md-6">{% include 'console/_field.html' with field=form.longitude %}</div>
+    <div class="grid grid--2">
+      {% include 'console/_field.html' with field=form.latitude %}
+      {% include 'console/_field.html' with field=form.longitude %}
     </div>
     {% include 'console/_field.html' with field=form.flyer %}
-    <div class="row">
-      <div class="col-md-4">{% include 'console/_field.html' with field=form.accent_color %}</div>
-      <div class="col-md-8">{% include 'console/_field.html' with field=form.logo_url %}</div>
+    <div class="split split--compact">
+      <div class="split__aside">{% include 'console/_field.html' with field=form.accent_color %}</div>
+      <div class="split__main">{% include 'console/_field.html' with field=form.logo_url %}</div>
     </div>
     {% endwith %}
-    <button class="btn btn-primary">Save</button>
+    <button class="button button--primary">Save</button>
   </form>
-</div></div>
+</div>
 {% if event.locked_fields %}
-<p class="small text-muted">{% icon "lock" "lock" %} Fields you’ve edited are protected from AI refreshes — the AI can still suggest changes, but they’re unticked by default.</p>
+<p class="small muted">{% icon "lock" "lock" %} Fields you’ve edited are protected from AI refreshes — the AI can still suggest changes, but they’re unticked by default.</p>
 {% endif %}
-<div class="card border-danger"><div class="card-body">
-  <h2 class="h6 text-danger">Delete event</h2>
-  <form method="post" action="{% url 'console:event_delete' event.id %}" class="d-flex gap-2">{% csrf_token %}
-    <input class="form-control form-control-sm" style="max-width:220px" name="confirm_code" placeholder="Type {{ event.event_code }}">
-    <button class="btn btn-sm btn-outline-danger">Delete permanently</button>
+<div class="panel panel--danger">
+  <h2 class="title-4 tone-danger">Delete event</h2>
+  <form method="post" action="{% url 'console:event_delete' event.id %}" class="cluster">{% csrf_token %}
+    <input class="small" name="confirm_code" placeholder="Type {{ event.event_code }}" aria-label="Event code to confirm">
+    <button class="button button--danger button--small">Delete permanently</button>
   </form>
-</div></div>
+</div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">

@@ -1,39 +1,39 @@
 {% load console_tags %}{% load tz %}
-<div class="mx-auto border border-4 border-dark rounded-5 overflow-hidden bg-white shadow" style="width:300px;height:600px;display:flex;flex-direction:column;--accent:{{ d.accent_color|default:'#ff5a1f' }}">
-  <div class="px-3 pt-4 pb-2 border-bottom">
-    {% if not event.paid %}<div class="small text-center text-white rounded mb-2" style="background:#b26b00;font-size:.7rem">Demo event</div>{% endif %}
-    <div class="fw-bold text-truncate">{{ event.name }}</div>
-    <div class="text-muted" style="font-size:.75rem">{% timezone tz %}{{ event.start_time|date:"D M j · g:i A" }}{% endtimezone %}</div>
+<div class="phone-preview" style="--accent:{{ d.accent_color|default:'#ff5a1f' }}">
+  <div class="phone-preview__head">
+    {% if not event.paid %}<div class="phone-preview__demo">Demo event</div>{% endif %}
+    <div class="strong truncate">{{ event.name }}</div>
+    <div class="muted phone-preview__note">{% timezone tz %}{{ event.start_time|date:"D M j · g:i A" }}{% endtimezone %}</div>
   </div>
-  <div class="flex-grow-1 overflow-hidden p-2" style="font-size:.8rem">
+  <div class="phone-preview__body">
     {% if d.default_tab == 'map' %}
-      <div class="rounded h-100 position-relative" style="background:linear-gradient(135deg,#e8f0e3,#dfe9f3)">
-        {% for loc in locations|slice:":8" %}<span class="position-absolute fs-5" style="color:var(--accent);left:{% cycle 15 55 35 70 25 60 45 80 %}%;top:{% cycle 20 30 55 45 70 15 80 60 %}%">{% icon "pin-fill" %}</span>{% endfor %}
-        {% if d.map_clustering %}<span class="position-absolute badge rounded-pill" style="background:var(--accent);left:40%;top:40%">{{ d.stats.location_count }}</span>{% endif %}
+      <div class="phone-preview__map">
+        {% for loc in locations|slice:":8" %}<span class="phone-preview__pin" style="left:{% cycle 15 55 35 70 25 60 45 80 %}%;top:{% cycle 20 30 55 45 70 15 80 60 %}%">{% icon "pin-fill" %}</span>{% endfor %}
+        {% if d.map_clustering %}<span class="badge badge--pill phone-preview__cluster">{{ d.stats.location_count }}</span>{% endif %}
       </div>
     {% elif d.default_tab == 'schedule' %}
-      {% if d.enable_search %}<div class="form-control form-control-sm mb-2 text-muted">Search</div>{% endif %}
-      {% if d.schedule_style == 'now_next' %}<div class="fw-semibold" style="color:var(--accent)">Happening now</div>{% endif %}
-      {% for it in items %}<div class="border-bottom py-1"><span class="text-muted">{% timezone tz %}{{ it.start_time|date:"g:i A" }}{% endtimezone %}</span> {{ it.name }}
-        {% if d.schedule_style == 'by_location' or d.schedule_style == 'now_next' %}<div class="text-muted" style="font-size:.7rem">{{ it.location.name }}</div>{% endif %}</div>
-      {% empty %}<div class="text-muted">No schedule items</div>{% endfor %}
+      {% if d.enable_search %}<div class="phone-preview__search">Search</div>{% endif %}
+      {% if d.schedule_style == 'now_next' %}<div class="phone-preview__accent">Happening now</div>{% endif %}
+      {% for it in items %}<div class="phone-preview__row"><span class="muted">{% timezone tz %}{{ it.start_time|date:"g:i A" }}{% endtimezone %}</span> {{ it.name }}
+        {% if d.schedule_style == 'by_location' or d.schedule_style == 'now_next' %}<div class="muted phone-preview__note">{{ it.location.name }}</div>{% endif %}</div>
+      {% empty %}<div class="muted">No schedule items</div>{% endfor %}
     {% else %}
-      {% if d.enable_search %}<div class="form-control form-control-sm mb-2 text-muted">Search</div>{% endif %}
-      {% if d.group_by_category and categories %}<div class="mb-2">{% for c in categories %}<span class="badge rounded-pill border text-dark me-1">{{ c }}</span>{% endfor %}</div>{% endif %}
+      {% if d.enable_search %}<div class="phone-preview__search">Search</div>{% endif %}
+      {% if d.group_by_category and categories %}<div class="cluster cluster--tight phone-preview__row">{% for c in categories %}<span class="badge badge--neutral badge--pill">{{ c }}</span>{% endfor %}</div>{% endif %}
       {% for loc in locations %}
         {% if d.locations_style == 'cards' %}
-          <div class="border rounded mb-2 overflow-hidden">{% if d.show_location_images %}<div style="height:70px;background:#eee {% if loc.resolved_image_url %}url('{{ loc.resolved_image_url }}') center/cover{% endif %}"></div>{% endif %}
-            <div class="p-2"><div class="fw-semibold">{{ loc.name }}</div><div class="text-muted" style="font-size:.7rem">{{ loc.snippet|truncatechars:60 }}</div></div></div>
+          <div class="phone-preview__card">{% if d.show_location_images %}<div class="phone-preview__image"{% if loc.resolved_image_url %} style="background-image:url('{{ loc.resolved_image_url }}')"{% endif %}></div>{% endif %}
+            <div><div class="strong">{{ loc.name }}</div><div class="muted phone-preview__note">{{ loc.snippet|truncatechars:60 }}</div></div></div>
         {% else %}
-          <div class="d-flex align-items-center gap-2 border-bottom py-1">{% if d.show_location_images %}<div class="rounded" style="width:28px;height:28px;background:#eee {% if loc.resolved_image_url %}url('{{ loc.resolved_image_url }}') center/cover{% endif %}"></div>{% endif %}
-            <div><div class="fw-semibold">{{ loc.name }}</div>{% if d.locations_style == 'grouped' %}<div class="text-muted" style="font-size:.7rem">{{ loc.category }}</div>{% endif %}</div></div>
+          <div class="cluster cluster--nowrap phone-preview__row">{% if d.show_location_images %}<div class="phone-preview__image phone-preview__image--small"{% if loc.resolved_image_url %} style="background-image:url('{{ loc.resolved_image_url }}')"{% endif %}></div>{% endif %}
+            <div><div class="strong">{{ loc.name }}</div>{% if d.locations_style == 'grouped' %}<div class="muted phone-preview__note">{{ loc.category }}</div>{% endif %}</div></div>
         {% endif %}
-      {% empty %}<div class="text-muted">No locations</div>{% endfor %}
+      {% empty %}<div class="muted">No locations</div>{% endfor %}
     {% endif %}
   </div>
-  <div class="d-flex justify-content-around border-top py-2" style="font-size:.65rem">
-    {% for t, label in tab_labels %}<div class="text-center" style="{% if t == d.default_tab %}color:var(--accent);font-weight:600{% else %}color:#888{% endif %}">
-      <span class="d-block fs-6">{% if t == 'map' %}{% icon "map" %}{% elif t == 'locations' %}{% icon "list" %}{% elif t == 'schedule' %}{% icon "calendar" %}{% elif t == 'flyer' %}{% icon "image" %}{% else %}{% icon "bell" %}{% endif %}</span>{{ label }}</div>{% endfor %}
+  <div class="phone-preview__tabs">
+    {% for t, label in tab_labels %}<div{% if t == d.default_tab %} aria-current="true"{% endif %}>
+      {% if t == 'map' %}{% icon "map" %}{% elif t == 'locations' %}{% icon "list" %}{% elif t == 'schedule' %}{% icon "calendar" %}{% elif t == 'flyer' %}{% icon "image" %}{% else %}{% icon "bell" %}{% endif %}{{ label }}</div>{% endfor %}
   </div>
 </div>
-<p class="text-center small text-muted mt-2">{{ d.resolved_preset|capfirst }} layout</p>
+<p class="center small muted">{{ d.resolved_preset|capfirst }} layout</p>

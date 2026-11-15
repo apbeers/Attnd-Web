@@ -1,21 +1,21 @@
 {% extends 'console/base.html' %}
 {% block title %}History · {{ event.name }}{% endblock %}
 {% block event_content %}
-<div class="d-flex align-items-center mb-3">
-  <p class="text-muted mb-0 me-auto">A snapshot is saved before every AI update and every restore. Restoring brings back locations, schedule and event details exactly as they were.</p>
-  <form method="post" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="action" value="snapshot">
-    <input name="summary" class="form-control form-control-sm" placeholder="Label (optional)">
-    <button class="btn btn-sm btn-outline-primary text-nowrap">Save snapshot</button></form>
+<div class="cluster cluster--loose toolbar">
+  <p class="muted grow">A snapshot is saved before every AI update and every restore. Restoring brings back locations, schedule and event details exactly as they were.</p>
+  <form method="post" class="cluster">{% csrf_token %}<input type="hidden" name="action" value="snapshot">
+    <input name="summary" class="small" placeholder="Label (optional)" aria-label="Snapshot label">
+    <button class="button button--outline button--small">Save snapshot</button></form>
 </div>
-<div class="card"><ul class="list-group list-group-flush">
+<div class="panel panel--flush"><ul class="list list--roomy">
 {% for r in revisions %}
-  <li class="list-group-item d-flex align-items-center py-3">
-    <div class="me-auto"><div class="fw-semibold">{{ r.summary|default:"Snapshot" }}</div>
-      <div class="small text-muted">{{ r.created_at|date:"M j, Y g:i A" }}{% if r.created_by %} · {{ r.created_by.email }}{% endif %} ·
+  <li class="cluster">
+    <div class="grow"><div class="strong">{{ r.summary|default:"Snapshot" }}</div>
+      <div class="small muted">{{ r.created_at|date:"M j, Y g:i A" }}{% if r.created_by %} · {{ r.created_by.email }}{% endif %} ·
         {{ r.snapshot.locations|length }} locations, {{ r.snapshot.schedule|length }} items</div></div>
     <form method="post">{% csrf_token %}<input type="hidden" name="revision" value="{{ r.id }}">
-      <button class="btn btn-sm btn-outline-secondary" data-confirm="Restore this version? Your current content is snapshotted first.">Restore</button></form>
+      <button class="button button--secondary button--small" data-confirm="Restore this version? Your current content is snapshotted first.">Restore</button></form>
   </li>
-{% empty %}<li class="list-group-item text-muted text-center py-5">No snapshots yet.</li>{% endfor %}
+{% empty %}<li class="list__empty">No snapshots yet.</li>{% endfor %}
 </ul></div>
 {% endblock %}

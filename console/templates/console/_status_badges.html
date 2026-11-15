@@ -1,12 +1,12 @@
 {% load console_tags %}{# Status of an event `e`: lifecycle, payment, timing. Used on cards and the event header. #}
-{% if e.status == 'draft' %}<span class="badge text-bg-warning" title="Only your team can see it; attendees can't join yet">Draft</span>
-{% elif e.status == 'archived' %}<span class="badge text-bg-secondary" title="Attendees see an 'event has ended' banner">Archived</span>
-{% else %}<span class="badge text-bg-success" title="Published: attendees can join">Live</span>{% endif %}
-{% if e.paid %}<span class="badge text-bg-light border" title="Paid: no demo banner in the app">Paid</span>
-{% else %}<span class="badge text-bg-light border" title="Not paid yet: attendees see a Demo event badge">Demo</span>{% endif %}
+{% if e.status == 'draft' %}<span class="badge badge--warning" title="Only your team can see it; attendees can't join yet">Draft</span>
+{% elif e.status == 'archived' %}<span class="badge badge--muted" title="Attendees see an 'event has ended' banner">Archived</span>
+{% else %}<span class="badge badge--success" title="Published: attendees can join">Live</span>{% endif %}
+{% if e.paid %}<span class="badge badge--neutral" title="Paid: no demo banner in the app">Paid</span>
+{% else %}<span class="badge badge--neutral" title="Not paid yet: attendees see a Demo event badge">Demo</span>{% endif %}
 {% with t=e.timing %}
-{% if t == 'now' and e.status != 'archived' %}<span class="badge badge-now" title="The event is on right now"><span class="live-dot"></span>Happening now</span>
-{% elif t == 'ended' and e.status != 'archived' %}<span class="badge text-bg-light border text-muted">Ended</span>{% endif %}
+{% if t == 'now' and e.status != 'archived' %}<span class="badge badge--live" title="The event is on right now"><span class="live-dot"></span>Happening now</span>
+{% elif t == 'ended' and e.status != 'archived' %}<span class="badge badge--ended">Ended</span>{% endif %}
 {% endwith %}
-{% if e.refresh_schedule == 'watch' %}<span class="badge text-bg-light border" title="Attnd keeps the app in sync with the event website">{% icon "refresh" %} Watching website</span>{% endif %}
-{% if e.user_id is None %}<span class="badge text-bg-warning" title="The owner's account was deleted">Unassigned</span>{% endif %}
+{% if e.refresh_schedule == 'watch' %}<span class="badge badge--neutral" title="Attnd keeps the app in sync with the event website">{% icon "refresh" %} Watching website</span>{% endif %}
+{% if e.user_id is None %}<span class="badge badge--warning" title="The owner's account was deleted">Unassigned</span>{% endif %}

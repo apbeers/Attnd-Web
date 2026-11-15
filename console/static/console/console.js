@@ -1,9 +1,9 @@
 /* Attnd console — small vanilla helpers (no third-party JS). */
 (function () {
-  // Dismissible alerts
+  // Dismissible notices: <button data-dismiss> removes the .notice it sits in.
   document.addEventListener('click', e => {
-    const btn = e.target.closest('[data-dismiss="alert"]');
-    if (btn) btn.closest('.alert').remove();
+    const button = e.target.closest('[data-dismiss]');
+    if (button) button.closest('.notice')?.remove();
   });
 
   // No inline event handlers (the Content Security Policy blocks them); these data attributes replace them.
@@ -24,14 +24,16 @@
     navigator.clipboard.writeText(el.dataset.copy).then(() => { el.textContent = 'Copied'; }).catch(() => {});
   });
 
-  // Tabs: <button data-tab-target="#id">
+  // Tabs: <div data-tabs> holds <button data-tab-target="#panel"> buttons. Clicking one selects it
+  // (aria-selected) and shows its panel; the other buttons' panels get [hidden].
   document.addEventListener('click', e => {
-    const btn = e.target.closest('[data-tab-target]');
-    if (!btn) return;
-    const group = btn.closest('[data-tabs]');
-    group.querySelectorAll('[data-tab-target]').forEach(b => b.classList.toggle('active', b === btn));
-    const target = document.querySelector(btn.dataset.tabTarget);
-    target.parentElement.querySelectorAll(':scope > .tab-pane').forEach(p => p.classList.toggle('active', p === target));
+    const button = e.target.closest('[data-tab-target]');
+    if (!button) return;
+    button.closest('[data-tabs]').querySelectorAll('[data-tab-target]').forEach(b => {
+      b.setAttribute('aria-selected', b === button ? 'true' : 'false');
+      const panel = document.querySelector(b.dataset.tabTarget);
+      if (panel) panel.hidden = b !== button;
+    });
   });
 
   // Drag-to-reorder for lists: makeSortable(list, {handle: '.drag-handle', onEnd})
@@ -151,7 +153,7 @@
       list.innerHTML = tasks.map((t) => {
         const running = t.status === 'queued' || t.status === 'running';
         const status = running ? `<span class="spinner"></span>${escapeHtml(t.progress || 'Working…')}`
-          : t.status === 'failed' ? `<span class="text-danger">${escapeHtml(t.error || 'Failed')}</span>`
+          : t.status === 'failed' ? `<span class="tone-danger">${escapeHtml(t.error || 'Failed')}</span>`
           : escapeHtml(t.summary || 'Done');
         const link = !running && t.url ? `<a href="${escapeHtml(t.url)}">Open</a>` : '';
         return `<li class="task-item task-${t.status}"><div class="task-title">${escapeHtml(t.title)}</div>
@@ -162,8 +164,8 @@
         if (button && t.status !== 'queued' && t.status !== 'running') {
           setBusy(button, false);
           const note = button.parentElement.querySelector('.task-inline-result') || document.createElement('span');
-          note.className = 'task-inline-result small ms-2';
-          note.innerHTML = t.status === 'failed' ? `<span class="text-danger">${escapeHtml(t.error)}</span>`
+          note.className = 'task-inline-result';
+          note.innerHTML = t.status === 'failed' ? `<span class="tone-danger">${escapeHtml(t.error)}</span>`
             : `${escapeHtml(t.summary)}${t.url ? ` · <a href="${escapeHtml(t.url)}">view</a>` : ''}`;
           button.after(note);
           delete buttonsByTask[t.id];
@@ -247,7 +249,7 @@
       } catch (err) {
         if (button) setBusy(button, false);
         const note = document.createElement('span');
-        note.className = 'task-inline-result small ms-2 text-danger';
+        note.className = 'task-inline-result tone-danger';
         note.textContent = err.message;
         (button || form).after(note);
       }

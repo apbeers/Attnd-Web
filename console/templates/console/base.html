@@ -11,70 +11,66 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-<nav class="navbar bg-white border-bottom">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="{% url 'console:dashboard' %}">attnd<span>.</span></a>
-    <a class="btn btn-sm btn-link nav-events{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'console:dashboard' %}">{% icon "list" %} Your events</a>
-    <div class="ms-auto d-flex align-items-center gap-2">
-      <a class="btn btn-sm btn-primary" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>
-      {% if user.is_superuser %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:index' %}">Admin</a>{% endif %}
-      <a class="btn btn-sm btn-link text-muted" href="{% url 'console:account' %}" title="Account">{{ user.email }}</a>
-      <form method="post" action="{% url 'logout' %}" class="m-0">{% csrf_token %}
-        <button class="btn btn-sm btn-link text-muted">Sign out</button></form>
-    </div>
+<header class="topbar">
+  <a class="brand" href="{% url 'console:dashboard' %}">attnd<span>.</span></a>
+  <a class="topbar__link" href="{% url 'console:dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %}>{% icon "list" %} Your events</a>
+  <div class="topbar__actions">
+    <a class="button button--primary button--small" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>
+    {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
+    <a class="button button--secondary button--small" href="{% url 'admin:index' %}">Admin</a>{% endif %}
+    <a class="button button--ghost button--small muted topbar__account" href="{% url 'console:account' %}" title="Account">{{ user.email }}</a>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+      <button class="button button--ghost button--small muted">Sign out</button></form>
   </div>
-</nav>
-<div class="container-xl py-4">
+</header>
+<main class="page">
   {% for message in messages %}
-    <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible">
-      {{ message }}<button type="button" class="btn-close" data-dismiss="alert" aria-label="Close">×</button></div>
+    <div class="notice notice--{% if message.tags == 'error' %}error{% else %}{{ message.tags|default:'info' }}{% endif %} notice--dismissible">
+      {{ message }}<button type="button" class="notice__close" data-dismiss aria-label="Close">×</button></div>
   {% endfor %}
   {% passkey_prompt as show_passkey_prompt %}{% if show_passkey_prompt %}
-    <div class="alert alert-info passkey-prompt" data-passkey-prompt data-passkey-scope hidden role="region" aria-label="Passkey">
-      <div class="d-flex flex-wrap align-items-center gap-3">
-        <div class="flex-grow-1"><strong>{% icon "key" %} Sign in faster with a passkey</strong><br>
+    <div class="notice notice--info" data-passkey-prompt data-passkey-scope hidden role="region" aria-label="Passkey">
+      <div class="cluster cluster--loose">
+        <div class="grow"><strong>{% icon "key" %} Sign in faster with a passkey</strong><br>
           <span class="small">Use Face ID, Touch ID, Windows Hello or your screen lock instead of your password next time.</span></div>
-        <button type="button" class="btn btn-sm btn-primary" data-passkey-register
+        <button type="button" class="button button--primary button--small" data-passkey-register
                 data-options-url="{% url 'passkey_register_options' %}" data-verify-url="{% url 'passkey_register' %}"
                 data-next="{{ request.get_full_path }}">Add a passkey</button>
-        <form method="post" action="{% url 'passkey_prompt_dismiss' %}" class="m-0">{% csrf_token %}
+        <form method="post" action="{% url 'passkey_prompt_dismiss' %}">{% csrf_token %}
           <input type="hidden" name="next" value="{{ request.get_full_path }}">
-          <button class="btn btn-sm btn-link text-muted">No thanks</button></form>
+          <button class="button button--ghost button--small muted">No thanks</button></form>
       </div>
-      <div class="small text-danger mt-2" role="alert" data-passkey-error hidden></div>
+      <div class="field__error" role="alert" data-passkey-error hidden></div>
     </div>
   {% endif %}
   {% if event and section %}
-    <a class="back-link small" href="{% url 'console:dashboard' %}">← Your events</a>
-    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-      <h1 class="h3 mb-0 me-2">{{ event.name }}</h1>
+    <a class="back-link" href="{% url 'console:dashboard' %}">← Your events</a>
+    <div class="cluster event-header">
+      <h1>{{ event.name }}</h1>
       {% include 'console/_status_badges.html' with e=event %}
-      {% if event.public %}<span class="badge text-bg-light border">{% icon "pin" %} Listed nearby</span>{% endif %}
-      <span class="text-muted ms-1 font-monospace">{{ event.event_code }}</span>
+      {% if event.public %}<span class="badge badge--neutral">{% icon "pin" %} Listed nearby</span>{% endif %}
+      <span class="muted mono">{{ event.event_code }}</span>
     </div>
-    <div class="row g-4">
-      <div class="col-lg-2">
-        <nav class="nav flex-column event-nav">
-          <a class="nav-link {% if section == 'overview' %}active{% endif %}" href="{% url 'console:event' event.id %}">{% icon "gauge" %}Overview</a>
-          <a class="nav-link {% if section == 'details' %}active{% endif %}" href="{% url 'console:event_edit' event.id %}">{% icon "info" %}Details</a>
-          <a class="nav-link {% if section == 'locations' %}active{% endif %}" href="{% url 'console:locations' event.id %}">{% icon "pin" %}Locations</a>
-          <a class="nav-link {% if section == 'schedule' %}active{% endif %}" href="{% url 'console:schedule' event.id %}">{% icon "calendar" %}Schedule</a>
-          <a class="nav-link {% if section == 'notifications' %}active{% endif %}" href="{% url 'console:notifications' event.id %}">{% icon "bell" %}Notifications</a>
-          <a class="nav-link {% if section == 'display' %}active{% endif %}" href="{% url 'console:display' event.id %}">{% icon "phone" %}App layout</a>
-          <a class="nav-link {% if section == 'changes' %}active{% endif %}" href="{% url 'console:changesets' event.id %}">{% icon "stars" %}AI updates
-            {% if pending_changes %}<span class="badge rounded-pill text-bg-primary ms-1">{{ pending_changes }}</span>{% endif %}</a>
-          <a class="nav-link {% if section == 'usage' %}active{% endif %}" href="{% url 'console:usage' event.id %}">{% icon "chart" %}Usage</a>
-          <a class="nav-link {% if section == 'history' %}active{% endif %}" href="{% url 'console:history' event.id %}">{% icon "history" %}History</a>
-          <a class="nav-link {% if section == 'team' %}active{% endif %}" href="{% url 'console:team' event.id %}">{% icon "people" %}Team</a>
-        </nav>
-      </div>
-      <div class="col-lg-10">{% block event_content %}{% endblock %}</div>
+    <div class="event-shell">
+      <nav class="sidenav" aria-label="Event">
+        <a class="sidenav__link" {% if section == 'overview' %}aria-current="page"{% endif %} href="{% url 'console:event' event.id %}">{% icon "gauge" %}Overview</a>
+        <a class="sidenav__link" {% if section == 'details' %}aria-current="page"{% endif %} href="{% url 'console:event_edit' event.id %}">{% icon "info" %}Details</a>
+        <a class="sidenav__link" {% if section == 'locations' %}aria-current="page"{% endif %} href="{% url 'console:locations' event.id %}">{% icon "pin" %}Locations</a>
+        <a class="sidenav__link" {% if section == 'schedule' %}aria-current="page"{% endif %} href="{% url 'console:schedule' event.id %}">{% icon "calendar" %}Schedule</a>
+        <a class="sidenav__link" {% if section == 'notifications' %}aria-current="page"{% endif %} href="{% url 'console:notifications' event.id %}">{% icon "bell" %}Notifications</a>
+        <a class="sidenav__link" {% if section == 'display' %}aria-current="page"{% endif %} href="{% url 'console:display' event.id %}">{% icon "phone" %}App layout</a>
+        <a class="sidenav__link" {% if section == 'changes' %}aria-current="page"{% endif %} href="{% url 'console:changesets' event.id %}">{% icon "stars" %}AI updates
+          {% if pending_changes %}<span class="badge badge--primary badge--pill">{{ pending_changes }}</span>{% endif %}</a>
+        <a class="sidenav__link" {% if section == 'usage' %}aria-current="page"{% endif %} href="{% url 'console:usage' event.id %}">{% icon "chart" %}Usage</a>
+        <a class="sidenav__link" {% if section == 'history' %}aria-current="page"{% endif %} href="{% url 'console:history' event.id %}">{% icon "history" %}History</a>
+        <a class="sidenav__link" {% if section == 'team' %}aria-current="page"{% endif %} href="{% url 'console:team' event.id %}">{% icon "people" %}Team</a>
+      </nav>
+      <div>{% block event_content %}{% endblock %}</div>
     </div>
   {% else %}
     {% block content %}{% endblock %}
   {% endif %}
-</div>
+</main>
 {% if user.is_authenticated %}
 <div id="task-tray" class="task-tray" hidden aria-live="polite">
   <button type="button" class="task-toggle"><span class="spinner"></span><span class="task-count"></span></button>

@@ -2,72 +2,74 @@
 {% load console_tags %}
 {% block title %}Usage · {{ event.name }}{% endblock %}
 {% block event_content %}
-<p class="text-muted">How attendees used the app for this event. Everything here is anonymous: the app only reports counts (for example "the Map tab was opened"), never who did it. Times are in the event's time zone ({{ event.timezone|default:"UTC" }}).</p>
+<div class="stack stack--loose">
+<p class="muted">How attendees used the app for this event. Everything here is anonymous: the app only reports counts (for example "the Map tab was opened"), never who did it. Times are in the event's time zone ({{ event.timezone|default:"UTC" }}).</p>
 
-<div class="card mb-4"><div class="card-body">
-  <div class="row text-center g-3">
-    <div class="col-6 col-md-3"><div class="stat">{{ usage.joins }}</div><div class="muted-label">Joined in the app</div></div>
-    <div class="col-6 col-md-3"><div class="stat">{{ in_event_now }}</div><div class="muted-label">Still in the event</div></div>
-    <div class="col-6 col-md-3"><div class="stat">{{ usage.opens }}</div><div class="muted-label">App opens</div></div>
-    <div class="col-6 col-md-3"><div class="stat">{{ usage.interactions }}</div><div class="muted-label">Interactions</div></div>
-    <div class="col-6 col-md-3"><div class="stat">{{ usage.notification_opens }}</div><div class="muted-label">Notifications opened</div></div>
-    <div class="col-6 col-md-3"><div class="stat">{{ usage.searches }}</div><div class="muted-label">Searches</div></div>
-    <div class="col-6 col-md-3"><div class="stat">{{ usage.platforms.ios }}/{{ usage.platforms.android }}</div><div class="muted-label">iPhone / Android activity</div></div>
-    <div class="col-6 col-md-3"><div class="stat">{% if usage.busiest %}{{ usage.busiest.hour|date:"D g A" }}{% else %}–{% endif %}</div><div class="muted-label">Busiest hour</div></div>
+<div class="panel">
+  <div class="grid grid--4 grid--stats">
+    <div><div class="stat__value">{{ usage.joins }}</div><div class="eyebrow">Joined in the app</div></div>
+    <div><div class="stat__value">{{ in_event_now }}</div><div class="eyebrow">Still in the event</div></div>
+    <div><div class="stat__value">{{ usage.opens }}</div><div class="eyebrow">App opens</div></div>
+    <div><div class="stat__value">{{ usage.interactions }}</div><div class="eyebrow">Interactions</div></div>
+    <div><div class="stat__value">{{ usage.notification_opens }}</div><div class="eyebrow">Notifications opened</div></div>
+    <div><div class="stat__value">{{ usage.searches }}</div><div class="eyebrow">Searches</div></div>
+    <div><div class="stat__value">{{ usage.platforms.ios }}/{{ usage.platforms.android }}</div><div class="eyebrow">iPhone / Android activity</div></div>
+    <div><div class="stat__value">{% if usage.busiest %}{{ usage.busiest.hour|date:"D g A" }}{% else %}–{% endif %}</div><div class="eyebrow">Busiest hour</div></div>
   </div>
-</div></div>
+</div>
 
 {% if not usage.has_data %}
-<div class="card mb-4"><div class="card-body text-muted text-center py-5">
+<div class="panel panel--empty">
   No usage yet. Counts appear here within a few minutes of attendees using the app (app versions from November 2026 onward).
-</div></div>
+</div>
 {% else %}
-<div class="card mb-4"><div class="card-body">
-  <h2 class="h6">Activity over time</h2>
+<div class="panel">
+  <h2 class="title-4">Activity over time</h2>
   {% include 'console/_linechart.html' with c=usage.activity_chart label="App activity" %}
-</div></div>
-<div class="card mb-4"><div class="card-body">
-  <h2 class="h6">QR code &amp; join link opens</h2>
-  <p class="small text-muted mb-2">{{ usage.link_opens.total }} opens: {{ usage.link_opens.ios }} iPhone, {{ usage.link_opens.android }} Android,
+</div>
+<div class="panel">
+  <h2 class="title-4">QR code &amp; join link opens</h2>
+  <p class="small muted">{{ usage.link_opens.total }} opens: {{ usage.link_opens.ios }} iPhone, {{ usage.link_opens.android }} Android,
     {{ usage.link_opens.desktop }} computer. iPhones and Android phones that already have the app open it directly, so those don't show up here.</p>
   {% include 'console/_linechart.html' with c=usage.link_chart label="QR and link opens" %}
-</div></div>
-<div class="card mb-4"><div class="card-body">
-  <h2 class="h6">People joining</h2>
+</div>
+<div class="panel">
+  <h2 class="title-4">People joining</h2>
   {% include 'console/_linechart.html' with c=usage.joins_chart label="People joining" %}
-</div></div>
+</div>
 
-<div class="row g-4">
-  <div class="col-md-6"><div class="card h-100"><div class="card-body">
-    <h2 class="h6">Features used</h2>
-    <table class="table table-sm mb-0"><tbody>
-      {% for t in usage.tabs %}<tr><td>{{ t.name }} tab</td><td class="text-end">{{ t.count }}</td></tr>{% endfor %}
-      <tr><td>Searches</td><td class="text-end">{{ usage.searches }}</td></tr>
-      <tr><td>Pull to refresh</td><td class="text-end">{{ usage.refreshes }}</td></tr>
-      <tr><td>Notifications opened</td><td class="text-end">{{ usage.notification_opens }}</td></tr>
+<div class="grid grid--2 grid--loose">
+  <div class="panel">
+    <h2 class="title-4">Features used</h2>
+    <table class="data-table"><tbody>
+      {% for t in usage.tabs %}<tr><td>{{ t.name }} tab</td><td class="num">{{ t.count }}</td></tr>{% endfor %}
+      <tr><td>Searches</td><td class="num">{{ usage.searches }}</td></tr>
+      <tr><td>Pull to refresh</td><td class="num">{{ usage.refreshes }}</td></tr>
+      <tr><td>Notifications opened</td><td class="num">{{ usage.notification_opens }}</td></tr>
     </tbody></table>
-  </div></div></div>
-  <div class="col-md-6"><div class="card h-100"><div class="card-body">
-    <h2 class="h6">Most viewed locations</h2>
-    <table class="table table-sm mb-0"><tbody>
-      {% for l in usage.top_locations %}<tr><td>{{ l.name }}</td><td class="text-end">{{ l.count }}</td></tr>
-      {% empty %}<tr><td class="text-muted">None yet.</td></tr>{% endfor %}
+  </div>
+  <div class="panel">
+    <h2 class="title-4">Most viewed locations</h2>
+    <table class="data-table"><tbody>
+      {% for l in usage.top_locations %}<tr><td>{{ l.name }}</td><td class="num">{{ l.count }}</td></tr>
+      {% empty %}<tr><td class="muted">None yet.</td></tr>{% endfor %}
     </tbody></table>
-  </div></div></div>
-  <div class="col-md-6"><div class="card h-100"><div class="card-body">
-    <h2 class="h6">Most viewed schedule items</h2>
-    <table class="table table-sm mb-0"><tbody>
-      {% for i in usage.top_items %}<tr><td>{{ i.name }}</td><td class="text-end">{{ i.count }}</td></tr>
-      {% empty %}<tr><td class="text-muted">None yet.</td></tr>{% endfor %}
+  </div>
+  <div class="panel">
+    <h2 class="title-4">Most viewed schedule items</h2>
+    <table class="data-table"><tbody>
+      {% for i in usage.top_items %}<tr><td>{{ i.name }}</td><td class="num">{{ i.count }}</td></tr>
+      {% empty %}<tr><td class="muted">None yet.</td></tr>{% endfor %}
     </tbody></table>
-  </div></div></div>
-  <div class="col-md-6"><div class="card h-100"><div class="card-body">
-    <h2 class="h6">Notifications opened</h2>
-    <table class="table table-sm mb-0"><tbody>
-      {% for n in usage.top_notifications %}<tr><td>{{ n.name }}</td><td class="text-end">{{ n.count }}</td></tr>
-      {% empty %}<tr><td class="text-muted">None yet.</td></tr>{% endfor %}
+  </div>
+  <div class="panel">
+    <h2 class="title-4">Notifications opened</h2>
+    <table class="data-table"><tbody>
+      {% for n in usage.top_notifications %}<tr><td>{{ n.name }}</td><td class="num">{{ n.count }}</td></tr>
+      {% empty %}<tr><td class="muted">None yet.</td></tr>{% endfor %}
     </tbody></table>
-  </div></div></div>
+  </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

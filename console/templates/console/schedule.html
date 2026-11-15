@@ -2,32 +2,34 @@
 {% load console_tags %}
 {% block title %}Schedule · {{ event.name }}{% endblock %}
 {% block event_content %}
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <form method="get" class="me-auto">
-    <select name="location" class="form-select form-select-sm" data-autosubmit>
+<div class="cluster toolbar">
+  <form method="get" class="grow">
+    <select name="location" class="small" data-autosubmit aria-label="Filter by location">
       <option value="">All locations ({{ count }} items)</option>
       {% for loc in locations %}<option value="{{ loc.id }}" {% if location_filter == loc.id|stringformat:"s" %}selected{% endif %}>{{ loc.name }}</option>{% endfor %}
     </select>
   </form>
-  <a class="btn btn-primary" href="{% url 'console:item_new' event.id %}">{% icon "plus" %} Add item</a>
+  <a class="button button--primary" href="{% url 'console:item_new' event.id %}">{% icon "plus" %} Add item</a>
 </div>
 {% for day, items in days %}
-  <h3 class="h6 muted-label mt-4">{{ day|date:"l, F j" }}</h3>
-  <div class="card"><ul class="list-group list-group-flush">
+<section class="section">
+  <h3 class="eyebrow">{{ day|date:"l, F j" }}</h3>
+  <div class="panel panel--flush"><ul class="list">
   {% for it in items %}
-    <li class="list-group-item d-flex align-items-center gap-3">
-      <div class="text-nowrap text-muted small" style="width:6.5rem">{{ it.start_time|date:"g:i A" }}{% if it.end_time %}–{{ it.end_time|date:"g:i A" }}{% endif %}</div>
-      <div class="me-auto">
-        <a class="fw-semibold text-decoration-none" href="{% url 'console:item_edit' event.id it.id %}">{{ it.name }}</a>
-        {% for t in it.tags %}<span class="badge text-bg-light border ms-1">{{ t }}</span>{% endfor %}
-        {% if it.hidden %}<span class="badge text-bg-secondary ms-1">Hidden</span>{% endif %}
-        {% if it.locked_fields %}{% icon "lock" "lock small ms-1" %}{% endif %}
-        <div class="small text-muted">{{ it.location.name|default:"No specific location" }}</div>
+    <li class="cluster cluster--loose cluster--nowrap">
+      <div class="nowrap muted small schedule-time">{{ it.start_time|date:"g:i A" }}{% if it.end_time %}–{{ it.end_time|date:"g:i A" }}{% endif %}</div>
+      <div class="grow">
+        <a class="title-link" href="{% url 'console:item_edit' event.id it.id %}">{{ it.name }}</a>
+        {% for t in it.tags %}<span class="badge badge--neutral">{{ t }}</span>{% endfor %}
+        {% if it.hidden %}<span class="badge badge--muted">Hidden</span>{% endif %}
+        {% if it.locked_fields %}{% icon "lock" "lock small" %}{% endif %}
+        <div class="small muted">{{ it.location.name|default:"No specific location" }}</div>
       </div>
     </li>
   {% endfor %}
   </ul></div>
+</section>
 {% empty %}
-  <div class="card p-5 text-center text-muted">Nothing scheduled yet. Small events can skip this — the Schedule tab hides itself when it’s empty.</div>
+  <div class="panel panel--empty">Nothing scheduled yet. Small events can skip this — the Schedule tab hides itself when it’s empty.</div>
 {% endfor %}
 {% endblock %}

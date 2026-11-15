@@ -1,50 +1,32 @@
 {% load static %}<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sign Up — Attnd</title>
-    <link rel="stylesheet" href="{% static 'console/console.css' %}">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign Up — Attnd</title>
+  <link rel="stylesheet" href="{% static 'console/console.css' %}">
 </head>
-<body class="bg-light">
-
-<div class="d-flex justify-content-center align-items-center min-vh-100">
-    <div class="card shadow-sm" style="width: 100%; max-width: 420px;">
-        <div class="card-body p-4">
-            <h2 class="card-title mb-4 text-center">Create an account</h2>
-            {% if claim_code %}
-            <div class="alert alert-success py-2 text-center small mb-3">
-                <strong>✓ Event found.</strong> Sign up to claim it as yours.
-            </div>
-            {% endif %}
-            {% if rate_limited %}<div class="alert alert-warning py-2" role="alert">{{ rate_limited }}</div>{% endif %}
-            <form method="post" autocomplete="on">
-                {% csrf_token %}
-                {% if claim_code %}<input type="hidden" name="claim" value="{{ claim_code }}">{% endif %}
-                {% for field in form %}
-                    <div class="mb-3">
-                        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in field.errors %}{{ error }}{% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-                {% if form.non_field_errors %}
-                    <div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>
-                {% endif %}
-                <div class="d-grid mt-3">
-                    <button type="submit" class="btn btn-primary">Sign Up</button>
-                </div>
-            </form>
-            <p class="text-center mt-3 mb-0 small">
-                Already have an account? <a href="{% url 'login' %}">Sign in</a>
-            </p>
-        </div>
+<body>
+<main class="page page--centered">
+  <div class="panel panel--narrow stack">
+    <h1 class="auth-title">Create an account</h1>
+    {% if claim_code %}
+    <div class="notice notice--success notice--compact center small">
+      <strong>✓ Event found.</strong> Sign up to claim it as yours.
     </div>
-</div>
-
+    {% endif %}
+    {% if rate_limited %}<div class="notice notice--warning notice--compact" role="alert">{{ rate_limited }}</div>{% endif %}
+    <form method="post" autocomplete="on">
+      {% csrf_token %}
+      {% if claim_code %}<input type="hidden" name="claim" value="{{ claim_code }}">{% endif %}
+      {% for field in form %}{% include 'console/_field.html' %}{% endfor %}
+      {% if form.non_field_errors %}
+        <div class="notice notice--error notice--compact">{{ form.non_field_errors }}</div>
+      {% endif %}
+      <button type="submit" class="button button--primary button--block">Sign Up</button>
+    </form>
+    <p class="center small">Already have an account? <a href="{% url 'login' %}">Sign in</a></p>
+  </div>
+</main>
 </body>
 </html>

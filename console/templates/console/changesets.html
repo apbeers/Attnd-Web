@@ -1,21 +1,23 @@
 {% extends 'console/base.html' %}
 {% block title %}AI updates · {{ event.name }}{% endblock %}
 {% block event_content %}
-<div class="card mb-4"><ul class="list-group list-group-flush">
+<div class="panel panel--flush"><ul class="list list--roomy">
 {% for cs in changesets %}
-  <li class="list-group-item d-flex align-items-center py-3">
-    <div class="me-auto"><a href="{% url 'console:changeset' cs.id %}" class="fw-semibold">{{ cs.summary }}</a>
-      <div class="small text-muted">{{ cs.created_at|date:"M j, g:i A" }}{% if cs.applied_by %} · reviewed by {{ cs.applied_by.email }}{% endif %}</div></div>
-    <span class="badge {% if cs.status == 'pending' %}text-bg-primary{% elif cs.status == 'applied' %}text-bg-success{% else %}text-bg-light border{% endif %}">{{ cs.get_status_display }}</span>
+  <li class="cluster">
+    <div class="grow"><a href="{% url 'console:changeset' cs.id %}" class="strong">{{ cs.summary }}</a>
+      <div class="small muted">{{ cs.created_at|date:"M j, g:i A" }}{% if cs.applied_by %} · reviewed by {{ cs.applied_by.email }}{% endif %}</div></div>
+    <span class="badge {% if cs.status == 'pending' %}badge--primary{% elif cs.status == 'applied' %}badge--success{% else %}badge--neutral{% endif %}">{{ cs.get_status_display }}</span>
   </li>
-{% empty %}<li class="list-group-item text-center text-muted py-5">No AI suggestions yet. Use “Check for updates” on the Overview page, or turn on automatic refresh.</li>{% endfor %}
+{% empty %}<li class="list__empty">No AI suggestions yet. Use “Check for updates” on the Overview page, or turn on automatic refresh.</li>{% endfor %}
 </ul></div>
-<h2 class="h6 muted-label">AI runs</h2>
-<div class="card"><ul class="list-group list-group-flush small">
+<section class="section">
+<h2 class="eyebrow">AI runs</h2>
+<div class="panel panel--flush"><ul class="list small">
 {% for job in jobs %}
-  <li class="list-group-item d-flex"><span class="me-auto">{{ job.get_kind_display }} · {{ job.created_at|date:"M j, g:i A" }} · {{ job.trigger }}</span>
-    {% if job.status == 'failed' %}<span class="text-danger" title="{{ job.error }}">Failed</span>{% elif job.status == 'done' %}<span class="text-muted">{{ job.result.summary|default:"Done" }}</span>
+  <li class="cluster"><span class="grow">{{ job.get_kind_display }} · {{ job.created_at|date:"M j, g:i A" }} · {{ job.trigger }}</span>
+    {% if job.status == 'failed' %}<span class="tone-danger" title="{{ job.error }}">Failed</span>{% elif job.status == 'done' %}<span class="muted">{{ job.result.summary|default:"Done" }}</span>
     {% else %}<a href="{% url 'console:job' job.pk %}">{{ job.get_status_display }}…</a>{% endif %}</li>
-{% empty %}<li class="list-group-item text-muted">None yet.</li>{% endfor %}
+{% empty %}<li class="muted">None yet.</li>{% endfor %}
 </ul></div>
+</section>
 {% endblock %}

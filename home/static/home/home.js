@@ -2,21 +2,21 @@
 (function () {
   const $ = id => document.getElementById(id);
   const form = $('scrape-form'), loading = $('scrape-loading'), success = $('scrape-success'), error = $('scrape-error');
-  const input = $('event-url'), btn = $('scrape-btn');
-  const show = (...els) => els.forEach(el => el.classList.remove('hidden'));
-  const hide = (...els) => els.forEach(el => el.classList.add('hidden'));
+  const input = $('event-url'), button = $('scrape-button');
+  const show = (...els) => els.forEach(el => { el.hidden = false; });
+  const hide = (...els) => els.forEach(el => { el.hidden = true; });
 
   function fail(message) {
     hide(loading);
     $('error-message').textContent = message || 'Something went wrong. Please try again.';
     show(form, error);
-    btn.disabled = false;
+    button.disabled = false;
   }
 
   async function run() {
     const url = input.value.trim();
     if (!url) { input.focus(); return; }
-    hide(form, success, error); show(loading); btn.disabled = true;
+    hide(form, success, error); show(loading); button.disabled = true;
     try {
       const start = await fetch('/scrape/', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -41,15 +41,15 @@
       $('result-qr').src = data.qr_code;
       const locs = data.location_count === 1 ? '1 location' : `${data.location_count} locations`;
       $('result-summary').textContent = `“${data.event_name}” — ${locs} imported.`;
-      $('claim-account-btn').href = data.claim_url;
+      $('claim-account-button').href = data.claim_url;
       show(success);
-      btn.disabled = false;
+      button.disabled = false;
     } catch (e) {
       fail('Network error — please check your connection and try again.');
     }
   }
 
-  btn.addEventListener('click', run);
+  button.addEventListener('click', run);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
-  $('scrape-again-btn').addEventListener('click', () => { hide(success, error); show(form); input.select(); });
+  $('scrape-again-button').addEventListener('click', () => { hide(success, error); show(form); input.select(); });
 })();

@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from events.models import Event, EventMember, Location, Notification, ScheduledItem, is_send_slot
 
-DT_WIDGET = forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}, format='%Y-%m-%dT%H:%M')
+DT_WIDGET = forms.DateTimeInput(attrs={'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M')
 DT_FORMATS = ['%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M']
 TIMEZONE_CHOICES = [(tz, tz.replace('_', ' ')) for tz in sorted(available_timezones()) if '/' in tz or tz == 'UTC']
 
@@ -35,21 +35,12 @@ class CoordinateField(forms.DecimalField):
         return initial != data
 
 
-def _bootstrapify(form):
-    for name, field in form.fields.items():
-        widget = field.widget
-        if isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple, forms.RadioSelect)):
-            widget.attrs.setdefault('class', 'form-check-input')
-        elif isinstance(widget, (forms.Select, forms.SelectMultiple)):
-            widget.attrs.setdefault('class', 'form-select')
-        else:
-            widget.attrs.setdefault('class', 'form-control')
+class StyledFormMixin:
+    """Shared set-up for console forms. Controls are styled by element inside `.field` (console.css), so no
+    widget needs a CSS class here."""
 
-
-class BootstrapMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        _bootstrapify(self)
         # Show coordinates at a sensible precision instead of 20 decimal places
         instance = getattr(self, 'instance', None)
         for f in ('latitude', 'longitude'):
@@ -58,7 +49,7 @@ class BootstrapMixin:
                 self.initial[f] = round(float(value), 6)
 
 
-class AIImportForm(BootstrapMixin, forms.Form):
+class AIImportForm(StyledFormMixin, forms.Form):
     urls = forms.CharField(
         label='Event website(s)', required=False,
         widget=forms.Textarea(attrs={'rows': 2, 'placeholder': 'https://yourevent.com\nhttps://yourevent.com/schedule'}),
@@ -99,7 +90,7 @@ class AIImportForm(BootstrapMixin, forms.Form):
         return data
 
 
-class BlankEventForm(BootstrapMixin, forms.ModelForm):
+class BlankEventForm(StyledFormMixin, forms.ModelForm):
     start_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS)
     timezone = forms.ChoiceField(choices=TIMEZONE_CHOICES, initial='America/Chicago')
 
@@ -108,7 +99,7 @@ class BlankEventForm(BootstrapMixin, forms.ModelForm):
         fields = ['name', 'start_time', 'timezone', 'address']
 
 
-class EventForm(BootstrapMixin, forms.ModelForm):
+class EventForm(StyledFormMixin, forms.ModelForm):
     start_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS)
     end_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS, required=False)
     timezone = forms.ChoiceField(choices=TIMEZONE_CHOICES)
@@ -137,7 +128,7 @@ class EventForm(BootstrapMixin, forms.ModelForm):
         return end
 
 
-class SourcesForm(BootstrapMixin, forms.ModelForm):
+class SourcesForm(StyledFormMixin, forms.ModelForm):
     source_urls_text = forms.CharField(
         label='Source websites', required=False, widget=forms.Textarea(attrs={'rows': 2}),
         help_text='Your event pages. One per line. The pages the AI reads from them are watched too.')
@@ -167,7 +158,7 @@ class SourcesForm(BootstrapMixin, forms.ModelForm):
         return super().save(commit)
 
 
-class RefreshForm(BootstrapMixin, forms.Form):
+class RefreshForm(StyledFormMixin, forms.Form):
     upload = AIImportForm.base_fields['upload']
     text = forms.CharField(label='Paste new details (optional)', required=False,
                            widget=forms.Textarea(attrs={'rows': 3}))
@@ -178,7 +169,7 @@ class RefreshForm(BootstrapMixin, forms.Form):
     ALLOWED_TYPES = AIImportForm.ALLOWED_TYPES
 
 
-class LocationForm(BootstrapMixin, forms.ModelForm):
+class LocationForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         field_classes = {'latitude': CoordinateField, 'longitude': CoordinateField}
         model = Location
@@ -197,7 +188,7 @@ class LocationForm(BootstrapMixin, forms.ModelForm):
         self.categories = categories
 
 
-class ScheduledItemForm(BootstrapMixin, forms.ModelForm):
+class ScheduledItemForm(StyledFormMixin, forms.ModelForm):
     start_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS)
     end_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS, required=False)
     tags_text = forms.CharField(label='Tags', required=False, help_text='Comma separated, e.g. Music, Kids')
@@ -230,14 +221,14 @@ class ScheduledItemForm(BootstrapMixin, forms.ModelForm):
         return super().save(commit)
 
 
-class NotificationForm(BootstrapMixin, forms.ModelForm):
+class NotificationForm(StyledFormMixin, forms.ModelForm):
     WHEN_NOW, WHEN_LATER = 'now', 'later'
     when = forms.ChoiceField(choices=[(WHEN_NOW, 'Send now'), (WHEN_LATER, 'Schedule for later')],
-                             initial=WHEN_NOW, widget=forms.RadioSelect(attrs={'class': 'form-check-input'}))
+                             initial=WHEN_NOW, widget=forms.RadioSelect)
     send_time = forms.DateTimeField(
         required=False, input_formats=DT_FORMATS,
         # step is in seconds: the picker only offers 10-minute marks
-        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control', 'step': 600},
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'step': 600},
                                    format='%Y-%m-%dT%H:%M'),
         help_text='Scheduled updates go out in 10-minute slots (:00, :10, :20 …).')
 
@@ -262,9 +253,9 @@ class NotificationForm(BootstrapMixin, forms.ModelForm):
 
 class DisplayForm(forms.Form):
     preset = forms.ChoiceField(choices=[(p, LABELS['preset'][p]) for p in PRESETS],
-                               widget=forms.RadioSelect(attrs={'class': 'form-check-input'}))
+                               widget=forms.RadioSelect)
     tabs = forms.MultipleChoiceField(choices=[(t, LABELS['tabs'][t]) for t in TABS],
-                                     widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+                                     widget=forms.CheckboxSelectMultiple,
                                      required=False)
     tab_order = forms.CharField(widget=forms.HiddenInput, required=False)
     default_tab = forms.ChoiceField(choices=[('', 'Automatic')] + [(t, LABELS['tabs'][t]) for t in TABS],
@@ -284,17 +275,10 @@ class DisplayForm(forms.Form):
                                       choices=[('', 'Automatic'), ('1', 'Yes'), ('0', 'No')])
     group_by_category = forms.ChoiceField(label='Category filters', required=False,
                                           choices=[('', 'Automatic'), ('1', 'Yes'), ('0', 'No')])
-    customize_tabs = forms.BooleanField(label='Choose tabs myself', required=False,
-                                        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+    customize_tabs = forms.BooleanField(label='Choose tabs myself', required=False)
 
     BOOL_KEYS = ['map_clustering', 'map_fit_all', 'show_location_images', 'enable_search', 'group_by_category']
     CHOICE_KEYS = ['default_tab', 'locations_style', 'schedule_style', 'secondary_pane']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for name, field in self.fields.items():
-            if isinstance(field.widget, forms.Select):
-                field.widget.attrs['class'] = 'form-select form-select-sm'
 
     @classmethod
     def initial_from(cls, overrides):
@@ -326,6 +310,6 @@ class DisplayForm(forms.Form):
         return out
 
 
-class TeamInviteForm(BootstrapMixin, forms.Form):
+class TeamInviteForm(StyledFormMixin, forms.Form):
     email = forms.EmailField(label='Email')
     role = forms.ChoiceField(label='Role', choices=EventMember.ROLE_CHOICES, initial=EventMember.ROLE_CONTRIBUTOR)

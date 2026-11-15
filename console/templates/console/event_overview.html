@@ -2,135 +2,137 @@
 {% load console_tags %}
 {% block title %}{{ event.name }}{% endblock %}
 {% block event_content %}
+<div class="stack stack--loose">
 {% if event.status == 'draft' %}
-<div class="card mb-4 border-start border-warning border-4"><div class="card-body d-flex flex-wrap align-items-center gap-3">
-  <div class="me-auto"><strong>This event is a draft.</strong> Review the details, locations and schedule, then publish it so attendees can join.</div>
+<div class="panel panel--warning cluster cluster--loose">
+  <div class="grow"><strong>This event is a draft.</strong> Review the details, locations and schedule, then publish it so attendees can join.</div>
   <form method="post" action="{% url 'console:event_status' event.id %}">{% csrf_token %}
-    <button name="action" value="publish" class="btn btn-success">{% icon "broadcast" %} Publish</button></form>
-</div></div>
+    <button name="action" value="publish" class="button button--success">{% icon "broadcast" %} Publish</button></form>
+</div>
 {% endif %}
 {% if pending_changes %}
-<div class="card mb-4 border-start border-primary border-4"><div class="card-body d-flex align-items-center">
-  <div class="me-auto">{% icon "stars" "text-primary" %} <strong>{{ pending_changes }} AI update{{ pending_changes|pluralize }} waiting for review.</strong></div>
-  <a class="btn btn-primary" href="{% url 'console:changesets' event.id %}">Review</a>
-</div></div>
+<div class="panel panel--accent cluster">
+  <div class="grow">{% icon "stars" "tone-brand" %} <strong>{{ pending_changes }} AI update{{ pending_changes|pluralize }} waiting for review.</strong></div>
+  <a class="button button--primary" href="{% url 'console:changesets' event.id %}">Review</a>
+</div>
 {% endif %}
 
-<div class="row g-4">
-  <div class="col-md-7">
+<div class="split">
+  <div class="split__main stack stack--loose">
     {% with t=event.timing %}
-    <div class="card mb-4 timing-tile timing-{{ t }}"><div class="card-body d-flex align-items-center gap-2">
-      {% if t == 'now' %}<span class="live-dot"></span><strong>Happening now</strong><span class="ms-auto small">ends {{ event.effective_end|date:"D M j, g:i A" }}</span>
-      {% elif t == 'upcoming' %}{% icon "calendar" %}<strong>Starts in {{ event.start_time|timeuntil }}</strong><span class="ms-auto small">{{ event.start_time|date:"D M j, g:i A" }}</span>
+    <div class="timing timing--{{ t }}">
+      {% if t == 'now' %}<span class="live-dot"></span><strong>Happening now</strong><span class="small">ends {{ event.effective_end|date:"D M j, g:i A" }}</span>
+      {% elif t == 'upcoming' %}{% icon "calendar" %}<strong>Starts in {{ event.start_time|timeuntil }}</strong><span class="small">{{ event.start_time|date:"D M j, g:i A" }}</span>
       {% else %}{% icon "history" %}<strong>Ended {{ event.effective_end|timesince }} ago</strong>{% endif %}
-    </div></div>
+    </div>
     {% endwith %}
-    <div class="card mb-4"><div class="card-body">
-      <div class="row text-center g-3">
-        <div class="col-4"><div class="stat">{{ stats.location_count }}</div><div class="muted-label">Locations</div></div>
-        <div class="col-4"><div class="stat">{{ stats.item_count }}</div><div class="muted-label">Schedule items</div></div>
-        <div class="col-4"><div class="stat">{{ audience.joined }}</div><div class="muted-label">Attendees joined</div></div>
-        <div class="col-4"><div class="stat">{{ audience.active_today }}</div><div class="muted-label">Active today</div></div>
-        <div class="col-4"><div class="stat">{{ audience.subscribed }}</div><div class="muted-label">Get notifications</div></div>
-        <div class="col-4"><div class="stat">{{ audience.ios }}/{{ audience.android }}</div><div class="muted-label">iPhone / Android</div></div>
+    <div class="panel">
+      <div class="grid grid--3 grid--stats">
+        <div><div class="stat__value">{{ stats.location_count }}</div><div class="eyebrow">Locations</div></div>
+        <div><div class="stat__value">{{ stats.item_count }}</div><div class="eyebrow">Schedule items</div></div>
+        <div><div class="stat__value">{{ audience.joined }}</div><div class="eyebrow">Attendees joined</div></div>
+        <div><div class="stat__value">{{ audience.active_today }}</div><div class="eyebrow">Active today</div></div>
+        <div><div class="stat__value">{{ audience.subscribed }}</div><div class="eyebrow">Get notifications</div></div>
+        <div><div class="stat__value">{{ audience.ios }}/{{ audience.android }}</div><div class="eyebrow">iPhone / Android</div></div>
       </div>
-    </div></div>
+    </div>
 
-    <div class="card mb-4"><div class="card-body">
-      <h2 class="h5" id="sync-settings">{% icon "stars" "text-primary" %} Keep it in sync with your website</h2>
-      <p class="text-muted small mb-3">Turn on watching and Attnd checks your pages for changes: every 10 minutes during the event, hourly in the week before, every few hours before that.
+    <div class="panel stack">
+      <h2 id="sync-settings">{% icon "stars" "tone-brand" %} Keep it in sync with your website</h2>
+      <p class="muted small">Turn on watching and Attnd checks your pages for changes: every 10 minutes during the event, hourly in the week before, every few hours before that.
         Checking is free; the AI only re-reads a page when its content actually changed. Anything you edited by hand is never overwritten.
         {% if event.last_refreshed_at %}Last AI update {{ event.last_refreshed_at|timesince }} ago.{% endif %}</p>
-      <form method="post" action="{% url 'console:event_refresh' event.id %}" enctype="multipart/form-data" class="mb-4"
+      <form method="post" action="{% url 'console:event_refresh' event.id %}" enctype="multipart/form-data" class="stack stack--tight"
             data-background data-busy-label="Checking for updates…" data-after-start="reset">{% csrf_token %}
-        <details class="mb-2"><summary class="small text-muted">Add new material (optional)</summary>
-          <div class="pt-2">{% for field in refresh_form %}{% include 'console/_field.html' %}{% endfor %}</div>
+        <details><summary class="small muted">Add new material (optional)</summary>
+          <div class="details-body">{% for field in refresh_form %}{% include 'console/_field.html' %}{% endfor %}</div>
         </details>
-        <button class="btn btn-outline-primary">{% icon "refresh" %} Check for updates now</button>
+        <div><button class="button button--outline">{% icon "refresh" %} Check for updates now</button></div>
       </form>
       <form method="post" action="{% url 'console:event_sources' event.id %}">{% csrf_token %}
         {% include 'console/_field.html' with field=sources_form.source_urls_text %}
-        <div class="row">
-          <div class="col-md-6">{% include 'console/_field.html' with field=sources_form.refresh_schedule %}</div>
-          <div class="col-md-6">{% include 'console/_field.html' with field=sources_form.update_mode %}</div>
+        <div class="grid grid--2">
+          {% include 'console/_field.html' with field=sources_form.refresh_schedule %}
+          {% include 'console/_field.html' with field=sources_form.update_mode %}
         </div>
-        <details class="mb-3"><summary class="small text-muted">Extra source text</summary>
-          <div class="pt-2">{{ sources_form.source_text }}</div></details>
-        {% if can_manage %}<button class="btn btn-sm btn-secondary">Save</button>{% else %}<p class="small text-muted mb-0">Only the owner and event admins can change these.</p>{% endif %}
+        <details class="field"><summary class="small muted">Extra source text</summary>
+          <div class="details-body">{{ sources_form.source_text }}</div></details>
+        {% if can_manage %}<button class="button button--secondary button--small">Save</button>{% else %}<p class="small muted">Only the owner and event admins can change these.</p>{% endif %}
       </form>
       {% if source_pages %}
-      <details class="mt-3"><summary class="small text-muted">Watched pages ({{ source_pages|length }}){% if event.sources_checked_at %} · checked {{ event.sources_checked_at|timesince }} ago{% endif %}</summary>
-        <ul class="small mb-0 mt-2">{% for p in source_pages %}
+      <details><summary class="small muted">Watched pages ({{ source_pages|length }}){% if event.sources_checked_at %} · checked {{ event.sources_checked_at|timesince }} ago{% endif %}</summary>
+        <ul class="small details-body">{% for p in source_pages %}
           <li><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|truncatechars:70 }}</a>
-            <span class="text-muted">· {% if p.has_pending_change %}<strong class="text-primary">changed, AI update pending</strong>{% elif p.changed_at %}last changed {{ p.changed_at|timesince }} ago{% elif p.checked_at %}no changes yet{% else %}not checked yet{% endif %}{% if p.failures %} · <span class="text-danger">{{ p.last_status }}</span>{% endif %}</span></li>
+            <span class="muted">· {% if p.has_pending_change %}<strong class="tone-brand">changed, AI update pending</strong>{% elif p.changed_at %}last changed {{ p.changed_at|timesince }} ago{% elif p.checked_at %}no changes yet{% else %}not checked yet{% endif %}{% if p.failures %} · <span class="tone-danger">{{ p.last_status }}</span>{% endif %}</span></li>
         {% endfor %}</ul>
       </details>
       {% endif %}
-    </div></div>
+    </div>
 
     {% if changesets %}
-    <div class="card mb-4"><div class="card-body">
-      <h2 class="h6 muted-label">Recent AI updates</h2>
-      <ul class="list-group list-group-flush">
+    <div class="panel">
+      <h2 class="eyebrow">Recent AI updates</h2>
+      <ul class="list list--inset">
       {% for cs in changesets %}
-        <li class="list-group-item px-0 d-flex">
-          <a href="{% url 'console:changeset' cs.id %}" class="me-auto">{{ cs.summary }}</a>
-          <span class="badge {% if cs.status == 'pending' %}text-bg-primary{% else %}text-bg-light border{% endif %}">{{ cs.get_status_display }}</span>
-          <span class="text-muted small ms-2">{{ cs.created_at|timesince }} ago</span>
+        <li class="cluster">
+          <a href="{% url 'console:changeset' cs.id %}" class="grow">{{ cs.summary }}</a>
+          <span class="badge {% if cs.status == 'pending' %}badge--primary{% else %}badge--neutral{% endif %}">{{ cs.get_status_display }}</span>
+          <span class="muted small">{{ cs.created_at|timesince }} ago</span>
         </li>
       {% endfor %}
       </ul>
-    </div></div>
+    </div>
     {% endif %}
   </div>
 
-  <div class="col-md-5">
-    <div class="mb-4">{% include 'console/_live_phone.html' %}
-      <div class="d-flex justify-content-center gap-2 mt-2">
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'console:event_qr' event.id %}?download=1">{% icon "download" %} QR</a>
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'console:event_poster' event.id %}" target="_blank">{% icon "printer" %} Poster</a>
-        <button class="btn btn-sm btn-outline-secondary" data-copy="{{ join_url }}">{% icon "link" %} Copy link</button>
+  <div class="split__aside stack stack--loose">
+    <div class="stack stack--tight">{% include 'console/_live_phone.html' %}
+      <div class="cluster cluster--center">
+        <a class="button button--secondary button--small" href="{% url 'console:event_qr' event.id %}?download=1">{% icon "download" %} QR</a>
+        <a class="button button--secondary button--small" href="{% url 'console:event_poster' event.id %}" target="_blank">{% icon "printer" %} Poster</a>
+        <button class="button button--secondary button--small" data-copy="{{ join_url }}">{% icon "link" %} Copy link</button>
       </div>
-      <div class="small text-muted text-break text-center mt-1">{{ join_url }}</div>
+      <div class="small muted break center">{{ join_url }}</div>
     </div>
 
-    <div class="card mb-4"><div class="card-body">
-      <h2 class="h6 muted-label">Visibility</h2>
-      <form method="post" action="{% url 'console:event_status' event.id %}" class="d-grid gap-2">{% csrf_token %}
+    <div class="panel stack">
+      <h2 class="eyebrow">Visibility</h2>
+      <form method="post" action="{% url 'console:event_status' event.id %}" class="stack stack--tight">{% csrf_token %}
         {% if event.status == 'published' %}
           {% if event.public %}
-            <button name="action" value="unlist" class="btn btn-outline-secondary btn-sm">Hide from “nearby events”</button>
+            <button name="action" value="unlist" class="button button--secondary button--small button--block">Hide from “nearby events”</button>
           {% else %}
-            <button name="action" value="list" class="btn btn-outline-primary btn-sm">Show in “nearby events”</button>
+            <button name="action" value="list" class="button button--outline button--small button--block">Show in “nearby events”</button>
           {% endif %}
-          <button name="action" value="archive" class="btn btn-outline-secondary btn-sm">Mark as ended (archive)</button>
-          <button name="action" value="unpublish" class="btn btn-link btn-sm text-muted">Move back to draft</button>
+          <button name="action" value="archive" class="button button--secondary button--small button--block">Mark as ended (archive)</button>
+          <button name="action" value="unpublish" class="button button--ghost button--small button--block muted">Move back to draft</button>
         {% elif event.status == 'archived' %}
-          <button name="action" value="publish" class="btn btn-outline-success btn-sm">Make live again</button>
+          <button name="action" value="publish" class="button button--outline button--small button--block">Make live again</button>
         {% endif %}
       </form>
-      {% if not event.paid %}<p class="small text-muted mt-3 mb-0">{% icon "info" %} Attendees see a “Demo event” banner until the event is upgraded.</p>{% endif %}
-    </div></div>
+      {% if not event.paid %}<p class="small muted">{% icon "info" %} Attendees see a “Demo event” banner until the event is upgraded.</p>{% endif %}
+    </div>
 
-    <div class="card"><div class="card-body">
-      <h2 class="h6 muted-label">App layout</h2>
-      <p class="mb-1"><strong>{{ display.resolved_preset|capfirst }}</strong>{% if display.preset == 'auto' %} <span class="text-muted">(automatic)</span>{% endif %}</p>
-      <p class="small text-muted">{{ display.reason }}</p>
-      <a class="btn btn-sm btn-outline-secondary" href="{% url 'console:display' event.id %}">Customize</a>
-    </div></div>
+    <div class="panel stack stack--tight">
+      <h2 class="eyebrow">App layout</h2>
+      <p class="title-4"><strong>{{ display.resolved_preset|capfirst }}</strong>{% if display.preset == 'auto' %} <span class="muted">(automatic)</span>{% endif %}</p>
+      <p class="small muted">{{ display.reason }}</p>
+      <div><a class="button button--secondary button--small" href="{% url 'console:display' event.id %}">Customize</a></div>
+    </div>
   </div>
 </div>
+</div>
 {% if event.refresh_schedule == 'watch' %}
-<dialog id="sync-notice" class="sync-dialog" data-event="{{ event.id }}">
-  <h2 class="h5">{% icon "refresh" "text-primary" %} Your app stays in sync with your website</h2>
+<dialog id="sync-notice" class="dialog" data-event="{{ event.id }}">
+  <h2>{% icon "refresh" "tone-brand" %} Your app stays in sync with your website</h2>
   <p>Attnd watches {% if event.source_urls %}your event website{% else %}your event website once you add it{% endif %} and
     {% if event.update_mode == 'auto' %}updates the app automatically{% elif event.update_mode == 'minor' %}applies small fixes automatically{% else %}suggests updates for you to review{% endif %}
     when it changes: every 10 minutes during the event, hourly the week before. Just keep editing your own site.</p>
-  <p class="small text-muted">Removals and anything your team edited here by hand always wait for a person. Change this any time under
+  <p class="small muted">Removals and anything your team edited here by hand always wait for a person. Change this any time under
     "Keep it in sync with your website".</p>
-  <div class="d-flex gap-2 justify-content-end">
-    <button class="btn btn-outline-secondary" data-action="settings">Change settings</button>
-    <button class="btn btn-primary" data-action="ok" autofocus>Got it</button>
+  <div class="cluster cluster--end">
+    <button class="button button--secondary" data-action="settings">Change settings</button>
+    <button class="button button--primary" data-action="ok" autofocus>Got it</button>
   </div>
 </dialog>
 <script nonce="{{ csp_nonce }}">

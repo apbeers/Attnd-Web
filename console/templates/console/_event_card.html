@@ -1,19 +1,11 @@
-{% load console_tags %}<div class="col-md-6 col-xl-4">
-  <a class="card h-100 text-decoration-none text-reset" href="{% url 'console:event' e.id %}">
-    <div class="card-body">
-      <div class="d-flex align-items-start">
-        <div class="me-auto">
-          <h3 class="h5 mb-1">{{ e.name }}</h3>
-          <div class="text-muted small">{{ e.start_time|date:"D M j, Y" }} · <span class="font-monospace">{{ e.event_code }}</span></div>
-        </div>
-      </div>
-      <div class="d-flex flex-wrap gap-1 mt-2">{% include 'console/_status_badges.html' %}</div>
-      <div class="d-flex gap-4 mt-3 small text-muted">
-        <span>{% icon "pin" %} {{ e.n_locations }}</span>
-        <span>{% icon "calendar" %} {{ e.n_items }}</span>
-        <span>{% icon "phone" %} {{ e.n_devices }} joined</span>
-        {% if e.n_pending %}<span class="text-primary fw-semibold">{% icon "stars" %} {{ e.n_pending }} to review</span>{% endif %}
-      </div>
-    </div>
-  </a>
-</div>
+{% load console_tags %}<a class="panel panel--link stack stack--tight" href="{% url 'console:event' e.id %}">
+  <h3 class="title-3">{{ e.name }}</h3>
+  <div class="muted small">{{ e.start_time|date:"D M j, Y" }} · <span class="mono">{{ e.event_code }}</span></div>
+  <div class="cluster cluster--tight">{% include 'console/_status_badges.html' %}</div>
+  <div class="cluster cluster--loose small muted">
+    <span>{% icon "pin" %} {{ e.n_locations }}</span>
+    <span>{% icon "calendar" %} {{ e.n_items }}</span>
+    <span>{% icon "phone" %} {{ e.n_devices }} joined</span>
+    {% if e.n_pending %}<span class="tone-brand strong">{% icon "stars" %} {{ e.n_pending }} to review</span>{% endif %}
+  </div>
+</a>

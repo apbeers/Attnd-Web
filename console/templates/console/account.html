@@ -2,119 +2,119 @@
 {% load console_tags %}
 {% block title %}Account{% endblock %}
 {% block content %}
-<h1 class="h4 mb-1">Account</h1>
-<p class="text-muted">You sign in with your email. Changing it keeps your events, teams and history.</p>
-<div class="row g-4" style="max-width:56rem">
-  <div class="col-md-6"><div class="card h-100"><div class="card-body">
-    <h2 class="h6">Email</h2>
-    <p class="small text-muted">Currently <strong>{{ user.email }}</strong></p>
+<div class="account">
+<h1 class="title-2">Account</h1>
+<p class="muted">You sign in with your email. Changing it keeps your events, teams and history.</p>
+<div class="grid grid--2 grid--loose">
+  <div class="panel">
+    <h2 class="title-4">Email</h2>
+    <p class="small muted">Currently <strong>{{ user.email }}</strong></p>
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email">
       {% for field in email_form %}{% include 'console/_field.html' %}{% endfor %}
-      <button class="btn btn-primary">Change email</button></form>
-  </div></div></div>
-  <div class="col-md-6"><div class="card h-100"><div class="card-body">
-    <h2 class="h6">Password</h2>
+      <button class="button button--primary">Change email</button></form>
+  </div>
+  <div class="panel">
+    <h2 class="title-4">Password</h2>
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="password">
       {% for field in password_form %}{% include 'console/_field.html' %}{% endfor %}
-      <button class="btn btn-primary">Change password</button></form>
-  </div></div></div>
-  {% if recovery_codes %}<div class="col-12"><div class="card"><div class="card-body">
-    <h2 class="h6">{% icon "lock" %} New recovery codes</h2>
+      <button class="button button--primary">Change password</button></form>
+  </div>
+  {% if recovery_codes %}<div class="panel span-all">
+    <h2 class="title-4">{% icon "lock" %} New recovery codes</h2>
     {% include 'console/_recovery_codes.html' %}
-  </div></div></div>{% endif %}
+  </div>{% endif %}
 
-  <div class="col-12"><div class="card" data-passkey-scope><div class="card-body">
-    <h2 class="h6" id="passkeys">{% icon "key" %} Passkeys</h2>
+  <div class="panel span-all" data-passkey-scope>
+    <h2 class="title-4" id="passkeys">{% icon "key" %} Passkeys</h2>
     <p class="small">Sign in with Face ID, Touch ID, Windows Hello or your phone’s screen lock instead of your password and a code.
       A passkey works only on this site{% if passkeys %}; you can still sign in with your password and a second step{% endif %}.</p>
     {% if passkeys %}
-    <ul class="list-group mb-3">
+    <ul class="list list--boxed field">
       {% for key in passkeys %}
-      <li class="list-group-item">
-        <div class="d-flex flex-wrap align-items-center gap-3">
-          <div class="flex-grow-1">
-            <strong>{{ key.name }}</strong>
-            {% if key.backed_up %}<span class="badge text-bg-light border ms-1" title="Saved in a password manager or cloud keychain, so it’s on your other devices too">Synced</span>
-            {% elif key.backup_eligible %}<span class="badge text-bg-light border ms-1">Can sync</span>
-            {% else %}<span class="badge text-bg-light border ms-1" title="Only on the device or security key that made it">This device only</span>{% endif %}
-            <div class="small text-muted">Added {{ key.created_at|date:"M j, Y" }} ·
-              {% if key.last_used_at %}last used {{ key.last_used_at|timesince }} ago{% else %}not used yet{% endif %}</div>
-          </div>
-          <form method="post" class="d-flex gap-2 align-items-end m-0">{% csrf_token %}
-            <input type="hidden" name="action" value="passkey_rename"><input type="hidden" name="passkey" value="{{ key.pk }}">
-            <div><label class="form-label small" for="id_passkey_name_{{ key.pk }}">Name</label>
-              <input class="form-control form-control-sm" id="id_passkey_name_{{ key.pk }}" name="name" value="{{ key.name }}" maxlength="64" required></div>
-            <button class="btn btn-sm btn-outline-secondary">Rename</button></form>
-          {% if key.removable %}
-          <form method="post" class="m-0">{% csrf_token %}
-            <input type="hidden" name="action" value="passkey_remove"><input type="hidden" name="passkey" value="{{ key.pk }}">
-            <button class="btn btn-sm btn-outline-danger" data-confirm="Remove the passkey “{{ key.name }}”? You won’t be able to sign in with it any more.">Remove</button></form>
-          {% else %}<span class="small text-muted" title="Admin accounts need a passkey or an authenticator app">Your only way to sign in safely: add another before removing it</span>{% endif %}
+      <li class="cluster cluster--loose">
+        <div class="grow">
+          <strong>{{ key.name }}</strong>
+          {% if key.backed_up %}<span class="badge badge--neutral" title="Saved in a password manager or cloud keychain, so it’s on your other devices too">Synced</span>
+          {% elif key.backup_eligible %}<span class="badge badge--neutral">Can sync</span>
+          {% else %}<span class="badge badge--neutral" title="Only on the device or security key that made it">This device only</span>{% endif %}
+          <div class="small muted">Added {{ key.created_at|date:"M j, Y" }} ·
+            {% if key.last_used_at %}last used {{ key.last_used_at|timesince }} ago{% else %}not used yet{% endif %}</div>
         </div>
+        <form method="post" class="cluster cluster--bottom">{% csrf_token %}
+          <input type="hidden" name="action" value="passkey_rename"><input type="hidden" name="passkey" value="{{ key.pk }}">
+          <div class="field field--small field--bare"><label class="field__label" for="id_passkey_name_{{ key.pk }}">Name</label>
+            <input id="id_passkey_name_{{ key.pk }}" name="name" value="{{ key.name }}" maxlength="64" required></div>
+          <button class="button button--secondary button--small">Rename</button></form>
+        {% if key.removable %}
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="action" value="passkey_remove"><input type="hidden" name="passkey" value="{{ key.pk }}">
+          <button class="button button--danger button--small" data-confirm="Remove the passkey “{{ key.name }}”? You won’t be able to sign in with it any more.">Remove</button></form>
+        {% else %}<span class="small muted" title="Admin accounts need a passkey or an authenticator app">Your only way to sign in safely: add another before removing it</span>{% endif %}
       </li>
       {% endfor %}
     </ul>
     {% endif %}
     <div data-passkey-ui hidden>
-      <div class="alert alert-danger py-2" role="alert" data-passkey-error hidden></div>
-      <div class="d-flex flex-wrap gap-2 align-items-end">
-        <div><label class="form-label small" for="id_new_passkey_name">Name for the new passkey</label>
-          <input class="form-control form-control-sm" id="id_new_passkey_name" maxlength="64" value="{{ passkey_name }}"></div>
-        <button type="button" class="btn btn-sm btn-primary" data-passkey-register
+      <div class="notice notice--error notice--compact" role="alert" data-passkey-error hidden></div>
+      <div class="cluster cluster--bottom">
+        <div class="field field--small field--bare"><label class="field__label" for="id_new_passkey_name">Name for the new passkey</label>
+          <input id="id_new_passkey_name" maxlength="64" value="{{ passkey_name }}"></div>
+        <button type="button" class="button button--primary button--small" data-passkey-register
                 data-options-url="{% url 'passkey_register_options' %}" data-verify-url="{% url 'passkey_register' %}"
                 data-next="{% url 'console:account' %}" data-name-input="#id_new_passkey_name">{% icon "plus" %} Add a passkey</button>
       </div>
     </div>
-    <p class="small text-muted mb-0" data-passkey-fallback hidden>This browser doesn’t support passkeys. Open this page in a current version of Safari, Chrome, Edge or Firefox to add one.</p>
-  </div></div></div>
+    <p class="small muted" data-passkey-fallback hidden>This browser doesn’t support passkeys. Open this page in a current version of Safari, Chrome, Edge or Firefox to add one.</p>
+  </div>
 
-  <div class="col-md-6"><div class="card h-100"><div class="card-body">
-    <h2 class="h6">{% icon "lock" %} Authenticator app</h2>
+  <div class="panel">
+    <h2 class="title-4">{% icon "lock" %} Authenticator app</h2>
     {% if two_factor %}
       <p class="small">On since {{ two_factor.confirmed_at|date:"M j, Y" }}. After your password, you can enter a code from your authenticator app.</p>
       {% if totp_removable %}
-      <form method="post" class="d-flex gap-2 align-items-end">{% csrf_token %}<input type="hidden" name="action" value="2fa_disable">
-        <div><label class="form-label small" for="id_disable_code">Code or recovery code</label>
-          <input class="form-control form-control-sm font-monospace" id="id_disable_code" name="code" autocomplete="one-time-code" required></div>
-        <button class="btn btn-sm btn-outline-danger" data-confirm="Turn off the authenticator app?">Turn off</button></form>
-      {% else %}<p class="small text-muted mb-0">Admin accounts need a passkey or an authenticator app: add a passkey before turning this off.</p>{% endif %}
+      <form method="post" class="cluster cluster--bottom">{% csrf_token %}<input type="hidden" name="action" value="2fa_disable">
+        <div class="field field--small field--bare"><label class="field__label" for="id_disable_code">Code or recovery code</label>
+          <input class="mono" id="id_disable_code" name="code" autocomplete="one-time-code" required></div>
+        <button class="button button--danger button--small" data-confirm="Turn off the authenticator app?">Turn off</button></form>
+      {% else %}<p class="small muted">Admin accounts need a passkey or an authenticator app: add a passkey before turning this off.</p>{% endif %}
     {% else %}
       <p class="small">A 6-digit code from an app on your phone (iOS Passwords, Google Authenticator, 1Password …) as a second step after your password.</p>
-      <a class="btn btn-sm btn-outline-primary" href="{% url 'two_factor_setup' %}?next={% url 'console:account' %}">Set up an authenticator app</a>
+      <a class="button button--outline button--small" href="{% url 'two_factor_setup' %}?next={% url 'console:account' %}">Set up an authenticator app</a>
     {% endif %}
-  </div></div></div>
+  </div>
 
-  <div class="col-md-6"><div class="card h-100"><div class="card-body">
-    <h2 class="h6">{% icon "mail" %} Emailed codes</h2>
+  <div class="panel">
+    <h2 class="title-4">{% icon "mail" %} Emailed codes</h2>
     {% if two_factor_required %}
-      <p class="small text-muted mb-0">Admin accounts use a passkey or an authenticator app; emailed codes aren’t available for them.</p>
+      <p class="small muted">Admin accounts use a passkey or an authenticator app; emailed codes aren’t available for them.</p>
     {% elif email_codes_on %}
       <p class="small">On. After your password, we can email a one-time code to {{ user.email }}.</p>
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_codes_off">
-        <button class="btn btn-sm btn-outline-danger" data-confirm="Turn off emailed codes?">Turn off</button></form>
+        <button class="button button--danger button--small" data-confirm="Turn off emailed codes?">Turn off</button></form>
     {% elif email_available %}
       <p class="small">Get a one-time code by email as a second step after your password. Simple, but weaker than a passkey or an authenticator app: anyone who can read your email could also reset your password.</p>
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_codes_on">
-        <button class="btn btn-sm btn-outline-primary">Turn on emailed codes</button></form>
+        <button class="button button--outline button--small">Turn on emailed codes</button></form>
     {% else %}
-      <p class="small text-muted mb-0">Email isn’t set up on this server, so emailed codes aren’t available.</p>
+      <p class="small muted">Email isn’t set up on this server, so emailed codes aren’t available.</p>
     {% endif %}
-  </div></div></div>
+  </div>
 
   {% if has_second_factor %}
-  <div class="col-12"><div class="card"><div class="card-body">
-    <h2 class="h6">{% icon "lock" %} Recovery codes</h2>
+  <div class="panel span-all">
+    <h2 class="title-4">{% icon "lock" %} Recovery codes</h2>
     <p class="small">{{ recovery_codes_left }} recovery code{{ recovery_codes_left|pluralize }} left. Each one replaces the second step once, if you lose your phone or passkey.</p>
-    <form method="post" class="d-flex gap-2 align-items-end">{% csrf_token %}<input type="hidden" name="action" value="2fa_codes">
+    <form method="post" class="cluster cluster--bottom">{% csrf_token %}<input type="hidden" name="action" value="2fa_codes">
       {% if two_factor %}
-      <div><label class="form-label small" for="id_codes_code">Code from your app</label>
-        <input class="form-control form-control-sm font-monospace" id="id_codes_code" name="code" inputmode="numeric" autocomplete="one-time-code" required></div>
+      <div class="field field--small field--bare"><label class="field__label" for="id_codes_code">Code from your app</label>
+        <input class="mono" id="id_codes_code" name="code" inputmode="numeric" autocomplete="one-time-code" required></div>
       {% else %}
-      <div><label class="form-label small" for="id_codes_password">Your password</label>
-        <input class="form-control form-control-sm" type="password" id="id_codes_password" name="password" autocomplete="current-password" required></div>
+      <div class="field field--small field--bare"><label class="field__label" for="id_codes_password">Your password</label>
+        <input type="password" id="id_codes_password" name="password" autocomplete="current-password" required></div>
       {% endif %}
-      <button class="btn btn-sm btn-outline-secondary">New recovery codes</button></form>
-  </div></div></div>
+      <button class="button button--secondary button--small">New recovery codes</button></form>
+  </div>
   {% endif %}
+</div>
 </div>
 {% endblock %}

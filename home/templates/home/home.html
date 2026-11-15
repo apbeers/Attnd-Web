@@ -22,19 +22,19 @@
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
 </svg>
 
-<nav class="nav">
+<nav class="site-nav">
   <div class="wrap">
     <a class="brand" href="/">attnd<span>.</span></a>
-    <div class="nav-links">
+    <div class="site-nav__links">
       <a href="#features">Features</a>
       <a href="#try-it">Try it free</a>
       <a href="#download">Download</a>
       <a href="{% url 'login' %}">Sign in</a>
-      <a class="btn btn-primary btn-small" href="{% url 'console:signup' %}">Create an event</a>
+      <a class="button button--primary button--small" href="{% url 'console:signup' %}">Create an event</a>
     </div>
-    <details class="nav-menu">
+    <details class="site-nav__menu">
       <summary>Menu</summary>
-      <div class="nav-links">
+      <div class="site-nav__links">
         <a href="#features">Features</a>
         <a href="#try-it">Try it free</a>
         <a href="#download">Download</a>
@@ -50,16 +50,16 @@
     <div>
       <h1>Your event's map, schedule and live updates — in everyone's pocket.</h1>
       <p class="lead">Perfect for festivals, trade shows, outdoor events, concerts and conferences. Paste your event website and AI builds the whole thing in about a minute.</p>
-      <div class="actions">
-        <a href="#try-it" class="btn btn-primary" style="background:#fff;color:var(--attnd)">Try it free</a>
-        <a href="{% url 'console:signup' %}" class="btn btn-ghost">$299 per event, flat</a>
+      <div class="cluster">
+        <a href="#try-it" class="button button--light">Try it free</a>
+        <a href="{% url 'console:signup' %}" class="button button--ghost">$299 per event, flat</a>
       </div>
     </div>
     <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-map.png' %}" alt="The Attnd app showing an event map"></div></div>
   </div>
 </header>
 
-<section id="features">
+<section class="section" id="features">
   <div class="wrap">
     <div class="section-head">
       <h2>Unlimited attendees, simple setup</h2>
@@ -67,7 +67,7 @@
     </div>
     <div class="features-layout">
       <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-locations.png' %}" alt="The Attnd app showing a list of locations"></div></div>
-      <div class="grid grid-2">
+      <div class="grid grid--2">
         <div class="feature"><svg class="icon"><use href="#i-stars"/></svg><h3>Built by AI, checked by you</h3>
           <p class="muted">Point us at your website, flyer or program. We pull in every stage, booth and set time, and you review it before anyone sees it.</p></div>
         <div class="feature"><svg class="icon"><use href="#i-refresh"/></svg><h3>Instant updates</h3>
@@ -85,88 +85,90 @@
   </div>
 </section>
 
-<section class="band" id="how">
+<section class="section section--band" id="how">
   <div class="wrap">
     <div class="section-head"><h2>How it works</h2></div>
-    <div class="grid grid-3">
-      <div class="step"><div class="num">1</div><h3>Import</h3><p class="muted">Paste your event site, upload a flyer, or type it in.</p></div>
-      <div class="step"><div class="num">2</div><h3>Review &amp; publish</h3><p class="muted">Edit anything, choose the app layout, then print your QR poster.</p></div>
-      <div class="step"><div class="num">3</div><h3>Stay current</h3><p class="muted">Attnd watches your own website and keeps the app in sync automatically, even during the event.</p></div>
+    <div class="grid grid--3">
+      <div class="step"><div class="step__num">1</div><h3>Import</h3><p class="muted">Paste your event site, upload a flyer, or type it in.</p></div>
+      <div class="step"><div class="step__num">2</div><h3>Review &amp; publish</h3><p class="muted">Edit anything, choose the app layout, then print your QR poster.</p></div>
+      <div class="step"><div class="step__num">3</div><h3>Stay current</h3><p class="muted">Attnd watches your own website and keeps the app in sync automatically, even during the event.</p></div>
     </div>
   </div>
 </section>
 
-<section id="live">
+<section class="section" id="live">
   <div class="wrap">
     <div class="section-head"><h2>Edit on the web. Watch it change on your phone.</h2>
       <p class="muted">Scan your event's QR code with your phone, keep the app open, and change anything in the console:
         a stage time, a new food truck, the tabs or the colors. Your phone, and every attendee's, updates within seconds.
         No app store, no re-publishing. On iPhone the code even opens an instant App Clip, so there's nothing to install.</p></div>
-    <div class="grid grid-3">
-      <div class="step"><div class="num">1</div><h3>Scan</h3><p class="muted">Point your camera at the QR code on your event's page in the console.</p></div>
-      <div class="step"><div class="num">2</div><h3>Edit</h3><p class="muted">Change anything on the web, or just update your own event website.</p></div>
-      <div class="step"><div class="num">3</div><h3>Watch</h3><p class="muted">The app on your phone updates live, a few seconds later.</p></div>
+    <div class="grid grid--3">
+      <div class="step"><div class="step__num">1</div><h3>Scan</h3><p class="muted">Point your camera at the QR code on your event's page in the console.</p></div>
+      <div class="step"><div class="step__num">2</div><h3>Edit</h3><p class="muted">Change anything on the web, or just update your own event website.</p></div>
+      <div class="step"><div class="step__num">3</div><h3>Watch</h3><p class="muted">The app on your phone updates live, a few seconds later.</p></div>
     </div>
   </div>
 </section>
 
-<section id="try-it">
+<section class="section" id="try-it">
   <div class="wrap">
     <div class="section-head">
       <h2>Already have an event? See it in the app.</h2>
       <p class="muted">Paste your event website. We'll pull in the locations, times and descriptions and give you a code to open in the app — no account needed.</p>
     </div>
-    <div class="card">
+    <div class="panel">
       <div id="scrape-form">
-        <label for="event-url" class="small" style="font-weight:600">Your event website</label>
-        <div class="field" style="margin-top:.4rem">
-          <input type="url" id="event-url" placeholder="https://yourevent.com" autocomplete="off">
-          <button class="btn btn-primary" id="scrape-btn" type="button">Build my event</button>
+        <div class="field">
+          <label for="event-url" class="field__label">Your event website</label>
+          <div class="cluster">
+            <input type="url" id="event-url" placeholder="https://yourevent.com" autocomplete="off">
+            <button class="button button--primary" id="scrape-button" type="button">Build my event</button>
+          </div>
         </div>
       </div>
 
-      <div id="scrape-loading" class="center hidden" aria-live="polite">
+      <div id="scrape-loading" class="center" aria-live="polite" hidden>
         <div class="spinner" role="status"></div>
-        <p class="muted" style="margin-bottom:.2rem">Reading your event site… this usually takes 30–90 seconds.</p>
+        <p class="muted tight">Reading your event site… this usually takes 30–90 seconds.</p>
         <p class="muted small" id="scrape-progress"></p>
       </div>
 
-      <div id="scrape-success" class="center hidden">
+      <div id="scrape-success" class="center" hidden>
         <svg class="success-icon"><use href="#i-check"/></svg>
         <h3>Your event is ready!</h3>
-        <p class="muted" style="margin-bottom:0">Scan with your phone to get the app and jump straight in:</p>
+        <p class="muted tight">Scan with your phone to get the app and jump straight in:</p>
         <img id="result-qr" class="qr" src="" alt="QR code to join the event">
-        <p class="muted small" style="margin-bottom:.2rem">Or open Attnd and enter this code:</p>
+        <p class="muted small tight">Or open Attnd and enter this code:</p>
         <div id="result-code" class="result-code"></div>
         <p id="result-summary" class="muted small"></p>
-        <button class="btn btn-ghost btn-small" id="scrape-again-btn" type="button">Try another URL</button>
+        <button class="button button--ghost button--small" id="scrape-again-button" type="button">Try another URL</button>
         <hr>
-        <p style="font-weight:600;margin-bottom:.2rem">Like what you see?</p>
+        <p class="strong tight">Like what you see?</p>
         <p class="muted small">Create a free account to claim this event, edit everything, choose the layout and send notifications.</p>
-        <a id="claim-account-btn" href="{% url 'console:signup' %}" class="btn btn-primary">Claim this event →</a>
+        <a id="claim-account-button" href="{% url 'console:signup' %}" class="button button--primary">Claim this event →</a>
       </div>
 
-      <div id="scrape-error" class="alert hidden" role="alert" style="margin-top:1rem"><span id="error-message"></span></div>
+      <div id="scrape-error" class="notice notice--error" role="alert" hidden><span id="error-message"></span></div>
     </div>
   </div>
 </section>
 
-<section class="dark center" id="download">
+<section class="section section--dark center" id="download">
   <div class="wrap">
     <h2>Get the app</h2>
-    <p style="opacity:.8">Free for attendees on iPhone and Android.</p>
-    <div class="badges">
+    <p class="muted-on-dark">Free for attendees on iPhone and Android.</p>
+    <div class="store-badges">
       <a href="https://apple.co/2yF6mNa"><img src="{% static 'home/img/app-store-badge.svg' %}" alt="Download on the App Store"></a>
       <a href="http://bit.ly/2YEZ4HL"><img src="{% static 'home/img/google-play-badge.svg' %}" alt="Get it on Google Play"></a>
     </div>
   </div>
 </section>
 
-<section class="cta">
+<section class="section center">
   <div class="wrap">
     <h2>Create your event for free.</h2>
     <p class="muted">Pay only when your event goes live.</p>
-    <a href="{% url 'console:signup' %}" class="btn btn-primary">Get started</a>
+    <a href="{% url 'console:signup' %}" class="button button--primary">Get started</a>
   </div>
 </section>
 

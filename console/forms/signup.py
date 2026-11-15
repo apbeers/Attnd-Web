@@ -3,21 +3,18 @@ from django import forms
 
 class SignUpForm(forms.Form):
     email = forms.EmailField(widget=forms.EmailInput(attrs={
-        'class': 'form-control',
         'autocomplete': 'email',
         'name': 'username',  # password managers look for this
         'autofocus': True,
     }))
     password = forms.CharField(widget=forms.PasswordInput(attrs={
-        'class': 'form-control',
         'autocomplete': 'new-password',
     }))
 
 
 class EmailChangeForm(forms.Form):
-    email = forms.EmailField(label='New email', widget=forms.EmailInput(attrs={'class': 'form-control', 'autocomplete': 'email'}))
-    password = forms.CharField(label='Current password', widget=forms.PasswordInput(attrs={
-        'class': 'form-control', 'autocomplete': 'current-password'}))
+    email = forms.EmailField(label='New email', widget=forms.EmailInput(attrs={'autocomplete': 'email'}))
+    password = forms.CharField(label='Current password', widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}))
 
     def __init__(self, user, *args, **kwargs):
         self.user = user
