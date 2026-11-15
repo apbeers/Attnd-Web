@@ -46,8 +46,8 @@
       <tr><td>Searches</td><td class="num">{{ usage.searches }}</td></tr>
       <tr><td>Pull to refresh</td><td class="num">{{ usage.refreshes }}</td></tr>
       <tr><td>Notifications opened</td><td class="num">{{ usage.notification_opens }}</td></tr>
-      <tr><td>Hearts given</td><td class="num">{{ usage.hearts_given }}</td></tr>
-      <tr><td>Hearts removed</td><td class="num">{{ usage.hearts_removed }}</td></tr>
+      <tr><td>Likes given</td><td class="num">{{ usage.hearts_given }}</td></tr>
+      <tr><td>Likes removed</td><td class="num">{{ usage.hearts_removed }}</td></tr>
     </tbody></table>
   </div>
   <div class="panel">
@@ -65,19 +65,19 @@
     </tbody></table>
   </div>
   <div class="panel">
-    <h2 class="title-4">{% icon "heart" "tone-danger" %} Most hearted locations</h2>
-    <p class="small muted">Net hearts: attendees who hearted it, minus those who took the heart back.</p>
+    <h2 class="title-4">{% icon "heart" "tone-danger" %} Most liked locations</h2>
+    <p class="small muted">Net likes: attendees who liked it, minus those who took the like back.</p>
     <table class="data-table"><tbody>
       {% for l in usage.hearted_locations %}<tr><td>{{ l.name }}</td><td class="num">{{ l.count }}</td></tr>
-      {% empty %}<tr><td class="muted">No hearts yet.</td></tr>{% endfor %}
+      {% empty %}<tr><td class="muted">No likes yet.</td></tr>{% endfor %}
     </tbody></table>
   </div>
   <div class="panel">
-    <h2 class="title-4">{% icon "heart" "tone-danger" %} Most hearted schedule items</h2>
-    <p class="small muted">Net hearts, as for locations.</p>
+    <h2 class="title-4">{% icon "heart" "tone-danger" %} Most liked schedule items</h2>
+    <p class="small muted">Net likes, as for locations.</p>
     <table class="data-table"><tbody>
       {% for i in usage.hearted_items %}<tr><td>{{ i.name }}</td><td class="num">{{ i.count }}</td></tr>
-      {% empty %}<tr><td class="muted">No hearts yet.</td></tr>{% endfor %}
+      {% empty %}<tr><td class="muted">No likes yet.</td></tr>{% endfor %}
     </tbody></table>
   </div>
   <div class="panel">

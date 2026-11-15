@@ -97,11 +97,11 @@ class HeartTests(Base):
         client.force_login(self.owner)
         url = lambda name: reverse(f'console:{name}', args=[self.event.id])  # noqa: E731
         page = client.get(url('usage'), secure=True).content.decode()
-        self.assertIn('Most hearted locations', page)
-        self.assertIn('Hearts given', page)
-        self.assertInHTML('<td class="num">11</td>', page)  # hearts given 7 + 4
+        self.assertIn('Most liked locations', page)
+        self.assertIn('Likes given', page)
+        self.assertInHTML('<td class="num">11</td>', page)  # likes given 7 + 4
         overview = client.get(url('event'), secure=True).content.decode()
-        self.assertIn('Most hearted', overview)
+        self.assertIn('Most liked', overview)
         self.assertLess(overview.index('Main Stage'), overview.index('Prairie Lights'))  # 7 before 3
         for name, needle in (('locations', '</svg> 7</span>'), ('schedule', '</svg> 3</span>')):
             self.assertIn(needle, client.get(url(name), secure=True).content.decode(), name)

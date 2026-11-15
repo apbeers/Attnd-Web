@@ -311,6 +311,23 @@ Call it on launch and whenever the app returns to the foreground.
 
 **Retired API versions:** any `/api/vN/…` call to a version the server no longer serves gets `410 Gone` with `{"error": "update_required", "update_url": …}`. Treat `410` or `426` from any API call as `update: required`.
 
+## Outside the version: shared plan links (API-015)
+
+`https://attnd.app/p/<EVENT_CODE>/<payload>` (a trailing `/` is optional) is a web link, not an API call: no
+`Authorization`, nothing stored. The apps make it to share a plan or an item and open it via Universal Links / App
+Links (the apple-app-site-association claims `/p/*` for the app and the App Clip, `/p/*/*/qr.svg` excluded; the
+Digital Asset Links file is domain-wide, so the Android app's verified intent filter decides).
+- `payload` = base64url **without padding** of compact JSON (`{"v":1,"ids":[101,114],"d":"2026-11-14"}` →
+  `eyJ2IjoxLCJpZHMiOlsxMDEsMTE0XSwiZCI6IjIwMjYtMTEtMTQifQ`), at most 1,500 characters. `v` is `1`; `ids` are
+  schedule item ids (integers) of that event; `d` (optional) is the plan's event day. No personal data.
+- The server reads it leniently (padding, `"s12"` ids and a malformed `d` are tolerated; unknown or hidden ids are
+  skipped) and serves it like `/join/<code>/`: Android → Google Play with `referrer=event_code%3D<code>`; iPhone → the
+  App Clip banner + App Store link; desktop → the event's join page listing the shared items (name, time in the event's
+  time zone, place) with a QR code of the link (`/p/<code>/<payload>/qr.svg`). An invalid payload (not base64url
+  JSON, `v` ≠ 1, `ids` not a list, too long) shows the plain join page; an unknown or draft event is the join `404`.
+  Opens count as `link_open` like join links.
+- Apps: treat ids not in the bundle as gone; a payload with `v` > 1 that the app can't read joins the event only.
+
 ## Objects
 
 ### Event

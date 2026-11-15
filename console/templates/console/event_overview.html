@@ -70,7 +70,7 @@
     </div>
 
     <div class="panel">
-      <div class="cluster"><h2 class="eyebrow grow">{% icon "heart" "tone-danger" %} Most hearted</h2>
+      <div class="cluster"><h2 class="eyebrow grow">{% icon "heart" "tone-danger" %} Most liked</h2>
         <a class="small" href="{% url 'console:usage' event.id %}">Usage</a></div>
       {% if most_hearted %}
       <ul class="list list--inset">
@@ -82,7 +82,7 @@
         </li>
       {% endfor %}
       </ul>
-      {% else %}<p class="small muted">Attendees can heart locations and schedule items in the app. The favourites show up here (anonymous counts only).</p>{% endif %}
+      {% else %}<p class="small muted">Attendees can like locations and schedule items in the app (the heart button). The favourites show up here (anonymous counts only).</p>{% endif %}
     </div>
 
     {% if changesets %}

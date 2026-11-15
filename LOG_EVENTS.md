@@ -57,11 +57,11 @@ The server drops keys whose name contains `token`, `password`, `secret`, `author
 | `live` | Live Activity (iOS) / Live Update (Android), reminders, venue arrival |
 | `location` | Permission, position and heading sources (no coordinates beyond 0.01°) |
 | `map` | Map rendering, clustering, pins, routes |
-| `planner` | My plan: preference extraction, the planner run, swaps |
-| `assistant` | Siri / App Intents / Spotlight, Gemini AppFunctions, Ask (on-device model) — "CRI requests" |
+| `planner` | My plan: preference extraction, the planner run, swaps, plan edits and undo |
+| `assistant` | Siri / App Intents / Spotlight, Gemini AppFunctions, Ask (on-device model), the event assistant's turns, blocks and actions — "CRI requests" |
 | `search` | Local search |
 | `storage` | Bundle cache, image cache, preferences |
-| `ui` | Screens, sheets, tabs, banners, errors shown |
+| `ui` | Screens, sheets, tabs, banners, errors shown, share links |
 | `perf` | Signposts / trace sections and measured durations |
 | `auth` | App Attest / Play Integrity, JWT, 401 retries |
 | `lifecycle` | Launch, foreground/background, memory warnings, update prompt |
@@ -150,6 +150,8 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `live.reminder.shown` | `live` | info | **`item_id`**, `walk_min` | a reminder fired |
 | `live.arrival` | `live` | notice | **`action`** (`entered`/`prompted`/`started`), `radius_m` | the venue geofence / `CLMonitor` circle |
 | `live.follow.changed` | `live` | notice | **`on`** (bool), `default` (bool) | "Follow on Lock Screen" changed |
+| `live.running_late` | `live` | notice | **`item_id`**, **`minutes_left`**, `walk_min`, `action` (`shown`/`left_now`/`swap_offered`/`swapped`/`dismissed`) | the running-late check fired at departure time (assistant spec §6; no coordinates) |
+| `live.checkoff` | `live` | info | **`item_id`**, **`source`** (`auto`/`tap`), **`done`** (bool), `minutes_near` | a planned item was checked off (or un-checked) |
 
 ### location
 
@@ -181,8 +183,10 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `planner.swap` | `planner` | info | **`item_id`**, `alternatives` | Swap was used |
 | `planner.changed` | `planner` | notice | **`removed`**, **`moved`** | a content update changed the plan ("Your plan changed") |
 | `planner.availability` | `planner` | info | **`status`** (`available`/`downloadable`/`downloading`/`unavailable`), `reason` | the on-device model's availability |
+| `plan.edit` | `planner` | info | **`ops`** (list of op names: `replace`/`remove`/`add`/`move`/`keep`/`unkeep`/`constraint`), **`source`** (`assistant`/`plan`/`live`/`siri`/`appfunction`), `applied` (bool), `removed`, `added`, `moved`, `ms` | a plan edit was previewed or applied (assistant spec §4; never the typed text) |
+| `plan.undo` | `planner` | info | **`depth`** (undo stack size after), `ok` (bool) | the last plan edit was undone |
 
-### assistant (Siri, App Intents, Spotlight, AppFunctions, Ask)
+### assistant (Siri, App Intents, Spotlight, AppFunctions, Ask, the event assistant)
 
 | Event | Category | Level | Fields | When |
 |-------|----------|-------|--------|------|
@@ -192,6 +196,9 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `assistant.answer` | `assistant` | debug | **`ms`**, **`citations`**, `tool_calls`, `fallback` (bool) | the model answered (no text) |
 | `assistant.error` | `assistant` | warning | **`kind`**, **`error`**, `domain`, `code` | the model or an intent failed |
 | `assistant.index` | `assistant` | debug | **`ms`**, **`entities`**, `action` (`reindexed`/`removed`) | Spotlight entities / shortcuts updated |
+| `assistant.turn` | `assistant` | info | **`path`** (`model`/`rules`), **`intent`** (router intent, e.g. `search`/`plan_edit`/`like`/`why_not`/`question`), **`ms`**, **`blocks`**, `query_len`, `fallback` (bool: model output invalid → rules), `tool_calls` | one assistant turn finished (event assistant, spec §3; never the text in production) |
+| `assistant.block` | `assistant` | debug | **`type`** (block type, e.g. `item_card`/`carousel`/`timeline`/`map`/`plan_diff`), **`ids`** (count), `dropped` (unknown ids dropped) | a response block was rendered |
+| `assistant.action` | `assistant` | info | **`name`** (action registry name, e.g. `like`/`plan_edit`/`follow_lock_screen`/`share_plan`), **`result`** (`applied`/`confirmed`/`declined`/`undone`/`failed`), `confirm` (`none`/`chip`/`sheet`) | an action was run from the assistant |
 
 ### search
 
@@ -211,7 +218,7 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `storage.images.pruned` | `storage` | debug | **`files`**, **`bytes`** | unreferenced images were deleted |
 | `storage.prefs.migrated` | `storage` | notice | **`from`**, **`to`** | stored preferences were migrated |
 
-### ui
+### ui (incl. share links)
 
 | Event | Category | Level | Fields | When |
 |-------|----------|-------|--------|------|
@@ -220,6 +227,8 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `ui.banner` | `ui` | debug | **`kind`** (`update`/`urgent`/`offline`/`demo`/`ended`/`update_available`), **`shown`** (bool) | a banner appeared / was dismissed |
 | `ui.error.shown` | `ui` | warning | **`kind`** (`join`/`lookup`/`refresh`/`scan`/`other`), `status` | an error message was shown to the user |
 | `ui.hang` | `ui` | warning | **`ms`** | the main thread was blocked > 250 ms (debug sessions only) |
+| `share.created` | `ui` | info | **`target`** (`plan`/`item`), **`items`**, `payload_len`, `via` (`share_sheet`/`qr`/`copy`) | a share link was made (API-015; never the link) |
+| `share.opened` | `ui` | notice | **`target`** (`plan`/`item`), **`items`**, `known` (ids found in the bundle), **`action`** (`viewed`/`use`/`merge`), `joined` (bool: the link joined the event) | a shared plan link was opened in the app |
 
 ### perf
 

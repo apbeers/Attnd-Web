@@ -62,6 +62,16 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
 
 ## Future
 
+### Event assistant (in progress; spec agreed Nov 15, 2026)
+Spec: `docs/specs/assistant_spec.md` (the "Attnd event assistant spec", read with `glance_plan_spec.md` and `search_spec.md`).
+The planner grows into one assistant screen in both apps (search, ask, like, plan, plan edits with undo, follow,
+reminders, share), answering with native "blocks"; on-device only, rule-based without the model; Android's `domain/`
+is the reference. Web parts:
+- Done (not pushed): shared plan links `/p/<code>/<payload>` + AASA paths (**API-015**), console "likes" wording
+  (metric names unchanged), the new log event names in `LOG_EVENTS.md`.
+- Apps: everything else (§1–9), including the `/p/` App Link intent filter on Android and an App Clip advanced
+  experience for `https://attnd.app/p/` if scanning a share QR should show the clip card (owner, App Store Connect).
+
 ### Glance / hearts / planner / Live Activity follow-ups (built Nov 15, 2026; API-009/010/011)
 Built on both apps: relative times, distance + compass, walking routes, map/list glanceables, hearts, the
 on-device planner (identical rules on both, Android's `Planner.kt` is the reference), onboarding, Live

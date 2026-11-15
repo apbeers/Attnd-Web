@@ -90,7 +90,7 @@ public/         # Files served at root by Whitenoise (robots.txt, etc.)
 - **Live editing:** every attendee-visible change bumps `content_version` and schedules a debounced silent push (`events.push.content_changed`); it goes to every joined device with a push token, `subscribed` or not (API-007). Open apps refresh on that push, on resume and pull-to-refresh, and poll every 60 s only without a push token (5 min safety poll with one). App layout autosaves. The "Live on your phone" panel (QR) replaces the old phone mock-up (`_phone_preview.html` is unused for now).
 - **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs` (links use `aria-current="page"`), `data-table` (`--compact`), `code-block` (pre), `link-button`, `meter`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
 - **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. Web app manifest at `/console/manifest.webmanifest`.
-- **Hearts** (API-009): net hearts (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted`: Usage page, counts on the Locations and Schedule lists, "Most hearted" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
+- **Likes** (API-009 hearts; the apps say "like", the heart icon stays): net likes (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted` (code and metric names keep "heart"; labels say "likes" / "liked"): Usage page, counts on the Locations and Schedule lists, "Most liked" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
 - **Google Maps** (`console/static/console/maps.js`) when `GOOGLE_MAPS_BROWSER_KEY` is set: Places autocomplete on addresses, draggable pin map; otherwise the OpenStreetMap picker.
 - **Brand colour** purple `#431f86` (from the app icon) across console, site and apps.
@@ -219,9 +219,15 @@ Set `APPLE_ATTEST_ENVIRONMENT=development` locally to accept sandbox attestation
 - iOS → App Store
 - Desktop → landing page with both store links
 
+`/p/<event_code>/<payload>` (API-015, trailing `/` optional) is a **shared plan link** from the apps: `payload` =
+base64url (no padding) of `{"v":1,"ids":[…],"d":"YYYY-MM-DD"?}`, ≤ 1,500 chars (`join.views.encode_share_payload` /
+`decode_share_payload`). Same routing as `/join/` (`SharedPlanRedirect`); the landing page (`join/landing.html` with
+`shared_plan`) lists the items in the event's time zone with a QR of the link (`/p/<code>/<payload>/qr.svg`). Invalid
+payload → the plain join page; unknown event → the join 404; opens count as `link_open`.
+
 Well-known files served from `join/views.py`:
-- `/.well-known/apple-app-site-association` — iOS Universal Links + App Clips
-- `/.well-known/assetlinks.json` — Android App Links
+- `/.well-known/apple-app-site-association` — iOS Universal Links + App Clips (`/join/*` and `/p/*`, QR images excluded)
+- `/.well-known/assetlinks.json` — Android App Links (domain-wide; the app's intent filter picks `/join/` and `/p/`)
 
 ## Local Development
 

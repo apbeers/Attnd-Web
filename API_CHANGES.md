@@ -62,6 +62,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-011 | Urgent announcements: `Notification.priority`, `priority` in notification pushes, urgent = every device + time-sensitive/high priority; iOS Live Activity push via `POST devices/` `live_activity_token` | additive (new keys, new optional request field, new push variant) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (b3cb181, d688ed0) | ✅ dev (d491c93) |
 | API-013 | Diagnostics: debug log upload (`POST diagnostics/logs/`), crash/hang reports, `X-Request-Id` / `X-Diag-Session`, Android R8 symbols + retrace, iOS symbolication workflow, staff Diagnostics panel | additive (new endpoints, new request headers) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
 | API-014 | Anonymous performance metrics: `perf_*` usage names with bucket details | additive (new usage names) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
+| API-015 | Shared plan links `/p/<EVENT_CODE>/<payload>` (web page + store routing like `/join/`), claimed in apple-app-site-association (app + App Clip) and opened by the apps | additive (new web route, new app link paths; no API endpoint) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -69,6 +70,48 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-015: shared plan links
+**Why:** the event assistant (assistant spec §7, Nov 15, 2026) shares a plan or an item as a link that opens the
+shared plan in the app and still works for someone without it. Additive: a new web route and new Universal Link / App
+Link paths; no API endpoint, no new key, nothing stored on the server.
+**Server (attnd-web):**
+- `GET /p/<EVENT_CODE>/<payload>` (also with a trailing `/`): `payload` = base64url without padding of compact JSON
+  `{"v":1,"ids":[<schedule item ids>],"d":"YYYY-MM-DD"?}`, at most 1,500 characters. Known string:
+  `{"v":1,"ids":[101,114],"d":"2026-11-14"}` → `eyJ2IjoxLCJpZHMiOlsxMDEsMTE0XSwiZCI6IjIwMjYtMTEtMTQifQ`.
+- Same routing as `/join/<code>/` (`join/views.py` `SharedPlanRedirect`): Android → Google Play with
+  `referrer=event_code%3D<code>`; iPhone → the join page with the App Clip banner and the App Store link, plus the
+  shared items; desktop → the join page listing the shared items by name, time (event's time zone) and place, both
+  store links and a QR code of the share link (`/p/<code>/<payload>/qr.svg`). Unknown, hidden or other events' ids are
+  skipped; an invalid payload shows the plain join page; an unknown or draft event is the join `404`. Opens are counted
+  as `link_open` (by device kind), like join links. Pages are `noindex`.
+- `/.well-known/apple-app-site-association`: `/p/*` added for the app and the App Clip (the same `appIDs` entry as
+  `/join/*`), with `/p/*/*/qr.svg` excluded. `assetlinks.json` is domain-wide (`handle_all_urls`), so it already covers
+  `/p/*`; which paths open the Android app is decided by the app's intent filter.
+- Documented in `API_V2.md` → "Outside the version: shared plan links"; tests in `join/tests.py`
+  (`SharedPlanLinkTests`, AASA paths).
+
+**iOS:**
+- Make share links as above (encode: compact JSON, base64url, strip `=`; ids only, no personal data; stay ≤ 1,500
+  characters, e.g. by sharing one day) and unit-test the codec against the known string (shared with Android).
+- `/p/*` arrives through the existing Universal Links handler (the `applinks:attnd.app` entitlement already covers the
+  domain; the AASA now lists the path): join the event if needed (code from the path), then show the read-only
+  "Shared plan" with "Use this plan" and "Merge with mine" (spec §7). Ids not in the bundle are skipped; a payload the
+  app can't read (`v` ≠ 1) just joins the event.
+- App Clip: a `/p/` link opens the clip like `/join/` (it joins the event; no share import, spec §8). The App Clip
+  card for `/p/` URLs only appears if App Store Connect's App Clip experiences cover that prefix (the default
+  experience covers the meta-tag banner on the page); add an advanced experience for `https://attnd.app/p/` if
+  scanning a share QR should show the card.
+- Log `share.created` / `share.opened` (LOG_EVENTS.md).
+
+**Android:**
+- Same codec and known string; `share_plan` / `share_item` through the system share sheet.
+- **App Links need the app's intent filter:** add `https://attnd.app/p/` (`android:pathPrefix="/p/"`) to the
+  `autoVerify="true"` intent filter that handles `/join/` in `AndroidManifest.xml` (assetlinks.json needs no change),
+  and route it in `MainActivity` / `domain/JoinLinks.kt`: join the event by its code, then show the shared plan.
+  Without the app, the link goes to Play with the event code as install referrer, so a first install joins the
+  event (the shared plan itself isn't carried through the referrer).
+- Log `share.created` / `share.opened` (LOG_EVENTS.md).
 
 ### API-014: anonymous performance metrics in usage
 **Why:** see how fast launches, bundle fetches, push refreshes, the planner and the map are in production, and how

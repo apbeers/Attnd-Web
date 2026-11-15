@@ -34,6 +34,10 @@ urlpatterns = [
     # Any other /api/vN/ path: 410 + update_required for retired versions, JSON 404 otherwise.
     re_path(r'^api/v(?P<version>\d+)/', retired_api_view),
     path('join/', include('join.urls')),
+    # Shared plan links (API-015), with or without the trailing slash (the apps write them without).
+    path('p/<str:event_code>/<str:payload>/qr.svg', join_views.shared_plan_qr, name='shared_plan_qr'),
+    path('p/<str:event_code>/<str:payload>/', join_views.SharedPlanRedirect.as_view(), name='shared_plan'),
+    path('p/<str:event_code>/<str:payload>', join_views.SharedPlanRedirect.as_view()),
     path('scrape/', include('scrape.urls')),
     path('accounts/login/', views_auth.SignInView.as_view(), name='login'),
     path('accounts/2fa/', views_auth.two_factor_verify, name='two_factor_verify'),
