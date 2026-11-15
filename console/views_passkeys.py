@@ -23,7 +23,7 @@ from django.views.decorators.http import require_POST
 
 from attnd.ratelimit import RateLimit, client_ip
 from console import passkeys, twofactor
-from console.views_auth import NEW_RECOVERY_CODES, PASSKEY_PROMPT, _next_url, _with_next
+from console.views_auth import PASSKEY_PROMPT, _next_url
 from console.webauthn import WebAuthnError
 
 logger = logging.getLogger(__name__)
@@ -128,11 +128,7 @@ def register_verify(request):
         return _error('That passkey couldn’t be added. Please try again.')
     twofactor.mark_verified(request)  # the account now has a second factor; this session has used it
     request.session.pop(PASSKEY_PROMPT, None)
-    codes = twofactor.first_recovery_codes(request.user)
     messages.success(request, f'Passkey “{passkey.name}” added. Next time, sign in with it: no password needed.')
-    if codes:
-        request.session[NEW_RECOVERY_CODES] = codes
-        return JsonResponse({'redirect': _with_next('two_factor_recovery_codes', next_url)})
     return JsonResponse({'redirect': next_url})
 
 

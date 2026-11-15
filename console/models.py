@@ -42,7 +42,7 @@ class SignInSecurity(models.Model):
     - `user_handle`: random 32 bytes (base64url) given to authenticators as WebAuthn user.id; a passkey
       sign-in finds the account by it. Not the database id or the email, which the authenticator would store.
     - `recovery_codes`: SHA-256 hex of each unused recovery code (they are random, so a plain hash is
-      enough). Made when the account's first second factor is turned on; they work with any of them.
+      enough). Optional, made from the Account page; they work with any second factor.
     - Emailed codes: only an HMAC (keyed with SECRET_KEY) of the current 6-digit code and its expiry;
       a new code replaces the old one, and a used code is cleared.
     """

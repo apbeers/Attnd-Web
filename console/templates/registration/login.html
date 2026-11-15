@@ -11,23 +11,29 @@
     <h1 class="auth-title">Sign in to Attnd</h1>
     {% if rate_limited %}<div class="notice notice--warning notice--compact" role="alert">{{ rate_limited }}</div>
     {% elif form.errors %}<div class="notice notice--error notice--compact">That email and password didn’t match.</div>{% endif %}
+    {# passkeys.js: autofill (conditional mediation) always; on a browser that used a passkey here before, #}
+    {# the passkey sheet opens on load (data-autoprompt, not after a failed password) and the password form folds away. #}
     <div data-passkey-signin data-passkey-scope data-options-url="{% url 'passkey_auth_options' %}"
-         data-verify-url="{% url 'passkey_auth' %}" data-next="{{ next }}">
+         data-verify-url="{% url 'passkey_auth' %}" data-next="{{ next }}"
+         {% if not form.errors and not rate_limited %}data-autoprompt{% endif %}>
       <div class="notice notice--error notice--compact" role="alert" data-passkey-error hidden></div>
       <div class="stack stack--tight" data-passkey-ui hidden>
-        <button type="button" class="button button--primary button--block" data-passkey-button>{% icon "key" %} Sign in with a passkey</button>
-        <p class="center small muted">or with your email and password</p>
+        <button type="button" class="button button--primary button--block" data-passkey-button>{% icon "key" %} <span data-passkey-button-label>Sign in with a passkey</span></button>
+        <p class="center small muted" data-passkey-or>or with your email and password</p>
       </div>
     </div>
-    <form method="post">{% csrf_token %}
-      <input type="hidden" name="next" value="{{ next }}">
-      <div class="field"><label class="field__label" for="id_username">Email</label>
-        <input type="text" name="username" id="id_username" autocomplete="username webauthn" autofocus required></div>
-      <div class="field"><label class="field__label" for="id_password">Password</label>
-        <input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
-      <p class="form-note small end"><a href="{% url 'password_reset' %}">Forgot your password?</a></p>
-      <button class="button button--outline button--block">Sign in</button>
-    </form>
+    <details class="password-signin" open data-password-details>
+      <summary hidden>Use a password instead</summary>
+      <form method="post" class="password-signin__form">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="field"><label class="field__label" for="id_username">Email</label>
+          <input type="text" name="username" id="id_username" autocomplete="username webauthn" autofocus required></div>
+        <div class="field"><label class="field__label" for="id_password">Password</label>
+          <input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
+        <p class="form-note small end"><a href="{% url 'password_reset' %}">Forgot your password?</a></p>
+        <button class="button button--outline button--block">Sign in</button>
+      </form>
+    </details>
     <p class="center small muted">New here? <a href="{% url 'console:signup' %}">Create an account</a></p>
   </div>
 </main>

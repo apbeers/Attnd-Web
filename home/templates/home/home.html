@@ -29,7 +29,7 @@
       <a href="#features">Features</a>
       <a href="#try-it">Try it free</a>
       <a href="#download">Download</a>
-      <a href="{% url 'login' %}">Sign in</a>
+      <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
       <a class="button button--primary button--small" href="{% url 'console:signup' %}">Create an event</a>
     </div>
     <details class="site-nav__menu">
@@ -38,7 +38,7 @@
         <a href="#features">Features</a>
         <a href="#try-it">Try it free</a>
         <a href="#download">Download</a>
-        <a href="{% url 'login' %}">Sign in</a>
+        <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
         <a href="{% url 'console:signup' %}">Create an event</a>
       </div>
     </details>
@@ -179,6 +179,9 @@
   </div>
 </footer>
 
+{# CSRF token for the passkey sign-in from the "Sign in" links (console/static/console/passkeys.js). #}
+<div hidden>{% csrf_token %}</div>
 <script src="{% static 'home/home.js' %}"></script>
+<script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ from django.urls import reverse
 
 from attnd.ratelimit import RateLimit, client_ip
 from console import totp, twofactor
-from console.models import TwoFactorDevice
+from console.models import SignInSecurity, TwoFactorDevice
 from events.models import Event
 
 NOW = 1_800_000_000.0  # fixed clock for TOTP tests
@@ -198,10 +198,11 @@ class TwoFactorTests(TestCase):
     def code(self, device, offset=0):
         return totp.totp(totp._key(device.secret), NOW + offset)
 
-    def enroll(self, user):
+    def enroll(self, user, with_codes=False):
+        """Turns on the authenticator app (no recovery codes: those are optional, made on the Account page)."""
         device = twofactor.start_setup(user)
-        codes = twofactor.confirm_setup(device, self.code(device, -30))  # leave the current step unused
-        return device, codes
+        self.assertTrue(twofactor.confirm_setup(device, self.code(device, -30)))  # leave the current step unused
+        return device, (twofactor.new_recovery_codes(user) if with_codes else [])
 
     def sign_in(self, email, password='pw'):
         return self.client.post(reverse('login'), {'username': email, 'password': password})
@@ -229,19 +230,36 @@ class TwoFactorTests(TestCase):
         device = TwoFactorDevice.objects.get(user=self.organizer)
         self.assertContains(page, device.secret[:4])
         self.assertContains(page, 'otpauth://totp/')
+        # One click opens the setup link in an installed authenticator (Apple Passwords, 1Password …).
+        self.assertContains(page, 'href="otpauth://totp/')
+        self.assertContains(page, 'Open in your authenticator app')
+        self.assertContains(page, 'inputmode="numeric"')
+        self.assertContains(page, 'autocomplete="one-time-code"')
+        self.assertNotContains(page, 'data-passkey-collapse')  # an organizer chose the app: shown directly
         self.assertFalse(device.confirmed)
         self.assertEqual(self.client.post(reverse('two_factor_setup'), {'code': '000000'}).status_code, 200)
         device.refresh_from_db()
         self.assertFalse(device.confirmed)
         response = self.client.post(reverse('two_factor_setup'), {'code': self.code(device), 'next': '/console/account/'})
+        self.assertRedirects(response, '/console/account/', fetch_redirect_response=False)
         device.refresh_from_db()
         self.assertTrue(device.confirmed)
+        # No recovery codes are pushed at setup; the Account page offers them calmly instead.
+        self.assertEqual(twofactor.recovery_codes_left(self.organizer), 0)
+        account = self.client.get(reverse('console:account'))
+        self.assertContains(account, 'Set up recovery codes')
+        self.assertNotContains(account, 'New recovery codes')
+        self.assertNotContains(account, 'Save these recovery codes now')
+        # Generating them needs a fresh code from the app.
+        response = self.client.post(reverse('console:account'), {'action': '2fa_codes', 'code': '000000'})
+        self.assertEqual(twofactor.recovery_codes_left(self.organizer), 0)
+        response = self.client.post(reverse('console:account'), {'action': '2fa_codes', 'code': self.code(device, 30)})
         codes = response.context['recovery_codes']
         self.assertEqual(len(codes), 10)
         for code in codes:
             self.assertContains(response, code)
-            self.assertNotIn(code, str(self.organizer.sign_in_security.recovery_codes))  # stored hashed only
-        self.assertEqual(self.client.get(reverse('console:account')).status_code, 200)
+            self.assertNotIn(code, str(SignInSecurity.objects.get(user=self.organizer).recovery_codes))  # hashed only
+        self.assertContains(self.client.get(reverse('console:account')), 'New recovery codes')
 
     def test_regular_user_can_turn_it_off_with_a_code(self):
         device, _ = self.enroll(self.organizer)
@@ -302,7 +320,7 @@ class TwoFactorTests(TestCase):
         self.assertEqual(other.get(self.admin_url).status_code, 302)
 
     def test_recovery_code_is_single_use(self):
-        device, codes = self.enroll(self.staff)
+        device, codes = self.enroll(self.staff, with_codes=True)
         self.sign_in('staff@example.com')
         response = self.client.post(reverse('two_factor_verify'), {'code': codes[0].upper().replace('-', ' ')})
         self.assertEqual(response.status_code, 302)
@@ -330,7 +348,7 @@ class TwoFactorTests(TestCase):
         self.assertTrue(TwoFactorDevice.objects.filter(pk=device.pk).exists())
 
     def test_new_recovery_codes_from_the_account_page(self):
-        device, old = self.enroll(self.organizer)
+        device, old = self.enroll(self.organizer, with_codes=True)
         self.client.force_login(self.organizer)
         self.client.post(reverse('two_factor_verify'), {'code': self.code(device)})
         response = self.client.post(reverse('console:account'), {'action': '2fa_codes', 'code': self.code(device, 30)})

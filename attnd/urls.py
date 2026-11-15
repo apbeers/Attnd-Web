@@ -42,7 +42,6 @@ urlpatterns = [
     path('accounts/login/', views_auth.SignInView.as_view(), name='login'),
     path('accounts/2fa/', views_auth.two_factor_verify, name='two_factor_verify'),
     path('accounts/2fa/setup/', views_auth.two_factor_setup, name='two_factor_setup'),
-    path('accounts/2fa/recovery-codes/', views_auth.recovery_codes, name='two_factor_recovery_codes'),
     path('accounts/passkeys/auth/options/', views_passkeys.auth_options, name='passkey_auth_options'),
     path('accounts/passkeys/auth/', views_passkeys.auth_verify, name='passkey_auth'),
     path('accounts/passkeys/register/options/', views_passkeys.register_options, name='passkey_register_options'),

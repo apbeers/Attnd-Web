@@ -430,6 +430,10 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 /* Two-factor sign-in */
 .two-factor-qr { max-width: 220px; margin: 0 auto var(--space-2); }
 .two-factor-qr svg { display: block; width: 100%; height: auto; }
+/* Folded alternatives: the password form when a passkey is the way in, the authenticator app under
+   "Other options". Shown open with no summary when the browser has no passkeys (passkeys.js). */
+.password-signin > summary, .setup-options > summary { text-align: center; font-size: var(--text-sm); color: var(--color-muted); padding: var(--space-2) 0; }
+.password-signin > summary:not([hidden]) ~ *, .setup-options > summary:not([hidden]) ~ * { margin-top: var(--space-3); }
 .recovery-codes { display: grid; grid-template-columns: repeat(2, max-content); gap: .25rem 2rem; padding: 0; list-style: none; font-family: var(--font-mono); }
 
 /* Diagnostics (staff, /console/diagnostics/): timeline lanes, entry list, network waterfall */
