@@ -335,9 +335,14 @@ Check it afterwards: `curl -s https://attnd.app/.well-known/assetlinks.json` sho
      A shortcut for the last two: in the Attnd-Android folder, run `./gradlew signingReport`. It prints the SHA-1 for the debug build, and for the release build when `signing.properties` is present.
 
      The debug SHA-1 is specific to each Mac. If you build on another computer, add that computer's debug SHA-1 as another `com.arcu.attnd.debug` row.
-   - **API restrictions → Restrict key → Maps SDK for Android**.
+   - **API restrictions → Restrict key**: Maps SDK for Android (`maps-android-backend`, `mapsandroid`), **Routes API** (`routes`: the map's walking routes) and the two services the key was already being used for, `firebaseinstallations` and `geocoding-backend` (Google refuses to drop a service with recent usage).
    - **Save**. It can take a few minutes to apply.
-4. Test: open the map in the next internal-testing build. A grey map with no streets means a fingerprint or package is wrong.
+   - ✅ Done Nov 15, 2026 (key "Android Map API Key" `af7cec96-…`, project `attnd-df28e`; Routes API enabled). The same change from the command line:
+     ```bash
+     gcloud services api-keys update af7cec96-8ebf-4b57-be9b-176e0efe7896 --project=attnd-df28e --api-target=service=maps-android-backend.googleapis.com --api-target=service=mapsandroid.googleapis.com --api-target=service=routes.googleapis.com --api-target=service=firebaseinstallations.googleapis.com --api-target=service=geocoding-backend.googleapis.com
+     ```
+     (`--api-target` replaces the whole list; the Android app restrictions stay as they are.)
+4. Test: open the map in the next internal-testing build. A grey map with no streets means a fingerprint or package is wrong. Tap a pin within 8 km: a solid route line means the Routes API works; a dashed straight line ("about 8 min walk") means the request was refused (check the key's API list).
 
 **4. ✅ Keystore backup (required).** The upload keystore secrets are already in GitHub and work: CI built a signed bundle. GitHub won't give them back, though, so keep your own copy. This command finds your `signing.properties` with Spotlight and copies one bundle to the clipboard: the passwords and alias, plus the keystore file as text. Paste it into a new secure note in your password manager:
 ```bash
@@ -595,9 +600,10 @@ The staff **Diagnostics** panel (`/console/diagnostics/`, API-013) symbolicates 
 posts the symbols back). The server needs a GitHub token that may only start that workflow.
 
 1. GitHub → **Settings → Developer settings → Fine-grained personal access tokens → Generate new token**:
-   name "Attnd symbolicate", expiry 1 year, **Repository access: Only select repositories → Attnd-iOS**,
-   **Permissions → Repository → Actions: Read and write** (nothing else; Metadata: read is added automatically).
-   Copy the token into the password manager.
+   name "Attnd symbolicate", expiry 1 year, **Repository access: Only select repositories → Attnd-iOS**.
+   Under **Permissions** (Repositories tab) press **+ Add permissions**, search **Actions**, tick it, close the menu,
+   then set its access to **Read and write**. Nothing else (Metadata: read appears by itself). **Generate token** and
+   copy it into the password manager.
 2. Set it on both apps (the second line is a production config change):
    ```bash
    heroku config:set -a attnd-dev GITHUB_SYMBOLICATE_TOKEN=github_pat_PASTE_HERE
