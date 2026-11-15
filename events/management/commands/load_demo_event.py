@@ -6,10 +6,10 @@
 
 It is happening right now (times are relative to when you run it), so every "now" feature shows.
 Running it again refreshes the same event (same id, so phones that joined it stay joined). It fills every feature:
-locations with categories and pins (and one without coordinates), a three-day schedule, sent and
+locations with categories, tags and pins (and one without coordinates), a three-day schedule, sent and
 scheduled notifications, a display config, a team and a pending invite, watched website pages, AI
 imports and updates (one applied, one waiting for review), history snapshots, joined devices and
-two days of anonymous 5-minute usage. Nothing here sends a real push: the fake devices have no push
+two days of anonymous 5-minute usage (hearts included). Nothing here sends a real push: the fake devices have no push
 tokens.
 """
 import math
@@ -52,6 +52,35 @@ LOCATIONS = [
     ('Rideshare Pickup', 'Parking', 'Uber / Lyft zone', 'Rideshare pickup and drop-off on Main St at 1st St.', (230, -160)),
     ('Overflow Parking', 'Parking', '$10 cash or card', 'Shuttles every 10 minutes to the main gate.', (-320, 260)),
 ]
+
+# Hand-written tags (API-010), from one small vocabulary like the AI import keeps. The live suites rely on them:
+# every schedule item and location has 2-6; music items all have "live music", chef demos "food" + "demo".
+LOCATION_TAGS = {
+    'Main Stage': ['live music', 'headliners', 'free'],
+    'Trinity Stage': ['live music', 'local bands', 'acoustic', 'free'],
+    'Panther Island Pavilion': ['live music', 'dj', 'late night'],
+    'Chef Demo Kitchen': ['food', 'cooking demo', 'free tastings'],
+    'Taco Row': ['food', 'tacos', 'vegetarian'],
+    'BBQ Pit Lane': ['food', 'bbq'],
+    'Sweet Spot': ['food', 'desserts', 'coffee'],
+    'Craft Beer Garden': ['drinks', 'beer', '21+'],
+    'Lemonade Stand': ['drinks', 'non-alcoholic', 'free water'],
+    'Makers Market': ['shopping', 'local makers', 'art'],
+    'Kids Zone': ['kid-friendly', 'family', 'games'],
+    'First Aid': ['services', 'medical', 'lost children'],
+    'Info Booth': ['services', 'maps', 'lost and found', 'phone charging'],
+    'Restrooms North': ['restrooms', 'accessible', 'baby changing'],
+    'Restrooms South': ['restrooms', 'handwashing'],
+    'Rideshare Pickup': ['transport', 'rideshare'],
+    'Overflow Parking': ['parking', 'shuttle'],
+    'Roaming Mariachi': ['live music', 'mariachi', 'free'],
+}
+ACT_GENRES = {
+    'The Prairie Lights': 'country', 'Ana Morales Trio': 'jazz', 'Cowtown Brass': 'brass band', 'DJ Lone Star': 'dj',
+    'Velvet Mesquite': 'blues', 'Sundown Choir': 'gospel', 'The Fort Worth Strings': 'classical', 'Kid Rodeo': 'rock',
+    'Neon Armadillo': 'rock', 'Juniper Lane': 'folk', 'Los Hermanos Flores': 'tejano', 'Big Sky Radio': 'country',
+}
+DEMO_TAGS = {'Brisket 101': 'bbq', 'Street tacos at home': 'tacos', 'Kolache masterclass': 'desserts'}
 
 ACTS = ['The Prairie Lights', 'Ana Morales Trio', 'Cowtown Brass', 'DJ Lone Star', 'Velvet Mesquite', 'Sundown Choir',
         'The Fort Worth Strings', 'Kid Rodeo', 'Neon Armadillo', 'Juniper Lane', 'Los Hermanos Flores', 'Big Sky Radio']
@@ -132,11 +161,13 @@ class Command(BaseCommand):
             lat, lng = _offset(n, e)
             out.append(Location.objects.create(
                 event=event, user=user, name=name, category=category, snippet=snippet, description=description,
-                latitude=lat, longitude=lng, sort_order=i, address='Panther Island, Fort Worth, TX'))
+                latitude=lat, longitude=lng, sort_order=i, address='Panther Island, Fort Worth, TX',
+                tags=LOCATION_TAGS[name]))
         # One without coordinates: shown in lists, never pinned on the map.
         out.append(Location.objects.create(
             event=event, user=user, name='Roaming Mariachi', category='Stage', sort_order=len(out),
-            snippet='Somewhere near you', description='A roaming mariachi band; follow the trumpets.'))
+            snippet='Somewhere near you', description='A roaming mariachi band; follow the trumpets.',
+            tags=LOCATION_TAGS['Roaming Mariachi']))
         return out
 
     def _schedule(self, event, user, locations, start, rng):
@@ -148,24 +179,26 @@ class Command(BaseCommand):
             items.append(ScheduledItem.objects.create(
                 event=event, user=user, location=None, name='Gates open' if day else 'Opening ceremony',
                 description='Welcome to the festival!', start_time=day_start, end_time=day_start + timedelta(minutes=30),
-                tags=['General']))
+                tags=['general', 'free']))
             for s, stage in enumerate(stages):
                 for slot in range(4):
                     t = day_start + timedelta(hours=2 + slot * 2 + s * 0.5)
                     act = ACTS[(day * 7 + s * 3 + slot) % len(ACTS)]
                     items.append(ScheduledItem.objects.create(
                         event=event, user=user, location=stage, name=act, description=f'{act} live on the {stage.name}.',
-                        start_time=t, end_time=t + timedelta(minutes=75), tags=['Music']))
+                        start_time=t, end_time=t + timedelta(minutes=75),
+                        tags=['live music', ACT_GENRES[act]]))
             for d, dish in enumerate(['Brisket 101', 'Street tacos at home', 'Kolache masterclass']):
                 t = day_start + timedelta(hours=3 + d * 3)
                 items.append(ScheduledItem.objects.create(
                     event=event, user=user, location=by_name['Chef Demo Kitchen'], name=dish,
                     description='Live demo with tastings.', start_time=t, end_time=t + timedelta(minutes=45),
-                    tags=['Food', 'Demo']))
+                    tags=['food', 'demo', DEMO_TAGS[dish]]))
             t = day_start + timedelta(hours=5)
             items.append(ScheduledItem.objects.create(
                 event=event, user=user, location=by_name['Kids Zone'], name='Face painting & games',
-                start_time=t, end_time=t + timedelta(hours=4), tags=['Family']))
+                start_time=t, end_time=t + timedelta(hours=4),
+                tags=['family', 'kid-friendly', 'free']))
         return items
 
     def _notifications(self, event, user, start, now):
@@ -177,8 +210,10 @@ class Command(BaseCommand):
             (now - timedelta(minutes=40), 'Set time change', 'Velvet Mesquite moves to 8:30 pm on the Main Stage.'),
         ]
         for when, title, body in sent:
+            # The set time change went out as an urgent announcement (API-011).
+            priority = Notification.PRIORITY_URGENT if title == 'Set time change' else Notification.PRIORITY_NORMAL
             out.append(Notification.objects.create(event=event, user=user, title=title, body=body, send_time=when,
-                                                   sent=True, sent_at=when, delivered_count=0))
+                                                   sent=True, sent_at=when, delivered_count=0, priority=priority))
         for minutes, title, body in [(90, 'Headliner soon', 'The Prairie Lights take the Main Stage in 30 minutes.'),
                                      (24 * 60, 'Day 2', 'Gates open at noon. Brisket 101 starts at 3 pm.')]:
             out.append(Notification.objects.create(event=event, user=user, title=title, body=body,
@@ -294,6 +329,15 @@ class Command(BaseCommand):
             for _ in range(int(activity / 5)):
                 add('schedule_item_view', t, 1, rng.choice(items).id)
             add('search', t, int(rng.random() * activity / 10))
+            # Hearts (API-009): popular stages and headliners collect most; a few are taken back.
+            for _ in range(int(rng.random() * activity / 8)):
+                add('location_heart', t, 1, rng.choice(weights).id)
+            for _ in range(int(rng.random() * activity / 6)):
+                add('schedule_item_heart', t, 1, rng.choice(items[:len(items) // 2] + items).id)
+            if rng.random() < 0.3:
+                add('location_unheart', t, 1, rng.choice(weights).id)
+            if rng.random() < 0.3:
+                add('schedule_item_unheart', t, 1, rng.choice(items).id)
             add('refresh', t, int(rng.random() * 2))
         for note in notifications:
             if note.sent and note.sent_at and note.sent_at <= now:

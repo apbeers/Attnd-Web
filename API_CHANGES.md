@@ -57,11 +57,106 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 | API-007 | Live updates via silent push to every device; slow safety poll; offline caching | additive (behaviour only, no shape change) | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev (f7c1d9c) | ✅ dev (c03cc2d) |
 | API-008 | CI keys: DEMO-only API access for live integration tests (`CI_API_KEYS`); `ci-` devices not counted | additive (server only, new key type) | ✅ dev · ✅ prod (Nov 15, 2026) | — (CI uses it: live tests) | — (CI uses it: live tests) |
+| API-009 | Anonymous heart counts: usage metrics `location_heart` / `location_unheart` / `schedule_item_heart` / `schedule_item_unheart`; net hearts in the console | additive (new usage names) | 🚧 dev (not pushed yet) | ⬜ | ⬜ |
+| API-010 | Tags: `Location.tags` in the bundle, all tags lower case; AI import/refresh tags everything; `backfill_tags`; DEMO tags | additive (new key; tag case normalised) | 🚧 dev (not pushed yet) | ⬜ | ⬜ |
+| API-011 | Urgent announcements: `Notification.priority`, `priority` in notification pushes, urgent = every device + time-sensitive/high priority; iOS Live Activity push via `POST devices/` `live_activity_token` | additive (new keys, new optional request field, new push variant) | 🚧 dev (not pushed yet) | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-011: urgent announcements and Live Activity push
+**Why:** organizers need one way to reach everyone at once for a cancellation, a weather hold or a safety notice, and
+iPhone attendees who follow the event on their Lock Screen (Live Activity, shared spec §8) should see it there.
+**Server (additive):**
+- `Notification.priority`: `normal` (default) or `urgent`. The console's "Send an update" form has an **Urgent**
+  checkbox with a warning (everyone in the event, right away, Lock Screen Live Activities); urgent ones are highlighted.
+- Bundle: every notification gains `"priority": "normal" | "urgent"`. Notification pushes gain `priority` (APNs top-level
+  key next to `aps`; FCM `data`), for normal ones too.
+- An urgent notification goes to **every** device in the event with a push token, whatever `subscribed` says:
+  - APNs alert, `aps.interruption-level: "time-sensitive"` (never `critical`), priority 10, `apns-collapse-id:
+    notification-<id>`, expires after 12 h.
+  - FCM **data-only**, Android priority `high`, TTL 12 h; `data` = `type: notification`, `event_id`, `notification_id`,
+    `priority: urgent`, `title`, `body` (no `notification` block, so the app chooses the channel).
+  - plus, for iOS, an ActivityKit push to every `live_activity_token` registered in the event: `apns-push-type:
+    liveactivity`, topic `<bundle id>.push-type.liveactivity`, priority 10, payload
+    `aps: {timestamp, event: "update", content-state: {"urgent": {id, title, body, sent_at}}, alert: {title, body, sound},
+    stale-date: sent + 12 h, relevance-score: 100}` (`sent_at` is an ISO 8601 string). APNs `410` / `BadDeviceToken` /
+    `Unregistered` clears that device's `live_activity_token`.
+- Limit: at most 3 urgent notifications per event per hour (`URGENT_MAX_PER_HOUR`). The console refuses a 4th "Send
+  now"; a scheduled one over the limit goes out as normal (and is stored as normal).
+- `POST devices/` (and `join/`) accept an optional `live_activity_token` (hex; `null` or `""` clears it; non-hex is
+  ignored; leaving it out keeps it). It is cleared when the device leaves or joins another event.
+- DEMO: the sent "Set time change" notification is `urgent`; the other three are `normal`.
+
+**iOS:**
+- Decode `Notification.priority` (default `normal`, unknown → normal). Highlight urgent updates in the Updates tab and
+  use them for the urgent block of the Live Activity (§8).
+- Push: an alert with `priority = "urgent"` (top-level key) is shown time-sensitive by iOS: add the **Time Sensitive
+  Notifications** capability (entitlement `com.apple.developer.usernotifications.time-sensitive`). Don't add Critical
+  Alerts. Tapping opens Updates at `notification_id`, as today; refresh the bundle.
+- Live Activity: start activities with `pushType: .token`; send each token from `pushTokenUpdates` (hex) with
+  `POST devices/` as `live_activity_token`; send `null` when the activity ends or the user turns "Follow on Lock Screen"
+  off. Not needed after leave/switch (the server clears it), but harmless.
+- `ContentState`: every property optional, so a push that carries **only** `urgent` decodes (the push replaces the whole
+  state). `urgent: {id: Int, title: String, body: String, sent_at: String}` — `sent_at` is ISO 8601 text, **not** `Date`
+  (ActivityKit's default decoder would read a `Date` as seconds since 2001). When the app next updates the activity
+  itself, keep `urgent` until it's dismissed or 12 h old, and refill the other fields. The alert lights up the screen /
+  expands the Dynamic Island; the push also sets `stale-date` = sent + 12 h, which the app's next update replaces.
+- The App Clip: decode `priority` only (no Live Activity, no token).
+
+**Android:**
+- Decode `Notification.priority` (default `normal`). Highlight urgent updates in the Updates tab.
+- FCM data `type=notification` with `priority=urgent`: data-only (title/body in `data`), high priority. Show it on a new
+  **urgent** notification channel (high importance) whenever `POST_NOTIFICATIONS` is granted, **even if the in-app
+  notification preference is off** (the organizer marked it urgent; the server sends it to every device with a token).
+  Tap → Updates at `notification_id`; refresh the bundle; switch the Live Update (§8) to urgent mode for up to 12 h or
+  until dismissed. Normal notifications are unchanged (they now carry `priority=normal` in `data`).
+- Never send `live_activity_token`.
+
+### API-010: tags for locations and schedule items
+**Why:** "Hearted" filters, the planner and search (shared spec §5–6) work on genre/category/audience tags
+("live music", "country", "bbq", "kid-friendly", "free"), so every location and schedule item needs a few consistent ones.
+**Server (additive, plus a case change):**
+- `Location.tags` (new, in the bundle's locations). Lockable like other fields: a person's edit is never overwritten by
+  the AI. The console editors show and edit tags (comma separated) and list them.
+- Tags are normalised everywhere (`events.models.normalize_tags`): lower case, trimmed, single-spaced, de-duplicated, at
+  most 8 of at most 32 characters. Schedule item tags already in the database were normalised by migration `0034`
+  (which bumped those events' `content_version`), so **`"Music"` is now `"music"`**.
+- AI import/refresh (`scrape/service.py`, strict structured output): a per-event `tag_vocabulary` and 2–6 tags per
+  location and item from it; refreshes are given the current vocabulary and tags to reuse; `scrape/tags.py` folds
+  spelling variants ("Kids friendly", "BBQs") onto the event's existing spelling. Tag changes count as minor.
+- `manage.py backfill_tags (<code|id> … | --all) [--dry-run]` tags existing events with the AI: only things with fewer
+  than 2 tags, keeping their tags first, never touching locked tags; one revision and one version bump per event; safe
+  to re-run.
+- DEMO (hand-written, counts unchanged): every location and item has 2–6 tags; music items `["live music", <genre>]` (36),
+  chef demos `["food", "demo", …]` (9), "Face painting & games" `["family", "kid-friendly", "free"]` (3), the general items
+  `["general", "free"]` (3); Main Stage `["live music", "headliners", "free"]`.
+
+**iOS / Android:**
+- Decode `Location.tags` (default `[]`) like `ScheduleItem.tags`. Treat tags as lower-case values: filter and search on
+  them as sent; capitalise only for display (e.g. "Live music").
+- Search already weighs tags 2 for schedule items: apply the same weight to location tags (update the shared search
+  spec cases if they assert on tags).
+- **Live tests (DEMO facts changed, update all three suites together):** `tags == ["General"]` → `["general", "free"]`;
+  `"Music" in tags` → `"live music" in tags` (still 36, all on the three stages); `Food`/`Demo` → `food`/`demo` (still 9,
+  all at Chef Demo Kitchen); Face painting `["Family"]` → contains `family` and `kid-friendly`. New facts: every location
+  and item has 2–6 lower-case tags; Main Stage's are `["live music", "headliners", "free"]`. The web suite
+  (`live_tests/`) is already updated; it and the app suites pass against a server only after DEMO is reloaded there.
+
+### API-009: anonymous heart counts
+**Why:** attendees heart locations and schedule items (shared spec §5); organizers want to see what people liked,
+without knowing who.
+**Server (additive):** `POST events/<id>/usage/` accepts `location_heart` / `location_unheart` (detail = location id) and
+`schedule_item_heart` / `schedule_item_unheart` (detail = schedule item id), validated like `location_view` (a heart
+without an id, or an id from another event, is dropped). CI keys keep discarding usage. Console: **Usage** shows hearts
+given/removed and the most hearted locations and items (net = hearts − unhearts over the event, never below 0); the
+Locations and Schedule lists show each one's net count; the event overview has a **Most hearted** list.
+**iOS / Android:** hearts are stored on the device per event (spec §5). Each time the attendee turns a heart on, record
+`location_heart` / `schedule_item_heart` with the id; each time they turn it off, the `…_unheart` metric. Use the existing
+usage reporter (same 5-minute buckets, flushes and retry rules, never a device id). Don't record anything when hearts are
+restored at launch, re-joined or cleared because the event was left.
 
 ### API-008: CI keys for live integration tests
 **Why:** the three repos run live integration tests against dev *and* production. Production will turn the static key off

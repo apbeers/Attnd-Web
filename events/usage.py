@@ -23,7 +23,14 @@ CLIENT_METRICS = {
     'notification_open': 'notification',  # a push was tapped; detail: notification id (optional)
     'search': None,                 # a search was run (never the search text)
     'refresh': None,                # pull to refresh
+    # Hearts (API-009): the attendee hearted / un-hearted something. Net hearts = hearts - unhearts.
+    'location_heart': 'location',        # detail: location id
+    'location_unheart': 'location',
+    'schedule_item_heart': 'item',       # detail: schedule item id
+    'schedule_item_unheart': 'item',
 }
+HEART_METRICS = {'location_heart': 'location_unheart', 'schedule_item_heart': 'schedule_item_unheart'}
+HEART_SET = set(HEART_METRICS) | set(HEART_METRICS.values())
 # Recorded by the server itself.
 SERVER_METRICS = {'join', 'leave', 'install'}
 
@@ -85,6 +92,8 @@ def ingest(event, platform, entries, now=None, save=True):
         elif kind == 'tab':
             if detail not in TABS:
                 continue
+        elif metric in HEART_SET and not detail:
+            continue  # a heart without the id of what was hearted means nothing
         elif detail:
             if not detail.isdigit():
                 continue

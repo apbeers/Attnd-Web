@@ -246,8 +246,9 @@ def event_overview(request, event):
         'android': devices.filter(platform='android').count(),
     }
     sources_form = SourcesForm(instance=event)
+    from console.usage import most_hearted
     return render(request, 'console/event_overview.html', _ctx(
-        event, 'overview', stats=stats, audience=audience, sources_form=sources_form,
+        event, 'overview', most_hearted=most_hearted(event), stats=stats, audience=audience, sources_form=sources_form,
         source_pages=list(event.source_pages.all()), can_manage=event.can_manage_team(request.user),
         refresh_form=RefreshForm(),
         recent_jobs=event.ingest_jobs.all()[:5],
@@ -375,7 +376,11 @@ def event_poster(request, event):
 
 @event_view
 def locations(request, event):
-    locs = event.location_set.annotate(n_items=Count('scheduleditem')).order_by('sort_order', 'name')
+    from console.usage import net_hearts
+    hearts = net_hearts(event)['location']
+    locs = list(event.location_set.annotate(n_items=Count('scheduleditem')).order_by('sort_order', 'name'))
+    for loc in locs:
+        loc.hearts = hearts.get(loc.pk, 0)
     return render(request, 'console/locations.html', _ctx(event, 'locations', locations=locs))
 
 
@@ -399,7 +404,8 @@ def location_edit(request, event, location_id=None):
         return redirect('console:locations', event_id=event.pk)
     items = loc.scheduleditem_set.order_by('start_time') if loc.pk else []
     return render(request, 'console/location_edit.html', _ctx(event, 'locations', form=form, location=loc,
-                                                               items=items, categories=categories))
+                                                               items=items, categories=categories,
+                                                               event_tags=_event_tags(event)))
 
 
 @event_view
@@ -442,8 +448,11 @@ def schedule(request, event):
     location_filter = request.GET.get('location')
     if location_filter:
         items = items.filter(location_id=location_filter)
+    from console.usage import net_hearts
+    hearts = net_hearts(event)['item']
     days = []
     for item in items:
+        item.hearts = hearts.get(item.pk, 0)
         day = timezone.localtime(item.start_time).date()
         if not days or days[-1][0] != day:
             days.append((day, []))
@@ -477,7 +486,13 @@ def item_edit(request, event, item_id=None):
                 url += f'?location={item.location_id}'
             return redirect(url)
         return redirect('console:schedule', event_id=event.pk)
-    return render(request, 'console/item_edit.html', _ctx(event, 'schedule', form=form, item=item))
+    return render(request, 'console/item_edit.html', _ctx(event, 'schedule', form=form, item=item,
+                                                           event_tags=_event_tags(event)))
+
+
+def _event_tags(event, limit=30):
+    from scrape.tags import event_vocabulary
+    return event_vocabulary(event)[:limit]
 
 
 @event_view
@@ -503,7 +518,7 @@ def item_action(request, event, item_id):
 
 @event_view
 def notifications(request, event):
-    form = NotificationForm(request.POST or None,
+    form = NotificationForm(request.POST or None, event=event,
                             initial={'send_time': next_send_slot(timezone.now() + timedelta(hours=1))})
     if request.method == 'POST' and form.is_valid():
         n = form.save(commit=False)
@@ -516,16 +531,20 @@ def notifications(request, event):
                 messages.warning(request, 'Saved, but the event is a draft — it will send once you publish.')
             else:
                 n = push.send_notification(n)
-                messages.success(request, f'Sent to {n.delivered_count} device(s). '
-                                          'It also appears in the app’s Updates tab.')
+                messages.success(request, f'Sent{" as urgent" if n.is_urgent else ""} to {n.delivered_count} '
+                                          'device(s). It also appears in the app’s Updates tab.')
         else:
             n.save()
             messages.success(request, 'Scheduled.')
         return redirect('console:notifications', event_id=event.pk)
     items = event.notification_set.order_by('-send_time')
-    reach = Device.objects.real().filter(event=event, subscribed=True).exclude(push_token='').count()
-    return render(request, 'console/notifications.html', _ctx(event, 'notifications', form=form,
-                                                               notifications=items, reach=reach))
+    devices = Device.objects.real().filter(event=event)
+    reach = devices.filter(subscribed=True).exclude(push_token='').count()
+    urgent_reach = devices.exclude(push_token='').count()
+    live_activities = devices.filter(platform='ios').exclude(live_activity_token='').count()
+    return render(request, 'console/notifications.html', _ctx(
+        event, 'notifications', form=form, notifications=items, reach=reach, urgent_reach=urgent_reach,
+        live_activities=live_activities, urgent_left=push.urgent_sends_left(event)))
 
 
 @event_view

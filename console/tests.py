@@ -177,7 +177,7 @@ class ConsoleTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         item = ScheduledItem.objects.get(name='Talk')
         self.assertEqual(item.start_time.astimezone(datetime.timezone.utc).hour, 23)  # 18:00 CDT
-        self.assertEqual(item.tags, ['Talks', 'Kids'])
+        self.assertEqual(item.tags, ['talks', 'kids'])  # API-010: normalised to lower case
 
     def test_publish_and_list(self):
         self.client.post(self.url('event_status'), {'action': 'publish'}, secure=True)

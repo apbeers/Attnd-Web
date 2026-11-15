@@ -87,12 +87,14 @@ class ApiContractTests(TestCase):
         loc = Location.objects.create(
             event=self.event, user=user, name='Stage', snippet='Main stage', description='Big',
             category='Stage', website='https://example.com', image_url='https://example.com/s.jpg',
-            address='2 Main St', latitude=32.751, longitude=-97.331)
+            address='2 Main St', latitude=32.751, longitude=-97.331, tags=['live music'])
         ScheduledItem.objects.create(
             event=self.event, user=user, location=loc, name='Band', description='Live',
             start_time=start, end_time=start + timedelta(hours=1), tags=['Music'])
         self.notification = Notification.objects.create(
             event=self.event, user=user, title='Hello', body='Doors open', send_time=start, sent=True, sent_at=start)
+        self.urgent = Notification.objects.create(
+            event=self.event, user=user, title='Cancelled', body='Rain', send_time=start, priority='urgent')
         Device.objects.create(id='contract-device', platform='ios', push_token='tok', subscribed=True,
                               event=self.event)
         self.client = Client()
@@ -124,19 +126,29 @@ class ApiContractTests(TestCase):
         }
         payloads = {}
 
-        def apns(tokens, payload, **kwargs):
-            payloads[f"apns:{payload['type']}"] = payload
+        # Keys: "<service>:<type>", plus ":urgent" for urgent announcements (API-011) and "apns:liveactivity"
+        # for the Live Activity update that goes with them.
+        def apns(tokens, payload, push_type='alert', **kwargs):
+            if push_type == 'liveactivity':
+                payloads['apns:liveactivity'] = payload
+            else:
+                urgent = ':urgent' if payload.get('priority') == 'urgent' else ''
+                payloads[f"apns:{payload['type']}{urgent}"] = payload
             return push.SendResult()
 
         def fcm(tokens, data, notification=None, **kwargs):
-            payloads[f"fcm:{data['type']}"] = {'data': data, 'notification': notification}
+            urgent = ':urgent' if data.get('priority') == 'urgent' else ''
+            payloads[f"fcm:{data['type']}{urgent}"] = {'data': data, 'notification': notification}
             return push.SendResult()
 
         Device.objects.create(id='contract-android', platform='android', push_token='tok2', subscribed=True,
                               event=self.event)
+        Device.objects.create(id='contract-ios', platform='ios', push_token='tok3', subscribed=True,
+                              event=self.event, live_activity_token='ab12')
         with patch('events.push.send_apns', side_effect=apns), patch('events.push.send_fcm', side_effect=fcm):
             Notification.objects.filter(pk=self.notification.pk).update(sent=False)
             push.send_notification(self.notification)
+            push.send_notification(self.urgent)
             push.notify_content_updated(self.event)
 
         resolver = get_resolver().url_patterns

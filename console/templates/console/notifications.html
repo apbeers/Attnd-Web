@@ -11,16 +11,24 @@
       {% include 'console/_field.html' with field=form.body %}
       <div class="choices choices--inline">{% for radio in form.when %}<label class="check" for="{{ radio.id_for_label }}">{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}</div>
       <div id="send-time">{% include 'console/_field.html' with field=form.send_time %}</div>
+      {% include 'console/_field.html' with field=form.urgent %}
+      <div class="notice notice--error small" id="urgent-warning" role="alert">
+        {% icon "warning" %} <strong>Urgent goes to everyone in the event, right away:</strong>
+        {{ urgent_reach }} device{{ urgent_reach|pluralize }}, including people who turned notifications off. It arrives
+        as a time-sensitive alert that can break through Focus, and appears on Lock Screen Live Activities
+        ({{ live_activities }} running). Use it only for cancellations, safety and big changes.
+        {{ urgent_left }} more urgent update{{ urgent_left|pluralize }} allowed this hour.
+      </div>
       <button class="button button--primary">{% icon "send" %} Send</button>
     </form>
   </div>
   <div class="split__main panel panel--flush">
     <ul class="list list--roomy">
     {% for n in notifications %}
-      <li class="stack stack--tight">
+      <li class="stack stack--tight{% if n.is_urgent %} is-urgent{% endif %}">
         <div>
         <div class="cluster">
-          <strong class="grow">{{ n.title }}</strong>
+          <strong class="grow">{% if n.is_urgent %}<span class="badge badge--danger">{% icon "warning" %} Urgent</span> {% endif %}{{ n.title }}</strong>
           {% if n.sent %}<span class="small muted">Sent {{ n.sent_at|default:n.send_time|date:"M j, g:i A" }} · {{ n.delivered_count }} delivered</span>
           {% else %}<span class="badge badge--info">Scheduled {{ n.send_time|date:"M j, g:i A" }}</span>{% endif %}
         </div>
@@ -43,5 +51,8 @@
 const toggle = () => { document.getElementById('send-time').style.display =
   document.querySelector('input[name=when]:checked')?.value === 'later' ? '' : 'none'; };
 document.querySelectorAll('input[name=when]').forEach(r => r.addEventListener('change', toggle)); toggle();
+const urgent = document.getElementById('id_urgent'), warning = document.getElementById('urgent-warning');
+const toggleUrgent = () => { warning.hidden = !urgent.checked; };
+urgent.addEventListener('change', toggleUrgent); toggleUrgent();
 </script>
 {% endblock %}

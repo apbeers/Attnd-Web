@@ -215,6 +215,8 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .list--roomy > li { padding-block: var(--space-4); }
 .list--inset > li { padding-inline: 0; }
 .list--boxed { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.list > li.is-urgent { background: var(--color-danger-soft); box-shadow: inset 3px 0 0 var(--color-danger); }
+.hearts { display: inline-flex; align-items: center; gap: var(--space-1); }
 .list__empty { padding: var(--space-7) 1.25rem !important; text-align: center; color: var(--color-muted); }
 
 /* Notices (messages): success, warning, error, info, neutral */

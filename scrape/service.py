@@ -43,9 +43,12 @@ _LOCATION = {
         "address": {"type": "string", "description": "Street address or empty string (max 512 chars)"},
         "latitude": _nullable("number", "Decimal latitude only if stated in the sources"),
         "longitude": _nullable("number", "Decimal longitude only if stated in the sources"),
+        "tags": {"type": "array", "items": {"type": "string"},
+                 "description": "2-6 short lower-case tags from tag_vocabulary: what it offers / its genre / "
+                                "audience, e.g. food, bbq, drinks, live music, kid-friendly, free, accessible"},
     },
     "required": ["existing_id", "name", "snippet", "description", "category", "website",
-                 "image_url", "address", "latitude", "longitude"],
+                 "image_url", "address", "latitude", "longitude", "tags"],
     "additionalProperties": False,
 }
 
@@ -58,7 +61,9 @@ _ITEM = {
         "start_time": _nullable("string", "Local wall-clock time, ISO 8601 without offset, e.g. 2026-07-04T18:00:00"),
         "end_time": _nullable("string", "Local wall-clock end time, ISO 8601 without offset"),
         "location_name": _nullable("string", "Exact name of the location (from locations[]) where it happens"),
-        "tags": {"type": "array", "items": {"type": "string"}, "description": "0-3 short tags, e.g. Music, Kids, Workshop"},
+        "tags": {"type": "array", "items": {"type": "string"},
+                 "description": "2-6 short lower-case tags from tag_vocabulary: genre / category / audience, "
+                                "e.g. live music, country, workshop, kid-friendly, free, food"},
     },
     "required": ["existing_id", "name", "description", "start_time", "end_time", "location_name", "tags"],
     "additionalProperties": False,
@@ -94,9 +99,13 @@ EVENT_SCHEMA = {
         "removed_item_ids": {"type": "array", "items": _REMOVAL,
                              "description": "CURRENT schedule items the sources say are gone or cancelled"},
         "notes": {"type": "string", "description": "Short notes for the organizer about anything ambiguous; empty if none"},
+        "tag_vocabulary": {"type": "array", "items": {"type": "string"},
+                           "description": "The event's small controlled tag vocabulary (about 8-30 lower-case tags). "
+                                          "Every tag on a location or schedule item comes from this list"},
     },
     "required": ["name", "description", "address", "latitude", "longitude", "timezone", "start_time",
-                 "end_time", "locations", "schedule", "removed_location_ids", "removed_item_ids", "notes"],
+                 "end_time", "locations", "schedule", "removed_location_ids", "removed_item_ids", "notes",
+                 "tag_vocabulary"],
     "additionalProperties": False,
 }
 
@@ -120,6 +129,20 @@ SYSTEM_PROMPT = textwrap.dedent("""
     - Put anything ambiguous or conflicting in notes, briefly.
 """).strip()
 
+TAG_RULES = textwrap.dedent("""
+    Tags (attendees filter and search by them):
+    - First choose a small controlled vocabulary for the whole event (tag_vocabulary): lower-case, 1-3 words,
+      singular unless the plural is the usual name ("live music", "country", "bbq", "tacos", "kid-friendly",
+      "free", "food", "drinks", "workshop", "21+", "accessible").
+    - Give every location and schedule item 2-6 tags from that vocabulary: genre, category, audience, cost.
+      The same concept always gets the same tag. Tags may be inferred from names and descriptions (a
+      "Brisket 101" demo is "bbq"), but never claim facts the sources contradict (only "free" when it is).
+    - Don't repeat the event's name, a location's own name or its category word for word as a tag unless it
+      helps filtering (a "Food" category location can still be tagged "food").
+""").strip()
+
+SYSTEM_PROMPT += "\n\n" + TAG_RULES
+
 REFRESH_RULES = textwrap.dedent("""
     You are REFRESHING an event that already exists. CURRENT DATA (JSON) is provided below.
     - For every location / schedule item you output that corresponds to a CURRENT one, set existing_id
@@ -128,6 +151,8 @@ REFRESH_RULES = textwrap.dedent("""
     - You may omit CURRENT items the sources do not mention; omission means "no change", NOT removal.
     - Only list ids in removed_location_ids / removed_item_ids when the sources clearly show the thing was
       cancelled or removed. Give the evidence as the reason.
+    - Reuse CURRENT DATA's tag_vocabulary and each thing's current tags unless the sources say otherwise;
+      add a new tag only for a concept the vocabulary lacks.
 """).strip()
 
 _HEADERS = {
@@ -318,6 +343,8 @@ def _extract(content: str, current: dict | None = None, attachments: list | None
     if not isinstance(data, dict) or not data.get("name"):
         raise ValueError("The AI could not find an event in those sources.")
     data = _normalize(data)
+    from scrape.tags import canonicalize_extraction
+    canonicalize_extraction(data, seed=(current or {}).get("tag_vocabulary") or [])
     logger.info("Extracted event %r: %d locations, %d schedule items",
                 data.get("name"), len(data["locations"]), len(data["schedule"]))
     return data
@@ -333,14 +360,18 @@ def _normalize(data: dict) -> dict:
         if not isinstance(data.get(key), list):
             data[key] = []
     data.setdefault("notes", "")
+    if not isinstance(data.get("tag_vocabulary"), list):
+        data["tag_vocabulary"] = []
     # Treat (0, 0) as unknown
     if not data["latitude"] and not data["longitude"]:
         data["latitude"] = data["longitude"] = None
     for loc in data["locations"]:
         for key, default in (("existing_id", None), ("snippet", ""), ("description", ""),
                              ("category", None), ("website", None), ("image_url", None),
-                             ("address", ""), ("latitude", None), ("longitude", None)):
+                             ("address", ""), ("latitude", None), ("longitude", None), ("tags", [])):
             loc.setdefault(key, default)
+        if not isinstance(loc["tags"], list):
+            loc["tags"] = []
         if not loc["latitude"] and not loc["longitude"]:
             loc["latitude"] = loc["longitude"] = None
         # Legacy shape: items nested under locations
@@ -353,6 +384,8 @@ def _normalize(data: dict) -> dict:
             item.setdefault(key, default)
         if item["start_time"] == "":
             item["start_time"] = None
+        if not isinstance(item["tags"], list):
+            item["tags"] = []
     return data
 
 
@@ -574,3 +607,71 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
         data = _enrich_with_places(data, google_api_key)
     data["source_pages"] = pages
     return data
+
+
+# ---------------------------------------------------------------------------
+# Tags for existing content (API-010 backfill; no crawling)
+# ---------------------------------------------------------------------------
+
+_TAGGED = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["location", "item"]},
+        "id": {"type": "integer"},
+        "tags": {"type": "array", "items": {"type": "string"}, "description": "2-6 tags from tag_vocabulary"},
+    },
+    "required": ["kind", "id", "tags"],
+    "additionalProperties": False,
+}
+
+TAGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "tag_vocabulary": EVENT_SCHEMA["properties"]["tag_vocabulary"],
+        "tagged": {"type": "array", "items": _TAGGED, "description": "One entry per location and schedule item given"},
+    },
+    "required": ["tag_vocabulary", "tagged"],
+    "additionalProperties": False,
+}
+
+TAGS_PROMPT = textwrap.dedent("""
+    You tag the locations and schedule items of an event in Attnd, an app attendees use at live events.
+    You get the event (name, description), its existing tag vocabulary, and the things to tag (kind + id,
+    name, category, description, location). Return tags for every one of them, by kind and id.
+""").strip() + "\n\n" + TAG_RULES + "\n- Reuse the existing vocabulary wherever it fits."
+
+
+def suggest_tags(event_info: dict, entries: list[dict], vocabulary: list[str]) -> dict:
+    """Ask the AI for tags. ``entries``: [{"kind": "location"|"item", "id", "name", ...}].
+
+    Returns {"tag_vocabulary": [...], "tags": {("location"|"item", id): [tags]}} for the ids that were asked
+    about (anything else the model returns is ignored). Raises ValueError on an unusable response."""
+    from django.conf import settings
+
+    model = getattr(settings, "OPENAI_MODEL", "gpt-5-mini")
+    payload = {"event": event_info, "tag_vocabulary": vocabulary, "things_to_tag": entries}
+    response = OpenAI().chat.completions.create(
+        model=model,
+        response_format={"type": "json_schema",
+                         "json_schema": {"name": "event_tags", "strict": True, "schema": TAGS_SCHEMA}},
+        messages=[{"role": "system", "content": TAGS_PROMPT},
+                  {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+        **_model_kwargs(model),
+    )
+    raw = response.choices[0].message.content or ""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"The AI returned an unreadable response: {raw[:200]}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("The AI returned no tags.")
+    wanted = {(e["kind"], e["id"]) for e in entries}
+    tags = {}
+    for row in data.get("tagged") or []:
+        if not isinstance(row, dict):
+            continue
+        key = (row.get("kind"), row.get("id"))
+        if key in wanted and isinstance(row.get("tags"), list):
+            tags[key] = row["tags"]
+    vocab = data.get("tag_vocabulary") if isinstance(data.get("tag_vocabulary"), list) else []
+    return {"tag_vocabulary": vocab, "tags": tags}

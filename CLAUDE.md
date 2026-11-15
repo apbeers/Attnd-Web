@@ -89,6 +89,7 @@ public/         # Files served at root by Whitenoise (robots.txt, etc.)
 - **Live editing:** every attendee-visible change bumps `content_version` and schedules a debounced silent push (`events.push.content_changed`); it goes to every joined device with a push token, `subscribed` or not (API-007). Open apps refresh on that push, on resume and pull-to-refresh, and poll every 60 s only without a push token (5 min safety poll with one). App layout autosaves. The "Live on your phone" panel (QR) replaces the old phone mock-up (`_phone_preview.html` is unused for now).
 - **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs`, `data-table`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
 - **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. Web app manifest at `/console/manifest.webmanifest`.
+- **Hearts** (API-009): net hearts (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted`: Usage page, counts on the Locations and Schedule lists, "Most hearted" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
 - **Google Maps** (`console/static/console/maps.js`) when `GOOGLE_MAPS_BROWSER_KEY` is set: Places autocomplete on addresses, draggable pin map; otherwise the OpenStreetMap picker.
 - **Brand colour** purple `#431f86` (from the app icon) across console, site and apps.
@@ -116,10 +117,10 @@ People only ever see and sign in with their **email** (`console.auth_backends.Em
 | Model | Key fields |
 |-------|------------|
 | `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, content_version, source_urls, refresh_schedule (off/watch), update_mode, sources_checked_at, locked_fields; `user` = owner, null = unassigned (owner deleted; admins reassign from Team) |
-| `Location` | name, snippet, description, category, sort_order, hidden, image/image_url, lat/lng (nullable), address, locked_fields — FK to Event |
+| `Location` | name, snippet, description, category, tags, sort_order, hidden, image/image_url, lat/lng (nullable), address, locked_fields — FK to Event |
 | `ScheduledItem` | name, description, start/end_time, tags, hidden, locked_fields — FK to Event, optional FK to Location |
-| `Notification` | title, body, send_time, sent, sent_at, delivered/failed counts — FK to Event |
-| `Device` | id (UUID string PK), platform (ios/android), subscribed, push_token, app_version, last_seen, event FK |
+| `Notification` | title, body, send_time, priority (normal/urgent, API-011), sent, sent_at, delivered/failed counts — FK to Event |
+| `Device` | id (UUID string PK), platform (ios/android), subscribed, push_token, live_activity_token (iOS, API-011; cleared on leave/switch), app_version, last_seen, event FK |
 | `EventMember` / `EventInvite` | team: admin or contributor; pending invites by email |
 | `scrape.SourcePage` | a watched page: etag/last-modified, content hash, pending hash |
 | `EventRevision` | full content snapshot for rollback |
@@ -130,6 +131,7 @@ People only ever see and sign in with their **email** (`console.auth_backends.Em
 - `public` = listed in nearby search. Unclaimed homepage trial events are published but unlisted, reachable by code/QR.
 - Coordinates are nullable; `null` means unknown (never `0,0`).
 - Times are stored in UTC; `Event.timezone` is the IANA zone used for entry and display.
+- **Tags** (API-010) on locations and schedule items are always normalised by `events.models.normalize_tags` (lower case, ≤ 8 × 32 chars; `save()` and the bundle apply it). The AI keeps one small vocabulary per event (`scrape/tags.py` folds spelling variants); `manage.py backfill_tags` tags old events (only things with < 2 tags, never locked ones).
 
 ## API Authentication
 
@@ -200,7 +202,7 @@ uv run python manage.py runserver
 
 - **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
 - **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, expires unclaimed trial events.
-- **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged.
+- **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged. Urgent notifications (API-011) go to every device with a token (time-sensitive APNs alert, high-priority FCM data message) plus an APNs `liveactivity` update to every `Device.live_activity_token` in the event; at most `URGENT_MAX_PER_HOUR` (3) per event, beyond that they go out as normal.
 
 ## Running Tests
 
@@ -209,7 +211,7 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py`, `events/tests_ci_keys.py` (API-008), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy) and `events/tests_integration.py`.
+Tests live in `<app>/tests.py`, `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy) and `events/tests_integration.py`.
 
 Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (no `staticfiles/` needed), `django.request` logs only errors (tests hit 4xx on purpose), and a 32+ byte test JWT secret. CI also runs `manage.py check` with `-W error::DeprecationWarning`; run the whole suite that way when upgrading Django/Python.
 

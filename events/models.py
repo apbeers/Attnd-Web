@@ -30,6 +30,30 @@ class CoordinatesMixin:
         super().save(*args, **kwargs)
 
 
+# Tags (API-010): short lowercase labels on locations and schedule items ("live music", "bbq", "kid-friendly").
+MAX_TAGS = 8
+MAX_TAG_LENGTH = 32
+
+
+def normalize_tags(values):
+    """Lower-case, trimmed, single-spaced, de-duplicated tags (order kept), at most MAX_TAGS of MAX_TAG_LENGTH.
+
+    Accepts a list or a comma-separated string. Anything that isn't text is dropped, so a bad value never
+    breaks a save or the bundle."""
+    if isinstance(values, str):
+        values = values.split(',')
+    if not isinstance(values, (list, tuple)):
+        return []
+    out = []
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        tag = ' '.join(value.replace('#', ' ').split()).lower().strip(' .,;:')[:MAX_TAG_LENGTH].strip()
+        if tag and tag not in out:
+            out.append(tag)
+    return out[:MAX_TAGS]
+
+
 def generate_event_code(length: int = 8) -> str:
     """Return a random uppercase alphanumeric code that doesn't already exist."""
     alphabet = string.ascii_uppercase + string.digits
@@ -179,6 +203,7 @@ class Location(CoordinatesMixin, models.Model):
     address = models.CharField(max_length=512, blank=True)
     category = models.CharField(max_length=64, blank=True,
                                 help_text='e.g. Stage, Food, Vendor, Restroom')
+    tags = models.JSONField(default=list, blank=True)  # API-010, normalize_tags
     sort_order = models.IntegerField(default=0)
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
@@ -186,13 +211,17 @@ class Location(CoordinatesMixin, models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
     CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url',
-                      'address', 'latitude', 'longitude', 'category']
+                      'address', 'latitude', 'longitude', 'category', 'tags']
 
     class Meta:
         indexes = [
             models.Index(fields=['event', 'user'])
         ]
         ordering = ['sort_order', 'name']
+
+    def save(self, *args, **kwargs):
+        self.tags = normalize_tags(self.tags)
+        super().save(*args, **kwargs)
 
     @property
     def has_coordinates(self):
@@ -225,6 +254,10 @@ class ScheduledItem(models.Model):
 
     CONTENT_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags']
 
+    def save(self, *args, **kwargs):
+        self.tags = normalize_tags(self.tags)
+        super().save(*args, **kwargs)
+
     class Meta:
         indexes = [
             models.Index(fields=['event', 'start_time']),
@@ -256,6 +289,10 @@ def is_send_slot(value):
 
 
 class Notification(models.Model):
+    PRIORITY_NORMAL = 'normal'
+    PRIORITY_URGENT = 'urgent'  # API-011: to every device in the event, right away, and on Live Activities
+    PRIORITY_CHOICES = [(PRIORITY_NORMAL, 'Normal'), (PRIORITY_URGENT, 'Urgent')]
+
     title = models.CharField(max_length=60)
     body = models.CharField(max_length=256)
     send_time = models.DateTimeField()
@@ -263,6 +300,7 @@ class Notification(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True)
     delivered_count = models.PositiveIntegerField(default=0)
     failed_count = models.PositiveIntegerField(default=0)
+    priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default=PRIORITY_NORMAL)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
@@ -270,6 +308,10 @@ class Notification(models.Model):
         indexes = [
             models.Index(fields=['event', 'user'])
         ]
+
+    @property
+    def is_urgent(self):
+        return self.priority == self.PRIORITY_URGENT
 
     def clean(self):
         # "Send now" sends immediately and skips this; only scheduled sends are restricted.
@@ -306,6 +348,9 @@ class Device(models.Model):
     subscribed = models.BooleanField(default=True)
     platform = models.CharField(max_length=12)
     push_token = models.CharField(max_length=512, blank=True)
+    # API-011: ActivityKit push token (hex) of the iOS Live Activity for the joined event. Cleared on leave, on
+    # joining another event and when APNs reports it invalid.
+    live_activity_token = models.CharField(max_length=512, blank=True)
     app_version = models.CharField(max_length=32, blank=True)
     last_seen = models.DateTimeField(null=True, blank=True)
     # Newest API version this device has called (1 = legacy app builds). Used to decide when an old

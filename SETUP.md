@@ -23,6 +23,10 @@ Do these steps once, in order. Each step says which values go where. For any sin
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
 - [x] Protect `main` in all three repos: ruleset "Protect main" blocks force-push and deletion (Nov 14, 2026). Add "require status checks" once releases go through pull requests.
 - [ ] Step 13: CI keys for the live integration tests (`CI_API_KEYS` on attnd-web, `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web).
+- [ ] API-010/011 data (after the server reaches each app): reload DEMO so it has the new tags and the urgent
+      "Set time change" (`heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com`, then the
+      same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
+      the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
@@ -169,6 +173,11 @@ gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
    ```
    - The team ID and bundle ID default to `APPLE_TEAM_ID` and `APPLE_APP_BUNDLE_ID`.
    - TestFlight and App Store builds use the production push servers. Only builds run directly from Xcode need `APNS_USE_SANDBOX=1`.
+   - The same key sends Live Activity updates for urgent announcements (API-011): topic `<bundle id>.push-type.liveactivity`,
+     which a **Team Scoped (All Topics)** key already covers. Nothing to configure on the server.
+4. For urgent announcements (API-011) the iOS app needs the **Time Sensitive Notifications** capability (Xcode → Signing &
+   Capabilities; automatic signing adds it to the App ID). Without it urgent alerts still arrive, as normal alerts.
+   Don't request **Critical Alerts**: that entitlement needs Apple's approval and Attnd doesn't use it.
 
 ### 3b. App Store Connect API key (signing and uploads from CI)
 1. Go to [App Store Connect](https://appstoreconnect.apple.com) → Users and Access → **Integrations** → App Store Connect API → **Team Keys → +**.
@@ -458,6 +467,12 @@ Optional: a Map ID (Google Cloud console → Map Management) in `GOOGLE_MAPS_MAP
 A fully populated event that is happening now, with usage history, AI updates and a team. Load or refresh it (same code, same id, so phones stay joined):
 ```bash
 heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com
+```
+Its tags (API-010) are hand-written; other events get theirs from the AI import. To tag events made before API-010
+(safe to re-run; skips anything with 2+ tags and anything whose tags were edited by hand):
+```bash
+heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run
+heroku run -a attnd-dev python manage.py backfill_tags --all
 ```
 
 ## 10. Join links and the App Clip card

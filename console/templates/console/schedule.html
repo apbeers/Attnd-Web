@@ -25,6 +25,7 @@
         {% if it.locked_fields %}{% icon "lock" "lock small" %}{% endif %}
         <div class="small muted">{{ it.location.name|default:"No specific location" }}</div>
       </div>
+      {% if it.hearts %}<span class="small nowrap hearts" title="Net hearts from attendees">{% icon "heart" "tone-danger" %} {{ it.hearts }}</span>{% endif %}
     </li>
   {% endfor %}
   </ul></div>

@@ -92,6 +92,17 @@ never need `POST_NOTIFICATIONS`. Send `"push_token": ""` only to clear a token y
 ```
 → `{ "status": "ok", "subscribed": true, "event_id": 1 }`. `event_id` is `null` if the device hasn't joined an event.
 
+**`live_activity_token` (API-011, iOS, optional):** the ActivityKit push token (`Activity.pushTokenUpdates`, as hex) of
+the Live Activity the app is running for the joined event.
+```json
+{ "device_id": "uuid", "live_activity_token": "80f3a1…" }
+```
+- Send it whenever ActivityKit hands the app a new token; send `"live_activity_token": null` (or `""`) when the activity
+  ends. Leaving the key out leaves the stored token unchanged. A value that isn't hex is ignored (no error).
+- The server clears it by itself when the device leaves the event or joins another one (`join/` may carry the new
+  token in the same body), and when APNs reports it invalid (`410`, `BadDeviceToken`).
+- It is only used for urgent announcements (see Push notifications). Android never sends it.
+
 ---
 
 ### `POST events/<id>/usage/` (API-005)
@@ -112,6 +123,13 @@ Anonymous usage counts. **Never send a device ID or anything identifying**; the 
 | `notification_open` | notification id when known. A push notification was tapped. |
 | `search` | none. A search was run. **Never send the search text.** |
 | `refresh` | none. Pull to refresh. |
+| `location_heart` / `location_unheart` (API-009) | location id (required). The attendee hearted / removed the heart from a location. |
+| `schedule_item_heart` / `schedule_item_unheart` (API-009) | schedule item id (required). The same for a schedule item. |
+
+- **Hearts (API-009):** send one `…_heart` each time the attendee turns a heart on and one `…_unheart` each time they
+  turn it off, through the same reporter, buckets and rules as every other count (no device id, ever). Don't re-send
+  hearts that are restored from storage at launch. The console shows **net** hearts per item (hearts − unhearts over
+  the event, never below 0). A heart without an id, or with an id from another event, is dropped.
 
 - `count` is optional (default 1). `at` is optional ISO 8601, used to place the count in its UTC 5-minute window (within the last 7 days). Up to 200 entries per request.
 - Unknown names, invalid details and ids from other events are dropped silently. A malformed body still returns `200`.
@@ -157,8 +175,10 @@ Call it on launch and whenever the app returns to the foreground.
 ```json
 { "id": 5, "name": "…", "snippet": "…", "description": "…", "category": "Food" | null,
   "website": "https://…" | null, "image_url": "https://…" | null, "address": "…",
-  "latitude": 32.74 | null, "longitude": -97.36 | null, "sort_order": 0 }
+  "latitude": 32.74 | null, "longitude": -97.36 | null, "sort_order": 0,
+  "tags": ["food", "bbq", "kid-friendly"] }
 ```
+- `tags` (API-010): see Tags below. Missing in responses from servers before API-010: default `[]`.
 
 ### ScheduleItem
 ```json
@@ -167,10 +187,22 @@ Call it on launch and whenever the app returns to the foreground.
 ```
 An item may have no location. Show it under "General" or "No location".
 
+### Tags (API-010)
+`Location.tags` and `ScheduleItem.tags` are lists of short labels for filtering and search: genre, category, audience,
+cost (`"live music"`, `"country"`, `"bbq"`, `"food"`, `"drinks"`, `"workshop"`, `"kid-friendly"`, `"free"`, `"21+"`).
+- Always **lower case**, trimmed, single-spaced, no duplicates, at most 8 tags of at most 32 characters. Since API-010
+  schedule item tags are normalised the same way (an item tagged `"Music"` is now `"music"`); compare them as given.
+  Capitalise for display if you like (`"Live music"`), but filter and search on the value as sent.
+- The AI import gives every location and item 2–6 tags from one small vocabulary per event, so the same concept has the
+  same tag across the event. Organizers can edit them; their edits win over later AI updates. An event may still have
+  things with no tags (`[]`).
+
 ### Notification
 ```json
-{ "id": 1, "title": "…", "body": "…", "send_time": "…" }
+{ "id": 1, "title": "…", "body": "…", "send_time": "…", "priority": "normal" | "urgent" }
 ```
+- `priority` (API-011): `urgent` is an organizer announcement such as a cancellation or a safety notice. Highlight it in
+  the Updates list. Any other or missing value means `normal`.
 
 ### Display
 This object holds the organizer's layout choices, already resolved by the server for this event's size. Clients render from it; they don't recompute it.
@@ -209,14 +241,45 @@ Client defaults when `display` or a key is missing:
 
 The server sends pushes through APNs (iOS) and FCM HTTP v1 (Android) to devices that joined the event and have a `push_token`:
 - **Organizer notifications** (visible) only to devices with `subscribed == true`.
+- **Urgent organizer notifications** (API-011) to **every** such device, `subscribed` or not, at high priority, plus
+  every iOS Live Activity registered with `live_activity_token`.
 - **Content updated** (silent) to **every** such device, `subscribed` or not (API-007).
 
 ### Payloads
 - **Organizer notification:**
   - Visible alert with `title` and `body`.
-  - Custom data: `type = "notification"`, `event_id`, `notification_id`.
+  - Custom data: `type = "notification"`, `event_id`, `notification_id`, `priority` (`"normal"` or `"urgent"`, API-011;
+    missing means normal).
   - iOS: the custom keys are top-level in the APNs payload, next to `aps`.
   - Android: they're in the FCM `data` map, as strings.
+- **Urgent organizer notification (API-011):** the same `type = "notification"` push with `priority = "urgent"`, sent the
+  moment it goes out to every device in the event with a token (`subscribed` ignored), and kept for 12 hours at most.
+  An event can send at most 3 urgent notifications an hour; beyond that they go out as normal ones.
+  - iOS: alert push with `aps.interruption-level = "time-sensitive"` (never `critical`), `apns-priority: 10`,
+    `apns-collapse-id: notification-<id>`. Time-sensitive delivery needs the app's **Time Sensitive Notifications**
+    capability (`com.apple.developer.usernotifications.time-sensitive` entitlement); without it iOS shows it as a normal
+    alert. Devices that haven't allowed alerts don't show it.
+  - Android: **data-only** message (no `notification` block), Android priority `high`, TTL 12 h. `data` has `type`,
+    `event_id`, `notification_id`, `priority = "urgent"`, `title`, `body`. Show it on an urgent channel, whatever the
+    in-app notification preference, when `POST_NOTIFICATIONS` is granted. (Builds before API-011 show it from
+    `data.title` / `data.body` like any notification.)
+  - Both: tapping opens the Updates tab at that notification; refresh the bundle (it's in `notifications` with
+    `priority: "urgent"`).
+- **Live Activity update (API-011, iOS):** for an urgent notification, also an ActivityKit push to each registered
+  `live_activity_token` of the event: `apns-push-type: liveactivity`, `apns-topic: <bundle id>.push-type.liveactivity`,
+  `apns-priority: 10`, token-based auth.
+  ```json
+  {"aps": {"timestamp": 1794760800, "event": "update",
+           "content-state": {"urgent": {"id": 9, "title": "Main Stage closed", "body": "Storm on the way…",
+                                        "sent_at": "2026-11-15T16:40:00+00:00"}},
+           "alert": {"title": "Main Stage closed", "body": "Storm on the way…", "sound": "default"},
+           "stale-date": 1794804000, "relevance-score": 100}}
+  ```
+  - `content-state` **replaces** the activity's whole content state and is decoded by ActivityKit with a default
+    `JSONDecoder`: every field of the app's `ContentState` must be optional, and `urgent.sent_at` is an ISO 8601
+    **string** (declare it as `String`, not `Date`). The app's own fields arrive absent; fill them in again on the next
+    local update.
+  - `timestamp` and `stale-date` are UNIX seconds; `stale-date` = sent + 12 h.
 - **Content updated:**
   - Silent push, sent about 3 s after any attendee-visible change (at most once every 15 s per event).
   - Custom data: `type = "content_updated"`, `event_id`, `content_version` (on Android all strings, as for every data value).

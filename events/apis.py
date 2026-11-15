@@ -398,9 +398,25 @@ class AllNotificationsView(ApiKeyRequired, View):
 # Device / membership endpoints
 # ---------------------------------------------------------------------------
 
+def clean_live_activity_token(value):
+    """API-011: an ActivityKit push token as lower-case hex, '' to clear (null or ""), or None to ignore
+    the value (missing or not hex: lenient, never an error)."""
+    if value is None:
+        return ''
+    if not isinstance(value, str):
+        return None
+    token = value.strip().lower()
+    if token == '':
+        return ''
+    if len(token) > 512 or any(c not in '0123456789abcdef' for c in token):
+        return None
+    return token
+
+
 def register_device(device_id, event=..., platform='', push_token=None, app_version=None,
-                    subscribed=None, api_version=None, **_ignored):
-    """Create or update a device. ``event=...`` leaves the joined event unchanged."""
+                    subscribed=None, api_version=None, live_activity_token=..., **_ignored):
+    """Create or update a device. ``event=...`` leaves the joined event unchanged; so does a missing
+    ``live_activity_token`` (``None``/``""`` clear it)."""
     device_id = str(device_id)[:128]
     device, created = Device.objects.get_or_create(id=device_id, defaults={'platform': platform or ''})
     now = timezone.now()
@@ -409,6 +425,8 @@ def register_device(device_id, event=..., platform='', push_token=None, app_vers
         if event is not None and device.event_id != event.id:
             device.joined_at = now
             newly_joined = event
+        if device.event_id != (event.id if event is not None else None):
+            device.live_activity_token = ''  # it belonged to the Live Activity of the previous event
         device.event = event
     if platform in ('ios', 'android'):
         device.platform = platform
@@ -420,6 +438,10 @@ def register_device(device_id, event=..., platform='', push_token=None, app_vers
         device.subscribed = subscribed
     if api_version:
         device.api_version = api_version
+    if live_activity_token is not ...:
+        token = clean_live_activity_token(live_activity_token)
+        if token is not None:
+            device.live_activity_token = token
     device.last_seen = now
     device.save()
     if is_ci_device(device_id):
@@ -467,7 +489,7 @@ def _leave(device_id, event_id):
     device = devices.first()
     if device is None:
         return
-    Device.objects.filter(pk=device.pk).update(event=None)
+    Device.objects.filter(pk=device.pk).update(event=None, live_activity_token='')
     if is_ci_device(device.pk):
         return
     from events import usage

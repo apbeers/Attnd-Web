@@ -9,7 +9,9 @@ from events.models import Device, Event, Location, Notification, ScheduledItem, 
 
 TAB_LABELS = {'map': 'Map', 'locations': 'Locations', 'schedule': 'Schedule', 'flyer': 'Flyer',
               'notifications': 'Updates', 'options': 'Options'}
-INTERACTIONS = ('app_open', 'tab_view', 'location_view', 'schedule_item_view', 'notification_open', 'search', 'refresh')
+INTERACTIONS = ('app_open', 'tab_view', 'location_view', 'schedule_item_view', 'notification_open', 'search', 'refresh',
+                'location_heart', 'location_unheart', 'schedule_item_heart', 'schedule_item_unheart')
+HEARTS = {'location': ('location_heart', 'location_unheart'), 'item': ('schedule_item_heart', 'schedule_item_unheart')}
 
 CHART_W, CHART_H = 720, 170
 
@@ -100,6 +102,42 @@ def _named(event_rows, model, event):
     return out
 
 
+def net_hearts(event):
+    """API-009: net hearts per location and schedule item id, {'location': {id: n}, 'item': {id: n}}.
+
+    Hearts minus unhearts over the whole event, never below 0 (an unheart can be counted in a window whose
+    heart was sent by an older build or lost). Only ids with at least one net heart are included."""
+    metrics = [m for pair in HEARTS.values() for m in pair]
+    sums = defaultdict(int)
+    for metric, detail, n in (UsageCount.objects.filter(event=event, metric__in=metrics).exclude(detail='')
+                              .values_list('metric', 'detail').annotate(n=Sum('count'))
+                              .values_list('metric', 'detail', 'n')):
+        sums[(metric, detail)] += n
+    out = {}
+    for kind, (heart, unheart) in HEARTS.items():
+        counts = {}
+        for (metric, detail), n in sums.items():
+            if metric != heart or not detail.isdigit():
+                continue
+            net = n - sums.get((unheart, detail), 0)
+            if net > 0:
+                counts[int(detail)] = net
+        out[kind] = counts
+    return out
+
+
+def most_hearted(event, limit=5):
+    """Locations and schedule items with the most net hearts, best first: [{'kind', 'obj', 'count'}]."""
+    hearts = net_hearts(event)
+    rows = []
+    for kind, model in (('location', Location), ('item', ScheduledItem)):
+        objs = model.objects.filter(event=event, pk__in=hearts[kind]).select_related(
+            *(['location'] if model is ScheduledItem else []))
+        rows += [{'kind': kind, 'obj': obj, 'count': hearts[kind][obj.pk]} for obj in objs]
+    rows.sort(key=lambda r: (-r['count'], r['obj'].name))
+    return rows[:limit]
+
+
 def event_usage(event, tz):
     rows = UsageCount.objects.filter(event=event)
     # Charts run up to now while the event is on (quiet stretches show as zero), and stop after it.
@@ -126,6 +164,13 @@ def event_usage(event, tz):
     for bucket, n in activity.items():
         hourly[bucket.replace(minute=0)] += n
 
+    hearts = net_hearts(event)
+
+    def hearted(model, counts):
+        names = dict(model.objects.filter(event=event, pk__in=counts).values_list('id', 'name'))
+        return sorted(({'name': names[i], 'count': n} for i, n in counts.items() if i in names),
+                      key=lambda r: (-r['count'], r['name']))[:10]
+
     platforms = dict(rows.filter(metric__in=INTERACTIONS).values_list('platform').annotate(n=Sum('count'))
                      .values_list('platform', 'n'))
     busiest = max(hourly.items(), key=lambda kv: kv[1]) if hourly else None
@@ -142,6 +187,11 @@ def event_usage(event, tz):
         'top_locations': _named(by_detail['location_view'], Location, event)[:10],
         'top_items': _named(by_detail['schedule_item_view'], ScheduledItem, event)[:10],
         'top_notifications': _named(by_detail['notification_open'], Notification, event)[:10],
+        'hearts_given': totals.get('location_heart', 0) + totals.get('schedule_item_heart', 0),
+        'hearts_removed': totals.get('location_unheart', 0) + totals.get('schedule_item_unheart', 0),
+        'net_hearts': sum(hearts['location'].values()) + sum(hearts['item'].values()),
+        'hearted_locations': hearted(Location, hearts['location']),
+        'hearted_items': hearted(ScheduledItem, hearts['item']),
         'platforms': {'ios': platforms.get('ios', 0), 'android': platforms.get('android', 0)},
         'busiest': {'hour': busiest[0].astimezone(tz), 'count': busiest[1]} if busiest else None,
         'activity_chart': line_chart([{'label': 'Interactions', 'cls': 'new', 'points': activity}], tz, end=chart_end),

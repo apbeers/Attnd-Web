@@ -124,6 +124,9 @@
           "name": "string",
           "snippet": "string",
           "sort_order": "integer",
+          "tags": [
+            "string"
+          ],
           "website": "string"
         }
       ],
@@ -131,6 +134,7 @@
         {
           "body": "string",
           "id": "integer",
+          "priority": "string",
           "send_time": "string",
           "title": "string"
         }
@@ -185,6 +189,27 @@
       "event_id": "integer",
       "type": "string"
     },
+    "apns:liveactivity": {
+      "aps": {
+        "alert": {
+          "body": "string",
+          "sound": "string",
+          "title": "string"
+        },
+        "content-state": {
+          "urgent": {
+            "body": "string",
+            "id": "integer",
+            "sent_at": "string",
+            "title": "string"
+          }
+        },
+        "event": "string",
+        "relevance-score": "integer",
+        "stale-date": "integer",
+        "timestamp": "integer"
+      }
+    },
     "apns:notification": {
       "aps": {
         "alert": {
@@ -195,6 +220,22 @@
       },
       "event_id": "integer",
       "notification_id": "integer",
+      "priority": "string",
+      "type": "string"
+    },
+    "apns:notification:urgent": {
+      "aps": {
+        "alert": {
+          "body": "string",
+          "title": "string"
+        },
+        "interruption-level": "string",
+        "relevance-score": "number",
+        "sound": "string"
+      },
+      "event_id": "integer",
+      "notification_id": "integer",
+      "priority": "string",
       "type": "string"
     },
     "fcm:content_updated": {
@@ -209,12 +250,24 @@
       "data": {
         "event_id": "integer",
         "notification_id": "integer",
+        "priority": "string",
         "type": "string"
       },
       "notification": {
         "body": "string",
         "title": "string"
       }
+    },
+    "fcm:notification:urgent": {
+      "data": {
+        "body": "string",
+        "event_id": "integer",
+        "notification_id": "integer",
+        "priority": "string",
+        "title": "string",
+        "type": "string"
+      },
+      "notification": "null"
     }
   }
 }

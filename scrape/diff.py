@@ -25,12 +25,12 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from events.content import batch_changes, save_revision
-from events.models import Event, Location, ScheduledItem
+from events.models import Event, Location, ScheduledItem, normalize_tags
 from scrape.models import Change, ChangeSet
 
 EVENT_FIELDS = ['name', 'description', 'address', 'latitude', 'longitude', 'timezone', 'start_time', 'end_time']
 LOCATION_FIELDS = ['name', 'snippet', 'description', 'category', 'website', 'image_url', 'address',
-                   'latitude', 'longitude']
+                   'latitude', 'longitude', 'tags']
 ITEM_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags']
 MAX_LEN = {'name': 256, 'description': 1024, 'snippet': 200, 'address': 512, 'category': 64,
            'website': 1024, 'image_url': 1024, 'timezone': 64}
@@ -101,7 +101,7 @@ def _same(field, old, new):
     if isinstance(old, datetime) or isinstance(new, datetime):
         return old == new
     if field == 'tags':
-        return sorted(old or []) == sorted(new or [])
+        return sorted(normalize_tags(old)) == sorted(normalize_tags(new))
     if field == 'location':
         return old == new
     return norm(old) == norm(new) if isinstance(old, str) or isinstance(new, str) else old == new
@@ -113,7 +113,9 @@ def _empty(value):
 
 def current_state(event):
     """Compact JSON of the event as it is now, given to the AI on refresh."""
+    from scrape.tags import VOCABULARY_HINT, event_vocabulary
     return {
+        'tag_vocabulary': event_vocabulary(event)[:VOCABULARY_HINT],
         'event': {
             'name': event.name, 'description': event.description, 'address': event.address,
             'timezone': event.timezone,
@@ -123,13 +125,13 @@ def current_state(event):
         },
         'locations': [
             {'id': loc.id, 'name': loc.name, 'snippet': loc.snippet, 'category': loc.category,
-             'address': loc.address}
+             'address': loc.address, 'tags': normalize_tags(loc.tags)}
             for loc in event.location_set.all()
         ],
         'schedule': [
             {'id': it.id, 'name': it.name,
              'start_time': it.start_time.astimezone(tz_or_utc(event.timezone)).replace(tzinfo=None).isoformat(),
-             'location': it.location.name if it.location_id else None}
+             'location': it.location.name if it.location_id else None, 'tags': normalize_tags(it.tags)}
             for it in event.scheduleditem_set.select_related('location')
         ],
     }
@@ -212,6 +214,7 @@ def compute_changes(event, data):
         if not loc.get('name'):
             continue
         proposed = {f: _clip(f, loc.get(f)) for f in LOCATION_FIELDS}
+        proposed['tags'] = normalize_tags(loc.get('tags'))
         target = match_location(loc)
         if target is not None:
             claimed.add(target.id)
@@ -274,7 +277,7 @@ def compute_changes(event, data):
             'description': _clip('description', item.get('description')),
             'start_time': start,
             'end_time': parse_local(item.get('end_time'), tz),
-            'tags': [t[:32] for t in (item.get('tags') or []) if isinstance(t, str)][:5],
+            'tags': normalize_tags(item.get('tags')),
         }
         if target is not None:
             claimed_items.add(target.id)
@@ -522,7 +525,8 @@ def create_event_from_extraction(data, owner, *, status, public, fallback_tz='UT
                 event=event, user=owner, sort_order=i,
                 **{f: _clip(f, loc.get(f)) if loc.get(f) is not None else
                    ('' if f in ('snippet', 'description', 'address', 'category') else None)
-                   for f in LOCATION_FIELDS},
+                   for f in LOCATION_FIELDS if f != 'tags'},
+                tags=normalize_tags(loc.get('tags')),
             )
             name_to_loc[norm(obj.name)] = obj
         for item in data.get('schedule', []):
@@ -538,7 +542,7 @@ def create_event_from_extraction(data, owner, *, status, public, fallback_tz='UT
                 description=_clip('description', item.get('description') or ''),
                 start_time=start_i,
                 end_time=parse_local(item.get('end_time'), tz),
-                tags=[t[:32] for t in (item.get('tags') or []) if isinstance(t, str)][:5],
+                tags=normalize_tags(item.get('tags')),
             )
         event.refresh_from_db()
         save_revision(event, 'Created by AI import')

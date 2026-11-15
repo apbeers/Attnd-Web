@@ -61,11 +61,15 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
   every open app with an older `content_version` fetch the full bundle within ~10 s (random 0–10 s delay: ~100 req/s per 1,000
   open apps, briefly). Older builds still poll every 5 s until they update. Load-test or size dynos before
   the first big event.
+- Push fan-out: `send_notification` sends one APNs/FCM request per device, in order, inside the transaction that
+  marks the notification sent. Urgent announcements (API-011) go to every device with a token plus every Live
+  Activity, so a big event (thousands of devices) takes minutes on the web dyno. Before the first big event: send
+  concurrently (HTTP/2 multiplexing, a thread pool) or on the worker dyno, outside the row lock.
 - Revisit the "push straight to develop" rule (branch protection, PRs) once there are real users.
 
 ## Future
 
-### Android: move FCM to the Firebase Installation ID registration API (would be API-009; API-008 became the CI keys)
+### Android: move FCM to the Firebase Installation ID registration API (would be API-012; API-008 became the CI keys, API-009–011 the heart counts, tags and urgent announcements)
 firebase-messaging 25.1.0 (June 2026) deprecated `FirebaseMessaging.getToken()` / `onNewToken` in favour of
 `register()` / `onRegistered`, which hands out a Firebase Installation ID instead of an FCM token. The app
 currently suppresses the deprecation (`PushNotifications.kt`, `AttndMessagingService.kt`). Moving needs a tracker

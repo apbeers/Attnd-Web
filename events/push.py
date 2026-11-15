@@ -69,9 +69,10 @@ def _apns_token(cfg):
     return token
 
 
-def send_apns(tokens, payload, push_type='alert', priority='10', collapse_id=None, expiration=None):
+def send_apns(tokens, payload, push_type='alert', priority='10', collapse_id=None, expiration=None, topic=None):
     """Send one payload to iOS tokens. ``collapse_id`` → ``apns-collapse-id`` (APNs keeps only the latest
-    with the same id); ``expiration`` (UNIX seconds) → ``apns-expiration``."""
+    with the same id); ``expiration`` (UNIX seconds) → ``apns-expiration``; ``topic`` overrides the app's
+    bundle id (Live Activities use ``<bundle id>.push-type.liveactivity``)."""
     result = SendResult()
     cfg = _apns_config()
     if cfg is None:
@@ -81,7 +82,7 @@ def send_apns(tokens, payload, push_type='alert', priority='10', collapse_id=Non
         return result
     headers = {
         'authorization': f'bearer {_apns_token(cfg)}',
-        'apns-topic': cfg['topic'],
+        'apns-topic': topic or cfg['topic'],
         'apns-push-type': push_type,
         'apns-priority': priority,
     }
@@ -209,16 +210,26 @@ def _forget(tokens):
         Device.objects.filter(push_token__in=tokens).update(push_token='')
 
 
-def deliver(event, alert=None, data=None, silent=False):
+def deliver(event, alert=None, data=None, silent=False, urgent=False):
     """Send one message to the event's devices. Returns a merged SendResult.
 
     Alerts go to subscribed devices only. Silent pushes go to every device with a token, collapse per
-    event (only the latest is delivered) and expire after ``CONTENT_PUSH_TTL``.
+    event (only the latest is delivered) and expire after ``CONTENT_PUSH_TTL``. Urgent alerts (API-011) go to
+    every device with a token, ``subscribed`` or not: APNs time-sensitive, FCM high-priority data message.
     """
     data = {'event_id': event.id, **(data or {})}
-    ios, android = _recipients(event, silent=silent)
+    ios, android = _recipients(event, silent=silent or urgent)
 
-    if silent:
+    if urgent:
+        apns_payload = {'aps': {'alert': alert, 'sound': 'default', 'interruption-level': 'time-sensitive',
+                                'relevance-score': 1.0}, **data}
+        r1 = send_apns(ios, apns_payload, collapse_id=f"notification-{data.get('notification_id', '')}",
+                       expiration=time.time() + URGENT_TTL)
+        # Data only, so the app picks its urgent channel even in the background. Builds before API-011 show
+        # data messages too: they read title/body from the data when there is no notification block.
+        r2 = send_fcm(android, {**data, 'title': alert.get('title', ''), 'body': alert.get('body', '')},
+                      priority='high', ttl=URGENT_TTL)
+    elif silent:
         apns_payload = {'aps': {'content-available': 1}, **data}
         r1 = send_apns(ios, apns_payload, push_type='background', priority='5',
                        collapse_id=f'content-{event.id}', expiration=time.time() + CONTENT_PUSH_TTL)
@@ -237,25 +248,87 @@ def deliver(event, alert=None, data=None, silent=False):
     )
 
 
+# Urgent announcements (API-011). They interrupt everyone in the event, so an event may send at most
+# URGENT_MAX_PER_HOUR of them (the console refuses more; a scheduled one over the limit goes out as normal).
+URGENT_MAX_PER_HOUR = 3
+URGENT_TTL = 12 * 3600  # a stale urgent alert is useless; the Live Activity shows it for 12 h at most
+
+
+def urgent_sends_left(event, now=None):
+    """How many more urgent announcements the event may send in the current hour."""
+    now = now or timezone.now()
+    limit = getattr(settings, 'URGENT_MAX_PER_HOUR', URGENT_MAX_PER_HOUR)
+    used = Notification.objects.filter(event=event, sent=True, priority=Notification.PRIORITY_URGENT,
+                                       sent_at__gte=now - timedelta(hours=1)).count()
+    return max(0, limit - used)
+
+
 def send_notification(notification):
-    """Send an organizer notification now and mark it sent (idempotent)."""
+    """Send an organizer notification now and mark it sent (idempotent).
+
+    An urgent one (API-011) goes to every device in the event with a push token at high priority, and to
+    every iOS Live Activity registered for the event."""
     with transaction.atomic():
         locked = Notification.objects.select_for_update().get(pk=notification.pk)
         if locked.sent:
             return locked
+        now = timezone.now()
+        if locked.is_urgent and urgent_sends_left(locked.event, now) <= 0:
+            logger.warning('Notification %s: urgent limit reached for event %s, sending as normal',
+                           locked.pk, locked.event_id)
+            locked.priority = Notification.PRIORITY_NORMAL
+        alert = {'title': locked.title, 'body': locked.body}
         result = deliver(
-            locked.event,
-            alert={'title': locked.title, 'body': locked.body},
-            data={'type': 'notification', 'notification_id': locked.id},
+            locked.event, alert=alert,
+            data={'type': 'notification', 'notification_id': locked.id, 'priority': locked.priority},
+            urgent=locked.is_urgent,
         )
+        if locked.is_urgent:
+            la = send_live_activity_urgent(locked.event, locked, now)
+            result.delivered += la.delivered
+            result.failed += la.failed
         locked.sent = True
-        locked.sent_at = timezone.now()
+        locked.sent_at = now
         locked.delivered_count = result.delivered
         locked.failed_count = result.failed
         locked.save()
-    logger.info('Notification %s sent: %d delivered, %d failed, %d skipped',
-                locked.pk, result.delivered, result.failed, result.skipped)
+    logger.info('Notification %s (%s) sent: %d delivered, %d failed, %d skipped',
+                locked.pk, locked.priority, result.delivered, result.failed, result.skipped)
     return locked
+
+
+def live_activity_payload(notification, now):
+    """APNs ``liveactivity`` update that puts an urgent announcement on the event's Live Activity.
+
+    ActivityKit decodes ``content-state`` into the app's ContentState with a default JSONDecoder, so every
+    value is a plain JSON string or number (``sent_at`` is an ISO 8601 string, not a Date). The update
+    replaces the whole content state: only ``urgent`` is set, the app's own fields decode as absent."""
+    sent_at = int(now.timestamp())
+    return {'aps': {
+        'timestamp': sent_at,
+        'event': 'update',
+        'content-state': {'urgent': {'id': notification.id, 'title': notification.title, 'body': notification.body,
+                                     'sent_at': now.isoformat()}},
+        'alert': {'title': notification.title, 'body': notification.body, 'sound': 'default'},
+        'stale-date': sent_at + URGENT_TTL,
+        'relevance-score': 100,
+    }}
+
+
+def send_live_activity_urgent(event, notification, now=None):
+    """Send the urgent announcement to every Live Activity token registered in the event (iOS)."""
+    now = now or timezone.now()
+    tokens = list(Device.objects.real().filter(event=event, platform='ios').exclude(live_activity_token='')
+                  .values_list('live_activity_token', flat=True))
+    if not tokens:
+        return SendResult()
+    cfg = _apns_config()
+    topic = f"{cfg['topic']}.push-type.liveactivity" if cfg else None
+    result = send_apns(tokens, live_activity_payload(notification, now), push_type='liveactivity', priority='10',
+                       expiration=now.timestamp() + URGENT_TTL, topic=topic)
+    if result.invalid_tokens:
+        Device.objects.filter(live_activity_token__in=result.invalid_tokens).update(live_activity_token='')
+    return result
 
 
 def send_due_notifications(now=None):

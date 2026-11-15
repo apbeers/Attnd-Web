@@ -7,7 +7,7 @@ from django import forms
 from events.display import (LABELS, LOCATIONS_STYLES, PRESETS, SCHEDULE_STYLES, SECONDARY_PANES, TABS)
 from django.utils import timezone
 
-from events.models import Event, EventMember, Location, Notification, ScheduledItem, is_send_slot
+from events.models import Event, EventMember, Location, Notification, ScheduledItem, is_send_slot, normalize_tags
 
 DT_WIDGET = forms.DateTimeInput(attrs={'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M')
 DT_FORMATS = ['%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M']
@@ -169,7 +169,31 @@ class RefreshForm(StyledFormMixin, forms.Form):
     ALLOWED_TYPES = AIImportForm.ALLOWED_TYPES
 
 
-class LocationForm(StyledFormMixin, forms.ModelForm):
+TAGS_HELP = ('Comma separated, lower case, e.g. live music, bbq, kid-friendly. Attendees can filter and search by '
+             'them. Reuse the same words across the event.')
+
+
+class TagsFieldMixin:
+    """A comma-separated ``tags_text`` field for the model's ``tags`` list (API-010). Saving normalises the
+    tags and, when they changed, reports ``tags`` in ``changed_data`` so the view locks the field."""
+
+    def _init_tags(self):
+        self.fields['tags_text'].initial = ', '.join(normalize_tags(self.instance.tags))
+
+    def clean_tags_text(self):
+        return normalize_tags(self.cleaned_data.get('tags_text', ''))
+
+    def _save_tags(self):
+        tags = self.cleaned_data.get('tags_text') or []
+        if tags != normalize_tags(self.instance.tags):
+            if self.instance.pk and 'tags' not in self.changed_data:
+                self.changed_data.append('tags')
+        self.instance.tags = tags
+
+
+class LocationForm(TagsFieldMixin, StyledFormMixin, forms.ModelForm):
+    tags_text = forms.CharField(label='Tags', required=False, help_text=TAGS_HELP)
+
     class Meta:
         field_classes = {'latitude': CoordinateField, 'longitude': CoordinateField}
         model = Location
@@ -186,12 +210,17 @@ class LocationForm(StyledFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['category'].widget.attrs['list'] = 'category-options'
         self.categories = categories
+        self._init_tags()
+
+    def save(self, commit=True):
+        self._save_tags()
+        return super().save(commit)
 
 
-class ScheduledItemForm(StyledFormMixin, forms.ModelForm):
+class ScheduledItemForm(TagsFieldMixin, StyledFormMixin, forms.ModelForm):
     start_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS)
     end_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS, required=False)
-    tags_text = forms.CharField(label='Tags', required=False, help_text='Comma separated, e.g. Music, Kids')
+    tags_text = forms.CharField(label='Tags', required=False, help_text=TAGS_HELP)
 
     class Meta:
         model = ScheduledItem
@@ -204,7 +233,7 @@ class ScheduledItemForm(StyledFormMixin, forms.ModelForm):
         self.fields['location'].queryset = event.location_set.order_by('sort_order', 'name')
         self.fields['location'].required = False
         self.fields['location'].empty_label = '— No specific location —'
-        self.fields['tags_text'].initial = ', '.join(self.instance.tags or [])
+        self._init_tags()
 
     def clean_end_time(self):
         end = self.cleaned_data.get('end_time')
@@ -214,10 +243,7 @@ class ScheduledItemForm(StyledFormMixin, forms.ModelForm):
         return end
 
     def save(self, commit=True):
-        tags = [t.strip()[:32] for t in self.cleaned_data.get('tags_text', '').split(',') if t.strip()]
-        if tags != (self.instance.tags or []):
-            self.instance.tags = tags
-            self.changed_data.append('tags')
+        self._save_tags()
         return super().save(commit)
 
 
@@ -231,6 +257,11 @@ class NotificationForm(StyledFormMixin, forms.ModelForm):
         widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'step': 600},
                                    format='%Y-%m-%dT%H:%M'),
         help_text='Scheduled updates go out in 10-minute slots (:00, :10, :20 …).')
+    urgent = forms.BooleanField(
+        label='Urgent', required=False,
+        help_text='For cancellations, safety and big changes only. It goes to everyone in the event right away, '
+                  'even people who turned notifications off, as a time-sensitive alert (it can break through '
+                  'Focus), and on Lock Screen Live Activities.')
 
     class Meta:
         model = Notification
@@ -238,9 +269,18 @@ class NotificationForm(StyledFormMixin, forms.ModelForm):
         widgets = {'body': forms.Textarea(attrs={'rows': 3, 'maxlength': 256}),
                    'title': forms.TextInput(attrs={'maxlength': 60})}
 
+    def __init__(self, *args, event=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.event = event
+
     def clean(self):
         data = super().clean()
         send_time = data.get('send_time')
+        if data.get('urgent') and data.get('when') == self.WHEN_NOW and self.event is not None:
+            from events.push import urgent_sends_left
+            if urgent_sends_left(self.event) <= 0:
+                self.add_error('urgent', 'This event has sent the most urgent updates allowed in an hour. Send it as '
+                                         'a normal update, or try again later.')
         if data.get('when') == self.WHEN_LATER:
             if not send_time:
                 self.add_error('send_time', 'Pick a time.')
@@ -249,6 +289,11 @@ class NotificationForm(StyledFormMixin, forms.ModelForm):
             elif send_time <= timezone.now():
                 self.add_error('send_time', 'Pick a time in the future, or choose “Send now”.')
         return data
+
+    def save(self, commit=True):
+        self.instance.priority = (Notification.PRIORITY_URGENT if self.cleaned_data.get('urgent')
+                                  else Notification.PRIORITY_NORMAL)
+        return super().save(commit)
 
 
 class DisplayForm(forms.Form):

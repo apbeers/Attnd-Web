@@ -10,7 +10,7 @@ import threading
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
-from events.models import Event, EventRevision, Location, Notification, ScheduledItem
+from events.models import Event, EventRevision, Location, Notification, ScheduledItem, normalize_tags
 
 _state = threading.local()
 
@@ -96,6 +96,7 @@ def location_v2(location, request=None):
         'latitude': _coord(location.latitude),
         'longitude': _coord(location.longitude),
         'sort_order': location.sort_order,
+        'tags': normalize_tags(location.tags),
     }
 
 
@@ -108,7 +109,7 @@ def item_v2(item):
         'end_time': _dt(item.end_time),
         'location_id': item.location_id,
         'location_name': item.location.name if item.location_id else None,
-        'tags': item.tags or [],
+        'tags': normalize_tags(item.tags),
     }
 
 
@@ -118,6 +119,7 @@ def notification_v2(n):
         'title': n.title,
         'body': n.body,
         'send_time': _dt(n.sent_at or n.send_time),
+        'priority': n.priority or Notification.PRIORITY_NORMAL,
     }
 
 
