@@ -80,6 +80,7 @@ home/           # Marketing/landing pages
 join/           # /join/<code>/ redirect + AASA & assetlinks well-known files
 scrape/         # AI import/refresh: crawl + OpenAI extraction, jobs, diff/changesets
 attestation/    # Apple App Attest + Google Play Integrity + JWT issuance
+diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, request log middleware, staff panel
 static/         # Project-level static assets
 public/         # Files served at root by Whitenoise (robots.txt, etc.)
 ```
@@ -87,13 +88,51 @@ public/         # Files served at root by Whitenoise (robots.txt, etc.)
 ## Console UX
 
 - **Live editing:** every attendee-visible change bumps `content_version` and schedules a debounced silent push (`events.push.content_changed`); it goes to every joined device with a push token, `subscribed` or not (API-007). Open apps refresh on that push, on resume and pull-to-refresh, and poll every 60 s only without a push token (5 min safety poll with one). App layout autosaves. The "Live on your phone" panel (QR) replaces the old phone mock-up (`_phone_preview.html` is unused for now).
-- **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs`, `data-table`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
+- **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs` (links use `aria-current="page"`), `data-table` (`--compact`), `code-block` (pre), `link-button`, `meter`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
 - **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. Web app manifest at `/console/manifest.webmanifest`.
 - **Hearts** (API-009): net hearts (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted`: Usage page, counts on the Locations and Schedule lists, "Most hearted" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
 - **Google Maps** (`console/static/console/maps.js`) when `GOOGLE_MAPS_BROWSER_KEY` is set: Places autocomplete on addresses, draggable pin map; otherwise the OpenStreetMap picker.
 - **Brand colour** purple `#431f86` (from the app icon) across console, site and apps.
 - **Demo data:** `python manage.py load_demo_event [--owner email]` builds the DEMO event (happening now, every feature populated).
+
+## Diagnostics (API-013, API-014)
+
+App logs, crash reports and server timings for staff; nothing organizer-facing. The shared record format and every
+event name the apps may log are in **`LOG_EVENTS.md`** (add a row there before an app logs a new name).
+- **Uploads** (`diagnostics/api.py`, `ingest.py`, `records.py`): `POST /api/v2/diagnostics/logs/` (a debug session's
+  gzip JSON batch: ≤ 500 entries, ≤ 256 KB sent / 2 MB decompressed; each record validated on its own and scrubbed
+  again server-side) and `POST /api/v2/diagnostics/reports/` (anonymous crash/hang/ANR/exit reports). A session is
+  keyed only by its debug code `D-XXXXX` (Crockford base32), never a device id. Caps: 20,000 entries per session per
+  10 min, uploads per IP (`RATE_LIMITS['diagnostics_ip']`, `diagnostics_reports_ip`) and the storage cap, all `429` +
+  `Retry-After`. CI keys get the normal answer and nothing is stored.
+- **Storage** (`models.py`): `DiagnosticSession`, `DiagnosticEntry` (indexes session+ts, level, cat, name, a pg_trgm
+  GIN on `UPPER(msg)`, BRIN on `received_at`; needs `django.contrib.postgres` and the `pg_trgm` extension from
+  migration 0001), `DiagnosticReport`, `SymbolFile` (gzip R8 mappings, newest 20), `EndpointTiming` (hourly
+  histograms). `storage.used_bytes()` = `pg_total_relation_size` of the three log tables, cached 60 s.
+- **Retention** (`purge.py`, every `run_scheduled_tasks` run, also `manage.py purge_diagnostics`): entries from dev
+  builds 7 days, debug mode 14 days (`DIAGNOSTICS_RETENTION_DAYS`), reports and timings 30 days; above
+  `DIAGNOSTICS_MAX_BYTES` (250 MB of the 1 GB essential-0 database) the oldest sessions go first, then `VACUUM FULL`
+  so the measured size drops (skipped inside transactions, i.e. tests).
+- **Request log** (`middleware.py`, first in `MIDDLEWARE`): one JSON line per `/api/` request on logger
+  `attnd.request` (method, path *template* with `{id}`, status, ms, `req_id`, `diag`, platform; never the query
+  string), `X-Request-Id` echoed or made; with `X-Diag-Session` on an authenticated, non-CI request (not the uploads
+  themselves) the line is also stored in that session as `server.request` (category `server`). `ApiKeyRequired` sets
+  `request.api_authenticated`. Timings go to `timing.py` (in memory, flushed once a minute; `DIAGNOSTICS_TIMING`
+  is off in tests unless a test turns it on).
+- **Symbols:** Android CI uploads `mapping.txt` to `POST /api/diagnostics/symbols/` (CI key, or the static key where
+  enabled); `retrace.py` is a pure-Python R8 retrace (line ranges, inline chains, ambiguous frames with `<OR>`,
+  exception class names), applied automatically to Android reports of a build with a mapping. iOS: the panel's
+  **Symbolicate** dispatches `symbolicate.yml` in Attnd-iOS through the GitHub REST API (`GITHUB_SYMBOLICATE_TOKEN`,
+  SETUP.md step 14) with a one-time token (2 h, SHA-256 stored); the workflow reads the frames from and posts
+  symbols to `/api/diagnostics/symbolicate/<id>/` (`symbolicate.py`).
+- **Panel** (`views.py`, `templates/diagnostics/`, `static/diagnostics/diagnostics.js`): `/console/diagnostics/`
+  (`is_staff` or superuser, else 404; the console's 2FA middleware applies; topbar button "Diagnostics"). Sessions
+  list + search, session page (summaries, canvas lanes timeline, filters, entry list, network waterfall, server lines
+  joined by `req_id`, `.jsonl` export, delete), reports grouped by signature, endpoint p50/p95 table, Android mappings
+  with paste-and-retrace, API-014 performance buckets. App text is untrusted: templates escape it, the JS only uses
+  `textContent`; no inline scripts.
+- **API-014:** `perf_*` usage metrics with bucket details (`events/usage.py` `PERF_METRICS`); not interactions.
 
 ## Accounts
 
@@ -201,7 +240,7 @@ uv run python manage.py runserver
 ## Background work
 
 - **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
-- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, expires unclaimed trial events.
+- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events.
 - **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged. Urgent notifications (API-011) go to every device with a token (time-sensitive APNs alert, high-priority FCM data message) plus an APNs `liveactivity` update to every `Device.live_activity_token` in the event; at most `URGENT_MAX_PER_HOUR` (3) per event, beyond that they go out as normal.
 
 ## Running Tests
@@ -211,7 +250,7 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py`, `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy) and `events/tests_integration.py`.
+Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy) and `events/tests_integration.py`.
 
 Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (no `staticfiles/` needed), `django.request` logs only errors (tests hit 4xx on purpose), and a 32+ byte test JWT secret. CI also runs `manage.py check` with `-W error::DeprecationWarning`; run the whole suite that way when upgrading Django/Python.
 
@@ -255,9 +294,15 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `APNS_USE_SANDBOX` | No | Truthy for development-signed builds |
 | `FCM_PROJECT_ID` | Push | Firebase project ID |
 | `FCM_SERVICE_ACCOUNT_JSON` | No | Defaults to `GOOGLE_SERVICE_ACCOUNT_JSON` (needs Firebase Messaging permission) |
+| `DIAGNOSTICS_MAX_MB` | No | Size cap of the diagnostics tables, default `250` (API-013) |
+| `DIAGNOSTICS_DEV_DAYS` / `DIAGNOSTICS_DEBUG_DAYS` | No | Log retention for dev builds / production debug mode, default `7` / `14` |
+| `DIAGNOSTICS_SESSION_MAX_ENTRIES` | No | Entries per debug session per 10 minutes, default `20000` |
+| `DIAGNOSTICS_MAX_SYMBOL_FILES` | No | Android R8 mappings kept, default `20` |
+| `GITHUB_SYMBOLICATE_TOKEN` | No | Fine-grained GitHub token (Attnd-iOS, Actions: read and write) for the panel's Symbolicate (SETUP.md step 14) |
+| `GITHUB_SYMBOLICATE_REPO` / `GITHUB_SYMBOLICATE_REF` | No | Default `apbeers/Attnd-iOS` / `main` |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |
-| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60) |
+| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60) |
 | `RATE_LIMIT_TRUST_X_FORWARDED_FOR` | No | Default `1` (behind Heroku's router); `0` = use the socket address |
 | `TWO_FACTOR_ISSUER` | No | Name shown in authenticator apps, default `Attnd` |
 | `WEBAUTHN_RP_ID` | No | Passkey domain (relying party ID), default `SITE_URL`'s host (`attnd.app`; dev: `dev.attnd.app`). Changing it makes existing passkeys stop working |

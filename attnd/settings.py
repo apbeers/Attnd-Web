@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sitemaps',
+    'django.contrib.postgres',  # GIN trigram + BRIN indexes for diagnostics (built into Django)
     'cloudinary_storage',
     'cloudinary',
     'events.apps.EventsConfig',
@@ -53,9 +54,12 @@ INSTALLED_APPS = [
     'join.apps.JoinConfig',
     'scrape.apps.ScrapeConfig',
     'attestation.apps.AttestationConfig',
+    'diagnostics.apps.DiagnosticsConfig',
 ]
 
 MIDDLEWARE = [
+    # First, so it times the whole request: one JSON line per /api/ request + X-Request-Id (API-013).
+    'diagnostics.middleware.RequestLogMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -174,6 +178,8 @@ RATE_LIMITS = {
     'passkey_ip': _rate('passkey_ip', '20/900'),      # failed passkey sign-ins per IP, 15 min
     'email_code_user': _rate('email_code_user', '3/900'),  # sign-in codes emailed per account, 15 min
     'csp_report_ip': _rate('csp_report_ip', '60/60'),  # CSP violation reports logged per IP, 1 min
+    'diagnostics_ip': _rate('diagnostics_ip', '600/600'),  # debug log uploads per IP, 10 min (API-013)
+    'diagnostics_reports_ip': _rate('diagnostics_reports_ip', '60/3600'),  # crash/hang report uploads per IP
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
@@ -229,6 +235,23 @@ STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', '
 # Separate from API_KEY and still accepted with STATIC_API_KEY_ENABLED=0, but only for the DEMO event
 # (lookup, nearby, its bundle/join/leave/usage) and for `ci-…` device ids; usage they post is discarded.
 CI_API_KEYS = [k.strip() for k in os.getenv('CI_API_KEYS', '').split(',') if k.strip()]
+
+# Diagnostics (API-013, diagnostics/): debug log sessions, crash reports, R8 mappings, endpoint timings.
+# The tables together stay under DIAGNOSTICS_MAX_MB (Heroku essential-0 Postgres has 1 GB in all); log entries
+# are kept 7 days from dev builds and 14 days from production debug mode (purged by run_scheduled_tasks).
+DIAGNOSTICS_MAX_BYTES = int(os.getenv('DIAGNOSTICS_MAX_MB', '250')) * 1024 * 1024
+DIAGNOSTICS_RETENTION_DAYS = {'dev': int(os.getenv('DIAGNOSTICS_DEV_DAYS', '7')),
+                              'debug_mode': int(os.getenv('DIAGNOSTICS_DEBUG_DAYS', '14'))}
+DIAGNOSTICS_SESSION_WINDOW = 600  # seconds
+DIAGNOSTICS_SESSION_MAX_ENTRIES = int(os.getenv('DIAGNOSTICS_SESSION_MAX_ENTRIES', '20000'))  # per window
+DIAGNOSTICS_MAX_SYMBOL_FILES = int(os.getenv('DIAGNOSTICS_MAX_SYMBOL_FILES', '20'))
+DIAGNOSTICS_VACUUM_FULL = True
+DIAGNOSTICS_TIMING = not TESTING  # endpoint timings (tests turn it on where they check it)
+# iOS symbolication: the panel dispatches symbolicate.yml in attnd-ios (fine-grained token with
+# "Actions: read and write" on that repo only). Unset = the Symbolicate button explains what's missing.
+GITHUB_SYMBOLICATE_TOKEN = os.getenv('GITHUB_SYMBOLICATE_TOKEN', '')
+GITHUB_SYMBOLICATE_REPO = os.getenv('GITHUB_SYMBOLICATE_REPO', 'apbeers/Attnd-iOS')
+GITHUB_SYMBOLICATE_REF = os.getenv('GITHUB_SYMBOLICATE_REF', 'main')
 
 # Public base URL of this deployment, for links in emails (dev: https://dev.attnd.app).
 SITE_URL = os.getenv('SITE_URL', 'https://attnd.app').rstrip('/')
@@ -333,11 +356,19 @@ LOGGING = {
             "format": "[{levelname}] {name}: {message}",
             "style": "{",
         },
+        "message": {
+            "format": "{message}",
+            "style": "{",
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
+        },
+        "request": {
+            "class": "logging.StreamHandler",
+            "formatter": "message",
         },
     },
     "root": {
@@ -345,6 +376,12 @@ LOGGING = {
         "level": "INFO",
     },
     "loggers": {
+        # One JSON line per API request (diagnostics.middleware), the message alone.
+        "attnd.request": {
+            "handlers": ["request"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "attnd.csp": {
             "handlers": ["console"],
             "level": "WARNING",
@@ -361,6 +398,7 @@ if TESTING:
     # Many tests deliberately get 4xx answers (404, 401, 429...), which django.request logs as warnings.
     # Only its errors (5xx, unhandled exceptions) stay visible in test output.
     LOGGING["loggers"]["django.request"] = {"handlers": ["console"], "level": "ERROR", "propagate": False}
+    LOGGING["loggers"]["attnd.request"]["level"] = "WARNING"  # one line per API call would flood the output
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 

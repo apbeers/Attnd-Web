@@ -16,6 +16,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 11. Email | ⏳ ✅ Mailgun Starter (free) add-ons on attnd-web (`mailgun-spherical-62131`) and attnd-dev (`mailgun-silhouetted-37822`; separate account, Mailgun can't be shared between apps; dev stays on its sandbox, which only mails authorized recipients). ✅ `mg.attnd.app` added (tracking off), Namecheap SPF/DKIM/DMARC added, **verified** by Mailgun. ✅ SMTP credentials (`postmaster@…`) set on both apps as `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD` + `DEFAULT_FROM_EMAIL`; dev `SITE_URL` set. ✅ Code: TLS, from address, per-site links, allow-list, password reset. ✅ `ADMIN_EMAILS` (both apps) and dev `EMAIL_ALLOWED_RECIPIENTS` = the owner's address; owner authorized on dev's sandbox; Nov 14 dev test emails (plain + `--admins`) **delivered** to iCloud. ✅ MX records for `mg` added; production-domain test from `noreply@mg.attnd.app` **delivered** to iCloud (Nov 14). ⬜ The production app itself sends once develop is released to main. |
 | 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then add a passkey (or an authenticator app) at the first admin sign-in, on dev and again on production (passkeys are per domain), and save the recovery codes. |
 | 13. CI keys (live tests) | ✅ Nov 15, 2026: `CI_API_KEYS` set on production (release v109; takes effect once API-008 is released to `main`), `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web. |
+| 14. Diagnostics (API-013) | ⬜ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
@@ -28,6 +29,8 @@ Do these steps once, in order. Each step says which values go where. For any sin
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
+- [ ] Step 14 (API-013 diagnostics): create the `GITHUB_SYMBOLICATE_TOKEN` fine-grained token and set it on both Heroku
+      apps, so the Diagnostics panel's **Symbolicate** button can run attnd-ios's `symbolicate.yml`.
 
 Notes:
 - If the Heroku CLI says an update is available, run `heroku update` first. It's optional.
@@ -585,6 +588,31 @@ key is set, **Integration · prod** fails, as a warning only: it never blocks a 
 To rotate: run step 1 again (the old key stops working the moment `CI_API_KEYS` changes). Several keys can be set at once,
 comma-separated, to rotate without a gap. Keys shorter than 32 characters are ignored.
 
+## 14. Diagnostics: iOS symbolication token (5 min)
+
+The staff **Diagnostics** panel (`/console/diagnostics/`, API-013) symbolicates iOS crash reports by dispatching the
+`symbolicate.yml` workflow in **Attnd-iOS** (it downloads the build's dSYM artifact, runs `atos` on a Mac runner and
+posts the symbols back). The server needs a GitHub token that may only start that workflow.
+
+1. GitHub → **Settings → Developer settings → Fine-grained personal access tokens → Generate new token**:
+   name "Attnd symbolicate", expiry 1 year, **Repository access: Only select repositories → Attnd-iOS**,
+   **Permissions → Repository → Actions: Read and write** (nothing else; Metadata: read is added automatically).
+   Copy the token into the password manager.
+2. Set it on both apps (the second line is a production config change):
+   ```bash
+   heroku config:set -a attnd-dev GITHUB_SYMBOLICATE_TOKEN=github_pat_PASTE_HERE
+   heroku config:set -a attnd-web GITHUB_SYMBOLICATE_TOKEN=github_pat_PASTE_HERE
+   ```
+3. Check: open an iOS crash report in the panel and press **Symbolicate**; the Attnd-iOS **Actions** tab shows a
+   "Symbolicate" run, and the report shows symbols a few minutes later. The workflow file must be on Attnd-iOS's
+   `main` branch (GitHub only dispatches workflows from the default branch's file list).
+
+Optional settings (defaults are fine): `GITHUB_SYMBOLICATE_REPO` (`apbeers/Attnd-iOS`), `GITHUB_SYMBOLICATE_REF`
+(`main`), `DIAGNOSTICS_MAX_MB` (250), `DIAGNOSTICS_DEV_DAYS` (7), `DIAGNOSTICS_DEBUG_DAYS` (14). Android needs no
+token: its CI uploads R8 mappings with the CI key / dev static key (`POST /api/diagnostics/symbols/`).
+
+To rotate or if leaked: revoke it on the same GitHub page, make a new one and run step 2 again.
+
 ## Key reference
 
 For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.
@@ -696,6 +724,11 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
    ```
    The server uses this one account for push too, so you don't need a separate `FCM_SERVICE_ACCOUNT_JSON`.
 - **If leaked:** delete the key under the service account's **Keys** tab and add a new one.
+
+**`GITHUB_SYMBOLICATE_TOKEN`**: lets the Diagnostics panel start attnd-ios's `symbolicate.yml` (API-013).
+- **Create:** fine-grained token, Attnd-iOS only, Actions: Read and write. See step 14.
+- **Put:** both Heroku apps.
+- **If leaked:** revoke it on GitHub; it can only run workflows in Attnd-iOS.
 
 **`ANDROID_SHA256_FINGERPRINT`**: makes `attnd.app/join/…` links open the Android app.
 - **Where:** Play Console → Attnd → **Test and release → App integrity → App signing** → *App signing key certificate* → **SHA-256 certificate fingerprint**.

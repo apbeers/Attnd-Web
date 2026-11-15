@@ -60,11 +60,163 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-009 | Anonymous heart counts: usage metrics `location_heart` / `location_unheart` / `schedule_item_heart` / `schedule_item_unheart`; net hearts in the console | additive (new usage names) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (e1802d9) | ✅ dev (41291f1) |
 | API-010 | Tags: `Location.tags` in the bundle, all tags lower case; AI import/refresh tags everything; `backfill_tags`; DEMO tags | additive (new key; tag case normalised) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (e1802d9) | ✅ dev (41291f1) |
 | API-011 | Urgent announcements: `Notification.priority`, `priority` in notification pushes, urgent = every device + time-sensitive/high priority; iOS Live Activity push via `POST devices/` `live_activity_token` | additive (new keys, new optional request field, new push variant) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (b3cb181, d688ed0) | ✅ dev (d491c93) |
+| API-013 | Diagnostics: debug log upload (`POST diagnostics/logs/`), crash/hang reports, `X-Request-Id` / `X-Diag-Session`, Android R8 symbols + retrace, iOS symbolication workflow, staff Diagnostics panel | additive (new endpoints, new request headers) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
+| API-014 | Anonymous performance metrics: `perf_*` usage names with bucket details | additive (new usage names) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+
+API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
 
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-014: anonymous performance metrics in usage
+**Why:** see how fast launches, bundle fetches, push refreshes, the planner and the map are in production, and how
+often calls fail, without any per-person logs. Agreed in the logging spec §6 (Nov 15, 2026).
+**Server (additive, new usage names):** `POST events/<id>/usage/` accepts `perf_launch_cold`, `perf_launch_warm`,
+`perf_bundle_fetch`, `perf_bundle_304`, `perf_api_error`, `perf_push_refresh_delay`, `perf_live_start_fail`,
+`perf_planner_ms`, `perf_map_first_render`, each with `detail` = a bucket label from the table in `API_V2.md` → usage
+→ Performance (an unknown or missing bucket drops the entry; `perf_live_start_fail` may have none). They are not
+"interactions" (organizer Usage pages ignore them); staff see them in Diagnostics → Sessions → App performance.
+Older servers drop the unknown names harmlessly.
+
+**iOS / Android (same rules on both):**
+- Measure on the device, map the value to its bucket (`<X` = less than X; buckets don't overlap: 500 ms is `<1s`) and
+  record it through the existing usage reporter (`track(.perfBundleFetch, detail: "<500ms")`), same 5-minute
+  buckets, flushes and retry rules, never a device id. A value measured outside an event goes into the next flush made
+  while in an event (keep at most ~50 pending), or is dropped.
+- `perf_launch_cold`: process start (iOS: `ProcessInfo`/`kinfo_proc` start time or the earliest `main`; Android:
+  `Process.getStartUptimeMillis()`) → first frame of the event UI. `perf_launch_warm`: foreground → interactive. Only
+  while in an event (launches to the launch screen aren't counted).
+- `perf_bundle_fetch` / `perf_bundle_304`: `GET bundle/` start → decoded (200) / answered (304), every refresh source.
+- `perf_api_error`: every failed API call: `4xx` (except 304), `5xx`, `timeout`, `offline` (no connection / DNS).
+- `perf_push_refresh_delay`: `content_updated` received → new bundle applied (includes the 0–10 s random delay);
+  not counted when the push was skipped as not newer.
+- `perf_live_start_fail`: `disabled` (user turned Live Activities/promoted notifications off), `denied` (no
+  notification permission), `limit` (ActivityKit too many activities), `error` (anything else).
+- `perf_planner_ms`: one `Planner` run (not the model's preference extraction).
+- `perf_map_first_render`: Map tab shown → first pins drawn (iOS: first `MapCameraUpdate`/annotations rendered;
+  Android: `GoogleMap` `onMapLoaded` with pins).
+- Also log each measurement as `perf.metric` (LOG_EVENTS.md) so debug sessions show it.
+- Unit-test the bucket function on both (edges: 249/250/499/500 ms, 0.5 s, 4 s, 60 s).
+
+### API-013: diagnostics: debug logs, crash reports, symbols, admin panel
+**Why:** when something goes wrong on a phone at an event, staff need the app's own timeline (network, push,
+background, Live Activity, location, planner, assistant…) next to the server's, without collecting anything personal.
+Agreed in the logging spec (Nov 15, 2026): storage in our Postgres with strict caps, production debug mode only when the
+user turns it on (never remotely), dev builds always. The shared record format and every event name are in
+[`LOG_EVENTS.md`](LOG_EVENTS.md).
+**Server (additive: new endpoints, new request headers, server-only tables):**
+- `POST /api/v2/diagnostics/logs/` (app auth, gzip JSON, ≤ 500 entries / 256 KB; per-record validation; 20,000 entries
+  per session per 10 min; `429` + `Retry-After` over caps or when the storage is full; CI keys discarded).
+- `POST /api/v2/diagnostics/reports/` (anonymous crash / hang / ANR / exit reports, ≤ 20 per request).
+- `POST /api/diagnostics/symbols/` (CI key or dev static key): Android R8 `mapping.txt` per build (gzip in the DB,
+  newest 20 kept); a pure-Python R8 retrace (`diagnostics/retrace.py`).
+- `GET|POST /api/diagnostics/symbolicate/<id>/`: the callback of attnd-ios's `symbolicate.yml`, which the panel
+  dispatches through the GitHub API (`GITHUB_SYMBOLICATE_TOKEN`, SETUP.md step 14) with a one-time token.
+- Every `/api/` request: one JSON log line on stdout (method, path **template**, status, ms, `req_id`, `diag`),
+  `X-Request-Id` echoed (or made) in the response, timings per endpoint (p50/p95 in the panel); with
+  `X-Diag-Session` the line is also stored in that session (`server.request`, category `server`).
+- Retention (`run_scheduled_tasks`, also `manage.py purge_diagnostics`): dev 7 days, debug mode 14 days, reports 30
+  days; total 250 MB (`pg_total_relation_size`), oldest sessions first, then VACUUM FULL.
+- Console → **Diagnostics** (staff, strong 2FA): sessions (search by code, time, platform, version, event, errors,
+  reason), session timeline (category lanes, server lines next to the app's by `req_id`, filters: level, category,
+  event, text, status ≥ 400, slower than N ms, fg/bg, ±30 s), network waterfall, summaries (errors grouped, slowest
+  requests, launch times, pushes received vs handled, background wakes), .jsonl export; reports grouped by problem
+  with retrace (Android) / Symbolicate (iOS); endpoint timings; Android mappings with a paste-and-retrace tool.
+- Privacy page: a paragraph on crash reports and debug logging.
+
+**iOS:**
+- **Logging facade** `AppLog` (one file, shared with the App Clip and the widget extension where useful):
+  `AppLog.debug(.net, "net.request.finished", "GET bundle 304 in 182 ms", ["method": …])` and `trace/info/notice/
+  warning/error/fault`. Check the level first (cheap when off); build the record and write it off the main thread
+  (a serial queue/actor). Each record goes to `os.Logger(subsystem: "com.arcu.Attnd", category: <cat>)` (dynamic
+  values `.public` only when the redaction rules say they're safe, else `.private`) **and** to the ring buffer.
+- Record format v1 exactly as `LOG_EVENTS.md` (`ts` UTC with ms and `Z`, `mono_ms` from `ContinuousClock`/
+  `mach_continuous_time` since launch, `seq` per install, `app`, `build`, `os` "iOS 27.2", `model` from `utsname`,
+  `state` fg/bg, `net` from `NWPathMonitor`, `event_id`, `diag`). Only event names from `LOG_EVENTS.md`.
+- **Redaction**, unit-tested (`LogRedactionTests`): never search/Ask/plan text (log `query_len`; `DEV` builds may log
+  `query`), never tokens/keys/push or Live Activity tokens/JWTs/emails/device id/support code; URLs only as path
+  templates (`/api/v2/events/{id}/bundle/`, no query, no host); coordinates rounded to 0.01° or distances only.
+- **Ring buffer:** JSON lines in `Application Support/attnd-logs/` (excluded from backup), ~2 MB, newest kept (two
+  rotating files are fine). Feeds the viewer, the export and uploads.
+- **Signposts:** `OSSignposter` intervals around launch, bundle fetch + decode, planner, map first render (also logged
+  as `perf.signpost` with `ms`).
+- **Every API call** sends `X-Request-Id` (new random 16 hex per request; retries get a new one) and logs it as
+  `req_id` in `net.request.started/finished/failed`; while a debug session is on, also `X-Diag-Session: D-XXXXX`.
+- **Levels:** `Dev` builds `debug` + continuous upload (`reason: "dev"`, one persistent code per install, made once,
+  stored in UserDefaults); production `warning`, local only.
+- **Debug mode** (production, About & support): "Turn on debug logging for 10 minutes" with a consent line ("Sends a
+  technical log of what the app does, labelled only with this code, for 10 minutes. No search text, location or
+  anything that identifies you."), a countdown, the code `D-XXXXX` (5 random Crockford base32 characters
+  `0-9A-HJKMNP-TV-Z`, new each time) with Copy, and Stop. While on: level `debug`, upload every ~10 s and on
+  background, plus the previous 5 minutes from the ring buffer (pre-roll) first. Store the code and expiry
+  (UserDefaults) so it survives restarts; at expiry go back to normal and log `logging.debug_mode on=false`. Never
+  link the code to the device id (not in support info, not sent with `devices/`). Never started remotely.
+- **Uploads:** `POST /api/v2/diagnostics/logs/` gzip (`Content-Encoding: gzip`), ≤ 500 entries and ≤ 256 KB per
+  request (split), off the main thread, never an error in the UI. On `429` wait `Retry-After` seconds; on other
+  failures keep the records and retry with the next batch. Not in screenshot mode. The App Clip: dev builds only.
+- **Log viewer** (Dev builds always; production while debug mode is on, and About & support → "Recent logs"): filter
+  by level, category, text, errors only; share/export `.jsonl` (ShareLink).
+- **Reports:** subscribe to MetricKit (`MXMetricManager.shared.add`); for each `MXDiagnosticPayload`, send its crash,
+  hang, CPU-exception, disk-write and app-launch diagnostics to `POST /api/v2/diagnostics/reports/` (`kind` crash/
+  hang/cpu/disk_write/launch, `payload` = `jsonRepresentation()` decoded to an object, `summary` e.g.
+  "EXC_BAD_ACCESS (SIGSEGV)", per-report `app`/`build`/`os` from `metaData`, `diag` if a debug session was on). No
+  device id. Keep unsent ones (≤ 20) and retry at the next launch. Don't send daily `MXMetricPayload`s.
+- **Dev configuration:** add a `Dev` build configuration copied from Debug (`-Onone`, `DEBUG` + `DEV` compilation
+  conditions, assertions on), archived by `ios.yml` for `develop` → TestFlight with distribution signing; `Release`
+  for `main`. dSYMs: keep uploading them to App Store Connect, and in the archive job also upload
+  `…xcarchive/dSYMs/` as the artifact **`dsyms-<build number>`** (`actions/upload-artifact`, `retention-days: 90`,
+  one per build, every branch) so `symbolicate.yml` finds them.
+- **Workflow:** add `.github/workflows/symbolicate.yml` (content in this entry's notes, provided by attnd-web; it
+  must be on `main` to be dispatchable). No secret is needed in attnd-ios (it uses `github.token`).
+- **Privacy labels** (App Store Connect → App Privacy): "Diagnostics → Crash data, Performance data, Other diagnostic
+  data: not linked to the user's identity, not used for tracking".
+- Commit with `API-013:`; tick the iOS column.
+
+**Android:**
+- **Logging facade** `AppLog` (`AppLog.debug(Cat.NET, "net.request.finished", "…", mapOf(…))`): level checked first,
+  records written on a single background dispatcher (`Dispatchers.IO.limitedParallelism(1)`). Each record goes to
+  `android.util.Log` with tag `Attnd/<cat>` **and** the ring buffer. Same record format, names and redaction rules
+  as iOS, unit-tested on the JVM (`LogRedactionTest`, `LogRecordTest`).
+- **Ring buffer:** JSON lines in `filesDir/logs/` (excluded from backup in `data_extraction_rules.xml`), ~2 MB, newest
+  kept.
+- **Trace sections:** `android.os.Trace` (`trace("bundle_fetch") { … }`) around launch, bundle fetch + decode,
+  planner, map first render (also `perf.signpost` with `ms`).
+- **Every API call** (`AttndApi`/`HttpClient`) sends `X-Request-Id` and logs it as `req_id`; while a debug session
+  is on also `X-Diag-Session`.
+- **Levels:** `BuildConfig.DEV` builds `debug` + continuous upload (`reason: "dev"`, one persistent code per install
+  in `DevicePrefs`); production `warning`, local only.
+- **Debug mode:** the same Options → About & support flow as iOS (consent, countdown, code with Copy, Stop, 10 min,
+  5-min pre-roll, survives restarts via `DevicePrefs`, never linked to the device id, never remote).
+- **Uploads:** the same endpoint and rules as iOS (gzip, ≤ 500 / 256 KB, `Retry-After`, background, never blocking).
+- **Log viewer:** dev builds always; production while debug mode is on and "Recent logs" in About & support; filters
+  level/category/text/errors only; export `.jsonl` through the share sheet (a `FileProvider` only if needed; or
+  `Intent.ACTION_SEND` with the text for small exports).
+- **Reports:** at launch read `ActivityManager.getHistoricalProcessExitReasons(packageName, 0, 10)` newer than the
+  last one handled (timestamp in `DevicePrefs`): `REASON_CRASH`/`REASON_CRASH_NATIVE` → `crash`, `REASON_ANR` → `anr`
+  (with `getTraceInputStream()` text as `stack`, ≤ 128 KB), `REASON_LOW_MEMORY` → `low_memory`, others (excluding
+  user-requested / exit-self) → `exit`; `reason` = the reason's name, `occurred_at` = `timestamp`. Add an uncaught
+  exception handler (chained to the previous one) that writes the **obfuscated** Java stack trace + exception
+  type/first message line to `filesDir/logs/crash.txt`; send it with the matching exit info (or alone) at the next
+  launch as `crash` with `stack`. `build` = `versionCode` (that's what the mapping is keyed by). No device id.
+- **Build types:** add `dev` (`initWith(release)`: release-signed, **not debuggable** (Play rejects debuggable
+  bundles), `isMinifyEnabled = false`, `buildConfigField DEV = true`) for `develop` → Play internal testing;
+  `release` keeps R8 minify with `DEV = false` for `main` → production. Debug builds also count as DEV for logging.
+- **Mapping upload (CI, `android.yml`, every minified release build):** in the same Play edit as the bundle upload,
+  `edits.deobfuscationfiles.upload` (`deobfuscationFileType: proguard`) for the version code; and upload the same file
+  to attnd-web: `POST /api/diagnostics/symbols/?platform=android&version=<versionName>&build=<versionCode>` with
+  `Authorization: Bearer $ATTND_PROD_CI_KEY` (production server) / `$ATTND_API_KEY` (dev server), body gzip (see
+  `API_V2.md`). A failed attnd-web upload is a warning, never a failed release. (Native symbols: none today.)
+- **Play data safety:** "Crash logs" and "Diagnostics" collected, not shared, not linked, debug logs optional.
+- Commit with `API-013:`; tick the Android column.
+
+**Notes — `symbolicate.yml` for attnd-ios** (inputs `report_id`, `build`, `version`, `server`, `token`; runs on
+`macos-latest`; reads the frames from `GET /api/diagnostics/symbolicate/<id>/`, downloads artifact `dsyms-<build>`,
+maps `binaryUUID` → DWARF with `dwarfdump --uuid`, `atos -arch <arch> -o <DWARF> -l 0x100000000 <0x100000000 +
+offset>…`, posts `{frames: [{uuid, offset, symbol}]}` or `{error}`; only ever to `https://attnd.app` or
+`https://dev.attnd.app`). The file content was handed to attnd-ios with this entry.
+
 
 ### API-011: urgent announcements and Live Activity push
 **Why:** organizers need one way to reach everyone at once for a cancellation, a weather hold or a safety notice, and

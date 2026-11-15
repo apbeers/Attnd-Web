@@ -74,7 +74,19 @@ Activity / Live Update (device-driven; server only for urgent announcements), re
   leaves the plan once today's planned items have ended (Android keeps it for the day).
 - Production: release develop → main, reload DEMO and run `backfill_tags --all` there (owner go-ahead).
 
-### Android: move FCM to the Firebase Installation ID registration API (would be API-012; API-008 became the CI keys, API-009–011 the heart counts, tags and urgent announcements)
+### Diagnostics follow-ups (server built Nov 15, 2026: API-013 / API-014)
+Server side is done (uploads, caps, purge, request log, panel, R8 retrace, symbolicate dispatch). Still open:
+- attnd-ios: `AppLog` facade + ring buffer + viewer, debug mode, `Dev` configuration, uploads, MetricKit reports,
+  dSYM artifacts per build and the `symbolicate.yml` workflow (content in the API-013 log entry's notes); API-014 counts.
+- attnd-android: the same with a `dev` build type, ApplicationExitInfo + crash handler reports, the CI mapping upload
+  (Play `deobfuscationfiles` + `POST /api/diagnostics/symbols/`); API-014 counts.
+- Store privacy answers: App Store "Diagnostics: crash, performance, other diagnostic data — not linked, not
+  tracking"; Play data safety "Crash logs, Diagnostics — not shared, optional for debug logs" (owner, in the consoles).
+- Later, if needed: a request-log drain to a cheaper store than Postgres; server lines for every request (not only
+  debug sessions) would need it. Retrace of R8 outline/synthesized frames (rare; shown unchanged today).
+- Live tests: once the apps upload, add a CI-key upload check to the three live suites (answered, discarded).
+
+### Android: move FCM to the Firebase Installation ID registration API (API-012, reserved; API-008 became the CI keys, API-009–011 the heart counts, tags and urgent announcements, API-013/014 diagnostics)
 firebase-messaging 25.1.0 (June 2026) deprecated `FirebaseMessaging.getToken()` / `onNewToken` in favour of
 `register()` / `onRegistered`, which hands out a Firebase Installation ID instead of an FCM token. The app
 currently suppresses the deprecation (`PushNotifications.kt`, `AttndMessagingService.kt`). Moving needs a tracker

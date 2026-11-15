@@ -108,6 +108,12 @@ class ApiContractTests(TestCase):
         self.assertEqual(resp.status_code, 200, f'{method.upper()} {path}: {resp.content[:300]}')
         return resp.json()
 
+    def symbols(self):
+        resp = self.client.post('/api/diagnostics/symbols/?platform=android&version=2.0.1&build=2001',
+                                b'com.a.B -> a.a:\n    void b() -> b\n', content_type='text/plain', secure=True, **AUTH)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        return resp.json()
+
     def build(self):
         e = self.event.id
         device = {'device_id': 'contract-device', 'platform': 'ios', 'push_token': 'tok',
@@ -123,6 +129,15 @@ class ApiContractTests(TestCase):
                 'platform': 'ios', 'events': [{'name': 'tab_view', 'detail': 'map', 'count': 2}]}),
             # Unversioned and frozen: old builds rely on it to learn they must update.
             'GET /api/app-status/': self.call('get', '/api/app-status/?platform=ios&version=2.0.1&api=2'),
+            # API-013: debug logs and anonymous crash/hang reports.
+            'POST diagnostics/logs/': self.call('post', '/api/v2/diagnostics/logs/', {
+                'session': 'D-7K3QX', 'platform': 'ios', 'reason': 'debug_mode', 'entries': [{
+                    'v': 1, 'ts': timezone.now().isoformat(), 'level': 'info', 'cat': 'net',
+                    'event': 'net.request.finished', 'msg': 'ok'}]}),
+            'POST diagnostics/reports/': self.call('post', '/api/v2/diagnostics/reports/', {
+                'platform': 'android', 'reports': [{'kind': 'crash', 'stack': 'x'}]}),
+            # Unversioned, CI only (attnd-android's release job).
+            'POST /api/diagnostics/symbols/': self.symbols(),
         }
         payloads = {}
 

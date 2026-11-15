@@ -49,6 +49,16 @@ class Command(BaseCommand):
         self.stdout.write(f'notifications sent: {sent}; stale jobs recovered: {recovered}; '
                           f'websites checked: {watched}; AI updates queued: {queued}')
 
+        # Diagnostics (API-013): retention (dev 7 d, debug 14 d, reports 30 d) and the 250 MB cap. Cheap when
+        # there is nothing to delete, so it runs every time (which also covers "nightly").
+        from diagnostics.purge import purge as purge_diagnostics
+        try:
+            purged = purge_diagnostics()
+            self.stdout.write('diagnostics purged: ' + ', '.join(f'{k} {v}' for k, v in purged.items() if v))
+        except Exception:  # never stop the other housekeeping
+            import logging
+            logging.getLogger(__name__).exception('Diagnostics purge failed')
+
         # Idempotent and cheap: delete unclaimed trial events past their expiry
         call_command('expire_trial_events', stdout=self.stdout)
 

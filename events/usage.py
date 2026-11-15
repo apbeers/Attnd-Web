@@ -29,6 +29,25 @@ CLIENT_METRICS = {
     'schedule_item_heart': 'item',       # detail: schedule item id
     'schedule_item_unheart': 'item',
 }
+# Anonymous performance (API-014): bucketed values, detail = the bucket label. No per-person data.
+LAUNCH_BUCKETS = ('<0.5s', '<1s', '<2s', '<4s', '>=4s')
+FETCH_BUCKETS = ('<250ms', '<500ms', '<1s', '<2s', '<5s', '>=5s')
+PUSH_DELAY_BUCKETS = ('<5s', '<10s', '<15s', '<30s', '<60s', '>=60s')
+PLANNER_BUCKETS = ('<100ms', '<250ms', '<500ms', '<1s', '<2s', '>=2s')
+RENDER_BUCKETS = ('<250ms', '<500ms', '<1s', '<2s', '<4s', '>=4s')
+PERF_METRICS = {
+    'perf_launch_cold': LAUNCH_BUCKETS,        # process start → first frame of the event UI
+    'perf_launch_warm': LAUNCH_BUCKETS,        # back to the foreground → interactive
+    'perf_bundle_fetch': FETCH_BUCKETS,        # GET bundle/ answered 200 (request start → decoded)
+    'perf_bundle_304': FETCH_BUCKETS,          # GET bundle/ answered 304
+    'perf_api_error': ('4xx', '5xx', 'timeout', 'offline'),  # any API call that failed
+    'perf_push_refresh_delay': PUSH_DELAY_BUCKETS,  # content_updated push received → new bundle shown
+    'perf_live_start_fail': ('', 'disabled', 'denied', 'limit', 'error'),  # Live Activity / Live Update didn't start
+    'perf_planner_ms': PLANNER_BUCKETS,        # one planner run
+    'perf_map_first_render': RENDER_BUCKETS,   # Map tab opened → first pins drawn
+}
+for _name, _buckets in PERF_METRICS.items():
+    CLIENT_METRICS[_name] = 'bucket'
 HEART_METRICS = {'location_heart': 'location_unheart', 'schedule_item_heart': 'schedule_item_unheart'}
 HEART_SET = set(HEART_METRICS) | set(HEART_METRICS.values())
 # Recorded by the server itself.
@@ -89,6 +108,9 @@ def ingest(event, platform, entries, now=None, save=True):
         detail = str(entry.get('detail') or '').strip().lower()
         if kind is None:
             detail = ''
+        elif kind == 'bucket':
+            if detail not in PERF_METRICS[metric]:
+                continue  # an unknown bucket would mean nothing
         elif kind == 'tab':
             if detail not in TABS:
                 continue

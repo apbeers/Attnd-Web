@@ -203,7 +203,8 @@ class ApiKeyRequired:
         only for the DEMO event and for `ci-…` device ids. Everything else answers 401.
 
     `ci_scope` per view: 'event' (the <event_id> must be the DEMO event, otherwise 404), 'lookup' and
-    'nearby' (the view limits its results to the DEMO event), 'device' (registration). Views with an
+    'nearby' (the view limits its results to the DEMO event), 'device' (registration), 'diagnostics'
+    (log/report uploads, answered normally and discarded; symbol uploads, API-013). Views with an
     'event' or 'device' scope also require a `ci-` device id in the body from a CI key.
     """
 
@@ -216,6 +217,7 @@ class ApiKeyRequired:
 
         # Static API key check (backward compat)
         if static_key_ok(bearer):
+            request.api_authenticated = True  # diagnostics.middleware: may store the request line (API-013)
             return super().dispatch(request, *args, **kwargs)
 
         # Attestation JWT check
@@ -223,11 +225,13 @@ class ApiKeyRequired:
         if payload is not None:
             request.attested_device_key = payload.get('sub')
             request.attested_platform = payload.get('platform')
+            request.api_authenticated = True
             return super().dispatch(request, *args, **kwargs)
 
         # CI key: DEMO event only
         if self.ci_scope and ci_key_ok(bearer):
             request.ci_key = True
+            request.api_authenticated = True
             if self.ci_scope == 'event':
                 demo = demo_event()
                 if demo is None or str(kwargs.get('event_id')) != str(demo.id):

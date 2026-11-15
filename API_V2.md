@@ -14,6 +14,8 @@ v2 is what the current iOS and Android apps use. The v1 endpoints in `API.md` st
 
   Devices whose id starts with `ci-` (with any key) are left out of organizer audience counts, install/join/leave
   counts and pushes, so test runs don't show up in DEMO's stats. Apps never send a CI key.
+- **Request ids (API-013):** send `X-Request-Id: <random>` with every call (and `X-Diag-Session: D-XXXXX` during a
+  debug session); the response echoes `X-Request-Id`. See Diagnostics.
 - **Timestamps:** ISO 8601 with a UTC offset. Display times in the **event's** `timezone`, not the device's.
 - **Coordinates:** may be `null`, meaning unknown. Never drop a pin for a `null` coordinate, and never treat `0,0` as a real location.
 - **Forward compatibility:** clients **must ignore unknown keys** and **must fall back to defaults for missing keys**, in every object, and especially in `display`.
@@ -125,16 +127,173 @@ Anonymous usage counts. **Never send a device ID or anything identifying**; the 
 | `refresh` | none. Pull to refresh. |
 | `location_heart` / `location_unheart` (API-009) | location id (required). The attendee hearted / removed the heart from a location. |
 | `schedule_item_heart` / `schedule_item_unheart` (API-009) | schedule item id (required). The same for a schedule item. |
+| `perf_…` (API-014) | the bucket (see Performance below). Anonymous timings and failures. |
 
 - **Hearts (API-009):** send one `…_heart` each time the attendee turns a heart on and one `…_unheart` each time they
   turn it off, through the same reporter, buckets and rules as every other count (no device id, ever). Don't re-send
   hearts that are restored from storage at launch. The console shows **net** hearts per item (hearts − unhearts over
   the event, never below 0). A heart without an id, or with an id from another event, is dropped.
 
+- **Performance (API-014):** anonymous, bucketed timings and failure counts, sent through this same endpoint and
+  reporter. `detail` is the **bucket label, exactly as written here** (ASCII, lower case); an unknown bucket, or a
+  missing one where one is required, drops the entry. Measure on the device, put the value into its bucket, count it
+  like any other metric. Only while in an event: a value measured outside an event is added to the next flush made
+  while in one, or dropped.
+
+  | `name` | `detail` (bucket) | What is measured |
+  |--------|-------------------|------------------|
+  | `perf_launch_cold` | `<0.5s`, `<1s`, `<2s`, `<4s`, `>=4s` | process start → first frame of the event UI (cold launch) |
+  | `perf_launch_warm` | same | return to the foreground → interactive |
+  | `perf_bundle_fetch` | `<250ms`, `<500ms`, `<1s`, `<2s`, `<5s`, `>=5s` | `GET bundle/` answered `200`: request start → decoded |
+  | `perf_bundle_304` | same as `perf_bundle_fetch` | `GET bundle/` answered `304` |
+  | `perf_api_error` | `4xx`, `5xx`, `timeout`, `offline` | any API call that failed (one count per failed call, retries included) |
+  | `perf_push_refresh_delay` | `<5s`, `<10s`, `<15s`, `<30s`, `<60s`, `>=60s` | `content_updated` push received → the new bundle shown (includes the random 0–10 s delay) |
+  | `perf_live_start_fail` | none, or `disabled`, `denied`, `limit`, `error` | a Live Activity (iOS) / Live Update (Android) could not start |
+  | `perf_planner_ms` | `<100ms`, `<250ms`, `<500ms`, `<1s`, `<2s`, `>=2s` | one planner run (preference extraction excluded) |
+  | `perf_map_first_render` | `<250ms`, `<500ms`, `<1s`, `<2s`, `<4s`, `>=4s` | Map tab opened → first pins drawn |
+
+  A bucket `<X` means "less than X" and the buckets don't overlap: 480 ms is `<500ms`, 500 ms is `<1s`, 5 s is `>=5s`.
+  These counts are for staff only (Diagnostics panel); organizers never see them and they never count as interactions.
+
 - `count` is optional (default 1). `at` is optional ISO 8601, used to place the count in its UTC 5-minute window (within the last 7 days). Up to 200 entries per request.
 - Unknown names, invalid details and ids from other events are dropped silently. A malformed body still returns `200`.
 - **Client behaviour:** aggregate in memory by (name, detail, UTC 5-minute window, sending its start as `at`) and send at most every ~60 seconds, when the app goes to the background, and before leaving an event. Drop the batch after one failed retry. Analytics must never block or slow the UI, and never show errors.
 - The server counts joins, leaves and new installs itself; don't send those.
+
+## Diagnostics (API-013)
+
+Debug logs and anonymous crash/hang reports. The record format and every event name are in
+[`LOG_EVENTS.md`](LOG_EVENTS.md) (the shared catalogue); only names listed there may be logged. Staff read them in
+the console's **Diagnostics** panel (`/console/diagnostics/`). Nothing here is ever linked to a device id: a log
+session is keyed by its random **debug code**, and reports carry no identifier at all.
+
+### Request headers on every API call
+
+- **`X-Request-Id`** (every call, every build): a new random id per request, 8–64 characters of `A-Z a-z 0-9 . _ : -`
+  (e.g. 16 hex characters). The server logs it with the request and returns it in the response's `X-Request-Id`
+  header (it makes one when the app sends none or an invalid one). Log it as `req_id` in the app's `net.request.*`
+  records, so the app's line and the server's line for the same call join up in the panel. A retry is a new request
+  with a new id.
+- **`X-Diag-Session: D-XXXXX`** (only while a debug session is on: dev builds always, production only during debug
+  mode): the server then also stores its own line for that request (`server.request`, category `server`) in that
+  session.
+
+### Debug codes
+
+`D-` + 5 characters of Crockford base32 (`0-9 A-H J K M N P-T V-Z`, i.e. no `I L O U`), random, upper case:
+`D-7K3QX`. Production: a new code each time the user turns debug logging on (10 minutes). Dev builds: one code per
+install, made once and kept. The code is shown to the user (with Copy) and is the only thing that names the session.
+
+### `POST diagnostics/logs/`
+Upload a batch of log records of a debug session. Same auth as the rest of v2. Only dev builds (always, `reason:
+"dev"`) and production builds during debug mode (`reason: "debug_mode"`, including the 5-minute pre-roll from the ring
+buffer) upload; production never uploads otherwise.
+
+- Body: JSON, **gzip-compressed** with `Content-Encoding: gzip` (plain JSON is accepted too). At most **256 KB as
+  sent** and 2 MB decompressed, at most **500 entries**.
+```json
+{"session": "D-7K3QX", "platform": "ios", "app": "2.0.131", "build": "131", "os": "iOS 27.2",
+ "model": "iPhone18,1", "reason": "debug_mode",
+ "entries": [{"v": 1, "ts": "2026-11-15T19:04:12.381Z", "mono_ms": 523101, "seq": 4182, "level": "debug",
+              "cat": "net", "event": "net.request.finished", "msg": "GET bundle 304 in 182 ms",
+              "f": {"method": "GET", "path": "/api/v2/events/{id}/bundle/", "status": 304, "ms": 182,
+                    "req_id": "9f2c41d07a3b5e68", "cache": "304"},
+              "app": "2.0.131", "build": "131", "os": "iOS 27.2", "model": "iPhone18,1", "state": "fg",
+              "net": "wifi", "event_id": 5, "diag": "D-7K3QX"}]}
+```
+→ `200 {"status": "ok", "accepted": 1, "rejected": 0}`
+
+- `session` must be a debug code, `platform` `ios`/`android`, `reason` `dev`/`debug_mode`, `entries` a list; otherwise
+  `400` (`{"error": "…"}`). Too large / too many entries: `413`. Send what's left in smaller batches.
+- **Each record** is checked on its own; an invalid one is dropped and counted in `rejected` (the others are kept):
+  `v` must be `1`; `level` one of `trace debug info notice warning error fault` (or 0–6); `cat` one of the app
+  categories (`net push background live location map planner assistant search storage ui perf auth lifecycle
+  logging`; `server` is the server's own); `event` a dotted lower-case name (2–5 parts, ≤ 64 characters); `ts` ISO 8601
+  with a zone, not older than the retention (7 / 14 days) and not more than a day ahead; `diag`, if present, the same
+  code as `session`. `msg` is cut at 2,000 characters, `f` (an object) is replaced by `{"_truncated": true}` above
+  4 KB of JSON.
+- **The server scrubs `f` again** (the apps must already redact, see `LOG_EVENTS.md`): keys naming tokens, passwords,
+  secrets, authorization, API keys, emails, device ids, support codes, cookies or JWTs are dropped; so are `query`,
+  `text`, `prompt` and `q` except from dev builds (`…_len`/`…_length`/`…_count` keys are kept); `url`/`path`/`href`/
+  `uri`/`link` lose their query string; `lat`/`lng` are rounded to 0.01°.
+- **Caps: `429` with `Retry-After` (seconds)** and `{"error": …, "retry_after": n}`:
+  - a session takes at most **20,000 entries per 10 minutes** (the window starts with the first accepted batch);
+    `Retry-After` is the rest of the window;
+  - while the diagnostics storage is full (250 MB), every upload: `Retry-After: 3600`;
+  - at most 600 uploads per 10 minutes from one network.
+
+  On `429` keep the records in the ring buffer and try again after `Retry-After`, not before. Records the ring buffer
+  overwrites meanwhile are lost (log `logging.dropped` when they are).
+- With a CI key the answer is the same and nothing is stored (API-008).
+- **Retention:** entries from dev builds are deleted after **7 days**, from debug mode after **14 days**; when the
+  storage passes 250 MB the oldest sessions go first.
+- **Client behaviour:** batch every ~10 s (dev builds: every ~30 s or 200 records, whichever first) and when the app
+  goes to the background; upload off the main thread; never show an error; failures stay in the ring buffer and are
+  retried on the next batch. The upload itself is logged as `logging.upload` (into the next batch).
+
+### `POST diagnostics/reports/`
+Anonymous crash, hang and exit reports, from every production and dev build (no opt-in needed: no identifier is
+sent). iOS: MetricKit `MXDiagnosticPayload` (crash, hang, CPU, disk-write and launch diagnostics). Android:
+`ActivityManager.getHistoricalProcessExitReasons` read at the next launch (crash, ANR, low memory, other exits;
+ANR thread dump from `getTraceInputStream`), plus the app's own uncaught-exception handler writing the Java stack
+trace to a file that is sent at the next launch. Same auth as the rest of v2. Same body limits as `logs/` (gzip,
+≤ 256 KB as sent, ≤ 2 MB decompressed); at most **20 reports** per request, each ≤ 256 KB.
+```json
+{"platform": "android", "app": "2.0.131", "build": "131000", "os": "Android 16", "model": "Pixel 9",
+ "reports": [{"kind": "crash", "occurred_at": "2026-11-15T18:02:11Z",
+              "exception": {"type": "java.lang.IllegalStateException", "message": "bundle missing"},
+              "stack": "java.lang.IllegalStateException: bundle missing\n\tat a.b.c.b(SourceFile:3)\n…",
+              "reason": "CRASH", "diag": "D-7K3QX"}]}
+```
+```json
+{"platform": "ios", "app": "2.0.131", "build": "131", "os": "iOS 27.2", "model": "iPhone18,1",
+ "reports": [{"kind": "crash", "occurred_at": "2026-11-15T18:02:11Z", "summary": "EXC_BAD_ACCESS (SIGSEGV)",
+              "payload": <MXCrashDiagnostic.jsonRepresentation() as an object>}]}
+```
+→ `200 {"status": "ok", "accepted": 1, "rejected": 0}`
+
+- `kind`: `crash`, `hang`, `anr`, `low_memory`, `exit`, `launch`, `cpu`, `disk_write`, `memory` or `metrics`
+  (anything else is rejected). `occurred_at` (ISO 8601) optional. `app`/`build`/`os`/`model` per report override the
+  top-level ones (MetricKit can deliver a report from the previous app version).
+- `exception` `{type, message}` (first line of the message, ≤ 280 characters, never user text) and/or `summary`
+  (≤ 500); `reason` (≤ 200: Android's exit reason name, iOS termination reason/signal).
+- Android: `stack` = the **obfuscated** stack trace or ANR dump as text (≤ 128 KB). The server retraces it with the
+  R8 mapping uploaded for that `build` (version code).
+- iOS: `payload` = the diagnostic's `jsonRepresentation()` decoded to an object (it carries `callStackTree` with
+  `binaryUUID`, `binaryName`, `offsetIntoBinaryTextSegment`, and `diagnosticMetaData`). Staff symbolicate it from the
+  panel with the build's dSYMs. Daily `MXMetricPayload`s are **not** sent (use API-014 counts).
+- `diag`: the debug code, only if a debug session was on when it happened (links the report to the session).
+- Never a device id, push token, user text or location.
+- Caps: `429` + `Retry-After` while the storage is full (`3600`) or after 60 reports-requests per hour from one
+  network. Reports are deleted after **30 days**. A CI key gets the same answer and nothing is stored.
+- **Client behaviour:** send at launch / when MetricKit delivers, off the main thread; on failure keep them (at most
+  20, the newest) and retry at the next launch; drop them after 7 days.
+
+### `POST /api/diagnostics/symbols/` (CI only, outside the version)
+attnd-android's release job uploads the R8 `mapping.txt` of every minified build (the same file it gives Play with
+`edits.deobfuscationfiles`).
+- `POST /api/diagnostics/symbols/?platform=android&version=<versionName>&build=<versionCode>[&kind=r8_mapping]`,
+  body = the mapping file, plain or gzip (≤ 25 MB as sent, ≤ 200 MB decompressed),
+  `Authorization: Bearer <CI key>` (`ATTND_PROD_CI_KEY` for production, the dev static key `ATTND_API_KEY` for dev;
+  the static key works only where it is enabled). Any other bearer: `401`.
+- → `200 {"status": "ok", "id": 12, "bytes": 4518123, "sha256": "…"}`. The same `build` again replaces the file.
+  `400` for anything that isn't an R8 mapping or a missing `version`/`build`. The newest 20 mappings are kept.
+```bash
+gzip -c app/build/outputs/mapping/release/mapping.txt | curl -sf -X POST \
+  -H "Authorization: Bearer $ATTND_CI_KEY" -H "Content-Type: application/gzip" --data-binary @- \
+  "https://attnd.app/api/diagnostics/symbols/?platform=android&version=$VERSION_NAME&build=$VERSION_CODE"
+```
+
+### `GET|POST /api/diagnostics/symbolicate/<report id>/` (attnd-ios workflow only)
+Used only by attnd-ios's `symbolicate.yml`, which the panel dispatches with a one-time token (input `token`, valid
+2 hours, `Authorization: Bearer <token>`; anything else `401`).
+- `GET` → `{"report_id": 42, "platform": "ios", "app": "2.0.131", "build": "131",
+  "frames": [{"uuid": "3F2A…", "binary": "Attnd", "offset": 123456}]}` (unique frames, crashed thread first).
+- `POST {"frames": [{"uuid": "3F2A…", "offset": 123456, "symbol": "EventViewModel.refresh() (EventViewModel.swift:42)"}]}`
+  or `{"error": "No dSYM for build 131"}` → `{"status": "ok", "symbols": 1}`. The token is used up by the POST.
+
+---
+
 
 ## Outside the version: update check (API-003)
 

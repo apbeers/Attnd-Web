@@ -1,6 +1,8 @@
 {
   "endpoints": [
     "devices/",
+    "diagnostics/logs/",
+    "diagnostics/reports/",
     "events/<int:event_id>/bundle/",
     "events/<int:event_id>/join/",
     "events/<int:event_id>/leave/",
@@ -178,6 +180,22 @@
       "min_version": "null",
       "update": "string",
       "update_url": "string"
+    },
+    "POST diagnostics/logs/": {
+      "accepted": "integer",
+      "rejected": "integer",
+      "status": "string"
+    },
+    "POST diagnostics/reports/": {
+      "accepted": "integer",
+      "rejected": "integer",
+      "status": "string"
+    },
+    "POST /api/diagnostics/symbols/": {
+      "bytes": "integer",
+      "id": "integer",
+      "sha256": "string",
+      "status": "string"
     }
   },
   "push": {
