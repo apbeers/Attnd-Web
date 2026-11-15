@@ -50,14 +50,14 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 
 | ID | Change | Type | Web | iOS | Android |
 |----|--------|------|-----|-----|---------|
-| API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | ✅ dev (TestFlight, App Attest verified on a real iPhone) · ⬜ prod | ✅ dev · ⬜ prod |
-| API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ⬜ prod | — | — |
-| API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
-| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages (5-minute buckets) | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
-| API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
-| API-007 | Live updates via silent push to every device; slow safety poll; offline caching | additive (behaviour only, no shape change) | ✅ dev · ⬜ prod | ✅ dev (f7c1d9c) | ✅ dev (c03cc2d) |
-| API-008 | CI keys: DEMO-only API access for live integration tests (`CI_API_KEYS`); `ci-` devices not counted | additive (server only, new key type) | ✅ dev (not deployed yet) · ⬜ prod | — (CI uses it: live tests) | — (CI uses it: live tests) |
-| API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev (TestFlight, App Attest verified on a real iPhone) · ⬜ prod | ✅ dev · ⬜ prod |
+| API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ✅ prod (Nov 15, 2026) | — | — |
+| API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages (5-minute buckets) | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-007 | Live updates via silent push to every device; slow safety poll; offline caching | additive (behaviour only, no shape change) | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev (f7c1d9c) | ✅ dev (c03cc2d) |
+| API-008 | CI keys: DEMO-only API access for live integration tests (`CI_API_KEYS`); `ci-` devices not counted | additive (server only, new key type) | ✅ dev · ✅ prod (Nov 15, 2026) | — (CI uses it: live tests) | — (CI uses it: live tests) |
+| API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 ## Log
 

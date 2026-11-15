@@ -31,12 +31,10 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
 
 ### Go-live checklist (everything else flagged so far)
 **Release + production config** (production changes need the user's go-ahead)
-- First web release: merge `develop` → `main`. Production still runs old code: no new join page / AASA
-  (App Clip experience and Universal Links depend on it), and main's old packages carry ~200 Dependabot alerts.
+- ✅ First web release: `develop` → `main` on Nov 15, 2026 (release v110): new join page, AASA, passkeys, email, security headers, own design system. Later web releases: fast-forward `main` to `develop`.
 - Production config: `GOOGLE_MAPS_BROWSER_KEY`, `IOS_APP_STORE_URL`; `APNS_USE_SANDBOX` off;
   `APPLE_ATTEST_ENVIRONMENT=production`.
-- Production DEMO event (`load_demo_event`) and the App Review account (`create_review_account`): both
-  stores' review notes tell reviewers to use code DEMO on attnd.app.
+- ✅ Production DEMO event loaded (Nov 15, 2026; the prod integration tests pass against it). Still to do: the App Review account (`create_review_account`); both stores' review notes tell reviewers to use code DEMO on attnd.app.
 - Production cleanup (SETUP step 7): list users and demo events, delete with a go-ahead.
 - Heroku Postgres: check the version and upgrade to 18 (SETUP step 2).
 - First app releases to `main` (iOS App Review, Play production), then Play production lock-down (SETUP 4d).
