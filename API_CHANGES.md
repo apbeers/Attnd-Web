@@ -57,9 +57,9 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 | API-007 | Live updates via silent push to every device; slow safety poll; offline caching | additive (behaviour only, no shape change) | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev (f7c1d9c) | ✅ dev (c03cc2d) |
 | API-008 | CI keys: DEMO-only API access for live integration tests (`CI_API_KEYS`); `ci-` devices not counted | additive (server only, new key type) | ✅ dev · ✅ prod (Nov 15, 2026) | — (CI uses it: live tests) | — (CI uses it: live tests) |
-| API-009 | Anonymous heart counts: usage metrics `location_heart` / `location_unheart` / `schedule_item_heart` / `schedule_item_unheart`; net hearts in the console | additive (new usage names) | 🚧 dev (not pushed yet) | ⬜ | ⬜ |
-| API-010 | Tags: `Location.tags` in the bundle, all tags lower case; AI import/refresh tags everything; `backfill_tags`; DEMO tags | additive (new key; tag case normalised) | 🚧 dev (not pushed yet) | ⬜ | ⬜ |
-| API-011 | Urgent announcements: `Notification.priority`, `priority` in notification pushes, urgent = every device + time-sensitive/high priority; iOS Live Activity push via `POST devices/` `live_activity_token` | additive (new keys, new optional request field, new push variant) | 🚧 dev (not pushed yet) | ⬜ | ⬜ |
+| API-009 | Anonymous heart counts: usage metrics `location_heart` / `location_unheart` / `schedule_item_heart` / `schedule_item_unheart`; net hearts in the console | additive (new usage names) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (e1802d9) | ✅ dev (41291f1) |
+| API-010 | Tags: `Location.tags` in the bundle, all tags lower case; AI import/refresh tags everything; `backfill_tags`; DEMO tags | additive (new key; tag case normalised) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (e1802d9) | ✅ dev (41291f1) |
+| API-011 | Urgent announcements: `Notification.priority`, `priority` in notification pushes, urgent = every device + time-sensitive/high priority; iOS Live Activity push via `POST devices/` `live_activity_token` | additive (new keys, new optional request field, new push variant) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (b3cb181, d688ed0) | ✅ dev (d491c93) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 ## Log

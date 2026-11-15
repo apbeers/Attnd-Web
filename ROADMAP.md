@@ -69,6 +69,18 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
 
 ## Future
 
+### Glance / hearts / planner / Live Activity follow-ups (built Nov 15, 2026; API-009/010/011)
+Built on both apps: relative times, distance + compass, walking routes, map/list glanceables, hearts, the
+on-device planner (identical rules on both, Android's `Planner.kt` is the reference), onboarding, Live
+Activity / Live Update (device-driven; server only for urgent announcements), reminders. Still open:
+- Home-screen widgets ("Happening now / Next in my plan"): Android Glance widget and iOS WidgetKit widget
+  (the `AttndWidgets` extension already exists).
+- Android venue arrival: needs `ACCESS_BACKGROUND_LOCATION` + the Play Console background-location
+  declaration (code is in place, off). Owner decision.
+- Align small differences: iOS reminders use a fixed 15 min lead (Android adds walk time); iOS Live Activity
+  leaves the plan once today's planned items have ended (Android keeps it for the day).
+- Production: release develop → main, reload DEMO and run `backfill_tags --all` there (owner go-ahead).
+
 ### Android: move FCM to the Firebase Installation ID registration API (would be API-012; API-008 became the CI keys, API-009–011 the heart counts, tags and urgent announcements)
 firebase-messaging 25.1.0 (June 2026) deprecated `FirebaseMessaging.getToken()` / `onNewToken` in favour of
 `register()` / `onRegistered`, which hands out a Firebase Installation ID instead of an FCM token. The app
