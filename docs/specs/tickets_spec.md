@@ -95,6 +95,38 @@ Inventory: `SELECT … FOR UPDATE` on TicketType/Capacity when creating a held o
 - Owner sign-ups (no payment ones): Apple Wallet Pass Type ID + certificate (passes, not Apple Pay) and a Google Wallet
   issuer account (approval takes days). Stripe account + Connect when ready.
 
+## Testing (agreed, part of the build)
+- **Dev = Stripe test mode end to end.** dev.attnd.app and the dev app builds (TestFlight Dev, Play internal) use
+  Stripe test keys (`sk_test_…`, a test webhook endpoint for dev), a test Connect platform, and Stripe test cards
+  (success, decline, 3-D Secure, dispute). Production keys never on dev; production never accepts test-mode webhooks.
+- **Walkthrough kit on dev** (staff-only page + management command `load_ticket_demo`): a DEMO ticketed event with
+  every ticket kind (paid, free/RSVP, donation, add-on, hidden + unlock code, promo code, sold-out + waitlist), a test
+  organizer with a completed Stripe test Connect account, a door-staff account, and buyer test emails, so every role
+  can be walked through: organizer sets up tickets with AI → buyer buys on the site (test card) → email + Wallet
+  passes → "My tickets" in the dev app → door staff scans (also in airplane mode) → refund / transfer / cancel the
+  event → payout released after the event (a "fast-forward to after the event" button on dev only).
+- Emails on dev go only to `EMAIL_ALLOWED_RECIPIENTS`; Wallet passes on dev use the same Pass Type ID with a "DEV"
+  label and a separate Google Wallet class prefix.
+- **Automated tests across everything**:
+  - Unit (web, iOS, Android): fee gross-up and all-in prices, inventory holds and expiry, promo/unlock rules, refund
+    rules, QR token signing/verification and revocation, offline check-in merge, Wallet pass contents and signing.
+  - Server integration (Django tests, Stripe mocked at the HTTP layer, recorded fixtures of real test-mode payloads):
+    checkout → webhook → tickets issued → refund/dispute/cancel → payouts; webhook idempotency and replay; oversell
+    under concurrent holds (parallel transactions on Postgres).
+  - Live integration (like today's `live_tests/` and the apps' DEMO suites, CI against dev): real Stripe test mode —
+    create a hold, complete a Checkout Session with a test card via Stripe's test helpers, receive the webhook, fetch
+    tickets through the API, verify the QR offline, check in, refund. Runs on every develop deploy; prod runs only
+    read-only checks.
+  - App suites: the iOS and Android integration tests gain "My tickets" (email code via a dev test inbox endpoint),
+    offline scan verification against the dev DEMO event, and Wallet pass download.
+  - Browser end-to-end (Playwright in CI against dev): organizer creates tickets → buyer checkout with a Stripe test
+    card → confirmation → console sees the order.
+  - Cross-repo: the DEMO ticket facts live in one place (`load_ticket_demo` + a test of it, like `tests_demo_facts.py`);
+    web, iOS and Android suites assert the same facts, and the tracker entry lists them.
+- **Broader goal** (beyond tickets): every user-facing flow gets an end-to-end test that runs on each push to develop
+  (join, bundle, push, planner/assistant, Studio publish, forms, diagnostics, sign-in with passkeys via a software
+  authenticator), so the three repos are always checked together.
+
 ## Phases
 1. Core: Stripe Connect onboarding, ticket types (paid/free), holds, web checkout, emails + QR, Wallet passes, door
    scanning offline + door staff role, orders/refunds/dashboard, AI drafting with review, payouts released after
