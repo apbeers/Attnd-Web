@@ -61,6 +61,11 @@ class Command(BaseCommand):
             import logging
             logging.getLogger(__name__).exception('Diagnostics purge failed')
 
+        # Tickets: lapsed holds, refunds of cancelled events, payouts due after events, old codes/tokens.
+        from tickets.tasks import run as run_ticket_tasks
+        done = run_ticket_tasks()
+        self.stdout.write('tickets: ' + ', '.join(f'{k} {v}' for k, v in done.items() if v))
+
         # Idempotent and cheap: delete unclaimed trial events past their expiry
         call_command('expire_trial_events', stdout=self.stdout)
 

@@ -1,0 +1,40 @@
+/* Public ticket pages (attnd.app/t/<code>/, /tickets/…). Builds on home/site.css tokens. */
+.tix { max-width: 760px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-6); }
+.tix-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-5); }
+.tix-head .brand { font-weight: 800; font-size: 1.4rem; text-decoration: none; color: var(--color-text); }
+.tix-head .brand span { color: var(--color-brand); }
+.tix-event h1 { font-size: clamp(1.7rem, 4vw, 2.4rem); margin-bottom: .2em; }
+.tix-meta { color: var(--color-muted); margin-bottom: var(--space-5); }
+.tix-card { border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); background: var(--color-bg); box-shadow: var(--shadow); margin-bottom: var(--space-4); }
+.tix-type { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) var(--space-4); align-items: center; padding: var(--space-4) 0; border-bottom: 1px solid var(--color-border); }
+.tix-type:last-child { border-bottom: 0; }
+.tix-type__name { font-weight: 700; font-size: 1.1rem; }
+.tix-type__price { font-weight: 800; font-size: 1.15rem; text-align: right; }
+.tix-type__desc, .tix-small { color: var(--color-muted); font-size: .92rem; }
+.tix-type__desc { grid-column: 1 / -1; margin: 0; white-space: pre-line; }
+.tix-type select, .tix-type input, .tix-field input, .tix-field select, .tix-field textarea {
+  font: inherit; padding: .55em .7em; border: 1px solid var(--color-control-border); border-radius: var(--radius); background: #fff; min-height: 44px; }
+.tix-field { display: flex; flex-direction: column; gap: .3em; margin-bottom: var(--space-3); }
+.tix-field label { font-weight: 600; }
+.tix-check { display: flex; gap: .5em; align-items: flex-start; margin: var(--space-3) 0; }
+.tix-pill { display: inline-block; font-size: .8rem; font-weight: 700; border-radius: var(--radius-pill); padding: .15em .7em; background: var(--color-subtle); color: var(--color-muted); }
+.tix-pill--hot { background: #fff2e5; color: #8a4a00; }
+.tix-pill--bad { background: var(--color-danger-soft); color: var(--color-danger-text); }
+.tix-pill--ok { background: #e6f4ea; color: #145c32; }
+.tix-totals { width: 100%; border-collapse: collapse; margin: var(--space-3) 0; }
+.tix-totals td { padding: .35em 0; }
+.tix-totals td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.tix-totals .tix-total td { font-weight: 800; font-size: 1.15rem; border-top: 1px solid var(--color-border); padding-top: .6em; }
+.tix-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-top: var(--space-4); }
+.tix-timer { font-variant-numeric: tabular-nums; font-weight: 700; }
+.tix-ticket { display: grid; grid-template-columns: 180px 1fr; gap: var(--space-4); align-items: center; }
+.tix-ticket img.tix-qr { width: 180px; height: 180px; background: #fff; border-radius: var(--radius); }
+.tix-code { font-family: var(--font-mono); font-weight: 700; letter-spacing: .06em; }
+.tix-wallet { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .5em 1.1em; border-radius: var(--radius-pill); background: #000; color: #fff; text-decoration: none; font-weight: 700; }
+.tix-error { background: var(--color-danger-soft); border: 1px solid var(--color-danger-line); color: var(--color-danger-text); border-radius: var(--radius); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
+.tix-info { background: var(--color-brand-soft); border-radius: var(--radius); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
+.tix details { margin: var(--space-3) 0; }
+.tix details summary { cursor: pointer; font-weight: 600; }
+.tix-foot { color: var(--color-muted); font-size: .85rem; margin-top: var(--space-6); }
+.tix-embed { padding: var(--space-3); max-width: none; }
+@media (max-width: 560px) { .tix-ticket { grid-template-columns: 1fr; justify-items: center; text-align: center; } }

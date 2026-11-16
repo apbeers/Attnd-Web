@@ -15,6 +15,8 @@ use these elements, so the site, the app and the flyer always agree.
   <attnd-updates limit="5">                       the organizer's latest announcements
   <attnd-countdown to="2026-11-21T12:00">         "3 days 4 hours"; defaults to the event start; "Happening now"
   <attnd-app-badge qr code>                       App Store + Google Play buttons, join QR code and event code
+  <attnd-tickets button="Get tickets" compact>    ticket types with all-in prices + a "Get tickets" link to attnd.app
+                                                  (only when the event sells tickets through Attnd; never sell on the site)
   <attnd-event field="name|dates|time|address|description">   one fact from the event, as text
 All attributes are optional. Times show in the event's time zone. Elements render plain, light-DOM HTML with classes
 attnd-<element>__<part> (e.g. .attnd-schedule__item, .attnd-schedule__time, .attnd-schedule__name,

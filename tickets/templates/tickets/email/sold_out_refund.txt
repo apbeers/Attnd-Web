@@ -1,0 +1,2 @@
+{% autoescape off %}Your payment for {{ event.name }} arrived after your hold ended and the tickets sold out in the meantime. We refunded the full {{ amount }} (order {{ order.ref }}).
+{% endautoescape %}

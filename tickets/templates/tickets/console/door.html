@@ -1,0 +1,12 @@
+{% extends 'console/base.html' %}
+{% load console_tags tickets_tags %}
+{% block title %}Door team · {{ event.name }}{% endblock %}
+{% block event_content %}
+{% include 'tickets/console/_nav.html' with tab='door' %}
+<div class="split">
+<div class="split__main panel stack"><h2 class="title-3">Door team</h2>
+  <p class="small muted">They scan tickets in the Attnd app (Options → Door mode) with this email; no console access. Everyone on the event’s team can scan too. The app downloads the ticket list, so scanning works offline.</p>
+  <ul class="list">{% for s in staff %}<li>{{ s.name|default:s.email }} <span class="small muted">{{ s.email }}</span>{% if can_manage %}<form method="post" class="push">{% csrf_token %}<input type="hidden" name="staff" value="{{ s.id }}"><button class="button button--small button--ghost" name="action" value="remove">Remove</button></form>{% endif %}</li>{% empty %}<li class="list__empty">Nobody yet.</li>{% endfor %}</ul></div>
+{% if can_manage %}<form method="post" class="split__aside panel stack">{% csrf_token %}<h2 class="title-3">Add door staff</h2>{% for field in form %}{% include 'console/_field.html' with field=field %}{% endfor %}<button class="button button--primary">Add and email instructions</button></form>{% endif %}
+</div>
+{% endblock %}

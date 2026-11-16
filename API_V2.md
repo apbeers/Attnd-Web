@@ -65,9 +65,11 @@ Returns everything the app shows, in one response.
   "categories": ["Food", "Stage"],
   "locations": [<Location>],
   "schedule": [<ScheduleItem>],
-  "notifications": [<Notification>]
+  "notifications": [<Notification>],
+  "tickets": <Tickets> | null
 }
 ```
+`tickets` (API-017): see Tickets.
 Hidden locations and items are already filtered out. `locations` are already in the organizer's order, and `schedule` is sorted by `start_time`. `notifications` are newest first.
 
 ### `POST events/<id>/join/`
@@ -295,6 +297,138 @@ Used only by attnd-ios's `symbolicate.yml`, which the panel dispatches with a on
 ---
 
 
+## Tickets (API-017)
+
+Tickets are **sold only on the website** (`https://attnd.app/t/<EVENT_CODE>/`, Stripe Checkout). The apps never sell,
+take payments or show a payment UI: they open the ticket page in the browser ("Get tickets"), show tickets the person
+already has ("My tickets", by verified email), and scan tickets at the door ("Door mode"). Every call below also needs
+the normal app `Authorization` (attestation JWT / static key); the buyer and door tokens go in their own headers.
+
+### In the bundle and event objects
+- `event.tickets_url` (every v2 event object): the ticket page while the event sells tickets through Attnd, else
+  `null` (also while sales are paused or sold out: the page explains).
+- `bundle.tickets`: `null` without Attnd ticketing, else
+  ```json
+  {"on_sale": true, "state": "open" | "paused" | "sold_out" | "cancelled" | "ended" | "closed",
+   "sold_out": false, "url": "https://attnd.app/t/FWFM2026/", "min_price_cents": 0, "max_price_cents": 7808,
+   "currency": "usd", "price_text": "From $26.06", "prices_include_fees": true}
+  ```
+  Prices are **all-in** (ticket + the buyer's processing fee; the FTC rule on live-event tickets): show `price_text`
+  (or format the cents) as is, never add a fee. Show **Get tickets** when `on_sale`; otherwise show the `state`
+  ("Sold out", "Tickets aren't on sale yet", "Event cancelled"). Tap → open `url` in the browser / Safari View
+  Controller / Custom Tab (not a WebView with app cookies; nothing from the app is sent). Changes to on-sale /
+  sold-out / prices bump `content_version` (sold-out only when it flips, not per sale).
+
+### My tickets: `POST tickets/code/`, `POST tickets/verify/`
+```json
+POST tickets/code/    {"email": "bea@example.com"}            → {"status": "sent", "expires_in": 600}
+POST tickets/verify/  {"email": "…", "code": "123456", "device_name": "Bea's iPhone"}
+                      → {"buyer_token": "<opaque>", "email": "bea@example.com", "expires_at": "…"}
+```
+- `code/` answers the same for any valid address (it never reveals who has tickets); the email holds a 6-digit code,
+  valid 10 minutes, 5 tries. `400 {"error": "invalid_email"}`; `429 {"error": "rate_limited"}` (3 codes per address
+  per 15 min, 20 per IP per hour).
+- `verify/` → `400 {"error": "invalid_code", "message"}` (wrong, used or expired), `429` after 8 wrong codes per
+  address per 15 min. The token lasts 180 days; store it in the Keychain / encrypted prefs, one per email.
+
+### `GET tickets/mine/` (header `X-Attnd-Buyer: <buyer_token>`, optional `?event_id=`)
+```json
+{"email": "bea@example.com", "tickets": [{
+  "id": 345, "code": "K7Q2-9XPM", "status": "valid" | "refunded" | "void", "version": 1,
+  "qr": "ATK1.<payload>.<signature>" | null,
+  "type": {"id": 7, "name": "General Admission"}, "holder_name": "Bea Buyer", "order_ref": "A7K2Q9",
+  "checked_in_at": "…" | null, "transferable": true,
+  "ticket_url": "https://attnd.app/tickets/ticket/<uuid>/<key>/",
+  "apple_wallet_url": "https://attnd.app/tickets/ticket/<uuid>/<key>/wallet.pkpass" | null,
+  "google_wallet_url": "https://attnd.app/tickets/ticket/<uuid>/<key>/google-wallet/" | null,
+  "event": {"id": 12, "name": "…", "event_code": "…", "timezone": "America/Chicago", "start_time": "…",
+            "end_time": "…" | null, "address": "…", "latitude": 32.75 | null, "longitude": -97.33 | null,
+            "cancelled": false}}]}
+```
+- Tickets **held by** that email (bought, or transferred to it). Refunded/void/transferred-away tickets drop out or
+  come back with `status` ≠ `valid` and `qr: null`: replace the stored copy each time.
+- `ETag` / `If-None-Match` → `304`. `401 {"error": "buyer_token_invalid"}` → sign in again.
+- **Offline:** store the whole response; show the QR (`qr` is the exact QR string, render it as a QR code,
+  error correction M) from storage with no network. Refresh on open / pull-to-refresh / when the event is joined.
+- Wallet: open `apple_wallet_url` (iOS `PKAddPassesViewController` from the downloaded `.pkpass`, or just open the URL)
+  and `google_wallet_url` (opens Google Wallet's save page). `null` = not configured on this server.
+- Transfers, refunds and resends happen on `ticket_url` (web).
+
+`POST tickets/signout/` (same header) revokes the token.
+
+### QR token format (verify offline)
+`ATK1.<payload>.<signature>`: `payload` = base64url (no padding) of compact JSON with sorted keys
+`{"e":<event id>,"k":<key id>,"n":<ticket version>,"t":<ticket id>,"y":<ticket type id>}`; `signature` = base64url
+(no padding) of the 64-byte **Ed25519** signature of the ASCII bytes `ATK1.<payload>`. Verify with the event's public
+key `k` from the door manifest (iOS: CryptoKit `Curve25519.Signing.PublicKey`, Android: `Signature.getInstance("Ed25519")`).
+A transfer, refund or void bumps the ticket's version: tokens with an older `n` are revoked.
+
+### Door mode: `POST door/code/`, `POST door/verify/`
+The same email-code flow (`purpose` door), for door staff the organizer added (console → Tickets → Door team) and the
+event's team. `verify/` → `{"door_token", "email", "expires_at" (30 days), "events": [<DoorEvent>]}` with
+`DoorEvent = {"id", "name", "event_code", "timezone", "start_time", "end_time"}` (empty list = this email works no
+doors). Header for the rest: `X-Attnd-Door: <door_token>`. Access to an event is re-checked on every call (a removed
+staff member gets `404`); `401 {"error": "door_token_invalid"}` → sign in again; `429` above 600 calls per 10 min.
+`GET door/events/` lists the events again; `POST door/signout/` revokes the token.
+
+### `GET door/events/<id>/manifest/` (ETag)
+```json
+{"schema": 1, "generated_at": "…",
+ "event": {"id", "name", "event_code", "timezone", "start_time", "end_time"},
+ "keys": [{"kid": 1, "alg": "Ed25519", "public_key": "<base64url raw 32 bytes>", "active": true}],
+ "ticket_types": [{"id": 7, "name": "General Admission", "reentry": false, "add_on": false, "valid_on": "2026-11-21" | null}],
+ "tickets": [{"id": 345, "code": "K7Q29XPM", "type_id": 7, "status": "valid", "version": 1, "name": "Bea Buyer",
+              "email_hash": "<sha256 hex of '<event id>:<lower-case email>'>", "order_ref": "A7K2Q9",
+              "checked_in_at": null, "checked_in_gate": null, "inside": false}],
+ "revocations_cursor": 88, "gates": ["Gate A"]}
+```
+Minimal personal data: names only (for manual search and greeting); emails only as `email_hash` (hash what staff type
+the same way to search by email). No prices, answers or phone numbers. Download before doors open (and whenever
+online, with `If-None-Match`).
+
+### `GET door/events/<id>/revocations/?since=<cursor>`
+`{"revocations": [{"cursor": 89, "ticket_id": 345, "version": 1, "reason": "transfer" | "refund" | "void" |
+"cancelled" | "dispute", "at": "…"}], "cursor": 89, "more": false}`. Tokens of `ticket_id` with `n` ≤ `version` are
+revoked. Poll every ~30 s while online (cheap); keep the cursor.
+
+### Scanning offline (what the app does with no server)
+1. Parse the QR; verify the signature with the manifest key `k`; `e` must be this event → else **red "Not a ticket
+   for this event"**.
+2. Revoked (`n` ≤ a revocation's version for `t`, or `n` < the manifest's `version`) → **red "Old QR code"**
+   (transferred or reissued). Manifest `status` refunded/void → **red "Refunded / void"**. A ticket missing from the
+   manifest but with a valid signature was bought after the download: admit it.
+3. `valid_on` ≠ today in the event's time zone → **red "Not valid today"**.
+4. Already admitted (manifest `checked_in_at`, or a scan in the local queue, from any gate this device knows of) and
+   the type has no `reentry` (or the holder is still `inside`) → **amber "Already checked in 7:42 PM at Gate B"**.
+5. Otherwise **green**, then queue the scan.
+Manual check-in: search the manifest by name, code, order ref or email hash, then queue a scan with `ticket_id`.
+
+### `POST door/events/<id>/checkins/`
+```json
+{"device_id": "door-ipad-3", "gate": "Gate B",
+ "checkins": [{"client_id": "<uuid made at scan time>", "token": "ATK1…" | null, "ticket_id": 345 | null,
+               "at": "2026-11-21T19:42:10-06:00", "kind": "in" | "out", "device_result": "ok" | "duplicate" | …}]}
+→ {"results": [{"client_id", "result": "ok" | "duplicate" | "revoked" | "void" | "invalid" | "wrong_day" | "rejected",
+                "ticket_id", "flagged": false, "at", "first_at"?, "first_gate"?}],
+   "counts": <Counts>, "revocations_cursor": 89}
+```
+- Up to 500 per call (`413` above); upload the queue in batches when online, oldest first, and retry until each
+  `client_id` has a result. **Idempotent by `client_id`**: re-sending returns the stored result.
+- `at` is the device's scan time (offline time is kept). The server merges all gates: the **earliest** admission of a
+  ticket wins; later ones become `duplicate` and `flagged` (also a scan the device admitted offline that the server
+  rejects). The app may show flagged results in its sync summary.
+
+### `GET door/events/<id>/counts/`
+`Counts = {"total": 412, "checked_in": 180, "inside": 175, "flagged": 2, "by_type": [{"type_id", "name", "total",
+"checked_in"}], "by_gate": [{"gate", "checked_in"}], "updated_at"}`.
+
+### CI / dev only
+With a CI key (API-008) these endpoints work only for DEMO and the ticket demo event (`TICKETS_DEMO_EVENT_CODE`,
+default `TIXDEMO`, `manage.py load_ticket_demo`) and only with test addresses (`@ci.attnd.test`, never mailed). On dev
+servers (`TICKETS_DEV_TOOLS`), CI keys can also read codes (`GET tickets/test-inbox/?email=` → `{"code"}`), hold
+tickets (`POST tickets/test/order/`) and pay a hold with Stripe's test card (`POST tickets/test/pay/`, test mode only).
+All three answer `404` everywhere else.
+
 ## Outside the version: update check (API-003)
 
 ### `GET /api/app-status/?platform=ios|android&version=<app version>&api=<API version the build speaks>`
@@ -342,9 +476,11 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
   "accent_color": "#FF5A1F" | null, "logo_url": "https://…" | null,
   "content_version": 15,
   "join_url": "https://attnd.app/join/FWFM2026/",
-  "website_url": "https://sites.attnd-example.com/fw-fair/" | null
+  "website_url": "https://sites.attnd-example.com/fw-fair/" | null,
+  "tickets_url": "https://attnd.app/t/FWFM2026/" | null
 }
 ```
+- `tickets_url` (API-017): the event's ticket page while it sells tickets through Attnd, else `null`. See Tickets.
 - `is_demo == true`: show the prominent **Demo Event** banner.
 - `website_url` (API-016): the event's website hosted by Attnd Studio while it is published, else `null` (missing in
   older responses = `null`). Apps show a **Website** link (opens in the browser). It is on a separate domain from

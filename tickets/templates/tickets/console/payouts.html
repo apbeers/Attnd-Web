@@ -1,0 +1,25 @@
+{% extends 'console/base.html' %}
+{% load console_tags tickets_tags %}
+{% block title %}Payouts · {{ event.name }}{% endblock %}
+{% block event_content %}
+{% include 'tickets/console/_nav.html' with tab='payouts' %}
+<div class="panel panel--roomy stack">
+  <h2 class="title-3">Payouts with Stripe</h2>
+  {% if not stripe_configured %}<div class="notice notice--warning">Stripe isn’t set up on this server yet (STRIPE_SECRET_KEY). Free tickets work; paid tickets need it.</div>{% endif %}
+  {% if test_mode %}<div class="notice notice--info small">Stripe test mode: no real money moves.</div>{% endif %}
+  {% if account %}
+    <p>Stripe account <span class="mono">{{ account.stripe_account_id }}</span>:
+      {% if account.ready %}<span class="badge badge--success">ready</span>{% else %}<span class="badge badge--warning">onboarding not finished</span>{% endif %}
+      {% if account.payouts_enabled %}<span class="badge badge--success">payouts enabled</span>{% endif %}</p>
+    {% if account.requirements_due %}<p class="small muted">Stripe still needs: {{ account.requirements_due|join:", " }}</p>{% endif %}
+  {% else %}<p>Connect a Stripe account to receive ticket money. Stripe asks for your business and bank details on its own pages.</p>{% endif %}
+  {% if can_manage and stripe_configured %}<form method="post" class="cluster">{% csrf_token %}
+    <button class="button button--primary" name="action" value="connect">{% if account %}{% if account.ready %}Update details on Stripe{% else %}Continue Stripe onboarding{% endif %}{% else %}Set up payouts with Stripe{% endif %}</button>
+    {% if account.ready %}<button class="button button--outline" name="action" value="dashboard">Open Stripe Express dashboard</button>{% endif %}</form>{% endif %}
+  <p class="small muted">Ticket money is held until after the event and paid out on {{ release_at|date:"l, F j" }} (it stays in your Stripe balance until then). Buyers pay the processing fee, so you receive the full ticket price. Attnd takes no cut.</p>
+  <p>To be paid out: <strong>{{ net }}</strong></p>
+</div>
+<div class="panel panel--flush"><table class="data-table"><thead><tr><th>Release</th><th>Amount</th><th>Status</th><th>Stripe</th></tr></thead><tbody>
+{% for p in payouts %}<tr><td>{{ p.release_at|date:"M j, Y" }}</td><td>{% if p.amount_cents %}{{ p.amount_cents|cents:p.currency }}{% else %}—{% endif %}</td><td>{{ p.status }}{% if p.error %} <span class="small muted">{{ p.error }}</span>{% endif %}</td><td class="mono small">{{ p.stripe_payout_id }} {{ p.stripe_status }}</td></tr>
+{% empty %}<tr><td colspan="4" class="muted">Scheduled with the first sale.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

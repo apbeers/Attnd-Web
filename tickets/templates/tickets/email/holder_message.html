@@ -1,0 +1,3 @@
+{% extends "tickets/email/base.html" %}{% block content %}
+<p style="color:#5f6672;margin:0 0 12px">A message from the organizer of {{ event.name }}:</p>
+<div>{{ body|linebreaksbr }}</div>{% endblock %}

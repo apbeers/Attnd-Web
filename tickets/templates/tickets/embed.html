@@ -1,0 +1,13 @@
+{% extends "tickets/base.html" %}
+{% block title %}Tickets for {{ event.name }}{% endblock %}
+{% block main_class %} tix-embed{% endblock %}
+{% block header %}{% endblock %}{% block footer %}{% endblock %}
+{% block content %}
+<div class="tix-card">
+  {% for row in rows %}<div class="tix-type"><div class="tix-type__name">{{ row.type.name }}{% if row.state == 'sold_out' %} <span class="tix-pill tix-pill--bad">Sold out</span>{% endif %}</div>
+    <div class="tix-type__price">{% if row.all_in_cents %}{% if row.type.kind == 'donation' %}From {% endif %}{{ row.all_in }}{% else %}Free{% endif %}</div></div>
+  {% empty %}<p>{{ reason|default:"No tickets are available right now." }}</p>{% endfor %}
+  {% if state == 'open' %}<div class="tix-actions"><a class="button button--primary" href="{{ url }}?src=embed" target="_blank" rel="noopener">Get tickets</a>
+    <span class="tix-small">Prices include fees. Opens attnd.app.</span></div>{% endif %}
+</div>
+{% endblock %}

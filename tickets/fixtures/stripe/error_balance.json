@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "balance_insufficient",
+    "type": "invalid_request_error",
+    "message": "You have insufficient funds in your Stripe account."
+  }
+}

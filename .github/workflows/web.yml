@@ -137,6 +137,28 @@ jobs:
           [ -n "$ATTND_IT_KEY" ] || echo "::warning::ATTND_DEV_API_KEY is not set: the API tests are skipped (SETUP.md, CI keys)"
           python live_tests/run.py
 
+  e2e-dev:
+    name: E2E · dev (tickets)
+    # Browser end-to-end of ticketing on dev with Stripe test mode (e2e/tickets_e2e.py). LEAN MODE: CI_FULL only.
+    if: vars.CI_FULL == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    env:
+      E2E_SERVER: https://dev.attnd.app
+      E2E_ORGANIZER_EMAIL: ${{ secrets.E2E_ORGANIZER_EMAIL }}
+      E2E_ORGANIZER_PASSWORD: ${{ secrets.E2E_ORGANIZER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+      - name: Playwright
+        run: python -m pip install playwright && python -m playwright install --with-deps chromium
+      - name: Tickets end to end
+        run: python e2e/tickets_e2e.py
+
   integration-prod:
     name: Integration · prod
     # Production as it is now, with the DEMO-only CI key. Runs alongside the tests and never gates a deploy:

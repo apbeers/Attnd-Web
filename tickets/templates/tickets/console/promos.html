@@ -1,0 +1,17 @@
+{% extends 'console/base.html' %}
+{% load console_tags tickets_tags %}
+{% block title %}Promo codes · {{ event.name }}{% endblock %}
+{% block event_content %}
+{% include 'tickets/console/_nav.html' with tab='promos' %}
+<div class="split">
+  <div class="split__main panel panel--flush"><table class="data-table"><thead><tr><th>Code</th><th>Off</th><th>Used</th><th>Valid</th><th></th></tr></thead><tbody>
+  {% for p in promos %}<tr><td class="mono">{{ p.code }}</td><td>{% if p.percent_off %}{{ p.percent_off }}%{% else %}{{ p.amount_off_cents|cents }}{% endif %}</td><td>{{ p.used_count }}{% if p.max_uses %} / {{ p.max_uses }}{% endif %}</td>
+    <td class="small">{% if p.starts_at %}from {{ p.starts_at|date:"M j" }} {% endif %}{% if p.ends_at %}until {{ p.ends_at|date:"M j" }}{% endif %}</td>
+    <td>{% if can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="promo" value="{{ p.id }}"><button class="button button--small button--outline" name="action" value="toggle">{% if p.active %}Turn off{% else %}Turn on{% endif %}</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="muted">No promo codes.</td></tr>{% endfor %}</tbody></table></div>
+  {% if can_manage %}<form method="post" class="split__aside panel stack">{% csrf_token %}<h2 class="title-3">New promo code</h2>
+    {% for field in form %}{% include 'console/_field.html' with field=field %}{% endfor %}
+    {% for e in form.non_field_errors %}<div class="field__error">{{ e }}</div>{% endfor %}
+    <button class="button button--primary">Create</button></form>{% endif %}
+</div>
+{% endblock %}

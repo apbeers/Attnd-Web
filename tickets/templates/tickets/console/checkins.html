@@ -1,0 +1,17 @@
+{% extends 'console/base.html' %}
+{% load console_tags tickets_tags %}
+{% block title %}Check-in · {{ event.name }}{% endblock %}
+{% block event_content %}
+{% include 'tickets/console/_nav.html' with tab='checkins' %}
+<div class="grid grid--stats">
+  <div class="panel"><div class="eyebrow">Checked in</div><div class="title-2">{{ counts.checked_in }} / {{ counts.total }}</div></div>
+  <div class="panel"><div class="eyebrow">Inside now</div><div class="title-2">{{ counts.inside }}</div></div>
+  <div class="panel"><div class="eyebrow">Flagged scans</div><div class="title-2">{{ counts.flagged }}</div></div>
+</div>
+<div class="grid grid--2">
+  <div class="panel"><h2 class="title-3">By ticket type</h2><ul class="list">{% for r in counts.by_type %}<li>{{ r.name }} <span class="push">{{ r.checked_in }} / {{ r.total }}</span></li>{% endfor %}</ul></div>
+  <div class="panel"><h2 class="title-3">By gate</h2><ul class="list">{% for r in counts.by_gate %}<li>{{ r.gate|default:"(no gate)" }} <span class="push">{{ r.checked_in }}</span></li>{% empty %}<li class="list__empty">No scans yet.</li>{% endfor %}</ul></div>
+</div>
+{% if flagged %}<div class="panel panel--warning"><h2 class="title-3">Flagged (admitted offline, but the server disagrees, or a second scan)</h2><ul class="list">{% for c in flagged %}<li>{{ c.at|date:"M j g:i:s A" }} · {{ c.gate|default:"—" }} · {{ c.get_result_display }} · {{ c.ticket.display_code|default:"unknown" }}</li>{% endfor %}</ul></div>{% endif %}
+<div class="panel"><h2 class="title-3">Latest scans</h2><ul class="list">{% for c in recent %}<li>{{ c.at|date:"g:i:s A" }} · {{ c.gate|default:"—" }} · {{ c.get_result_display }} · {{ c.ticket.ticket_type.name|default:"—" }} {{ c.ticket.holder_name }}</li>{% empty %}<li class="list__empty">No scans yet. Door staff scan in the Attnd app (Options → Door mode), online or offline.</li>{% endfor %}</ul></div>
+{% endblock %}

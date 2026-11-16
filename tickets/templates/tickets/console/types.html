@@ -1,0 +1,17 @@
+{% extends 'console/base.html' %}
+{% load console_tags tickets_tags %}
+{% block title %}Ticket types · {{ event.name }}{% endblock %}
+{% block event_content %}
+{% include 'tickets/console/_nav.html' with tab='types' %}
+<div class="cluster"><h2 class="title-3 grow">Ticket types</h2>{% if can_manage %}<a class="button button--primary button--small" href="{% url 'tickets_console:type_new' event.id %}">{% icon "plus" %} Add a ticket type</a>{% endif %}</div>
+<div class="panel panel--flush"><table class="data-table"><thead><tr><th>Name</th><th>Kind</th><th>Price</th><th>Buyers pay</th><th>Sold</th><th>Left</th><th></th></tr></thead><tbody>
+{% for row in stats.per_type %}<tr><td><strong>{{ row.type.name }}</strong>{% if row.type.add_on %} <span class="badge badge--neutral">add-on</span>{% endif %}{% if row.type.hidden %} <span class="badge badge--neutral">hidden · {{ row.type.unlock_code }}</span>{% endif %}{% if not row.type.active %} <span class="badge badge--neutral">removed</span>{% endif %}{% if row.type.pool %} <span class="small muted">{{ row.type.pool.name }}</span>{% endif %}</td>
+<td>{{ row.type.get_kind_display }}</td><td>{{ row.price }}</td><td>{{ row.all_in }}</td><td>{{ row.sold }}</td><td>{% if row.left is None %}∞{% else %}{{ row.left }}{% endif %}</td>
+<td>{% if can_manage %}<a class="button button--small button--outline" href="{% url 'tickets_console:type_edit' event.id row.type.id %}">Edit</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="muted">None yet. Add one, or let the AI draft them from the Overview.</td></tr>{% endfor %}</tbody></table></div>
+<div class="panel stack"><h2 class="title-3">Shared capacity</h2>
+  <p class="small muted">A cap several ticket types share, e.g. the venue’s 500 across General and VIP.</p>
+  <ul class="list">{% for p in pools %}<li>{{ p.name }}: {{ p.capacity }}{% if can_manage %}<form method="post" class="push">{% csrf_token %}<input type="hidden" name="pool" value="{{ p.id }}"><button class="button button--small button--ghost" name="action" value="delete_pool">Remove</button></form>{% endif %}</li>{% empty %}<li class="list__empty">None</li>{% endfor %}</ul>
+  {% if can_manage %}<form method="post" class="cluster">{% csrf_token %}{{ pool_form.name }} {{ pool_form.capacity }}<button class="button button--small" name="action" value="pool">Add</button></form>{% endif %}
+</div>
+{% endblock %}

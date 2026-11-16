@@ -1,0 +1,19 @@
+{% extends "tickets/base.html" %}
+{% block title %}Find my tickets{% endblock %}
+{% block content %}
+<h1>Find my tickets</h1>
+{% if error %}<div class="tix-error" role="alert">{{ error }}</div>{% endif %}
+<form method="post" class="tix-card">{% csrf_token %}
+  {% if step == 'code' %}
+    <p>We sent a 6-digit code to <strong>{{ email }}</strong> (if it has tickets, the email lists them too).</p>
+    <input type="hidden" name="email" value="{{ email }}">
+    <div class="tix-field"><label for="code">Code</label><input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required autofocus></div>
+    <div class="tix-actions"><button class="button button--primary" name="action" value="verify">Show my tickets</button>
+      <button class="button button--ghost" name="action" value="send" formnovalidate>Send a new code</button></div>
+  {% else %}
+    <p>Enter the email you bought with (or that a ticket was sent to). No account needed.</p>
+    <div class="tix-field"><label for="email">Email</label><input id="email" type="email" name="email" value="{{ email }}" autocomplete="email" required></div>
+    <button class="button button--primary" name="action" value="send">Email me a code</button>
+  {% endif %}
+</form>
+{% endblock %}

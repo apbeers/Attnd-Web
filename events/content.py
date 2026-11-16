@@ -82,7 +82,14 @@ def event_v2(event, request=None):
         'join_url': f'https://attnd.app/join/{event.event_code}/',
         # API-016: the event's Attnd Studio website while it is published, else null.
         'website_url': _website_url(event),
+        # API-017: the event's ticket page on attnd.app while it sells tickets through Attnd, else null.
+        'tickets_url': _tickets_url(event),
     }
+
+
+def _tickets_url(event):
+    from tickets.content import tickets_url
+    return tickets_url(event)
 
 
 def _website_url(event):
@@ -152,7 +159,13 @@ def bundle(event, request=None):
         'locations': [location_v2(loc, request) for loc in locations],
         'schedule': [item_v2(i) for i in items],
         'notifications': [notification_v2(n) for n in notifications],
+        'tickets': _tickets_summary(event),  # API-017, null without Attnd ticketing
     }
+
+
+def _tickets_summary(event):
+    from tickets.content import summary
+    return summary(event)
 
 
 def models_q_visible_location():
@@ -203,7 +216,13 @@ def snapshot(event):
         },
         'locations': locations,
         'schedule': items,
+        'tickets': _tickets_snapshot(event),
     }
+
+
+def _tickets_snapshot(event):
+    from tickets.content import snapshot as tickets_snapshot
+    return tickets_snapshot(event)
 
 
 def save_revision(event, summary, user=None):
@@ -261,6 +280,9 @@ def restore(revision, user=None):
                 obj.hidden = it['hidden']
                 obj.locked_fields = it['locked_fields']
                 obj.save()
+            if data.get('tickets'):
+                from tickets.content import restore as restore_tickets
+                restore_tickets(event, data['tickets'])
     return event
 
 

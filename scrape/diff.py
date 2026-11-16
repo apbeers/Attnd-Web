@@ -321,17 +321,19 @@ def summarize(changes):
         key = (c['op'], c['entity'])
         counts[key] = counts.get(key, 0) + 1
     words = {'event': ('event detail', 'event details'), 'location': ('location', 'locations'),
-             'item': ('schedule item', 'schedule items')}
+             'item': ('schedule item', 'schedule items'), 'ticket_type': ('ticket type', 'ticket types'),
+             'ticket_settings': ('ticket page text', 'ticket page texts')}
     verbs = {'create': 'new', 'update': 'updated', 'delete': 'removed'}
     parts = []
     for (op, entity), n in sorted(counts.items(), key=lambda kv: ('create', 'update', 'delete').index(kv[0][0])):
         noun = words[entity][0 if n == 1 else 1]
-        parts.append(f'{n} {verbs[op]} {noun}' if entity != 'event' else 'event details updated')
+        parts.append(f'{n} {verbs[op]} {noun}' if entity not in ('event', 'ticket_settings')
+                     else f'{noun if entity == "ticket_settings" else "event details"} updated')
     return ', '.join(parts) or 'No changes'
 
 
 def save_changeset(event, job, changes, notes=''):
-    order = {'event': 0, 'location': 1, 'item': 2}
+    order = {'event': 0, 'location': 1, 'item': 2, 'ticket_settings': 3, 'ticket_type': 4}
     cs = ChangeSet.objects.create(
         event=event, job=job, notes=notes or '',
         base_version=Event.objects.filter(pk=event.pk).values_list('content_version', flat=True).first() or 0,
@@ -342,6 +344,7 @@ def save_changeset(event, job, changes, notes=''):
         Change(changeset=cs, sort=order[c['entity']] * 10000 + i, entity=c['entity'], op=c['op'],
                target_id=c.get('target_id'), ref=c.get('ref', ''), label=(c.get('label') or '')[:256],
                data=c['data'], conflict_fields=c.get('conflict_fields', []), reason=c.get('reason', ''),
+               human_fields=c.get('human_fields', []),
                minor=c.get('minor', False))
         for i, c in enumerate(changes)
     ])
@@ -364,7 +367,10 @@ def default_decisions(changeset, minor_only=False):
     for ch in changeset.changes.all():
         if minor_only and not (ch.minor and not ch.conflict_fields and ch.op == Change.OP_UPDATE):
             continue
-        fields = [f for f in ch.data if f not in ch.conflict_fields] if ch.op == Change.OP_UPDATE else None
+        if ch.human_fields and ch.op != Change.OP_UPDATE:
+            continue  # money: a person ticks it
+        fields = ([f for f in ch.data if f not in ch.conflict_fields and f not in ch.human_fields]
+                  if ch.op == Change.OP_UPDATE else None)
         if ch.op == Change.OP_UPDATE and not fields:
             continue
         decisions[ch.id] = {'accept': True, 'fields': fields}
@@ -412,6 +418,9 @@ def apply_changeset(changeset, decisions, user=None, partial_ok=False):
 
 
 def _apply_one(event, owner, ch, fields, ref_ids):
+    if ch.entity in (Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS):
+        from tickets.ai import apply_change
+        return apply_change(event, owner, ch, fields)
     if ch.entity == Change.ENTITY_EVENT and ch.op == Change.OP_UPDATE:
         for f in (fields if fields is not None else ch.data.keys()):
             if f in ch.data and f in EVENT_FIELDS:

@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'attestation.apps.AttestationConfig',
     'diagnostics.apps.DiagnosticsConfig',
     'studio.apps.StudioConfig',
+    'tickets.apps.TicketsConfig',
 ]
 
 MIDDLEWARE = [
@@ -189,6 +190,14 @@ RATE_LIMITS = {
     'studio_form_ip': _rate('studio_form_ip', '10/600'),       # Studio site form posts per IP per site, 10 min
     'studio_form_site': _rate('studio_form_site', '300/3600'),  # Studio site form posts per site, 1 hour
     'studio_report_ip': _rate('studio_report_ip', '5/3600'),    # "Report this site" per IP, 1 hour
+    # Tickets (tickets/): emailed verification codes, wrong codes, holds and door uploads.
+    'tickets_code_email': _rate('tickets_code_email', '3/900'),   # codes emailed per address, 15 min
+    'tickets_code_ip': _rate('tickets_code_ip', '20/3600'),       # codes requested per IP, 1 hour
+    'tickets_verify_email': _rate('tickets_verify_email', '8/900'),  # wrong codes per address, 15 min
+    'tickets_verify_ip': _rate('tickets_verify_ip', '40/900'),    # wrong codes per IP, 15 min
+    'tickets_hold_ip': _rate('tickets_hold_ip', '30/600'),        # carts started per IP, 10 min
+    'tickets_action_ip': _rate('tickets_action_ip', '30/3600'),   # transfers / resends / refund requests per IP
+    'tickets_door_token': _rate('tickets_door_token', '600/600'),  # door API calls per door token, 10 min
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
@@ -359,6 +368,51 @@ STUDIO_PRICES = {
 }
 
 # ---------------------------------------------------------------------------
+# Attnd Tickets (tickets/, docs/specs/tickets_spec.md): Stripe Checkout + Connect, QR tokens, Wallet passes
+# ---------------------------------------------------------------------------
+# Stripe (all money). Without STRIPE_SECRET_KEY paid tickets can't be sold (free tickets still work) and the console
+# says what's missing. Dev uses test-mode keys (sk_test_…); production refuses test-mode webhooks and the other way
+# round. STRIPE_CONNECT_WEBHOOK_SECRET = the signing secret of the "Connected accounts" webhook endpoint (optional,
+# same URL).
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
+STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY', '')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+STRIPE_CONNECT_WEBHOOK_SECRET = os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET', '')
+STRIPE_API_VERSION = os.getenv('STRIPE_API_VERSION', '2025-03-31.basil')
+STRIPE_CONNECT_COUNTRY = os.getenv('STRIPE_CONNECT_COUNTRY', 'US')
+# Buyers pay the processing fee: total = (subtotal + fixed) / (1 - rate), rounded up to the cent (tickets.money).
+TICKETS_FEE_PERCENT = os.getenv('TICKETS_FEE_PERCENT', '2.9')
+TICKETS_FEE_FIXED_CENTS = int(os.getenv('TICKETS_FEE_FIXED_CENTS', '30'))
+TICKETS_HOLD_MINUTES = int(os.getenv('TICKETS_HOLD_MINUTES', '10'))          # cart hold
+TICKETS_CHECKOUT_MINUTES = int(os.getenv('TICKETS_CHECKOUT_MINUTES', '30'))  # Stripe's minimum session life
+TICKETS_PAYOUT_DELAY_DAYS = int(os.getenv('TICKETS_PAYOUT_DELAY_DAYS', '3'))  # after the event ends
+TICKETS_MAX_PER_ORDER = int(os.getenv('TICKETS_MAX_PER_ORDER', '20'))
+# Encrypts the events' Ed25519 private keys at rest (defaults to SECRET_KEY; changing it makes old keys unreadable).
+TICKETS_KEY_SECRET = os.getenv('TICKETS_KEY_SECRET', '') or SECRET_KEY
+# The ticketed demo event (manage.py load_ticket_demo); CI keys may use the ticket APIs for it (and DEMO).
+TICKETS_DEMO_EVENT_CODE = os.getenv('TICKETS_DEMO_EVENT_CODE', 'TIXDEMO')
+# Dev-only tools: the staff walkthrough page's fast-forward, the apps' test inbox. Never on attnd.app.
+TICKETS_DEV_TOOLS = (os.getenv('TICKETS_DEV_TOOLS', '1' if (DEBUG or _site.hostname != 'attnd.app') else '0')
+                     not in ('0', 'false', 'False')) and _site.hostname != 'attnd.app'
+# Addresses at this domain never get mail; their codes can be read back by CI keys through the test inbox (dev tools).
+TICKETS_TEST_EMAIL_DOMAIN = os.getenv('TICKETS_TEST_EMAIL_DOMAIN', 'ci.attnd.test').lower()
+TICKETS_BUYER_TOKEN_DAYS = int(os.getenv('TICKETS_BUYER_TOKEN_DAYS', '180'))
+TICKETS_DOOR_TOKEN_DAYS = int(os.getenv('TICKETS_DOOR_TOKEN_DAYS', '30'))
+# Apple Wallet (PassKit). The Pass Type ID certificate and its key as PEM text (heroku config:set …="$(cat file)"),
+# plus Apple's WWDR G4 intermediate. Unset = no "Add to Apple Wallet" buttons.
+APPLE_WALLET_PASS_TYPE_ID = os.getenv('APPLE_WALLET_PASS_TYPE_ID', 'pass.com.arcu.attnd.tickets')
+APPLE_WALLET_TEAM_ID = os.getenv('APPLE_WALLET_TEAM_ID', 'GQQX4L6TE2')
+APPLE_WALLET_CERT_PEM = os.getenv('APPLE_WALLET_CERT_PEM', '').replace('\\n', '\n')
+APPLE_WALLET_KEY_PEM = os.getenv('APPLE_WALLET_KEY_PEM', '').replace('\\n', '\n')
+APPLE_WALLET_KEY_PASSWORD = os.getenv('APPLE_WALLET_KEY_PASSWORD', '')
+APPLE_WALLET_WWDR_PEM = os.getenv('APPLE_WALLET_WWDR_PEM', '').replace('\\n', '\n')
+# Google Wallet (Event Ticket classes/objects). Unset = no "Save to Google Wallet" buttons. Dev uses its own prefix.
+GOOGLE_WALLET_ISSUER_ID = os.getenv('GOOGLE_WALLET_ISSUER_ID', '')
+GOOGLE_WALLET_SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_WALLET_SERVICE_ACCOUNT_JSON', '')
+GOOGLE_WALLET_CLASS_PREFIX = os.getenv('GOOGLE_WALLET_CLASS_PREFIX', '') or (
+    'attnd' if _site.hostname == 'attnd.app' else 'attnd-dev')
+
+# ---------------------------------------------------------------------------
 # Content Security Policy (Django's built-in CSP middleware)
 # ---------------------------------------------------------------------------
 # CSP_MODE=enforce (default) | report (Content-Security-Policy-Report-Only: browsers only report) | off.
@@ -393,7 +447,8 @@ CSP_POLICY = {
     'worker-src': [CSP.SELF, 'blob:'],  # /console/sw.js; Maps uses blob: workers
     'frame-ancestors': [CSP.NONE],
     'base-uri': [CSP.SELF],
-    'form-action': [CSP.SELF],
+    # Tickets: forms that redirect to Stripe's hosted Checkout and Connect onboarding (browsers check redirects).
+    'form-action': [CSP.SELF, 'https://checkout.stripe.com', 'https://connect.stripe.com'],
     'object-src': [CSP.NONE],
     'report-uri': '/csp-report/',
 }

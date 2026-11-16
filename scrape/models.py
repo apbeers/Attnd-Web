@@ -12,7 +12,8 @@ class IngestJob(models.Model):
 
     KIND_CREATE = 'create'
     KIND_REFRESH = 'refresh'
-    KIND_CHOICES = [(KIND_CREATE, 'Create event'), (KIND_REFRESH, 'Refresh event')]
+    KIND_TICKETS = 'tickets'  # AI draft of ticket types and texts (tickets.ai)
+    KIND_CHOICES = [(KIND_CREATE, 'Create event'), (KIND_REFRESH, 'Refresh event'), (KIND_TICKETS, 'Draft tickets')]
 
     QUEUED, RUNNING, DONE, FAILED = 'queued', 'running', 'done', 'failed'
     STATUS_CHOICES = [(QUEUED, 'Queued'), (RUNNING, 'Running'), (DONE, 'Done'), (FAILED, 'Failed')]
@@ -85,7 +86,9 @@ class ChangeSet(models.Model):
 
 class Change(models.Model):
     ENTITY_EVENT, ENTITY_LOCATION, ENTITY_ITEM = 'event', 'location', 'item'
-    ENTITY_CHOICES = [(ENTITY_EVENT, 'Event'), (ENTITY_LOCATION, 'Location'), (ENTITY_ITEM, 'Schedule item')]
+    ENTITY_TICKET_TYPE, ENTITY_TICKET_SETTINGS = 'ticket_type', 'ticket_settings'  # tickets.ai
+    ENTITY_CHOICES = [(ENTITY_EVENT, 'Event'), (ENTITY_LOCATION, 'Location'), (ENTITY_ITEM, 'Schedule item'),
+                      (ENTITY_TICKET_TYPE, 'Ticket type'), (ENTITY_TICKET_SETTINGS, 'Ticket page')]
     OP_CREATE, OP_UPDATE, OP_DELETE = 'create', 'update', 'delete'
     OP_CHOICES = [(OP_CREATE, 'Add'), (OP_UPDATE, 'Update'), (OP_DELETE, 'Remove')]
     PENDING, ACCEPTED, REJECTED = 'pending', 'accepted', 'rejected'
@@ -100,6 +103,8 @@ class Change(models.Model):
     # create: {field: value}; update: {field: {"old": x, "new": y}}; delete: {}
     data = models.JSONField(default=dict)
     conflict_fields = models.JSONField(default=list, blank=True)
+    # Money fields (ticket prices, quantities): always unticked in the review, never applied automatically.
+    human_fields = models.JSONField(default=list, blank=True)
     reason = models.TextField(blank=True)
     minor = models.BooleanField(default=False)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING)

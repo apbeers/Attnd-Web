@@ -1,0 +1,25 @@
+{
+  "id": "evt_1QDispute",
+  "object": "event",
+  "api_version": "2025-03-31.basil",
+  "created": 1763251300,
+  "livemode": false,
+  "pending_webhooks": 1,
+  "type": "charge.dispute.created",
+  "data": {
+    "object": {
+      "id": "dp_1QTestDispute",
+      "object": "dispute",
+      "amount": 5368,
+      "charge": "ch_3QTestCharge",
+      "payment_intent": "pi_3QTestPayment",
+      "reason": "fraudulent",
+      "status": "needs_response",
+      "currency": "usd"
+    }
+  },
+  "request": {
+    "id": null,
+    "idempotency_key": null
+  }
+}

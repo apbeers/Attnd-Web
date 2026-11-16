@@ -66,6 +66,7 @@ The server drops keys whose name contains `token`, `password`, `secret`, `author
 | `auth` | App Attest / Play Integrity, JWT, 401 retries |
 | `lifecycle` | Launch, foreground/background, memory warnings, update prompt |
 | `logging` | The logging system itself: debug mode, uploads, the ring buffer |
+| `tickets` | My tickets and door mode (API-017): fetches, QR shown, manifest downloads, scans, check-in sync |
 | `server` | **Server only**: the server's own line for an API request in a debug session (apps never send it) |
 
 Levels: `debug` for routine detail, `info` for milestones, `notice` for state changes worth seeing in production
@@ -258,6 +259,20 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `logging.ring.trimmed` | `logging` | trace | **`bytes`** | the ring buffer was trimmed to ~2 MB |
 | `logging.export` | `logging` | info | **`entries`** | the viewer exported a .jsonl |
 | `logging.report.sent` | `logging` | info | **`kind`**, **`count`**, **`status`** | crash/hang reports were uploaded |
+
+### tickets (API-017; never emails, names, codes, tokens or QR strings)
+
+| Event | Category | Level | Fields | When |
+|-------|----------|-------|--------|------|
+| `tickets.mine.fetched` | `tickets` | info | **`status`**, **`count`**, `ms`, `cache` (`304`/`none`), `offline` (bool) | My tickets loaded (or shown from the stored copy) |
+| `tickets.mine.signin` | `tickets` | info | **`step`** (`code_sent`/`verified`/`failed`), `error` | the email-code sign-in for My tickets |
+| `tickets.qr.shown` | `tickets` | debug | **`event_id`**, `offline` (bool) | a ticket's QR was shown |
+| `tickets.wallet.add` | `tickets` | info | **`platform`** (`apple`/`google`), **`ok`** (bool), `error` | Add to Apple Wallet / Save to Google Wallet |
+| `tickets.door.signin` | `tickets` | info | **`step`**, `events` (count), `error` | door mode sign-in |
+| `tickets.door.manifest` | `tickets` | info | **`event_id`**, **`tickets`**, **`status`**, `ms`, `bytes`, `cache` | the door ticket list was downloaded (or `304`) |
+| `tickets.door.scan` | `tickets` | info | **`result`** (`ok`/`duplicate`/`revoked`/`void`/`invalid`/`wrong_day`/`unreadable`), **`offline`** (bool), `kind` (`in`/`out`), `manual` (bool), `ms` | one scan, as the device judged it |
+| `tickets.door.sync` | `tickets` | info | **`sent`**, **`status`**, `flagged`, `queued`, `ms` | a batch of check-ins was uploaded |
+| `tickets.door.revocations` | `tickets` | debug | **`count`**, `cursor` | revocations fetched |
 
 ### errors (any category)
 

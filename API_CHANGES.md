@@ -64,6 +64,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-014 | Anonymous performance metrics: `perf_*` usage names with bucket details | additive (new usage names) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
 | API-015 | Shared plan links `/p/<EVENT_CODE>/<payload>` (web page + store routing like `/join/`), claimed in apple-app-site-association (app + App Clip) and opened by the apps | additive (new web route, new app link paths; no API endpoint) | ✅ dev · ⬜ prod | ✅ | ✅ |
 | API-016 | Attnd Studio: `event.website_url` (the event's Studio-hosted website, or null) in every v2 event object | additive (new key) | ✅ dev · ⬜ prod | ✅ | ✅ |
+| API-017 | Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | 🚧 built, not merged · ⬜ prod | ⬜ | ⬜ (later) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -71,6 +72,76 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-017: tickets (Get tickets, My tickets, door mode with offline scanning)
+**Why:** Attnd Tickets (`docs/specs/tickets_spec.md`, owner-approved Nov 15–16, 2026): Eventbrite-style ticketing for
+events on the $499 Studio + tickets plan. Buying happens **only on the website** (Stripe Checkout); the apps link
+out, show tickets the person holds, and scan at the door, offline. Additive: two new keys and new endpoints.
+**Server (attnd-web):**
+- `event.tickets_url` in every v2 event object and `bundle.tickets` (`on_sale`, `state`, `sold_out`, `url`,
+  `min_price_cents` / `max_price_cents` **all-in** (fee included), `currency`, `price_text`, `prices_include_fees`), or
+  `null`. On-sale changes and sold-out flips bump `content_version`.
+- My tickets: `POST tickets/code/` → `POST tickets/verify/` (6-digit email code → `buyer_token`, 180 days) →
+  `GET tickets/mine/` (header `X-Attnd-Buyer`, ETag) with each ticket's QR string, status, Wallet links, event;
+  `POST tickets/signout/`.
+- Door mode: `POST door/code/` → `POST door/verify/` (`door_token`, 30 days, + the events this email may scan: door
+  staff from the console, or the event's team), header `X-Attnd-Door`: `GET door/events/`,
+  `GET door/events/<id>/manifest/` (Ed25519 public keys, ticket types, tickets with name + email hash only),
+  `GET door/events/<id>/revocations/?since=`, `POST door/events/<id>/checkins/` (batches ≤ 500, idempotent by
+  `client_id`, device scan times kept, earliest admission wins, later ones flagged), `GET door/events/<id>/counts/`,
+  `POST door/signout/`.
+- QR = `ATK1.<payload>.<sig>` Ed25519 (exact format in `API_V2.md` → Tickets), verifiable offline; transfers,
+  refunds and voids bump the ticket version and add a revocation.
+- No enumeration (code requests answer the same for any address), rate limits on codes, wrong codes and door calls.
+- CI keys: DEMO + the ticket demo event only, test addresses only (`@ci.attnd.test`, never mailed); dev-only
+  `tickets/test-inbox/`, `tickets/test/order/`, `tickets/test/pay/` for the live suites.
+- Documented in `API_V2.md` → Tickets; contract snapshot updated; tests in `tickets/tests_*.py`.
+- **DEMO ticket facts** (`manage.py load_ticket_demo`, `tickets.tests_web.DemoFactsTests`): event `TIXDEMO` (Studio
+  plan, a week ahead, America/Chicago); 7 ticket types in order General Admission $25 ×200, VIP $75 ×20 (pool "Venue"
+  250), Kids under 12 free ×50, Support the artists pay-what-you-want from $5, Parking add-on $10 ×40 (re-entry),
+  Backstage hidden (unlock `BACKSTAGE`) $150 ×10, Early Bird $15 ×10 (sold out, waitlist); promo `SAVE10` (10% off GA and
+  VIP); door staff `door@ci.attnd.test`; 14 valid tickets (buyer1 ×2 General Admission, one checked in at "Gate A";
+  buyer2 VIP + Parking; buyer3 ×10 Early Bird) and 1 refunded (buyer4), buyers `buyerN@ci.attnd.test`.
+
+**iOS:**
+- Decode `event.tickets_url` (`URL?`) and `bundle.tickets` leniently (every field optional, unknown `state` = don't
+  show a buy button). Show **Get tickets** (with `price_text`, e.g. "From $26.06", already including fees) when
+  `on_sale`, else the state ("Sold out", "Not on sale yet", "Event cancelled"), in the event's Options header and the
+  search event detail (and wherever the design puts it). It opens `url` in Safari (`openURL` / `SFSafariViewController`),
+  never an in-app purchase; nothing else is sold in the app (App Review 3.1.3(e): goods used outside the app). The App
+  Clip may show the same link.
+- **My tickets** (Options and/or a Tickets entry; works without joining the event): email → `tickets/code/` → code
+  field (`.oneTimeCode`) → `tickets/verify/`; keep `buyer_token` in the Keychain. `GET tickets/mine/` on open and pull to
+  refresh (with `If-None-Match`); persist the response (Application Support, excluded from backup) and show it offline:
+  event, type, holder, code, the QR (Core Image `CIQRCodeGenerator` from `qr`, correction level M, brightness up while
+  shown), status, checked-in time. "Add to Apple Wallet" downloads `apple_wallet_url` and presents
+  `PKAddPassesViewController` (no entitlement needed for adding); "Manage" opens `ticket_url` in Safari (transfer,
+  refund, resend). `401` → sign in again. Sign out = `tickets/signout/` + delete the stored copy.
+- **Door mode** (Options → Door mode): email code (`door/code/`, `door/verify/`), pick the event, **Download tickets**
+  (`manifest/`, store it + the keys), then scan with VisionKit `DataScannerViewController` (existing QR code) and verify
+  offline per `API_V2.md` → "Scanning offline" (CryptoKit `Curve25519.Signing.PublicKey(rawRepresentation:)
+  .isValidSignature`): full-screen green / red / amber "Already checked in 7:42 PM at Gate B", haptics + sound; gate
+  name setting; manual search (name, code, order ref; email via the same SHA-256 hash); re-entry (scan out) for types
+  with `reentry`. Queue every scan (`client_id` UUID, scan time, `device_result`) on disk; upload in batches of ≤ 500
+  when online (and every ~15 s while online), poll `revocations/?since=` every ~30 s, show `counts/`. Everything works
+  in airplane mode; a sync summary shows flagged results.
+- Unit tests: token parse/verify against a fixed key + token (generate one with `tickets.signing` and paste it into
+  the tests), revocation rules, the offline duplicate rules, queue/merge; the live suite: My tickets via the dev test
+  inbox (`tickets/test-inbox/`, CI key, `@ci.attnd.test`), download the TIXDEMO manifest, verify a QR offline, upload a
+  check-in, Wallet pass download (content type `application/vnd.apple.pkpass`) when configured.
+- LOG_EVENTS: the `tickets.*` rows in `LOG_EVENTS.md` (new category `tickets`), never emails, names, codes, tokens
+  or QR strings.
+
+**Android:**
+- Decode `tickets_url` / `tickets` (`String? = null`, all fields defaulted). **Get tickets** opens `url` with
+  `Intent.ACTION_VIEW` / Custom Tabs (no WebView, no payment code or Google Pay; Play's payments policy allows
+  linking out for physical event tickets).
+- **My tickets** as on iOS (token in encrypted prefs / DataStore, offline copy in `filesDir`, QR via the in-house
+  `domain/QrCode.kt` encoder at level M); "Save to Google Wallet" opens `google_wallet_url`.
+- **Door mode** as on iOS: CameraX + ML Kit barcode scanning (existing), Ed25519 with `Signature.getInstance("Ed25519")`
+  (API 33+, minSdk 35), offline verification, queue in Room/prefs, WorkManager-free foreground sync while the screen
+  is open, counts, manual search, re-entry.
+- Same unit and live tests as iOS (shared token fixture). Later (owner: "Android app later"): not started.
 
 ### API-016: event website link (Attnd Studio)
 **Why:** Attnd Studio (invite-only beta, `docs/specs/studio_spec.md`) lets an organizer design the event's website

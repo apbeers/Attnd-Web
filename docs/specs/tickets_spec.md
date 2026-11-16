@@ -1,4 +1,14 @@
-# Attnd Tickets — plan (draft, Nov 15, 2026; not built)
+# Attnd Tickets — plan (approved Nov 15, 2026; web + server built Nov 16, 2026, API-017; apps next)
+
+**Build status (Nov 16, 2026):** everything in the web/server scope below is built in `tickets/` (CLAUDE.md → Attnd
+Tickets): Stripe Connect Express onboarding + Checkout destination charges + webhooks + refunds + payouts after the
+event (Stripe calls over urllib in `tickets/stripe_api.py`, mocked in tests; no keys yet), ticket types (paid, free,
+pay what you want, add-ons, hidden + unlock, day tickets, re-entry), pools, promo codes, questions, waitlists, 10-minute
+holds, the ticket page + order pages + lookup + transfers + refund requests, ticket emails, Ed25519 QR tokens +
+revocations, Apple Wallet passes + web service + pushes, Google Wallet save links + updates, door staff + the door API,
+console tools, AI drafts reviewed as ChangeSets with money fields always human, `<attnd-tickets>` + an embed page, the
+dev walkthrough kit, and the app API (API-017). Not built: the apps' My tickets / door mode (iOS next, Android later),
+the $499 plan checkout, policies/terms, and recorded (rather than documented-shape) Stripe fixtures.
 
 Goal: Eventbrite-style ticketing inside Attnd, so an organizer runs the whole event here (site, app, plan, tickets, door).
 
@@ -126,6 +136,19 @@ Inventory: `SELECT … FOR UPDATE` on TicketType/Capacity when creating a held o
 - **Broader goal** (beyond tickets): every user-facing flow gets an end-to-end test that runs on each push to develop
   (join, bundle, push, planner/assistant, Studio publish, forms, diagnostics, sign-in with passkeys via a software
   authenticator), so the three repos are always checked together.
+
+## Offline (server design, built)
+Nothing at the door needs the backend during the event:
+- QR codes are self-verifying: `ATK1.<payload>.<Ed25519 signature>` with the event's key (API_V2.md → Tickets). A door
+  device downloads the public keys, the ticket list (status, version, names, email hashes, who's in) and the
+  revocations before doors open, then verifies signatures and applies the rules locally (valid / old QR / refunded /
+  not today / already in at Gate B). Tickets bought after the download still verify by signature.
+- Every scan is queued on the device with its own id and scan time, and uploaded in batches when there is a
+  connection; uploads are idempotent; the server merges all gates (the earliest admission wins, later ones are flagged
+  duplicates; scans admitted offline that the server rejects are flagged for the organizer).
+- Buyers' apps keep "My tickets" (QR strings included) on the device, so the ticket shows with no network; Wallet
+  passes work offline by design.
+- Online again, devices poll revocations by cursor (transfers and refunds reach the door within seconds).
 
 ## Phases
 1. Core: Stripe Connect onboarding, ticket types (paid/free), holds, web checkout, emails + QR, Wallet passes, door

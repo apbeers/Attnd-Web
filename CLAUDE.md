@@ -83,6 +83,7 @@ scrape/         # AI import/refresh: crawl + OpenAI extraction, jobs, diff/chang
 attestation/    # Apple App Attest + Google Play Integrity + JWT issuance
 diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, request log middleware, staff panel
 studio/         # Attnd Studio (beta): AI-designed event websites hosted on SITES_HOST, flyer art, app look
+tickets/        # Attnd Tickets: Stripe Checkout + Connect, QR tokens, Wallet passes, door check-in, console tools (API-017)
 static/         # Project-level static assets
 public/         # Files served at root by Whitenoise (robots.txt, etc.)
 ```
@@ -172,6 +173,54 @@ sets the **app's look**; Attnd hosts the site.
 - **Publishing** (`publishing.py`): publish = site serves that version + its app look (accent, logo, display) and flyer
   are copied onto the event + `content_version` bump; the bundle's `event.website_url` (API-016) is the live URL.
 - Custom domains are designed (spec §13), not built.
+
+## Attnd Tickets (beta with Studio; `tickets/`, spec `docs/specs/tickets_spec.md`, API-017)
+
+Ticketing is part of the $499 **Studio + tickets** plan (`Event.plan == studio`) and gated like Studio (people without
+Studio access get 404 and see no "Tickets" link). **Tickets are sold only on attnd.app**; the apps link out, show
+"My tickets" and scan at the door.
+- **Money (Stripe only, `tickets/stripe_api.py`, urllib, no SDK: ~10 endpoints + webhook HMAC; switching to the SDK is
+  contained in that file).** Organizers connect a **Stripe Connect Express** account (hosted onboarding + Express
+  dashboard) with **manual payouts**; each order is a **Checkout Session** (hosted page: cards, Apple Pay, Google Pay,
+  Link) creating a **destination charge** `on_behalf_of` the organizer with `application_fee_amount` = the buyer's
+  processing fee. Fee (`tickets/money.py`): total = ceil((subtotal + 30¢) / (1 − 2.9%)), free orders none;
+  **every price shown is all-in** (FTC rule), the fee is itemised at checkout. Refunds return the ticket price
+  (refund + an exact transfer reversal); the fee only when the event is cancelled (mass refund). Payouts are released
+  `payout_delay_days` (default 3) after the event by `run_scheduled_tasks` (`tickets.payouts` in `payments.py`).
+  Webhooks `/tickets/stripe/webhook/` (signature, livemode must match the key, `StripeEvent` idempotency, 500 → Stripe
+  retries): checkout completed/expired, payment_intent.succeeded, charge.refunded (Dashboard refunds reconciled),
+  disputes (lost → tickets void), account.updated, payout.*. Without `STRIPE_SECRET_KEY` paid tickets are off (free
+  tickets work). Tests mock Stripe at the HTTP layer (`tickets/fakes.py`, `fixtures/stripe/`).
+- **Inventory** (`inventory.py`): ticket types (paid / free / pay-what-you-want, add-ons, hidden + unlock code, day
+  tickets, re-entry, transferable, waitlist), shared capacity pools, promo codes; a cart is a 10-minute **hold**
+  (Order `held`), extended to Stripe's 30-minute session minimum at checkout (`pending`); holds lock the types and pools
+  with `SELECT … FOR UPDATE` (race test in `tests_core`); lapsed holds expire (scheduled task) and waitlists are emailed.
+- **Buyers** (no account): `/t/<code>/` → order page (details, questions per order/ticket, countdown) → Checkout →
+  confirmation with QR + Wallet buttons + email; `/tickets/lookup/` email code → `/tickets/mine/`; transfer (new QR,
+  new link, revocation), resend, refund request per policy (none / automatic until N days before / organizer
+  approves). `/t/<code>/embed/` can be framed elsewhere; Studio sites get `<attnd-tickets>` (data.json `tickets`).
+- **QR tokens** (`signing.py`): `ATK1.<payload>.<Ed25519 sig>` per event key (private keys Fernet-encrypted with
+  `TICKETS_KEY_SECRET`); version bumps + `Revocation` rows on transfer/refund/void.
+- **Door** (`checkin.py`, API `door/…`): door staff (console → Tickets → Door team, invited by email, **no console
+  access**) or the event's team sign in in the apps with an email code; manifest (keys, types, tickets with names and
+  email hashes only), revocations by cursor, idempotent check-in batches (device time kept, earliest admission wins,
+  later ones flagged), counts. **Offline:** the apps verify signatures and lists locally and sync later; nothing at the
+  door needs the server.
+- **Wallet**: Apple `.pkpass` signed with the Pass Type ID certificate (`cryptography` PKCS #7 + WWDR G4), PassKit web
+  service at `/wallet/v1/…` and APNs pass pushes on changes (transfer, refund, event time/place: `tickets/signals.py`);
+  Google Wallet Event Ticket class per event + object per pass via "Save to Google Wallet" JWT links, PATCHed on
+  changes. Each off without its settings. Dev passes show "DEV" and use the `attnd-dev` Google class prefix.
+- **Console** (`views_console.py`, `/console/events/<id>/tickets/…`): overview (setup checklist, on sale, sales, AI
+  draft), types, pools, promo codes, settings (texts, refund policy, questions, payout delay), orders (search, refunds
+  full/partial/per ticket, void, resend, refund requests), comps, attendees CSV (formula-safe), check-in report, door
+  team, email holders, payouts (Connect onboarding, Express dashboard), cancel + mass refund. Owners/admins move money;
+  contributors look. **AI drafts** (`ai.py`, IngestJob kind `tickets`) become a ChangeSet (entities `ticket_type`,
+  `ticket_settings`); money fields (`kind`, `price_cents`, `quantity`) are in `Change.human_fields`: unticked, never
+  auto-applied; History snapshots/restores ticket types (never tickets).
+- **Dev kit**: `manage.py load_ticket_demo` (TIXDEMO facts in its docstring and API-017), staff page
+  `/console/tickets/demo/` (test cards, codes sent to `@ci.attnd.test`, fast-forward past the event + payout release
+  on dev only, `TICKETS_DEV_TOOLS`), CI-key dev endpoints for the live suites (`tickets/test-inbox|test/order|test/pay/`).
+  Live suite `live_tests/live_tickets.py`; browser e2e `e2e/tickets_e2e.py` (job "E2E · dev", CI_FULL only).
 
 ## Accounts
 
@@ -286,7 +335,7 @@ uv run python manage.py runserver
 ## Background work
 
 - **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
-- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events.
+- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events, and for tickets: expires lapsed holds, finishes cancellation refunds, releases payouts after events.
 - **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged. Urgent notifications (API-011) go to every device with a token (time-sensitive APNs alert, high-priority FCM data message) plus an APNs `liveactivity` update to every `Device.live_activity_token` in the event; at most `URGENT_MAX_PER_HOUR` (3) per event, beyond that they go out as normal.
 
 ## Running Tests
@@ -296,7 +345,7 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer) and `events/tests_integration.py`.
+Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer), `tickets/tests_core.py` (fees, signing, holds, oversell race), `tickets/tests_payments.py` (Stripe flows, webhooks, refunds, payouts), `tickets/tests_api.py` (My tickets, door, offline merge, CI scope), `tickets/tests_web.py` (web flows, Wallet signing with generated certs, console, AI drafts, demo facts) and `events/tests_integration.py`.
 
 Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (no `staticfiles/` needed), `django.request` logs only errors (tests hit 4xx on purpose), and a 32+ byte test JWT secret. CI also runs `manage.py check` with `-W error::DeprecationWarning`; run the whole suite that way when upgrading Django/Python.
 
@@ -354,9 +403,20 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `STUDIO_IMAGE_MODEL` / `STUDIO_IMAGE_FALLBACK_MODEL` / `STUDIO_VISION_MODEL` | No | Default `gpt-image-2` / `gpt-image-1` / `OPENAI_MODEL` |
 | `STUDIO_DAILY_SPEND_CAP_USD` | No | Studio AI spend per event per UTC day, default `5` |
 | `STUDIO_MAX_STEPS` / `STUDIO_PREVIEW_LINK_DAYS` | No | Model calls per AI run (24) / private preview link lifetime (7 days) |
+| `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` | Tickets | Stripe keys (dev: `sk_test_…`/`pk_test_…`; production: live). Unset = paid tickets off |
+| `STRIPE_WEBHOOK_SECRET` / `STRIPE_CONNECT_WEBHOOK_SECRET` | Tickets | Signing secrets of the account and Connect webhook endpoints (both `https://<host>/tickets/stripe/webhook/`) |
+| `STRIPE_API_VERSION` / `STRIPE_CONNECT_COUNTRY` | No | Default `2025-03-31.basil` / `US` |
+| `TICKETS_FEE_PERCENT` / `TICKETS_FEE_FIXED_CENTS` | No | The buyer's processing fee gross-up, default `2.9` / `30` |
+| `TICKETS_HOLD_MINUTES` / `TICKETS_CHECKOUT_MINUTES` / `TICKETS_PAYOUT_DELAY_DAYS` / `TICKETS_MAX_PER_ORDER` | No | `10` / `30` / `3` / `20` |
+| `TICKETS_KEY_SECRET` | No | Encrypts the events' Ed25519 ticket keys (default `SECRET_KEY`; changing it orphans existing keys) |
+| `TICKETS_DEMO_EVENT_CODE` / `TICKETS_TEST_EMAIL_DOMAIN` / `TICKETS_DEV_TOOLS` | No | `TIXDEMO` / `ci.attnd.test` / on except on attnd.app (fast-forward, test inbox, test payments) |
+| `TICKETS_BUYER_TOKEN_DAYS` / `TICKETS_DOOR_TOKEN_DAYS` | No | `180` / `30` |
+| `APPLE_WALLET_CERT_PEM` / `APPLE_WALLET_KEY_PEM` / `APPLE_WALLET_KEY_PASSWORD` / `APPLE_WALLET_WWDR_PEM` | Wallet | Pass Type ID certificate + key (PEM text) and Apple WWDR G4; unset = no Apple Wallet |
+| `APPLE_WALLET_PASS_TYPE_ID` / `APPLE_WALLET_TEAM_ID` | No | Default `pass.com.arcu.attnd.tickets` / `GQQX4L6TE2` |
+| `GOOGLE_WALLET_ISSUER_ID` / `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON` / `GOOGLE_WALLET_CLASS_PREFIX` | Wallet | Issuer + the `attnd-wallet` service account key; prefix default `attnd` (prod) / `attnd-dev` |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |
-| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60), `STUDIO_FORM_IP` (10/600, form posts per IP per site), `STUDIO_FORM_SITE` (300/3600), `STUDIO_REPORT_IP` (5/3600) |
+| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60), `STUDIO_FORM_IP` (10/600, form posts per IP per site), `STUDIO_FORM_SITE` (300/3600), `STUDIO_REPORT_IP` (5/3600), `TICKETS_CODE_EMAIL` (3/900), `TICKETS_CODE_IP` (20/3600), `TICKETS_VERIFY_EMAIL` (8/900), `TICKETS_VERIFY_IP` (40/900), `TICKETS_HOLD_IP` (30/600), `TICKETS_ACTION_IP` (30/3600), `TICKETS_DOOR_TOKEN` (600/600) |
 | `RATE_LIMIT_TRUST_X_FORWARDED_FOR` | No | Default `1` (behind Heroku's router); `0` = use the socket address |
 | `TWO_FACTOR_ISSUER` | No | Name shown in authenticator apps, default `Attnd` |
 | `WEBAUTHN_RP_ID` | No | Passkey domain (relying party ID), default `SITE_URL`'s host (`attnd.app`; dev: `dev.attnd.app`). Changing it makes existing passkeys stop working |

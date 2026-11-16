@@ -122,5 +122,12 @@ shared-origin limitation. Check Heroku's domain limits per app first.
 - A real CDN or cache in front of hosted pages and assets before big events (today: Heroku + Cloudinary redirects).
 - Server-side flyer rendering (an HTML flyer layout → PNG/PDF) if image-model flyers aren't enough.
 
-## Tickets (planned, not built)
-- Eventbrite-style ticketing on the website via Stripe Checkout + Connect (payouts held until after the event), buyers pay the processing fee (all-in prices), offline door scanning, Apple/Google Wallet passes, AI drafting with review. Plan: `docs/specs/tickets_spec.md`. Pricing: $299 bring an event in, $499 Studio + ticketing.
+## Tickets (web + server built Nov 16, 2026: API-017; spec `docs/specs/tickets_spec.md`)
+- **Owner setup** (SETUP step 16): Stripe + Connect in the LLC's name, test keys/webhooks on dev, Wallet certificates
+  and Google Wallet key. Then re-record the Stripe fixtures (`tickets/fixtures/stripe/`) from real test-mode payloads.
+- **Apps**: iOS My tickets + door mode next (API-017 iOS section), Android later.
+- Before real sales: Terms of Sale, Organizer Agreement, privacy policy update, store privacy labels; confirm Stripe's
+  maximum payout hold for US Express accounts (events months ahead); Stripe Tax / sales tax on tickets if needed;
+  the $499 plan checkout itself (today the plan is switched by Studio beta users / staff).
+- Later (spec phase 3): timed entry, rotating QR codes, resale, affiliate links, tap to pay; Attnd absorbing fees for
+  a percentage (one plain price) as an option; a buyer account page for people with Attnd accounts.

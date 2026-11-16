@@ -101,6 +101,21 @@ class ApiContractTests(TestCase):
             event=self.event, user=user, title='Cancelled', body='Rain', send_time=start, priority='urgent')
         Device.objects.create(id='contract-device', platform='ios', push_token='tok', subscribed=True,
                               event=self.event)
+        # API-017: ticketing on, one ticket held by buyer@example.com, a door team member, a revocation.
+        from tickets import payments
+        from tickets.models import DoorStaff, Order, OrderItem, PayoutAccount, TicketSettings, TicketType
+        account = PayoutAccount.objects.create(user=user, stripe_account_id='acct_contract', charges_enabled=True,
+                                               details_submitted=True)
+        TicketSettings.objects.create(event=self.event, enabled=True, on_sale=True, payout_account=account)
+        ga = TicketType.objects.create(event=self.event, name='GA', price_cents=2500, quantity=10)
+        free = TicketType.objects.create(event=self.event, name='RSVP', kind='free')
+        order = Order.objects.create(event=self.event, email='buyer@example.com', name='Bea', status=Order.HELD,
+                                     expires_at=start)
+        OrderItem.objects.create(order=order, ticket_type=free, quantity=2, unit_price_cents=0)
+        payments.fulfil(order.public_id)
+        payments.void(order.tickets.last())
+        DoorStaff.objects.create(event=self.event, email='door@example.com')
+        self.ticket_type = ga
         self.client = Client()
 
     def call(self, method, path, body=None):
@@ -117,6 +132,47 @@ class ApiContractTests(TestCase):
                                 b'com.a.B -> a.a:\n    void b() -> b\n', content_type='text/plain', secure=True, **AUTH)
         self.assertEqual(resp.status_code, 200, resp.content)
         return resp.json()
+
+    def tickets(self):
+        """API-017: My tickets and door mode."""
+        from unittest.mock import patch as mock_patch
+        e = self.event.id
+        out = {}
+        with mock_patch('tickets.buyers.secrets.randbelow', return_value=123456):
+            out['POST tickets/code/'] = self.call('post', '/api/v2/tickets/code/', {'email': 'buyer@example.com'})
+            out['POST door/code/'] = self.call('post', '/api/v2/door/code/', {'email': 'door@example.com'})
+        out['POST tickets/verify/'] = self.call('post', '/api/v2/tickets/verify/', {
+            'email': 'buyer@example.com', 'code': '123456', 'device_name': 'iPhone'})
+        out['POST door/verify/'] = self.call('post', '/api/v2/door/verify/', {
+            'email': 'door@example.com', 'code': '123456', 'device_name': 'iPhone'})
+        buyer = {'HTTP_X_ATTND_BUYER': out['POST tickets/verify/']['buyer_token']}
+        door = {'HTTP_X_ATTND_DOOR': out['POST door/verify/']['door_token']}
+
+        def get(path, headers):
+            resp = self.client.get(path, secure=True, **AUTH, **headers)
+            self.assertEqual(resp.status_code, 200, resp.content[:300])
+            return resp.json()
+
+        def post(path, body, headers):
+            resp = self.client.post(path, json.dumps(body), content_type='application/json', secure=True, **AUTH,
+                                    **headers)
+            self.assertEqual(resp.status_code, 200, resp.content[:300])
+            return resp.json()
+
+        out['GET tickets/mine/'] = get('/api/v2/tickets/mine/', buyer)
+        ticket = next(t for t in out['GET tickets/mine/']['tickets'] if t['status'] == 'valid')
+        out['GET door/events/'] = get('/api/v2/door/events/', door)
+        out['GET door/events/<id>/manifest/'] = get(f'/api/v2/door/events/{e}/manifest/', door)
+        out['GET door/events/<id>/revocations/'] = get(f'/api/v2/door/events/{e}/revocations/?since=0', door)
+        out['POST door/events/<id>/checkins/'] = post(f'/api/v2/door/events/{e}/checkins/', {
+            'device_id': 'door-ipad', 'gate': 'Gate A', 'checkins': [
+                {'client_id': 'scan-1', 'token': ticket['qr'], 'at': timezone.now().isoformat(),
+                 'device_result': 'ok'},
+                {'client_id': 'scan-2', 'token': ticket['qr'], 'at': timezone.now().isoformat()}]}, door)
+        out['GET door/events/<id>/counts/'] = get(f'/api/v2/door/events/{e}/counts/', door)
+        out['POST tickets/signout/'] = post('/api/v2/tickets/signout/', {}, buyer)
+        out['POST door/signout/'] = post('/api/v2/door/signout/', {}, door)
+        return out
 
     def build(self):
         e = self.event.id
@@ -142,6 +198,7 @@ class ApiContractTests(TestCase):
                 'platform': 'android', 'reports': [{'kind': 'crash', 'stack': 'x'}]}),
             # Unversioned, CI only (attnd-android's release job).
             'POST /api/diagnostics/symbols/': self.symbols(),
+            **self.tickets(),
         }
         payloads = {}
 

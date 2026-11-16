@@ -30,6 +30,7 @@ def site_data(site, base_url):
         'app': {'ios': settings.IOS_APP_STORE_URL, 'android': settings.ANDROID_PLAY_STORE_URL,
                 'join_url': join_url(event), 'qr_url': f'{base_url}_attnd/qr.svg', 'code': event.event_code},
         'categories': [], 'locations': [], 'schedule': [], 'updates': [],
+        'tickets': None,  # <attnd-tickets> (tickets.content.site_tickets)
     }
     if event.status == Event.STATUS_DRAFT:
         return data  # unpublished content never leaves the console
@@ -40,6 +41,8 @@ def site_data(site, base_url):
         if loc.get('image_url') and not loc['image_url'].startswith(('http://', 'https://')):
             loc['image_url'] = None
     data['schedule'] = bundle['schedule']
+    from tickets.content import site_tickets
+    data['tickets'] = site_tickets(event)
     data['updates'] = [{'id': n['id'], 'title': n['title'], 'body': n['body'], 'sent_at': n['send_time'],
                         'priority': n['priority']} for n in bundle['notifications']]
     return data

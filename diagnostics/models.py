@@ -14,7 +14,7 @@ LEVEL_ERROR = LEVELS.index('error')
 LEVEL_WARNING = LEVELS.index('warning')
 # Categories the apps may send. "server" is only written by the server (its request lines).
 APP_CATEGORIES = ('net', 'push', 'background', 'live', 'location', 'map', 'planner', 'assistant', 'search',
-                  'storage', 'ui', 'perf', 'auth', 'lifecycle', 'logging')
+                  'storage', 'ui', 'perf', 'auth', 'lifecycle', 'logging', 'tickets')
 SERVER_CATEGORY = 'server'
 REASON_DEV = 'dev'
 REASON_DEBUG = 'debug_mode'

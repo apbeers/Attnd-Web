@@ -128,6 +128,9 @@ def run_job(job_id, already_claimed=False):
     try:
         if job.kind == IngestJob.KIND_CREATE:
             _run_create(job)
+        elif job.kind == IngestJob.KIND_TICKETS:
+            from tickets.ai import run_job as run_tickets_draft
+            run_tickets_draft(job)
         else:
             _run_refresh(job)
     except ValueError as exc:

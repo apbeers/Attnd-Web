@@ -79,9 +79,18 @@ Accounts and services:
   Apple Development certificate for CI (expires Nov 14, 2027); App Attest.
 - App Store Connect: Attnd (id1470627406), App Clip, TestFlight.
 - Google Play Console: `com.arcu.attnd` (upload key, Play App Signing), publishing service account.
-- OpenAI (server key: AI import, website watching, Studio, image generation).
+- OpenAI (server key: AI import, website watching, Studio, image generation; ticket drafts).
+- Stripe (tickets, built Nov 16, 2026, not set up): the platform account + Connect (Express, destination charges,
+  manual payouts), test + live API keys (`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`), two webhook endpoints per mode
+  (`STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET`), organizers' connected accounts (they move with the
+  platform account), statement descriptor "ATTND TICKETS". Create it in the LLC's name (SETUP step 16a).
+- Apple Wallet: the Pass Type ID certificate + key and the WWDR G4 intermediate as Heroku config vars
+  (`APPLE_WALLET_*`, SETUP 16b); passes issued under team GQQX4L6TE2 (moving the team to the LLC means a new Pass
+  Type ID certificate; already-issued passes keep working but stop updating).
+- Google Wallet: issuer id + `attnd-wallet` service-account JSON key on Heroku (`GOOGLE_WALLET_*`, SETUP 16c); Event
+  Ticket classes `attnd-event-<id>` / `attnd-dev-event-<id>`.
 - Attnd's own data: organizer accounts (emails, passkeys), anonymous device ids, usage counts, diagnostics; buyers'
-  names/emails/orders once tickets launch.
+  names/emails/orders, ticket holders' names/emails, door check-ins (tickets).
 Legal/policy surface (to re-issue in the LLC's name):
 - Privacy policy (`/privacy/`), Terms of Service (to write), Terms of Sale + Organizer Agreement (tickets), App Store
   privacy labels, Play data safety, support email, App Review contact.

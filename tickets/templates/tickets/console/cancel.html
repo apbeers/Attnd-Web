@@ -1,0 +1,13 @@
+{% extends 'console/base.html' %}
+{% load console_tags tickets_tags %}
+{% block title %}Cancel the event · {{ event.name }}{% endblock %}
+{% block event_content %}
+<a class="back-link" href="{% url 'tickets_console:home' event.id %}">← Tickets</a>
+<form method="post" class="panel panel--danger panel--roomy stack">{% csrf_token %}
+  <h2>Cancel {{ event.name }} and refund everyone</h2>
+  <p>Sales stop, all {{ paid_count }} paid order{{ paid_count|pluralize }} are refunded in full <strong>including the processing fee</strong> ({{ total }}), every ticket stops working and every holder gets an email. This can’t be undone.</p>
+  <div class="field"><label class="field__label" for="reason">Message to ticket holders</label><textarea id="reason" name="reason" rows="3"></textarea></div>
+  <div class="field"><label class="field__label" for="confirm">Type the event code <span class="mono">{{ event.event_code }}</span> to confirm</label><input id="confirm" name="confirm" autocomplete="off"></div>
+  <button class="button button--danger">Cancel the event and refund everyone</button>
+</form>
+{% endblock %}

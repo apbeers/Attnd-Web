@@ -1,0 +1,4 @@
+{% extends "tickets/email/base.html" %}{% block content %}
+<p>We refunded <strong>{{ amount }}</strong> for order {{ order.ref }} ({{ event.name }}). It goes back to your card in 5–10 business days.</p>
+{% if refund.tickets.exists %}<p style="color:#5f6672">These tickets no longer work: {% for t in refund.tickets.all %}{{ t.display_code }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+{% if not refund.fee_cents and order.fee_cents %}<p style="color:#5f6672;font-size:14px">The processing fee is only refunded if the event is cancelled.</p>{% endif %}{% endblock %}

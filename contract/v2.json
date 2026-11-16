@@ -3,12 +3,27 @@
     "devices/",
     "diagnostics/logs/",
     "diagnostics/reports/",
+    "door/code/",
+    "door/events/",
+    "door/events/<int:event_id>/checkins/",
+    "door/events/<int:event_id>/counts/",
+    "door/events/<int:event_id>/manifest/",
+    "door/events/<int:event_id>/revocations/",
+    "door/signout/",
+    "door/verify/",
     "events/<int:event_id>/bundle/",
     "events/<int:event_id>/join/",
     "events/<int:event_id>/leave/",
     "events/<int:event_id>/usage/",
     "events/lookup/",
-    "events/nearby/"
+    "events/nearby/",
+    "tickets/code/",
+    "tickets/mine/",
+    "tickets/signout/",
+    "tickets/test-inbox/",
+    "tickets/test/order/",
+    "tickets/test/pay/",
+    "tickets/verify/"
   ],
   "responses": {
     "GET events/nearby/": {
@@ -34,6 +49,7 @@
             "paid": "boolean",
             "start_time": "string",
             "status": "string",
+            "tickets_url": "string",
             "timezone": "string",
             "website_url": "string"
           },
@@ -60,6 +76,7 @@
         "paid": "boolean",
         "start_time": "string",
         "status": "string",
+        "tickets_url": "string",
         "timezone": "string",
         "website_url": "string"
       }
@@ -114,6 +131,7 @@
         "paid": "boolean",
         "start_time": "string",
         "status": "string",
+        "tickets_url": "string",
         "timezone": "string",
         "website_url": "string"
       },
@@ -159,6 +177,17 @@
         }
       ],
       "schema_version": "integer",
+      "tickets": {
+        "currency": "string",
+        "max_price_cents": "integer",
+        "min_price_cents": "integer",
+        "on_sale": "boolean",
+        "price_text": "string",
+        "prices_include_fees": "boolean",
+        "sold_out": "boolean",
+        "state": "string",
+        "url": "string"
+      },
       "updated_at": "string"
     },
     "POST events/<id>/join/": {
@@ -198,6 +227,201 @@
       "bytes": "integer",
       "id": "integer",
       "sha256": "string",
+      "status": "string"
+    },
+    "POST tickets/code/": {
+      "expires_in": "integer",
+      "status": "string"
+    },
+    "POST door/code/": {
+      "expires_in": "integer",
+      "status": "string"
+    },
+    "POST tickets/verify/": {
+      "buyer_token": "string",
+      "email": "string",
+      "expires_at": "string"
+    },
+    "POST door/verify/": {
+      "door_token": "string",
+      "email": "string",
+      "events": [
+        {
+          "end_time": "string",
+          "event_code": "string",
+          "id": "integer",
+          "name": "string",
+          "start_time": "string",
+          "timezone": "string"
+        }
+      ],
+      "expires_at": "string"
+    },
+    "GET tickets/mine/": {
+      "email": "string",
+      "tickets": [
+        {
+          "apple_wallet_url": "null",
+          "checked_in_at": "null",
+          "code": "string",
+          "event": {
+            "address": "string",
+            "cancelled": "boolean",
+            "end_time": "string",
+            "event_code": "string",
+            "id": "integer",
+            "latitude": "number",
+            "longitude": "number",
+            "name": "string",
+            "start_time": "string",
+            "timezone": "string"
+          },
+          "google_wallet_url": "null",
+          "holder_name": "string",
+          "id": "integer",
+          "order_ref": "string",
+          "qr": "string",
+          "status": "string",
+          "ticket_url": "string",
+          "transferable": "boolean",
+          "type": {
+            "id": "integer",
+            "name": "string"
+          },
+          "version": "integer"
+        }
+      ]
+    },
+    "GET door/events/": {
+      "email": "string",
+      "events": [
+        {
+          "end_time": "string",
+          "event_code": "string",
+          "id": "integer",
+          "name": "string",
+          "start_time": "string",
+          "timezone": "string"
+        }
+      ]
+    },
+    "GET door/events/<id>/manifest/": {
+      "event": {
+        "end_time": "string",
+        "event_code": "string",
+        "id": "integer",
+        "name": "string",
+        "start_time": "string",
+        "timezone": "string"
+      },
+      "gates": [],
+      "generated_at": "string",
+      "keys": [
+        {
+          "active": "boolean",
+          "alg": "string",
+          "kid": "integer",
+          "public_key": "string"
+        }
+      ],
+      "revocations_cursor": "integer",
+      "schema": "integer",
+      "ticket_types": [
+        {
+          "add_on": "boolean",
+          "id": "integer",
+          "name": "string",
+          "reentry": "boolean",
+          "valid_on": "null"
+        }
+      ],
+      "tickets": [
+        {
+          "checked_in_at": "null",
+          "checked_in_gate": "null",
+          "code": "string",
+          "email_hash": "string",
+          "id": "integer",
+          "inside": "boolean",
+          "name": "string",
+          "order_ref": "string",
+          "status": "string",
+          "type_id": "integer",
+          "version": "integer"
+        }
+      ]
+    },
+    "GET door/events/<id>/revocations/": {
+      "cursor": "integer",
+      "more": "boolean",
+      "revocations": [
+        {
+          "at": "string",
+          "cursor": "integer",
+          "reason": "string",
+          "ticket_id": "integer",
+          "version": "integer"
+        }
+      ]
+    },
+    "POST door/events/<id>/checkins/": {
+      "counts": {
+        "by_gate": [
+          {
+            "checked_in": "integer",
+            "gate": "string"
+          }
+        ],
+        "by_type": [
+          {
+            "checked_in": "integer",
+            "name": "string",
+            "total": "integer",
+            "type_id": "integer"
+          }
+        ],
+        "checked_in": "integer",
+        "flagged": "integer",
+        "inside": "integer",
+        "total": "integer",
+        "updated_at": "string"
+      },
+      "results": [
+        {
+          "at": "string",
+          "client_id": "string",
+          "flagged": "boolean",
+          "result": "string",
+          "ticket_id": "integer"
+        }
+      ],
+      "revocations_cursor": "integer"
+    },
+    "GET door/events/<id>/counts/": {
+      "by_gate": [
+        {
+          "checked_in": "integer",
+          "gate": "string"
+        }
+      ],
+      "by_type": [
+        {
+          "checked_in": "integer",
+          "name": "string",
+          "total": "integer",
+          "type_id": "integer"
+        }
+      ],
+      "checked_in": "integer",
+      "flagged": "integer",
+      "inside": "integer",
+      "total": "integer",
+      "updated_at": "string"
+    },
+    "POST tickets/signout/": {
+      "status": "string"
+    },
+    "POST door/signout/": {
       "status": "string"
     }
   },

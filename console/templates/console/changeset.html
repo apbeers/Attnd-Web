@@ -21,11 +21,12 @@
   <div class="cluster">
     {% if cs.status == 'pending' and ch.status == 'pending' %}
       <input class="change-toggle" type="checkbox" name="accept_{{ ch.id }}" value="1" id="c{{ ch.id }}"
-        {% if ch.op != 'update' or row.fields|length > ch.conflict_fields|length %}checked{% endif %}>
+        {% if not ch.human_fields or ch.op == 'update' %}{% if ch.op != 'update' or row.fields|length > ch.conflict_fields|length %}checked{% endif %}{% endif %}>
     {% endif %}
     <span class="badge {% if ch.op == 'create' %}badge--success{% elif ch.op == 'delete' %}badge--danger{% else %}badge--primary{% endif %}">{{ ch.get_op_display }}</span>
     <label class="strong" for="c{{ ch.id }}">{{ ch.get_entity_display }}: {{ ch.label }}</label>
     {% if ch.minor %}<span class="badge badge--neutral">small</span>{% endif %}
+    {% if ch.human_fields %}<span class="badge badge--warning">{% icon "warning" %} Money: needs your OK</span>{% endif %}
     {% if ch.status != 'pending' %}<span class="small muted push">{{ ch.get_status_display }}</span>{% endif %}
   </div>
   {% if ch.reason %}<div class="small muted">Why: {{ ch.reason }}</div>{% endif %}
@@ -34,7 +35,7 @@
     {% for f in row.fields %}
     <tr>
       <td class="diff-check">{% if ch.op == 'update' and cs.status == 'pending' and ch.status == 'pending' %}
-        <input class="field-toggle" data-change="{{ ch.id }}" type="checkbox" name="field_{{ ch.id }}_{{ f.name }}" value="1" aria-label="{{ f.label }}" {% if not f.conflict %}checked{% endif %}>{% endif %}</td>
+        <input class="field-toggle" data-change="{{ ch.id }}" type="checkbox" name="field_{{ ch.id }}_{{ f.name }}" value="1" aria-label="{{ f.label }}" {% if not f.conflict and not f.human %}checked{% endif %}>{% endif %}</td>
       <td class="muted nowrap diff-label">{{ f.label }} {% if f.conflict %}{% icon "lock" "lock" %}{% endif %}</td>
       <td>{% if ch.op == 'update' %}<span class="diff-old">{{ f.old|truncatechars:300 }}</span> → {% endif %}
         {% if f.is_image and f.new != '—' %}<img src="{{ f.new }}" alt="" class="diff-thumb">{% endif %}

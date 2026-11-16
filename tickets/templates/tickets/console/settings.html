@@ -1,0 +1,11 @@
+{% extends 'console/base.html' %}
+{% load console_tags tickets_tags %}
+{% block title %}Ticket settings · {{ event.name }}{% endblock %}
+{% block event_content %}
+{% include 'tickets/console/_nav.html' with tab='settings' %}
+<form method="post" class="panel panel--roomy stack">{% csrf_token %}
+  {% for field in form %}{% include 'console/_field.html' with field=field locked=ts.locked_fields %}{% endfor %}
+  <p class="small muted">Refunds always return the ticket price; the processing fee is refunded only if you cancel the event.</p>
+  <button class="button button--primary">Save</button>
+</form>
+{% endblock %}

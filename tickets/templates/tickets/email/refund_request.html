@@ -1,0 +1,4 @@
+{% extends "tickets/email/base.html" %}{% block content %}
+<p>{{ order.email }} asked for a refund of order <strong>{{ order.ref }}</strong> ({{ event.name }}).</p>
+{% if req.reason %}<blockquote style="border-left:3px solid #e5e7eb;margin:0;padding-left:12px;color:#5f6672">{{ req.reason|linebreaksbr }}</blockquote>{% endif %}
+<p><a href="{{ url }}">Review it in the console</a></p>{% endblock %}

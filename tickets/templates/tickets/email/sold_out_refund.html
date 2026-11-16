@@ -1,0 +1,2 @@
+{% extends "tickets/email/base.html" %}{% block content %}
+<p>Your payment for {{ event.name }} arrived after your 10-minute hold ended, and the tickets sold out in the meantime. We refunded the full {{ amount }} (order {{ order.ref }}). Sorry about that.</p>{% endblock %}

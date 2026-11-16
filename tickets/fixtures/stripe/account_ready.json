@@ -1,0 +1,31 @@
+{
+  "id": "acct_1QTestOrganizer",
+  "object": "account",
+  "type": "express",
+  "country": "US",
+  "email": "org@example.com",
+  "charges_enabled": true,
+  "payouts_enabled": true,
+  "details_submitted": true,
+  "livemode": false,
+  "capabilities": {
+    "card_payments": "active",
+    "transfers": "active"
+  },
+  "requirements": {
+    "currently_due": [],
+    "eventually_due": [],
+    "past_due": [],
+    "disabled_reason": null
+  },
+  "settings": {
+    "payouts": {
+      "schedule": {
+        "interval": "manual"
+      },
+      "statement_descriptor": null
+    }
+  },
+  "metadata": {},
+  "created": 1763251200
+}

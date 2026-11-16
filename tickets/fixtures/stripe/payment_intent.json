@@ -1,0 +1,26 @@
+{
+  "id": "pi_3QTestPayment",
+  "object": "payment_intent",
+  "amount": 5368,
+  "amount_received": 5368,
+  "currency": "usd",
+  "status": "succeeded",
+  "application_fee_amount": 368,
+  "on_behalf_of": "acct_1QTestOrganizer",
+  "transfer_data": {
+    "destination": "acct_1QTestOrganizer"
+  },
+  "metadata": {},
+  "livemode": false,
+  "latest_charge": {
+    "id": "ch_3QTestCharge",
+    "object": "charge",
+    "amount": 5368,
+    "amount_refunded": 0,
+    "paid": true,
+    "refunded": false,
+    "transfer": "tr_3QTestTransfer",
+    "application_fee": "fee_1QTestFee",
+    "payment_intent": "pi_3QTestPayment"
+  }
+}

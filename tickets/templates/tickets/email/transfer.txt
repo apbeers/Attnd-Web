@@ -1,0 +1,6 @@
+{% autoescape off %}{{ from_name|default:"Someone" }} sent you a {{ ticket.ticket_type.name }} ticket for {{ event.name }} ({{ when }}).
+
+Ticket and QR code: {{ links.page }}{% if links.apple %}
+Add to Apple Wallet: {{ links.apple }}{% endif %}{% if links.google %}
+Save to Google Wallet: {{ links.google }}{% endif %}
+{% endautoescape %}

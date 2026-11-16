@@ -1,0 +1,11 @@
+{% extends 'console/base.html' %}
+{% load console_tags tickets_tags %}
+{% block title %}Tickets · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="panel panel--roomy stack">
+  <h2>{% icon "ticket" %} Sell tickets with Attnd</h2>
+  <p>Ticketing is part of the <strong>Studio + tickets</strong> plan ($499 per event): your AI-designed website, flyer and app look, plus tickets with Stripe payouts, Wallet passes and offline door scanning. Attnd takes no cut of ticket sales; buyers pay the card processing fee.</p>
+  {% if can_switch and can_manage %}<form method="post">{% csrf_token %}<button class="button button--primary" name="action" value="enable_plan">Switch this event to Studio + tickets</button></form>
+  {% else %}<p class="muted small">Ask the event’s owner or an admin to switch the plan.</p>{% endif %}
+</div>
+{% endblock %}
