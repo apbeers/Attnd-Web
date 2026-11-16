@@ -114,9 +114,11 @@ def event_new(request):
             job = _job_from_form(ai_form, kind=IngestJob.KIND_CREATE, trigger=IngestJob.TRIGGER_CONSOLE,
                                  created_by=request.user,
                                  timezone=request.POST.get('browser_tz', '')[:64],
-                                 # Attnd Studio (beta): also bring the first website into Studio when done.
-                                 studio_import=bool(request.POST.get('studio_import') and ai_form.cleaned_data.get('urls')
-                                                    and has_studio_access(request.user)))
+                                 # Attnd Studio (beta): the website comes into Studio automatically when the
+                                 # import is done; the form's checkbox (on by default) is only an opt-out.
+                                 studio_import=bool(ai_form.cleaned_data.get('urls') and has_studio_access(request.user)
+                                                    and not (request.POST.get('studio_import_shown')
+                                                             and not request.POST.get('studio_import'))))
             jobs.enqueue(job)
             if _wants_json(request):
                 return JsonResponse({'task': task_json(job), 'redirect': reverse('console:dashboard')}, status=202)
@@ -253,6 +255,7 @@ def event_overview(request, event):
     from console.usage import most_hearted
     return render(request, 'console/event_overview.html', _ctx(
         event, 'overview', most_hearted=most_hearted(event), stats=stats, audience=audience, sources_form=sources_form,
+        studio_import=_studio_import_run(event, request.user),
         source_pages=list(event.source_pages.all()), can_manage=event.can_manage_team(request.user),
         refresh_form=RefreshForm(),
         recent_jobs=event.ingest_jobs.all()[:5],
@@ -260,6 +263,18 @@ def event_overview(request, event):
         display=resolve_display(event, stats),
         join_url=f'https://attnd.app/join/{event.event_code}/',
     ))
+
+
+def _studio_import_run(event, user):
+    """The newest "Bring into Studio" run, for the overview's notice (Studio beta users only)."""
+    if event.plan != Event.PLAN_STUDIO:
+        return None
+    from studio.access import has_studio_access
+    from studio.models import StudioRun
+    if not has_studio_access(user):
+        return None
+    return (StudioRun.objects.filter(site__event=event, kind=StudioRun.KIND_IMPORT).select_related('site')
+            .order_by('-created_at').first())
 
 
 @event_view

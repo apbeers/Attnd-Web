@@ -62,6 +62,12 @@
       </ol>
       <div class="studio-run" data-run-panel hidden><div class="cluster"><span class="spinner"></span><strong>Working…</strong></div>
         <ol class="studio-run__steps small" data-run-steps></ol></div>
+      <div class="notice notice--error stack stack--tight" role="status" data-run-failed {% if not failed_run %}hidden{% endif %}>
+        <div><strong>The last request didn't finish.</strong> <span data-run-failed-text>{{ failed_run.error }}</span></div>
+        <form method="post" data-retry-form action="{% if failed_run %}{% url 'studio:run_retry' event.id failed_run.pk %}{% endif %}">{% csrf_token %}
+          <button class="button button--primary button--small">{% icon "refresh" %} Retry</button>
+          <span class="small muted">Files already copied into Assets are kept.</span></form>
+      </div>
       <form class="stack stack--tight" data-chat-form>
         <div class="studio-selection small" data-selection hidden><span>About <span class="mono" data-selection-label></span></span>
           <button type="button" class="button button--ghost button--small" data-clear-selection>Clear</button></div>
@@ -117,7 +123,7 @@
             <label class="field__label" for="import-note">Notes (optional)</label>
             <input id="import-note" name="note" maxlength="2000" placeholder="e.g. Keep the yellow, drop the old 2025 lineup">
             <div><button class="button button--outline button--small">{% icon "download" %} Bring it in</button></div>
-            <p class="muted">Studio copies its look, images and fonts into Assets and builds a closely similar site. Only your event's own source websites.</p>
+            <p class="muted">Studio reads every page of the site (up to 25), copies its images, logos, fonts and PDFs into Assets and rebuilds the whole site to match, with live data for the schedule, map and updates. Only your event's own source websites.</p>
           </form>
         </details>
         {% endif %}

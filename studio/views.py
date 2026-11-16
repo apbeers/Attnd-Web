@@ -58,12 +58,13 @@ def editor(request, event):
         return render(request, 'studio/enable.html', _ctx(event, can_switch=can_switch_plan(event, request.user)))
     site = publishing.ensure_site(event, request.user)
     active = site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).first()
+    last = site.runs.order_by('-created_at').first()
     forms = _forms_summary(site)
     return render(request, 'studio/editor.html', _ctx(
         event, site=site, can_publish=can_publish(event, request.user),
         is_manager=event.can_manage_team(request.user),
         chat=site.messages.select_related('created_by').order_by('-created_at')[:60][::-1],
-        active_run=active, forms=forms, usage=ai.usage_summary(event), sites_origin=hosting.sites_origin(),
+        active_run=active, failed_run=last if last and last.status == StudioRun.FAILED else None, forms=forms, usage=ai.usage_summary(event), sites_origin=hosting.sites_origin(),
         public_url=site.public_url(), sources=event.source_urls or [],
         app_preview=_app_preview_html(site), undo=publishing.undo_target(site),
         state=_state(site), ideas=IDEAS,
@@ -127,7 +128,8 @@ def app_preview(request, event):
 # ---------------------------------------------------------------------------
 
 def _run_json(run):
-    return {'id': run.pk, 'status': run.status, 'steps': run.steps[-30:], 'files_rev': run.files_rev,
+    return {'id': run.pk, 'status': run.status, 'kind': run.kind,
+            'retry_url': reverse('studio:run_retry', args=[run.site.event_id, run.pk]), 'steps': run.steps[-30:], 'files_rev': run.files_rev,
             'reply': run.reply, 'error': run.error, 'version': run.result_version.number if run.result_version else None,
             'preview': hosting.preview_url(run.site, run=run) if run.is_active and hosting.sites_origin() else '',
             'cost': float(run.cost_usd)}
@@ -167,6 +169,31 @@ def run_status(request, event, run_id):
     site = _site_or_404(event)
     run = get_object_or_404(StudioRun, pk=run_id, site=site)
     return JsonResponse({'run': _run_json(run)})
+
+
+@studio_event_view
+@require_POST
+def run_retry(request, event, run_id):
+    """Retry a failed run (an import reuses what it already read and copied)."""
+    site = _site_or_404(event)
+    failed = get_object_or_404(StudioRun, pk=run_id, site=site, status=StudioRun.FAILED)
+    wants_json = 'application/json' in request.headers.get('Accept', '')
+    error = None
+    if ai.budget_left(event) <= 0:
+        error = (f'Today\'s AI budget for this event is used up (${settings.STUDIO_DAILY_SPEND_CAP_USD:.2f} per day). '
+                 f'It resets at midnight UTC.')
+    else:
+        with transaction.atomic():
+            Site.objects.select_for_update().get(pk=site.pk)
+            if site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).exists():
+                error = 'The assistant is still working on the last request.'
+            else:
+                run = agent.retry(failed, request.user)
+    if wants_json:
+        return _json_error(error, status=409) if error else JsonResponse({'run': _run_json(run)}, status=202)
+    if error:
+        messages.error(request, error)
+    return redirect('studio:editor', event_id=event.pk)
 
 
 # ---------------------------------------------------------------------------
@@ -317,6 +344,9 @@ def site_settings(request, event):
 def bring_in(request, event):
     site = _site_or_404(event)
     url = (request.POST.get('url') or '').strip()
+    if site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).exists():
+        messages.error(request, 'The assistant is still working on the last request. Try again when it is done.')
+        return redirect('studio:editor', event_id=event.pk)
     try:
         importer.start_import(site, url, request.user, note=(request.POST.get('note') or '').strip())
     except importer.SiteImportError as exc:

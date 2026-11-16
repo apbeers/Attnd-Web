@@ -184,7 +184,12 @@ def _run_create(job):
 
 
 def _bring_into_studio(job, event):
-    """Attnd Studio (beta): the organizer asked to also bring the imported website into Studio."""
+    """Attnd Studio (beta): an import that creates an event brings its website into Studio automatically (the
+    organizer can untick it on the import form): the whole site is crawled, its files copied and the AI rebuilds it.
+    Only for people with Studio access (checked again here, when the job runs)."""
+    from studio.access import has_studio_access
+    if not has_studio_access(job.created_by):
+        return
     try:
         from studio import importer, publishing
         publishing.switch_plan(event, Event.PLAN_STUDIO)

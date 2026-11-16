@@ -11,6 +11,7 @@ urlpatterns = [
     path('events/<int:event_id>/studio/app-preview/', v.app_preview, name='app_preview'),
     path('events/<int:event_id>/studio/chat/', v.chat, name='chat'),
     path('events/<int:event_id>/studio/runs/<int:run_id>/', v.run_status, name='run'),
+    path('events/<int:event_id>/studio/runs/<int:run_id>/retry/', v.run_retry, name='run_retry'),
     path('events/<int:event_id>/studio/code/', v.code, name='code'),
     path('events/<int:event_id>/studio/undo/', v.undo, name='undo'),
     path('events/<int:event_id>/studio/publish/', v.publish, name='publish'),

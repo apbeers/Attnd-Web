@@ -22,7 +22,7 @@ Server-only feature plus one additive API key (**API-016** `event.website_url`).
 | `StudioAccess` | email (unique, lower case), invited_by, created_at |
 | `Site` | event (1:1), slug (unique, `[a-z0-9-]`, 3–50, reserved words refused), draft → `SiteVersion`, published → `SiteVersion` (null = not live), published_at/by, suspended (+reason; staff takedown), preview_secret (rotating revokes every preview link), notify_on_forms, created_at |
 | `SiteVersion` | site, number (1, 2, …), files `{path: text}`, app_look `{accent_color, logo_url, display}`, flyer_asset, summary, source (ai/code/restore/import/start), created_by, run, created_at |
-| `StudioAsset` | id (UUID, unguessable), event, file (raw storage: Cloudinary raw when configured), name, kind image/svg/pdf/font, content_type, size, width/height, description, alt, tags, colors, generated (AI image), origin_url (imported), created_by, created_at |
+| `StudioAsset` | id (UUID, unguessable), event, file (raw storage: Cloudinary raw when configured), name, kind image/svg/pdf/font, content_type, size, width/height, description, alt, tags, colors, generated (AI image), origin_url (imported), sha256 (imports reuse an identical file), created_by, created_at |
 | `StudioRun` | the AI working: site, created_by, prompt, selection, kind chat/import, status queued/running/done/failed, steps `[{at, text}]`, working files/app_look/flyer (live copy while it runs), files_rev, reply, error, provider, model, tokens, cost, result_version, timestamps |
 | `StudioMessage` | site, role user/assistant, text, selection, run, created_by, created_at (the chat history) |
 | `StudioUsage` | event, run, kind chat/image/describe, provider, model, input/output tokens, images, cost_usd, created_at (cost log + spend cap) |
@@ -68,8 +68,9 @@ version" works for any version. **Unpublish** = `published = null` (bumps too).
   Accepted for the invite-only beta; custom domains (one origin per site) fix it.
 - **Abuse**: "Report this site" (`/<slug>/_attnd/report`, rate limited) → `SiteReport`, listed for staff at
   `/console/studio/reports/` with **Take down** (suspend) / restore / resolve. Publishing requires the Studio plan and
-  Studio access. **AI spend cap**: `STUDIO_DAILY_SPEND_CAP_USD` (default $5) per event per UTC day, checked before every
-  model call; runs stop with a clear message when reached.
+  Studio access. **AI spend cap**: `STUDIO_DAILY_SPEND_CAP_USD` (default $10; was $5, but a full import costs about
+  $2–4 on gpt-5.5 with prompt caching and up to ~$6 on Claude) per event per UTC day, checked before every model call;
+  runs stop with a clear message when reached. Cached input tokens are priced at a tenth.
 
 ## 4. Public routes on SITES_HOST (`studio/urls_sites.py`)
 | Path | What |
@@ -116,21 +117,27 @@ The AI sees every asset (id, kind, size, description, tags) and references them 
 `_attnd/assets/<id>/<name>`.
 
 ## 7. AI
-- **Provider layer** (`studio/ai.py`): `OpenAIProvider` (the existing SDK, chat completions with function tools) and
-  `AnthropicProvider` (Messages API over `urllib`, used when `ANTHROPIC_API_KEY` is set; `fallbacks: "default"` on
-  refusals). `STUDIO_AI_PROVIDER` = `auto` (Anthropic when its key exists, else OpenAI) / `openai` / `anthropic`.
+- **Provider layer** (`studio/ai.py`): `OpenAIProvider` (the SDK's **Responses API**: `responses.create` with
+  function tools, `reasoning: {effort: medium}`, `instructions` = the system prompt on every call, turns chained with
+  `previous_response_id` (stored responses) so each call sends only the new `function_call_output` items; Chat
+  Completions refuses function tools with reasoning on gpt-5.5) and `AnthropicProvider` (Messages API over `urllib`,
+  used when `ANTHROPIC_API_KEY` is set; `fallbacks: "default"` on refusals; a prompt-cache breakpoint on the newest
+  block). The fallback model is used only when the error says the model is missing or not available to the account. `STUDIO_AI_PROVIDER` = `auto` (Anthropic when its key exists, else OpenAI) / `openai` / `anthropic`.
   Models (Nov 2026; settings): `STUDIO_OPENAI_MODEL` `gpt-5.5` (OpenAI's strongest coding model) falling back to
   `STUDIO_OPENAI_FALLBACK_MODEL` `gpt-5` if the account can't use it; `STUDIO_ANTHROPIC_MODEL` `claude-opus-5-5`;
   images `STUDIO_IMAGE_MODEL` `gpt-image-2` falling back to `gpt-image-1`. Prices per model in `STUDIO_PRICES`
   (conservative estimates; unknown models are priced high so the cap errs safe). Every call is logged in
   `StudioUsage`.
-- **Agent loop** (`studio/agent.py`, background thread like AI import, ≤ `STUDIO_MAX_STEPS` 24 model calls): context =
+- **Agent loop** (`studio/agent.py`, background thread like AI import, ≤ `STUDIO_MAX_STEPS` 24 model calls, import
+  runs ≤ `STUDIO_IMPORT_MAX_STEPS` 40, every run ≤ `STUDIO_RUN_MAX_MINUTES` 25 (stops and keeps the work); several tool
+  calls per turn): context =
   system prompt + event data + assets + current files (full text up to 150 K characters, else a listing) + the selected
   element + the last 12 chat turns + the request. Tools: `write_file(path, content)`, `edit_file(path, find, replace)`,
   `delete_file(path)`, `read_file(path)`, `set_app_look(accent_color, logo_asset_id, tabs, default_tab,
   locations_style, schedule_style)`, `generate_image(prompt, purpose, size, name, reference_asset_ids)`,
   `set_flyer(asset_id)`. Paths `[a-z0-9][a-z0-9_-]*(/…)*.(html|css|js|json|svg|txt)`, not `_attnd/` or `_preview/`,
-  ≤ 40 files, ≤ 300 KB each, ≤ 2 MB total. Each tool call updates the run's working copy (`files_rev` + a step), so the
+  ≤ 40 files, ≤ 300 KB each, ≤ 2 MB total; a file that loads images, fonts, stylesheets or scripts from the old
+  website's hosts (the event's sources and the copied files' origins) is refused (use the copies). Each tool call updates the run's working copy (`files_rev` + a step), so the
   editor's preview reloads while the AI works. The final text is the reply; a new version is made if anything changed.
 - **System prompt** (`studio/prompts.py`): what organizers want from event sites (black top bar with logo + hamburger;
   bold full-width banner/flyer art with presenting sponsor, name, place, date, time, stats; giant "THIS SATURDAY /
@@ -164,14 +171,36 @@ Polling, no WebSockets: the page polls `…/studio/runs/<id>/` every 1.5 s while
 files_rev, reply); the iframe reloads when `files_rev` changes.
 
 ## 9. Import ("Bring into Studio")
-On the Studio page ("Bring your website into Studio") and as a checkbox on AI import (beta users only;
-`IngestJob.studio_import`, started when the import finishes). Only URLs the organizer gave as the event's sources
-(`Event.source_urls`, or the import's URLs). `studio/importer.py` fetches with `urllib` (http/https only, public IPs
-only (SSRF guard, also after redirects), 15 s, ≤ 2 MB HTML, ≤ 500 KB per stylesheet), parses with BeautifulSoup:
-stylesheets (≤ 8) and inline styles, colour frequencies, font families + `@font-face` files (≤ 6, copied), images (img,
-srcset, og:image, CSS backgrounds, the logo; ≤ 24 copied as assets), the outline (nav links, headings, buttons,
-sections) of the homepage and up to 4 same-origin nav pages. Then an AI run (kind `import`) rebuilds a closely
-similar site with the copied assets, using the data library for schedule/locations.
+- **Automatic**: an AI import that creates an event (console "Build it with AI" with a website) by someone with Studio
+  access brings the site into Studio when the import finishes (`IngestJob.studio_import`; the form's checkbox "Also
+  rebuild the website in Attnd Studio" is ticked by default and only opts out; access is checked again when the job
+  runs): the event switches to the Studio plan and an import run starts. Refreshes and "Check for updates" never do.
+  The event overview shows the run (rebuilding / ready / failed → Open Studio to retry). The Studio page's "Bring your
+  current website into Studio" does the same full import.
+- **Only** URLs the organizer gave as the event's sources (`Event.source_urls`); the seeds are the chosen URL plus the
+  other sources on the same host, and the site's homepage.
+- **Crawl** (`studio/importer.py`, `Capture`): same host(s) as the seeds only, breadth-first (navigation links first),
+  ≤ 25 pages, skipping admin/login/cart/feed/search paths and non-page files; per page the outline and a cleaned body
+  (no scripts/styles, trimmed attributes, absolute URLs, srcsets reduced to their largest image). Stylesheets (≤ 16,
+  ≤ 500 KB, `@import` one level, `url()`s resolved against the stylesheet), colours, font families, Google Fonts
+  families (kept as Google Fonts), licensed font CSS (Typekit…) skipped.
+- **Files** (any public host, so CDNs work): images from `img`/`source` (largest `srcset` candidate, `data-src` and
+  other lazy-load attributes), CSS and inline-style backgrounds, `og:image`/`twitter:image`, icons/apple-touch-icon,
+  JSON-LD logos, video posters, linked full-size images; the logo (JSON-LD, "logo" hints, first header image); sponsor
+  logos (sponsor/partner hints or headings); self-hosted `@font-face` files (woff2 preferred); linked PDFs (tagged
+  guide / map / flyer / document). ≤ 120 images, 12 fonts, 8 PDFs, most important first; 4 downloads at a time.
+  Stored with `create_asset(dedupe=True)`: type sniffing and size limits (larger files skipped), the library budget
+  (200 files / 300 MB; a full library stops the copying), deduplicated by SHA-256; description/alt/tags from the page
+  (no vision calls for imported files).
+- **Caps per run**: `STUDIO_IMPORT_SECONDS` (300) and `STUDIO_IMPORT_MAX_MB` (150) for all fetches; hitting one stops
+  fetching and continues with what was read (noted for the AI). SSRF guard on every fetch and every redirect hop.
+- **Rebuild**: the old URLs in the captured HTML and CSS are replaced by the copies' paths, page links by the new
+  file names (`/` → `index.html`, `/info/parking/` → `info-parking.html`); the AI gets every page (≤ 100 K characters
+  of HTML, the homepage ≤ 30 K), the copied files, fonts (@font-face paths), colours, the logo and flyer/guide asset and
+  the CSS, and rebuilds the whole multi-page site with the data library elements for schedule/lineup/map/updates
+  (`IMPORT_PROMPT`).
+- **Failure**: copied files stay in Assets; the run fails with the reason; the editor shows "The last request didn't
+  finish" with **Retry** (`POST …/studio/runs/<id>/retry/`, any failed run; an import reuses its crawl and copies).
 
 ## 10. App tie-in (API-016)
 Bundle `event.website_url`: `https://<SITES_HOST>/<slug>/` while the site is published and not suspended, else
@@ -179,13 +208,14 @@ Bundle `event.website_url`: `https://<SITES_HOST>/<slug>/` while the site is pub
 
 ## 11. Console entry points
 Sidenav "Studio" (beta badge) for users with access; topbar "Studio beta" (staff: access list + reports); AI import
-checkbox "Also bring the website into Studio". Staff pages `/console/studio/access/` (add/remove emails) and
+opt-out checkbox "Also rebuild the website in Attnd Studio" (ticked); the event overview's import notice. Staff pages `/console/studio/access/` (add/remove emails) and
 `/console/studio/reports/`.
 
 ## 12. Settings
 `SITES_HOST`, `STUDIO_BETA_EMAILS`, `STUDIO_AI_PROVIDER`, `ANTHROPIC_API_KEY`, `STUDIO_OPENAI_MODEL`,
 `STUDIO_OPENAI_FALLBACK_MODEL`, `STUDIO_ANTHROPIC_MODEL`, `STUDIO_IMAGE_MODEL`, `STUDIO_IMAGE_FALLBACK_MODEL`,
-`STUDIO_VISION_MODEL`, `STUDIO_DAILY_SPEND_CAP_USD`, `STUDIO_MAX_STEPS`, `STUDIO_PREVIEW_LINK_DAYS`, `STUDIO_PRICES`,
+`STUDIO_VISION_MODEL`, `STUDIO_DAILY_SPEND_CAP_USD`, `STUDIO_MAX_STEPS`, `STUDIO_IMPORT_MAX_STEPS`,
+`STUDIO_RUN_MAX_MINUTES`, `STUDIO_IMPORT_SECONDS`, `STUDIO_IMPORT_MAX_MB`, `STUDIO_PREVIEW_LINK_DAYS`, `STUDIO_PRICES`,
 rate limits `studio_form_ip`, `studio_form_site`, `studio_report_ip`.
 
 ## 13. Custom domains (later, not built)
@@ -199,5 +229,8 @@ publish), sites host isolation (console/admin/api/static 404, no cookies, CSP, n
 attnd.app never routes site paths), page routing + base/footer injection, data.json (draft events leak nothing),
 forms (store, honeypot, rate limits, CSV, email), assets (sniffing, limits, serving), versions/publish/rollback/undo +
 bundle `website_url` + contract snapshot, previews (token expiry, revocation, versions), the AI loop with mocked
-providers (tools, limits, spend cap, failure), the Anthropic HTTP adapter, image generation, the importer with mocked
-fetches (SSRF guard), reports + takedown, and the CSP template check.
+providers (tools, limits, spend cap, failure), the OpenAI Responses round trip (function_call → function_call_output,
+previous_response_id, reasoning, cached-token pricing, fallback only for a missing model) on SDK types, the Anthropic
+HTTP adapter, image generation, the importer with mocked fetches (multi-page crawl limits, srcset/CSS url()/og:image/
+icons/fonts/PDF discovery, dedupe, time/byte caps, SSRF incl. redirects, hotlink refusal, import → automatic run,
+opt-out, failure + Retry), reports + takedown, and the CSP template check.
