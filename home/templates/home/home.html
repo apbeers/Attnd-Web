@@ -27,19 +27,20 @@
     <a class="brand" href="/">attnd<span>.</span></a>
     <div class="site-nav__links">
       <a href="#features">Features</a>
-      <a href="#try-it">Try it free</a>
+      {% if SIGNUPS_OPEN %}<a href="#try-it">Try it free</a>{% endif %}
       <a href="#download">Download</a>
       <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
-      <a class="button button--primary button--small" href="{% url 'console:signup' %}">Create an event</a>
+      {% if SIGNUPS_OPEN %}<a class="button button--primary button--small" href="{% url 'console:signup' %}">Create an event</a>
+      {% else %}<a class="button button--primary button--small" href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Invite only</a>{% endif %}
     </div>
     <details class="site-nav__menu">
       <summary>Menu</summary>
       <div class="site-nav__links">
         <a href="#features">Features</a>
-        <a href="#try-it">Try it free</a>
+        {% if SIGNUPS_OPEN %}<a href="#try-it">Try it free</a>{% endif %}
         <a href="#download">Download</a>
         <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
-        <a href="{% url 'console:signup' %}">Create an event</a>
+        {% if SIGNUPS_OPEN %}<a href="{% url 'console:signup' %}">Create an event</a>{% else %}<a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Invite only</a>{% endif %}
       </div>
     </details>
   </div>
@@ -51,8 +52,13 @@
       <h1>Your event's map, schedule and live updates — in everyone's pocket.</h1>
       <p class="lead">Perfect for festivals, trade shows, outdoor events, concerts and conferences. Paste your event website and AI builds the whole thing in about a minute.</p>
       <div class="cluster">
+        {% if SIGNUPS_OPEN %}
         <a href="#try-it" class="button button--light">Try it free</a>
         <a href="{% url 'console:signup' %}" class="button button--ghost">$299 per event, flat</a>
+        {% else %}
+        <a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}" class="button button--light">Invite only for now</a>
+        <a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}" class="button button--ghost">$299 per event, flat</a>
+        {% endif %}
       </div>
     </div>
     <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-map.png' %}" alt="The Attnd app showing an event map"></div></div>
@@ -110,6 +116,7 @@
   </div>
 </section>
 
+{% if TRIAL_IMPORT_OPEN %}
 <section class="section" id="try-it">
   <div class="wrap">
     <div class="section-head">
@@ -152,6 +159,22 @@
     </div>
   </div>
 </section>
+{% else %}
+<section class="section" id="invite-only">
+  <div class="wrap">
+    <div class="panel center">
+      <h2>Attnd is invite-only right now</h2>
+      <p class="muted">We aren't taking new organizers yet. If you were invited, create your account with the email
+        address the invite was sent to.</p>
+      <div class="cluster cluster--center">
+        <a href="{% url 'console:signup' %}" class="button button--primary">I have an invite</a>
+        <a href="{% url 'login' %}" class="button button--ghost">Sign in</a>
+      </div>
+      <p class="muted small">Going to an event? You don't need an invite: get the free app below and scan the event's QR code.</p>
+    </div>
+  </div>
+</section>
+{% endif %}
 
 <section class="section section--dark center" id="download">
   <div class="wrap">
@@ -166,9 +189,15 @@
 
 <section class="section center">
   <div class="wrap">
+    {% if SIGNUPS_OPEN %}
     <h2>Create your event for free.</h2>
     <p class="muted">Pay only when your event goes live.</p>
     <a href="{% url 'console:signup' %}" class="button button--primary">Get started</a>
+    {% else %}
+    <h2>Organizing an event?</h2>
+    <p class="muted">Attnd is invite-only right now and isn't taking new organizers yet.</p>
+    <p><a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Have an invite?</a></p>
+    {% endif %}
   </div>
 </section>
 
@@ -181,7 +210,7 @@
 
 {# CSRF token for the passkey sign-in from the "Sign in" links (console/static/console/passkeys.js). #}
 <div hidden>{% csrf_token %}</div>
-<script src="{% static 'home/home.js' %}"></script>
+{% if TRIAL_IMPORT_OPEN %}<script src="{% static 'home/home.js' %}"></script>{% endif %}
 <script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>

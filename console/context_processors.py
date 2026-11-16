@@ -9,3 +9,9 @@ def maps(request):
 def store_links(request):
     """The apps' store pages (App Store / Google Play), for download links on any page."""
     return {'IOS_APP_STORE_URL': settings.IOS_APP_STORE_URL, 'ANDROID_PLAY_STORE_URL': settings.ANDROID_PLAY_STORE_URL}
+
+
+def signups(request):
+    """SIGNUPS_OPEN for templates (sign-up links become the invite-only notice while it is off)."""
+    from console.signups import signups_open, trial_import_open
+    return {'SIGNUPS_OPEN': signups_open(), 'TRIAL_IMPORT_OPEN': trial_import_open(request)}

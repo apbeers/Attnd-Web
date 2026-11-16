@@ -1,5 +1,6 @@
 """
-Public "try it" endpoints used by the homepage. No account needed.
+Public "try it" endpoints used by the homepage. No account needed while SIGNUPS_OPEN is on; while it is off
+(invite-only) POST /scrape/ answers 403 for anonymous visitors (console.signups.trial_import_open).
 
     POST /scrape/                 {"url", "timezone"} → 202 {"job_id", "status_url"}
     GET  /scrape/jobs/<job_id>/   → {"status", "progress", "error", ...result}
@@ -19,6 +20,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from attnd.ratelimit import client_ip
+from console.signups import INVITE_ONLY_MESSAGE, trial_import_open
 from scrape import jobs
 from scrape.diff import valid_tz
 from scrape.models import IngestJob
@@ -53,6 +55,9 @@ def qr_data_url(text: str) -> str:
 @csrf_exempt
 @require_POST
 def scrape_view(request):
+    if not trial_import_open(request):
+        # Invite-only (SIGNUPS_OPEN off): no anonymous AI imports, so no OpenAI calls for visitors.
+        return JsonResponse({"error": INVITE_ONLY_MESSAGE, "invite_only": True}, status=403)
     try:
         body = json.loads(request.body)
         url = str(body.get("url", "")).strip()

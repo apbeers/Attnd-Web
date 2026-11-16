@@ -176,6 +176,7 @@ sets the **app's look**; Attnd hosts the site.
 ## Accounts
 
 People only ever see and sign in with their **email** (`console.auth_backends.EmailOrUsernameBackend`, case-insensitive). The account's `username` is an internal generated id (`u` + 10 hex, `console.accounts.new_username`), so an email can change (Account page, `/console/account/`) without losing the account. Emails are unique case-insensitively (Postgres index `auth_user_email_lower_uniq` + `email_in_use`). Create a site admin with `python manage.py create_admin you@example.com` (they set up two-factor sign-in at their first sign-in; see Security). Deleting an account never deletes events: they become unassigned.
+- **Invite-only** (`console/signups.py`, `SIGNUPS_OPEN`, default off): `/console/signup/` shows "Invite only" with the form folded under "Have an invite?"; only emails with a pending `EventInvite`, a `StudioAccess` row or in `STUDIO_BETA_EMAILS` can create an account (anyone else gets the same 403 invite-only answer, checked before "already exists", so it never reveals who is invited or has an account; the signup rate limit still applies; claiming a trial event follows the same rule). The homepage's anonymous AI import is closed (`POST /scrape/` → 403 JSON for anonymous visitors, no job; the homepage shows the invite-only notice instead of the form and its sign-up CTAs; signed-in organizers keep it). Sign-in and everything attendees use (apps, API, `/join/`, `/p/`, Studio sites) are unaffected. `SIGNUPS_OPEN=1` restores open sign-ups.
 
 ## Security
 
@@ -316,6 +317,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Email | Mailgun SMTP credentials for the sending domain (`postmaster@mg.attnd.app` on prod; dev uses its sandbox). No password = mail goes to the log. They feed Django 6.1's `MAILERS` (settings `EMAIL_ENABLED`, `EMAIL_SMTP_OPTIONS`); the deprecated `EMAIL_*` Django settings aren't used |
 | `DEFAULT_FROM_EMAIL` | No | Default `Attnd <noreply@mg.attnd.app>` |
 | `SITE_URL` | No | Base URL for links in emails, default `https://attnd.app` (dev: `https://dev.attnd.app`) |
+| `SIGNUPS_OPEN` | No | Default off = invite-only organizer sign-ups (only invited emails; homepage AI import closed for anonymous visitors). `1` = anyone can sign up (console.signups) |
 | `ADMIN_EMAILS` | No | Comma-separated; get server error emails |
 | `EMAIL_ALLOWED_RECIPIENTS` | No | Comma-separated addresses/@domains; when set, nobody else is emailed (for dev) |
 | `MAILGUN_*` | — | Set by the Mailgun add-on (SMTP server/port, API key, sandbox domain) |

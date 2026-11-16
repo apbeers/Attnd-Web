@@ -74,6 +74,7 @@ class RunJobsInline:
 # Public trial endpoints
 # ---------------------------------------------------------------------------
 
+@override_settings(SIGNUPS_OPEN=True)
 class TrialImportTests(RunJobsInline, TestCase):
     def setUp(self):
         self.client = Client()

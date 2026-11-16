@@ -91,6 +91,7 @@ TEMPLATES = [
                 'django.template.context_processors.csp',
                 'console.context_processors.maps',
                 'console.context_processors.store_links',
+                'console.context_processors.signups',
                 'studio.context_processors.studio',
             ],
         },
@@ -327,6 +328,9 @@ if SITES_HOST and '*' not in ALLOWED_HOSTS:
 SITES_ORIGIN = f"{'http' if DEBUG and SITES_HOST.startswith(('127.0.0.1', 'localhost')) else 'https'}://{SITES_HOST}"
 # Console origins allowed to frame hosted pages (the editor's preview); nobody else may frame them.
 STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))
+# Organizer sign-ups (console.signups): off = invite-only (only invited emails can create an account, and the
+# homepage's anonymous AI import is closed). Attendees and existing accounts are unaffected.
+SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '').strip().lower() in ('1', 'true', 'yes', 'on')
 # Invite-only beta: these emails (comma-separated) always have Studio access, plus staff and StudioAccess rows.
 STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', 'apbeers@icloud.com').split(',')
                       if e.strip()]

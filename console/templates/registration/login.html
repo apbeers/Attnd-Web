@@ -34,7 +34,11 @@
         <button class="button button--outline button--block">Sign in</button>
       </form>
     </details>
+    {% if SIGNUPS_OPEN %}
     <p class="center small muted">New here? <a href="{% url 'console:signup' %}">Create an account</a></p>
+    {% else %}
+    <p class="center small muted">Attnd is invite-only right now. <a href="{% url 'console:signup' %}">Have an invite?</a></p>
+    {% endif %}
   </div>
 </main>
 <script src="{% static 'console/passkeys.js' %}"></script>

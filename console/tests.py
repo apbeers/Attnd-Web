@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 import datetime
@@ -17,6 +17,7 @@ def _make_trial_user():
     return user
 
 
+@override_settings(SIGNUPS_OPEN=True)
 class SignUpViewTests(TestCase):
 
     def setUp(self):
@@ -345,6 +346,7 @@ class UsagePageTests(ConsoleTests):
         self.assertEqual(self.client.get(self.url('usage')).status_code, 200)
 
 
+@override_settings(SIGNUPS_OPEN=True)
 class AccountEmailTests(TestCase):
     def test_signup_rejects_an_email_already_used_by_any_account(self):
         User.objects.create_superuser('u8741', 'Owner@Example.com', 'pw')
