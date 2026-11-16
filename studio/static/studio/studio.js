@@ -121,7 +121,24 @@
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); chatForm.requestSubmit(); }
   });
 
+  var failedBox = $('[data-run-failed]'), retryForm = $('[data-retry-form]');
+  function showFailed(run) {
+    $('[data-run-failed-text]').textContent = run.error || '';
+    retryForm.setAttribute('action', run.retry_url); failedBox.hidden = false;
+  }
+  retryForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var target = retryForm.getAttribute('action');
+    if (!target) return;
+    post(target, {}).then(function (j) {
+      if (!j.run) { $('[data-run-failed-text]').textContent = j.error || 'Something went wrong.'; return; }
+      failedBox.hidden = true; addMessage('user', 'Try again');
+      watchRun(j.run.id);
+    }).catch(function () { $('[data-run-failed-text]').textContent = 'Could not reach Attnd. Try again.'; });
+  });
+
   function watchRun(id) {
+    failedBox.hidden = true;
     runPanel.hidden = false; sendBtn.disabled = true; steps.replaceChildren(); lastRev = -1;
     clearTimeout(pollTimer);
     (function poll() {
@@ -138,6 +155,7 @@
         }
         runPanel.hidden = true; sendBtn.disabled = false; runPreview = '';
         addMessage('assistant', run.status === 'done' ? run.reply : 'Sorry, that didn\'t work: ' + run.error);
+        if (run.status === 'failed') showFailed(run); else failedBox.hidden = true;
         refresh();
       }).catch(function () { pollTimer = setTimeout(poll, 4000); });
     })();

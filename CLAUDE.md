@@ -163,13 +163,22 @@ sets the **app's look**; Attnd hosts the site.
   nothing): `<attnd-schedule|lineup|locations|map|updates|countdown|app-badge|event>` (light DOM, `attnd-*__*` classes,
   `--attnd-*` custom properties, OpenStreetMap tiles, no Google key) and `<form data-attnd-form>` → `/<slug>/_attnd/forms/<name>`
   (honeypot, 2 s time trap, `studio_form_ip`/`studio_form_site` rate limits, email to owner+admins, CSV export).
-- **AI** (`studio/ai.py`, `agent.py`, `prompts.py`): provider layer (OpenAI SDK; Anthropic Messages API over urllib when
-  `ANTHROPIC_API_KEY` is set), agent loop with tools write/edit/delete/read file, set_app_look, generate_image,
-  set_flyer, in a background thread (like AI import); the editor polls `runs/<id>/` (no WebSockets) and the preview
-  reloads on every file change. Defaults: `gpt-5.5` → `gpt-5` fallback, `claude-opus-5-5`, images `gpt-image-2` →
-  `gpt-image-1`. Daily spend cap per event (`STUDIO_DAILY_SPEND_CAP_USD`, $5) over `StudioUsage`; vision describes
-  uploads. "Bring into Studio" (`importer.py`, urllib with an SSRF guard, only the event's `source_urls`) copies a
-  site's look/images/fonts and rebuilds it; also a checkbox on AI import (`IngestJob.studio_import`).
+- **AI** (`studio/ai.py`, `agent.py`, `prompts.py`): provider layer (OpenAI SDK **Responses API**: function tools +
+  reasoning, chained with `previous_response_id`; Chat Completions refuses tools with reasoning on gpt-5.5. Anthropic
+  Messages API over urllib when `ANTHROPIC_API_KEY` is set, with a prompt-cache breakpoint), agent loop with tools
+  write/edit/delete/read file, set_app_look, generate_image, set_flyer, in a background thread (like AI import); the
+  editor polls `runs/<id>/` (no WebSockets), the preview reloads on every file change, a failed run shows **Retry**
+  (`runs/<id>/retry/`). Defaults: `gpt-5.5` → `gpt-5` fallback (only when the model is unavailable), `claude-opus-5-5`,
+  images `gpt-image-2` → `gpt-image-1`. Daily spend cap per event (`STUDIO_DAILY_SPEND_CAP_USD`, $10: a full import
+  costs ~$2–4) over `StudioUsage` (cached input at a tenth); vision describes uploads. Scrape extraction, tags and
+  vision stay on Chat Completions with structured output (no tools, still supported).
+- **Import** (`importer.py`, spec §9): an AI import that creates an event brings its website into Studio
+  automatically for Studio users (opt-out checkbox, `IngestJob.studio_import`; not refreshes); the Studio page's
+  "Bring into Studio" does the same. Crawls ≤ 25 same-host pages, copies every image (srcset, picture, lazy, CSS
+  backgrounds, og:image, icons, logo, sponsors), self-hosted font and PDF as assets (deduped by SHA-256, library
+  budget), per-run caps `STUDIO_IMPORT_SECONDS`/`STUDIO_IMPORT_MAX_MB`, SSRF guard on every fetch and redirect; the AI
+  rebuilds the whole site with the local copies (hotlinks to the old site are refused) and the data library. Failures
+  keep the copies; Retry reuses them.
 - **Publishing** (`publishing.py`): publish = site serves that version + its app look (accent, logo, display) and flyer
   are copied onto the event + `content_version` bump; the bundle's `event.website_url` (API-016) is the live URL.
 - Custom domains are designed (spec §13), not built.
@@ -401,8 +410,10 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `ANTHROPIC_API_KEY` | No | Studio uses Claude (`STUDIO_ANTHROPIC_MODEL`, default `claude-opus-5-5`) when set; `STUDIO_AI_PROVIDER=auto/openai/anthropic` |
 | `STUDIO_OPENAI_MODEL` / `STUDIO_OPENAI_FALLBACK_MODEL` | No | Default `gpt-5.5` / `gpt-5` |
 | `STUDIO_IMAGE_MODEL` / `STUDIO_IMAGE_FALLBACK_MODEL` / `STUDIO_VISION_MODEL` | No | Default `gpt-image-2` / `gpt-image-1` / `OPENAI_MODEL` |
-| `STUDIO_DAILY_SPEND_CAP_USD` | No | Studio AI spend per event per UTC day, default `5` |
+| `STUDIO_DAILY_SPEND_CAP_USD` | No | Studio AI spend per event per UTC day, default `10` (a full import is ~$2–4) |
 | `STUDIO_MAX_STEPS` / `STUDIO_PREVIEW_LINK_DAYS` | No | Model calls per AI run (24) / private preview link lifetime (7 days) |
+| `STUDIO_IMPORT_MAX_STEPS` / `STUDIO_RUN_MAX_MINUTES` | No | Model calls per import run (40) / wall clock per run (25 min; stops and keeps the work) |
+| `STUDIO_IMPORT_SECONDS` / `STUDIO_IMPORT_MAX_MB` | No | Per import run: time (300 s) and bytes (150 MB) for crawling the old site and copying its files |
 | `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` | Tickets | Stripe keys (dev: `sk_test_…`/`pk_test_…`; production: live). Unset = paid tickets off |
 | `STRIPE_WEBHOOK_SECRET` / `STRIPE_CONNECT_WEBHOOK_SECRET` | Tickets | Signing secrets of the account and Connect webhook endpoints (both `https://<host>/tickets/stripe/webhook/`) |
 | `STRIPE_API_VERSION` / `STRIPE_CONNECT_COUNTRY` | No | Default `2025-03-31.basil` / `US` |

@@ -353,8 +353,15 @@ STUDIO_IMAGE_MODEL = os.getenv('STUDIO_IMAGE_MODEL', 'gpt-image-2')
 STUDIO_IMAGE_FALLBACK_MODEL = os.getenv('STUDIO_IMAGE_FALLBACK_MODEL', 'gpt-image-1')
 STUDIO_VISION_MODEL = os.getenv('STUDIO_VISION_MODEL', '') or os.getenv('OPENAI_MODEL', 'gpt-5-mini')
 # AI spend per event per UTC day (all Studio calls: chat, images, asset descriptions). 0 = no Studio AI.
-STUDIO_DAILY_SPEND_CAP_USD = float(os.getenv('STUDIO_DAILY_SPEND_CAP_USD', '5'))
+# $10: a full import (a 10-25 page site rebuilt in one run) costs roughly $2-4 with gpt-5.5 and prompt caching, up
+# to ~$6 on Claude, so $5 left little or nothing for the chat turns that follow it on the same day.
+STUDIO_DAILY_SPEND_CAP_USD = float(os.getenv('STUDIO_DAILY_SPEND_CAP_USD', '10'))
 STUDIO_MAX_STEPS = int(os.getenv('STUDIO_MAX_STEPS', '24'))
+STUDIO_IMPORT_MAX_STEPS = int(os.getenv('STUDIO_IMPORT_MAX_STEPS', '40'))  # model calls of an import run
+STUDIO_RUN_MAX_MINUTES = int(os.getenv('STUDIO_RUN_MAX_MINUTES', '25'))  # wall clock per run (stops, keeps the work)
+# Bring into Studio: per run, time and bytes for crawling the old site and copying its files.
+STUDIO_IMPORT_SECONDS = int(os.getenv('STUDIO_IMPORT_SECONDS', '300'))
+STUDIO_IMPORT_MAX_MB = int(os.getenv('STUDIO_IMPORT_MAX_MB', '150'))
 STUDIO_PREVIEW_LINK_DAYS = int(os.getenv('STUDIO_PREVIEW_LINK_DAYS', '7'))
 # USD per 1M input / output tokens, and per generated image. Conservative estimates (check the providers' price
 # pages); a model missing here is priced at STUDIO_PRICES['default'] so the cap errs on the safe side.

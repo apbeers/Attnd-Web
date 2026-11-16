@@ -148,11 +148,13 @@ class StudioAsset(models.Model):
     colors = models.JSONField(default=list, blank=True)
     generated = models.BooleanField(default=False)  # made by the image model
     origin_url = models.URLField(max_length=1024, blank=True)  # copied from the organizer's old website
+    sha256 = models.CharField(max_length=64, blank=True)  # of the bytes: imports reuse an identical file
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(default=dj_tz.now)
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['event', 'sha256'], name='studio_asset_event_sha')]
 
     def __str__(self):
         return self.name

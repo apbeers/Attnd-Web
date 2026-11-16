@@ -15,8 +15,10 @@
       <input type="hidden" name="mode" value="ai"><input type="hidden" name="browser_tz" id="browser_tz">
       {% for err in ai_form.non_field_errors %}<div class="notice notice--error notice--compact">{{ err }}</div>{% endfor %}
       {% for field in ai_form %}{% include 'console/_field.html' %}{% endfor %}
-      {% if studio_access %}<label class="check field" for="studio_import"><input type="checkbox" id="studio_import" name="studio_import" value="1">
-        Also bring the website into Attnd Studio <span class="badge badge--neutral badge--pill">Beta</span></label>{% endif %}
+      {% if studio_access %}<input type="hidden" name="studio_import_shown" value="1">
+        <label class="check field" for="studio_import"><input type="checkbox" id="studio_import" name="studio_import" value="1" checked>
+        Also rebuild the website in Attnd Studio <span class="badge badge--neutral badge--pill">Beta</span>
+        <span class="field__help">Studio copies every page, image, font and PDF of the website and the AI builds a matching site. Open Studio to watch it.</span></label>{% endif %}
       <div class="cluster">
         <button class="button button--primary button--large">{% icon "stars" %} Build my event</button>
         <span class="muted small">Usually takes under a minute. You can keep working: it runs in the background and shows up in the corner.</span>

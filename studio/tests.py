@@ -637,7 +637,8 @@ class ChatEndpointTests(StudioTestCase):
         self.assertTrue(status['preview'].startswith(f'https://{SITES}/'))
 
     def test_spend_cap(self):
-        StudioUsage.objects.create(event=self.event, kind='chat', provider='openai', model='x', cost_usd=6)
+        StudioUsage.objects.create(event=self.event, kind='chat', provider='openai', model='x',
+                                   cost_usd=settings.STUDIO_DAILY_SPEND_CAP_USD + 1)
         response = self.client.post(reverse('studio:chat', args=[self.event.pk]), {'text': 'Hi'})
         self.assertEqual(response.status_code, 429)
         self.assertFalse(StudioRun.objects.exists())

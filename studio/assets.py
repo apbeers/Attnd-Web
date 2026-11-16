@@ -1,5 +1,6 @@
 """The per-event asset library: validation (types sniffed from the bytes), limits, saving and AI descriptions."""
 
+import hashlib
 import io
 import logging
 import re
@@ -71,8 +72,20 @@ def check_library(event, size):
 
 
 def create_asset(event, data: bytes, filename, user=None, generated=False, origin_url='', describe=True,
-                 description='', tags=None):
-    """Validate and store one file; returns the StudioAsset. Raises AssetError with a message for the organizer."""
+                 description='', tags=None, alt='', dedupe=False):
+    """Validate and store one file; returns the StudioAsset. Raises AssetError with a message for the organizer.
+
+    dedupe=True (imports): an identical file (same SHA-256) already in this event's library is returned instead of
+    a copy; the new tags are added to it."""
+    digest = hashlib.sha256(data).hexdigest()
+    if dedupe:
+        existing = StudioAsset.objects.filter(event=event, sha256=digest).first()
+        if existing is not None:
+            merged = list(dict.fromkeys([*existing.tags, *(tags or [])]))[:12]
+            if merged != existing.tags:
+                existing.tags = merged
+                existing.save(update_fields=['tags'])
+            return existing
     found = sniff(data)
     if not found:
         raise AssetError(f'{filename or "That file"}: only PNG, JPEG, GIF, WebP, SVG, PDF and font files (WOFF, WOFF2, '
@@ -93,7 +106,8 @@ def create_asset(event, data: bytes, filename, user=None, generated=False, origi
             raise AssetError(f'{filename or "That image"} could not be read as an image.') from exc
     asset = StudioAsset(event=event, name=safe_name(filename, content_type), kind=kind, content_type=content_type,
                         size=len(data), width=width, height=height, created_by=user, generated=generated,
-                        origin_url=origin_url[:1024], description=description[:1000], tags=list(tags or [])[:12])
+                        origin_url=origin_url[:1024], description=description[:1000], tags=list(tags or [])[:12],
+                        alt=alt[:300], sha256=digest)
     asset.file.save(asset.name, ContentFile(data), save=False)
     asset.save()
     if describe and kind in (StudioAsset.KIND_IMAGE, StudioAsset.KIND_SVG) and not description:

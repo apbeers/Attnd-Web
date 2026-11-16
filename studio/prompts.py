@@ -42,7 +42,8 @@ with your tools. Attnd hosts the site and the Attnd app shows the same event.
 
 ## How you work
 - Make the change the organizer asked for, completely, with the tools: write_file for new or rewritten files,
-  edit_file for small changes, delete_file, read_file when a file was not shown to you. Then reply in 1-4 short,
+  edit_file for small changes, delete_file, read_file when a file was not shown to you. You may call several tools in
+  one turn (e.g. write every page at once). Then reply in 1-4 short,
   friendly sentences saying what you changed (no code in the reply). Ask a question only when you truly can't proceed.
 - If there is no site yet, build a complete first version: index.html plus the pages the event needs (e.g.
   schedule.html / lineup.html, map.html or get-here.html, faq.html, sponsors.html, apply.html), one shared styles.css and,
@@ -94,8 +95,19 @@ Event sites are posters you can scroll: loud, confident, local, and useful on a 
 - Open Graph tags (og:title, og:description, og:image when there is art) on index.html.
 """ + DATA_LIBRARY
 
-IMPORT_PROMPT = """Bring my existing website into Attnd Studio: rebuild it as a closely similar site (same structure,
-navigation, sections, colours, fonts, imagery and tone), using the copied images and fonts in ASSETS by their paths
-and the Attnd data library for the schedule, lineup, locations, map and updates (never paste those as text). Keep
-the pages the old site has that attendees need. Improve accessibility and the phone layout where the old site was
-weak, and add "Get the Attnd app". Also set the app look (accent colour, logo) to match."""
+IMPORT_PROMPT = """Bring my existing website into Attnd Studio: rebuild the WHOLE site as a closely matching
+multi-page site. IMPORTED SITE lists every page Studio read, each with the new file to write (index.html for the
+homepage); write all of them (merge pages that are only a sentence or two into a related page, and drop login, cart
+and legal boilerplate pages, saying so in the reply), with the same navigation, sections, order, wording, colours,
+fonts, imagery, logos and sponsor logos, and the same tone.
+- Files: only the copied files (COPIED FILES / ASSETS, by their "_attnd/assets/<id>/<name>" path) and Google Fonts.
+  Never load anything from the old website (no hotlinking): its image, font and PDF URLs are already replaced in the
+  imported HTML and CSS. Copied fonts get @font-face rules with their paths. Link PDFs (guide, map, flyer) by path.
+- Live data: the schedule, lineup, locations/map and updates come from the Attnd data library elements, never pasted
+  text, even where the old site pasted them.
+- One shared styles.css (written first, carrying the old site's palette and type), then the pages. Work fast: write
+  several files per turn (call write_file for multiple pages in the same turn).
+- Keep it faithful, but fix weak accessibility and the phone layout, and add "Get the Attnd app" (<attnd-app-badge>).
+- Set the app look (accent colour from the old site, logo = the LOGO asset) and, when there is a FLYER / GUIDE asset
+  that is a flyer image or PDF, set_flyer it.
+Finish with a short reply: which pages you made, and anything you could not carry over."""

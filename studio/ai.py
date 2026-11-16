@@ -8,6 +8,9 @@ Both chat providers expose the same small interface for the agent loop (studio/a
     turn = provider.chat(system, messages, TOOLS)      # Turn(text, calls=[ToolCall(id, name, args)], usage)
     provider.add_turn(messages, turn)
     provider.add_results(messages, [(call, "result text"), ...])
+
+OpenAI goes through the Responses API (function tools + reasoning; Chat Completions refuses that combination on
+gpt-5.5), Anthropic through the Messages API.
 """
 
 import base64
@@ -48,6 +51,7 @@ class Turn:
     input_tokens: int = 0
     output_tokens: int = 0
     model: str = ''
+    cached_tokens: int = 0  # part of input_tokens read from the provider's prompt cache (billed lower)
     raw: object = None  # provider-native assistant message, appended back as is
 
 
@@ -60,9 +64,15 @@ def price(model):
     return prices.get(model) or prices['default']
 
 
-def token_cost(model, input_tokens, output_tokens):
+CACHED_INPUT_FACTOR = 0.1  # cached input tokens cost a tenth of fresh ones (OpenAI and Anthropic cache reads)
+
+
+def token_cost(model, input_tokens, output_tokens, cached_tokens=0):
     per_in, per_out = price(model)
-    return Decimal(str(round(input_tokens * per_in / 1_000_000 + output_tokens * per_out / 1_000_000, 4)))
+    cached = min(max(cached_tokens, 0), input_tokens)
+    fresh = input_tokens - cached
+    return Decimal(str(round((fresh + cached * CACHED_INPUT_FACTOR) * per_in / 1_000_000
+                             + output_tokens * per_out / 1_000_000, 4)))
 
 
 def spent_today(event):
@@ -82,9 +92,9 @@ def check_budget(event):
                              f'It resets at midnight UTC; you can still edit the code by hand.')
 
 
-def record_usage(event, run, kind, provider, model, input_tokens=0, output_tokens=0, images=0):
+def record_usage(event, run, kind, provider, model, input_tokens=0, output_tokens=0, images=0, cached_tokens=0):
     from studio.models import StudioUsage
-    cost = token_cost(model, input_tokens, output_tokens) + Decimal(str(settings.STUDIO_PRICES['image'])) * images
+    cost = token_cost(model, input_tokens, output_tokens, cached_tokens) + Decimal(str(settings.STUDIO_PRICES['image'])) * images
     StudioUsage.objects.create(event=event, run=run, kind=kind, provider=provider, model=model[:64],
                                input_tokens=input_tokens, output_tokens=output_tokens, images=images, cost_usd=cost)
     return cost
@@ -124,63 +134,109 @@ def get_provider():
 
 _unavailable_models = set()  # OpenAI models this account can't use (fell back once; remembered per process)
 
+REASONING_PREFIXES = ('gpt-5', 'o1', 'o3', 'o4')
+
+
+def model_unavailable(exc):
+    """True when an OpenAI error says the model itself can't be used (not found / no access), so the fallback model
+    is worth a try. Other 400s (bad parameters, too long) are real errors."""
+    from openai import NotFoundError
+    if isinstance(exc, NotFoundError):
+        return True
+    text = str(exc).lower()
+    return getattr(exc, 'code', None) == 'model_not_found' or (
+        'model' in text and any(w in text for w in ('does not exist', 'not found', 'do not have access',
+                                                     'does not have access', 'invalid model', 'unsupported model')))
+
+
+def _item_dict(item):
+    """A Responses output item as a plain dict (SDK models, or anything with attributes in tests)."""
+    if isinstance(item, dict):
+        return item
+    if hasattr(item, 'model_dump'):
+        return item.model_dump(exclude_none=True, mode='json')
+    return {k: v for k, v in vars(item).items() if v is not None}
+
 
 class OpenAIProvider:
+    """OpenAI through the Responses API (`client.responses.create`) with function tools and reasoning on.
+
+    Chat Completions refuses function tools together with `reasoning_effort` on gpt-5.5, so Studio uses Responses.
+    The conversation is chained with `previous_response_id` (responses are stored, the default): each call sends only
+    the new input items (the request, or the `function_call_output`s for the last turn's `function_call`s); the
+    reasoning items stay on OpenAI's side. `messages` keeps the full item list anyway (useful in logs and tests).
+    `instructions` (the system prompt) is not carried over by previous_response_id, so it goes with every call.
+    """
     name = 'openai'
 
     def __init__(self):
         self.model = settings.STUDIO_OPENAI_MODEL
         if self.model in _unavailable_models and settings.STUDIO_OPENAI_FALLBACK_MODEL:
             self.model = settings.STUDIO_OPENAI_FALLBACK_MODEL
+        self.previous_id = None
+        self._sent = 0  # items of `messages` that OpenAI already has (through previous_response_id)
 
     @staticmethod
     def _tools(tools):
-        return [{'type': 'function', 'function': {'name': t['name'], 'description': t['description'],
-                                                  'parameters': t['parameters']}} for t in tools]
+        return [{'type': 'function', 'name': t['name'], 'description': t['description'],
+                 'parameters': t['parameters'], 'strict': False} for t in tools]
 
     def start(self, user_text):
+        self.previous_id, self._sent = None, 0
         return [{'role': 'user', 'content': user_text}]
 
     def chat(self, system, messages, tools):
-        from openai import BadRequestError, NotFoundError, OpenAI
-        client = OpenAI(timeout=600)
-        kwargs = {'reasoning_effort': 'medium'} if self.model.startswith(('gpt-5', 'o3', 'o4')) else {}
+        from openai import APIError, BadRequestError, NotFoundError, OpenAI
+        client = OpenAI(timeout=900)
+        kwargs = {'reasoning': {'effort': 'medium'}} if self.model.startswith(REASONING_PREFIXES) else {}
+        if self.previous_id:
+            kwargs['previous_response_id'] = self.previous_id
         try:
-            response = client.chat.completions.create(
-                model=self.model, messages=[{'role': 'system', 'content': system}, *messages],
-                tools=self._tools(tools), **kwargs)
+            response = client.responses.create(
+                model=self.model, instructions=system, input=list(messages[self._sent:]),
+                tools=self._tools(tools), parallel_tool_calls=True, store=True, **kwargs)
         except (NotFoundError, BadRequestError) as exc:
             fallback = settings.STUDIO_OPENAI_FALLBACK_MODEL
-            if 'model' in str(exc).lower() and fallback and self.model != fallback:
+            if model_unavailable(exc) and fallback and self.model != fallback and not self.previous_id:
                 logger.warning('Studio model %s unavailable (%s); using %s', self.model, exc, fallback)
                 _unavailable_models.add(self.model)
                 self.model = fallback
                 return self.chat(system, messages, tools)
             raise AIError(f'The AI request failed: {exc}') from exc
-        message = response.choices[0].message
+        except APIError as exc:
+            raise AIError(f'The AI request failed: {exc}') from exc
+        status = getattr(response, 'status', 'completed')
+        if status == 'failed':
+            error = getattr(response, 'error', None)
+            raise AIError(f'The AI request failed: {getattr(error, "message", None) or "no details"}')
+        output = list(getattr(response, 'output', None) or [])
         calls = []
-        for tc in message.tool_calls or []:
+        for item in output:
+            if getattr(item, 'type', '') != 'function_call':
+                continue
             try:
-                args = json.loads(tc.function.arguments or '{}')
+                args = json.loads(item.arguments or '{}')
             except json.JSONDecodeError:
-                args = {'_invalid_json': tc.function.arguments[:200]}
-            calls.append(ToolCall(tc.id, tc.function.name, args if isinstance(args, dict) else {}))
-        raw = {'role': 'assistant', 'content': message.content or ''}
-        if message.tool_calls:
-            raw['tool_calls'] = [{'id': tc.id, 'type': 'function',
-                                  'function': {'name': tc.function.name, 'arguments': tc.function.arguments}}
-                                 for tc in message.tool_calls]
-        usage = response.usage
-        return Turn(text=message.content or '', calls=calls, raw=raw, model=self.model,
-                    input_tokens=getattr(usage, 'prompt_tokens', 0) or 0,
-                    output_tokens=getattr(usage, 'completion_tokens', 0) or 0)
+                args = {'_invalid_json': (item.arguments or '')[:200]}
+            calls.append(ToolCall(item.call_id, item.name, args if isinstance(args, dict) else {}))
+        text = getattr(response, 'output_text', '') or ''
+        if status == 'incomplete' and not calls and not text:
+            reason = getattr(getattr(response, 'incomplete_details', None), 'reason', '') or 'incomplete'
+            raise AIError(f'The AI stopped before answering ({reason}). Try a smaller request.')
+        self.previous_id = response.id
+        usage = getattr(response, 'usage', None)
+        cached = getattr(getattr(usage, 'input_tokens_details', None), 'cached_tokens', 0) or 0
+        return Turn(text=text, calls=calls, raw=[_item_dict(i) for i in output], model=self.model,
+                    input_tokens=getattr(usage, 'input_tokens', 0) or 0,
+                    output_tokens=getattr(usage, 'output_tokens', 0) or 0, cached_tokens=cached)
 
     def add_turn(self, messages, turn):
-        messages.append(turn.raw)
+        messages.extend(turn.raw)  # function_call (and reasoning/message) items; OpenAI has them already
+        self._sent = len(messages)
 
     def add_results(self, messages, results):
         for call, text in results:
-            messages.append({'role': 'tool', 'tool_call_id': call.id, 'content': text})
+            messages.append({'type': 'function_call_output', 'call_id': call.id, 'output': text})
 
 
 ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
@@ -212,7 +268,7 @@ class AnthropicProvider:
 
     def chat(self, system, messages, tools):
         body = {
-            'model': self.model, 'max_tokens': 16000, 'system': system, 'messages': messages,
+            'model': self.model, 'max_tokens': 32000, 'system': system, 'messages': self._cached(messages),
             'tools': [{'name': t['name'], 'description': t['description'], 'input_schema': t['parameters']}
                       for t in tools],
             'output_config': {'effort': 'high'}, 'fallbacks': 'default',
@@ -228,7 +284,23 @@ class AnthropicProvider:
                     raw={'role': 'assistant', 'content': content},
                     input_tokens=(usage.get('input_tokens') or 0) + (usage.get('cache_read_input_tokens') or 0)
                     + (usage.get('cache_creation_input_tokens') or 0),
+                    cached_tokens=usage.get('cache_read_input_tokens') or 0,
                     output_tokens=usage.get('output_tokens') or 0)
+
+    @staticmethod
+    def _cached(messages):
+        """The messages with a prompt-cache breakpoint on the newest block, so each step of the agent loop reads the
+        conversation so far from the cache instead of paying for it again (the caller's list is not changed)."""
+        if not messages:
+            return messages
+        last = dict(messages[-1])
+        content = last.get('content')
+        blocks = [{'type': 'text', 'text': content}] if isinstance(content, str) else [dict(b) for b in content or []]
+        if not blocks:
+            return messages
+        blocks[-1]['cache_control'] = {'type': 'ephemeral'}
+        last['content'] = blocks
+        return [*messages[:-1], last]
 
     def add_turn(self, messages, turn):
         messages.append(turn.raw)  # every block back unchanged (thinking blocks included)
@@ -263,7 +335,7 @@ def generate_image(prompt, size='portrait', references=()):
                                                   size=IMAGE_SIZES.get(size, IMAGE_SIZES['portrait']))
         except (NotFoundError, BadRequestError) as exc:
             last_error = exc
-            if 'model' in str(exc).lower():
+            if model_unavailable(exc):
                 continue
             raise AIError(f'Image generation failed: {exc}') from exc
         item = response.data[0]
