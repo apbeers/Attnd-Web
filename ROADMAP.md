@@ -124,3 +124,27 @@ shared-origin limitation. Check Heroku's domain limits per app first.
 
 ## Tickets (planned, not built)
 - Eventbrite-style ticketing on the website via Stripe Checkout + Connect (payouts held until after the event), buyers pay the processing fee (all-in prices), offline door scanning, Apple/Google Wallet passes, AI drafting with review. Plan: `docs/specs/tickets_spec.md`. Pricing: $299 bring an event in, $499 Studio + ticketing.
+
+## Platform ideas (agreed direction, not built; Nov 16, 2026)
+- **Event ops / Work mode, roles, accounts, staff tools, modular features**: `docs/specs/event_ops_plan.md` (iOS first,
+  one app; Sign in with Apple/Google/email code/passkey; invites by email, phone share, personal/group QR; roles from
+  door staff to stage managers and vendors; staff location sharing; staff notifications with view tracking and optional
+  acknowledgement; every feature an optional module, simple by default).
+- **Email campaigns + contacts**: one contact list per event (buyers, RSVPs, waitlist, Studio form sign-ups, past
+  attendees, CSV) with consent; scheduled campaigns to segments; the default sequence (announce → early bird → lineup →
+  last chance → know before you go → day of → thank you/survey); AI drafts with review; unsubscribe/CAN-SPAM; a separate
+  marketing sending subdomain; open/click stats. SMS later (urgent only, needs a provider).
+- **Organizer billing** ($299 / $499 checkout via Stripe) before launch.
+- **Applications**: vendor/artist/food truck/volunteer/sponsor applications, review board, fees via Stripe, documents
+  with expiry reminders, waivers/agreements, booth assignment on the map.
+- **Sponsors**: tiers, deliverables, automatic logo placement (site/app/flyer/emails), sponsor reports.
+- **Map editor**: zones (stages, restrooms, first aid, accessible routes, closures, parking, shuttle stops) feeding app,
+  site and flyer.
+- **Run of show + task checklists** (internal schedule, AI-drafted tasks by event type, owners, deadlines).
+- **Promotion**: tracking/promoter links, social image sizes + captions from the flyer, `.ics` feed, schema.org Event
+  data on Studio sites.
+- **During**: live ops dashboard, translations of all content, polls / Q&A / photo wall.
+- **After**: survey (NPS, per act/vendor), recap email, organizer report/exports, clone for next year.
+- **Platform**: organizations (multiple events, series, venues, shared branding/roles), integrations (webhooks,
+  Sheets/CSV, Mailchimp import, calendar feeds), legal/compliance (ToS, privacy, data requests, WCAG for sites,
+  moderation), help center + AI support for organizers.
