@@ -33,7 +33,9 @@ sales tax on the $299/$499 tiers and ticketing).
 
 ## 2. Identity and email first (everything else hangs off these)
 1. **Google Workspace** on `attnd.app` (Business Starter is enough), billed to the LLC card. An older Workspace
-   already exists on `attnd.app` (owner recovering admin access, Nov 16, 2026): reuse it rather than creating a new one. Mailboxes/aliases:
+   already exists on `attnd.app`: admin access recovered Nov 16, 2026 (admin user `andrew@attnd.app`), **no active
+   subscription yet** (nothing works until one is started). Reuse it rather than creating a new one: subscribe
+   (billed to the LLC), then add the shared aliases below. Mailboxes/aliases:
    `admin@`, `support@`, `billing@`, `dev@` (shared aliases rather than personal ones, so services aren't tied to a
    person). DNS at Namecheap: Workspace MX + SPF/DKIM/DMARC; Mailgun keeps `mg.attnd.app` (no conflict).
 2. This also creates a **Google Cloud organization** (attnd.app) for §3.
@@ -63,7 +65,7 @@ sales tax on the $299/$499 tiers and ticketing).
 
 ## 4. Inventory (running list: add to it with every feature)
 Accounts and services:
-- Google Workspace (existing, on `attnd.app`; being reactivated Nov 2026).
+- Google Workspace on `attnd.app` (admin `andrew@attnd.app`, access recovered Nov 16, 2026; no active subscription).
 - Namecheap: `attnd.app` (DNS: Heroku `attnd.app`, `dev.attnd.app`, Mailgun `mg.attnd.app`).
 - GitHub: `apbeers/Attnd-Web`, `apbeers/Attnd-iOS`, `apbeers/Attnd-Android` (+ environments, secrets, variables, rulesets).
 - Heroku: `attnd-web` (prod), `attnd-dev` (dev); Postgres essential-0 ×2, Scheduler ×2, Mailgun ×2, Cloudinary
