@@ -30,9 +30,11 @@ Do these steps once, in order. Each step says which values go where. For any sin
       "Set time change" (`heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com`, then the
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
-- [x] iOS App Group + WeatherKit + manual CI signing (Nov 19, 2026): App Group `group.com.arcu.Attnd` on
-      `com.arcu.Attnd` and `.widgets`, WeatherKit on `com.arcu.Attnd`, an Apple Distribution certificate and three App
-      Store profiles stored as GitHub secrets (step 3f). Renew before Nov 19, 2027.
+- [ ] iOS WeatherKit + manual CI signing (Nov 19, 2026): WeatherKit on `com.arcu.Attnd`, an Apple Distribution
+      certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). **Open:**
+      `IOS_PROFILE_APP_B64` was saved empty: set it again (step 3f, its line alone). No App Group: the "Now & Next"
+      widget, its only user, was removed (Nov 19, 2026; Live Activities only); `group.com.arcu.Attnd` can stay
+      registered unused.
 - [x] Google Weather API (Nov 19, 2026): `weather.googleapis.com` enabled in `attnd-df28e` and added to the Android
       Maps key `af7cec96-…` (Android weather on the planner page, not built yet). Optional: a daily quota cap in
       Cloud Console → APIs & Services → Weather API → Quotas.
@@ -280,7 +282,8 @@ Each CI run on a fresh Mac used to create a new "Created via API" Apple Developm
 The certificate expires after a year: repeat steps 2–5 then.
 
 ### 3f. Manual App Store signing for CI (done Nov 19, 2026; renew yearly)
-Automatic signing with the App Store Connect API key can't sign the App Group ("Authentication failed"), so CI signs
+Automatic signing with the App Store Connect API key couldn't sign the App Group ("Authentication failed"; the group
+has since been dropped with the widget), so CI signs
 with a stored **Apple Distribution** certificate and three **App Store** provisioning profiles
 (`Attnd/scripts/ci/signing_profiles.py` + `archive_upload.sh`). Files on the owner's Mac:
 `/Users/andrewbeers/Documents/Attnd/ios-signing` (`dist.key`, `dist.csr`, `distribution.cer`, `dist.p12`, the three

@@ -73,8 +73,8 @@ Accounts and services:
 - Google Cloud `attnd-df28e`: Firebase (FCM), Maps SDK key (Android, `af7cec96-…`), browser Maps key, Places key,
   Routes API, Weather API (`weather.googleapis.com`, paid per call, on the Android Maps key; Nov 19, 2026), Play Integrity service account, Google Wallet API + service account `attnd-wallet`.
 - Google Pay & Wallet Console: business profile "Attnd" (MCC 7922), Issuer ID.
-- Apple Developer team GQQX4L6TE2 (Individual): App IDs `com.arcu.Attnd`, `.clip`, `.widgets`; App Group
-  `group.com.arcu.Attnd`; Pass Type ID `pass.com.arcu.attnd.tickets` + certificate (files in
+- Apple Developer team GQQX4L6TE2 (Individual): App IDs `com.arcu.Attnd`, `.clip`, `.widgets` (Live Activity
+  extension); App Group `group.com.arcu.Attnd` (registered, unused since Nov 19, 2026); Pass Type ID `pass.com.arcu.attnd.tickets` + certificate (files in
   `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass`); APNs auth key; App Store Connect API key (CI, Admin);
   Apple Development certificate for CI (expires Nov 14, 2027); Apple Distribution certificate + three App Store
   profiles for CI signing (Nov 19, 2026, expire Nov 2027; files in `/Users/andrewbeers/Documents/Attnd/ios-signing`,
