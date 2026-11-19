@@ -24,6 +24,7 @@
       <div class="split__aside">{% include 'console/_field.html' with field=form.accent_color %}</div>
       <div class="split__main">{% include 'console/_field.html' with field=form.logo_url %}</div>
     </div>
+    {% include 'console/_assistant_context.html' %}
     {% endwith %}
     <button class="button button--primary">Save</button>
   </form>

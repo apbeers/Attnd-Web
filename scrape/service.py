@@ -30,6 +30,66 @@ def _nullable(t, description):
     return {"type": [t, "null"], "description": description}
 
 
+def _text(description):
+    return {"type": "string", "description": description + "; empty string if the sources don't say"}
+
+
+def _rows(item, description):
+    return {"type": "array", "items": item, "description": description + "; empty list if none"}
+
+
+def _object(properties):
+    return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
+
+
+# API-018: details an attendee's on-device assistant answers questions from, offline (events.context).
+_LINK = _object({"title": {"type": "string", "description": "Short link title"},
+                 "url": {"type": "string", "description": "Absolute https URL that appears in the sources"}})
+
+_EVENT_CONTEXT = _object({
+    "about": _text("Long attendee-facing description of the event beyond `description` (max 4000 chars)"),
+    "faq": _rows(_object({"q": {"type": "string"}, "a": {"type": "string"}}),
+                 "Questions attendees ask, answered from the sources (max 40): parking, shuttles, bag policy, re-entry, "
+                 "rules, weather, tickets at the door, pets, smoking, strollers, cash/cards"),
+    "amenities": _rows(_object({
+        "kind": {"type": "string", "enum": ["restrooms", "water", "atm", "first_aid", "charging", "lockers", "info",
+                                            "accessible_entrance", "food", "merch", "parking", "shuttle", "other"]},
+        "name": {"type": "string", "description": "e.g. Restrooms by the north gate"},
+        "location_name": _nullable("string", "Exact name of the location in locations[] where it is, if any"),
+        "note": {"type": "string", "description": "Short note (hours, cost); may be empty"},
+    }), "Amenities on site (max 60)"),
+    "accessibility": _text("Accessibility: step-free routes, seating, viewing areas, interpreters, sensory (max 1500)"),
+    "policies": _text("Policies: bags, re-entry, age limits, prohibited items (max 1500)"),
+    "getting_there": _text("Getting there: parking, transit, rideshare, shuttles, bikes (max 1500)"),
+    "weather_plan": _text("Rain / heat plan (max 600)"),
+    "links": _rows(_LINK, "Useful attendee links from the sources: tickets, map, FAQ (max 10)"),
+})
+
+_LOCATION_CONTEXT = _object({
+    "about": _text("Vendor / venue story beyond the description (max 2000)"),
+    "menu": _rows(_object({"name": {"type": "string"},
+                           "price": {"type": "string", "description": "As written, e.g. $8; may be empty"},
+                           "note": {"type": "string", "description": "e.g. vegetarian, gluten-free; may be empty"}}),
+                  "Menu or products with prices (max 40)"),
+    "hours": _text("Opening hours (max 300)"),
+    "accessibility": _text("Accessibility of this place (max 300)"),
+    "age_limit": _text("Age limit such as 21+ (max 300)"),
+    "links": _rows(_LINK, "Links for this place (max 5)"),
+})
+
+_ITEM_CONTEXT = _object({
+    "about": _text("More about this session / performance beyond the description (max 2000)"),
+    "performers": _rows(_object({
+        "name": {"type": "string"},
+        "bio": {"type": "string", "description": "Short bio from the sources (max 600); may be empty"},
+        "genres": {"type": "array", "items": {"type": "string"}, "description": "Up to 5 lower-case genres/styles"},
+    }), "Performers, speakers or hosts (max 10)"),
+    "age_limit": _text("Age limit (max 300)"),
+    "price": _text("Price if separate from entry, as written (max 300)"),
+    "accessibility": _text("Accessibility notes (max 300)"),
+    "links": _rows(_LINK, "Links for this item (max 5)"),
+})
+
 _LOCATION = {
     "type": "object",
     "properties": {
@@ -46,9 +106,10 @@ _LOCATION = {
         "tags": {"type": "array", "items": {"type": "string"},
                  "description": "2-6 short lower-case tags from tag_vocabulary: what it offers / its genre / "
                                 "audience, e.g. food, bbq, drinks, live music, kid-friendly, free, accessible"},
+        "context": _LOCATION_CONTEXT,
     },
     "required": ["existing_id", "name", "snippet", "description", "category", "website",
-                 "image_url", "address", "latitude", "longitude", "tags"],
+                 "image_url", "address", "latitude", "longitude", "tags", "context"],
     "additionalProperties": False,
 }
 
@@ -64,8 +125,10 @@ _ITEM = {
         "tags": {"type": "array", "items": {"type": "string"},
                  "description": "2-6 short lower-case tags from tag_vocabulary: genre / category / audience, "
                                 "e.g. live music, country, workshop, kid-friendly, free, food"},
+        "context": _ITEM_CONTEXT,
     },
-    "required": ["existing_id", "name", "description", "start_time", "end_time", "location_name", "tags"],
+    "required": ["existing_id", "name", "description", "start_time", "end_time", "location_name", "tags",
+                 "context"],
     "additionalProperties": False,
 }
 
@@ -90,6 +153,7 @@ EVENT_SCHEMA = {
         "timezone": _nullable("string", "IANA time zone of the event location, e.g. America/Chicago"),
         "start_time": _nullable("string", "Local wall-clock start, ISO 8601 without offset"),
         "end_time": _nullable("string", "Local wall-clock end, ISO 8601 without offset"),
+        "context": _EVENT_CONTEXT,
         "locations": {"type": "array", "items": _LOCATION,
                       "description": "Venues, stages, booths, vendors and points of interest within the event"},
         "schedule": {"type": "array", "items": _ITEM,
@@ -104,7 +168,7 @@ EVENT_SCHEMA = {
                                           "Every tag on a location or schedule item comes from this list"},
     },
     "required": ["name", "description", "address", "latitude", "longitude", "timezone", "start_time",
-                 "end_time", "locations", "schedule", "removed_location_ids", "removed_item_ids", "notes",
+                 "end_time", "context", "locations", "schedule", "removed_location_ids", "removed_item_ids", "notes",
                  "tag_vocabulary"],
     "additionalProperties": False,
 }
@@ -141,7 +205,19 @@ TAG_RULES = textwrap.dedent("""
       helps filtering (a "Food" category location can still be tagged "food").
 """).strip()
 
-SYSTEM_PROMPT += "\n\n" + TAG_RULES
+CONTEXT_RULES = textwrap.dedent("""
+    Context (an assistant on attendees' phones answers questions from it offline):
+    - Fill `context` on the event, each location and each schedule item with what the sources say beyond the
+      description: the event's FAQ (parking, shuttles, bags, re-entry, rules, weather, tickets at the door, pets,
+      smoking), amenities (restrooms, water, ATMs, first aid, charging, lockers, info, accessible entrances),
+      accessibility, policies, getting there, rain/heat plan; menus and prices of food and drink places, opening
+      hours, age limits; performers' and speakers' short bios and genres.
+    - Only facts from the sources, written for attendees, concise. Don't repeat the description. Never include
+      private details (organizer contacts not published for attendees, staff notes, internal prices).
+    - Empty strings and empty lists when the sources say nothing. Links: absolute https URLs from the sources.
+""").strip()
+
+SYSTEM_PROMPT += "\n\n" + TAG_RULES + "\n\n" + CONTEXT_RULES
 
 REFRESH_RULES = textwrap.dedent("""
     You are REFRESHING an event that already exists. CURRENT DATA (JSON) is provided below.
@@ -153,6 +229,9 @@ REFRESH_RULES = textwrap.dedent("""
       cancelled or removed. Give the evidence as the reason.
     - Reuse CURRENT DATA's tag_vocabulary and each thing's current tags unless the sources say otherwise;
       add a new tag only for a concept the vocabulary lacks.
+    - Context: start from CURRENT DATA's context and change only what the sources change. Keep its wording when
+      the sources still say the same. Leave a context field empty when these sources don't cover it (empty means
+      "no change", never "remove").
 """).strip()
 
 _HEADERS = {
@@ -360,6 +439,8 @@ def _normalize(data: dict) -> dict:
         if not isinstance(data.get(key), list):
             data[key] = []
     data.setdefault("notes", "")
+    if not isinstance(data.get("context"), dict):
+        data["context"] = {}
     if not isinstance(data.get("tag_vocabulary"), list):
         data["tag_vocabulary"] = []
     # Treat (0, 0) as unknown
@@ -372,6 +453,8 @@ def _normalize(data: dict) -> dict:
             loc.setdefault(key, default)
         if not isinstance(loc["tags"], list):
             loc["tags"] = []
+        if not isinstance(loc.get("context"), dict):
+            loc["context"] = {}
         if not loc["latitude"] and not loc["longitude"]:
             loc["latitude"] = loc["longitude"] = None
         # Legacy shape: items nested under locations
@@ -386,6 +469,8 @@ def _normalize(data: dict) -> dict:
             item["start_time"] = None
         if not isinstance(item["tags"], list):
             item["tags"] = []
+        if not isinstance(item.get("context"), dict):
+            item["context"] = {}
     return data
 
 

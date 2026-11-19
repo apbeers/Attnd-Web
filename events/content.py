@@ -12,6 +12,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
+from events import context as ctx
 from events.models import Event, EventRevision, Location, Notification, ScheduledItem, normalize_tags
 
 _state = threading.local()
@@ -138,6 +139,7 @@ def location_v2(location, request=None):
         'longitude': _coord(location.longitude),
         'sort_order': location.sort_order,
         'tags': normalize_tags(location.tags),
+        'context': ctx.for_bundle(ctx.LOCATION, location.context),  # API-018
     }
 
 
@@ -151,6 +153,7 @@ def item_v2(item):
         'location_id': item.location_id,
         'location_name': item.location.name if item.location_id else None,
         'tags': normalize_tags(item.tags),
+        'context': ctx.for_bundle(ctx.ITEM, item.context),  # API-018
     }
 
 
@@ -176,15 +179,21 @@ def bundle(event, request=None):
     notifications = list(event.notification_set.filter(sent=True).order_by('-send_time'))
     stats = event_stats(event, locations)
     categories = sorted({loc.category for loc in locations if loc.category})
+    location_rows = [location_v2(loc, request) for loc in locations]
+    item_rows = [item_v2(i) for i in items]
+    # API-018: the event's assistant context only in the bundle (not in lookup / nearby), within one budget.
+    event_row = event_v2(event, request)
+    event_row['context'] = ctx.for_bundle(ctx.EVENT, event.context, location_ids={loc.id for loc in locations})
+    ctx.apply_budget(event_row['context'], location_rows, item_rows, label=f'event {event.pk}')
     return {
         'schema_version': 2,
         'content_version': event.content_version,
         'updated_at': _dt(event.content_updated_at),
-        'event': event_v2(event, request),
+        'event': event_row,
         'display': resolve_display(event, stats),
         'categories': categories,
-        'locations': [location_v2(loc, request) for loc in locations],
-        'schedule': [item_v2(i) for i in items],
+        'locations': location_rows,
+        'schedule': item_rows,
         'notifications': [notification_v2(n) for n in notifications],
         'tickets': _tickets_summary(event),  # API-017, null without Attnd ticketing
     }
@@ -228,6 +237,7 @@ def snapshot(event):
             'end_time': _dt(item.end_time),
             'location_id': item.location_id,
             'tags': item.tags,
+            'context': item.context,
             'hidden': item.hidden,
             'locked_fields': item.locked_fields,
         })
@@ -241,6 +251,7 @@ def snapshot(event):
             'start_time': _dt(event.start_time),
             'end_time': _dt(event.end_time),
             'timezone': event.timezone,
+            'context': event.context,
             'locked_fields': event.locked_fields,
         },
         'locations': locations,
@@ -280,6 +291,8 @@ def restore(revision, user=None):
             event.longitude = ev['longitude']
             event.start_time = parse_datetime(ev['start_time'])
             event.end_time = parse_datetime(ev['end_time']) if ev['end_time'] else None
+            if 'context' in ev:  # API-018; older snapshots keep the current context
+                event.context = ev['context']
             event.save()
 
             owner = event.user
@@ -308,6 +321,8 @@ def restore(revision, user=None):
                 obj.end_time = parse_datetime(it['end_time']) if it['end_time'] else None
                 obj.location_id = id_map.get(it['location_id'])
                 obj.tags = it['tags']
+                if 'context' in it:
+                    obj.context = it['context']
                 obj.hidden = it['hidden']
                 obj.locked_fields = it['locked_fields']
                 obj.save()

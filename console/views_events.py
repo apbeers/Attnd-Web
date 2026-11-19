@@ -705,7 +705,7 @@ def changeset_detail(request, changeset_id):
 FIELD_LABELS = {'start_time': 'Starts', 'end_time': 'Ends', 'image_url': 'Image', 'latitude': 'Latitude',
                 'longitude': 'Longitude', 'snippet': 'Summary', 'timezone': 'Time zone', 'price_cents': 'Price',
                 'quantity': 'Tickets available', 'page_text': 'Ticket page intro',
-                'refund_policy_text': 'Refund policy', 'faq': 'FAQ'}
+                'refund_policy_text': 'Refund policy', 'faq': 'FAQ', 'context': 'Details for the assistant'}
 
 
 def _fmt(field, value):
@@ -732,11 +732,16 @@ def _changes_for_review(cs):
         changes = changes.exclude(entity__in=[Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS])
     for ch in changes:
         fields = []
+        kind = {Change.ENTITY_EVENT: 'event', Change.ENTITY_LOCATION: 'location', Change.ENTITY_ITEM: 'item'}.get(ch.entity)
         if ch.op == Change.OP_UPDATE:
             for f, v in ch.data.items():
                 old, new = v.get('old'), v.get('new')
                 if f == 'location':
                     old, new = v.get('old_name'), v.get('new_name')
+                if f == 'context' and kind:  # API-018: a readable summary, not the JSON
+                    from events import context as ctx
+                    old, new = (ctx.summary(kind, old),
+                                ' — '.join(filter(None, [ctx.describe_changes(kind, old, new), ctx.summary(kind, new)])))
                 fields.append({'name': f, 'label': FIELD_LABELS.get(f, f.replace('_', ' ').capitalize()),
                                'old': _fmt(f, old), 'new': _fmt(f, new),
                                'conflict': f in ch.conflict_fields, 'is_image': f == 'image_url',
@@ -746,6 +751,9 @@ def _changes_for_review(cs):
                 if f in ('location',):
                     continue
                 label = 'Location' if f == 'location_name' else FIELD_LABELS.get(f, f.replace('_', ' ').capitalize())
+                if f == 'context' and kind:
+                    from events import context as ctx
+                    v = ctx.summary(kind, v)
                 fields.append({'name': f, 'label': label, 'new': _fmt(f, v), 'is_image': f == 'image_url'})
         rows.append({'change': ch, 'fields': fields})
     return rows

@@ -103,10 +103,23 @@ class ApiContractTests(TestCase):
         loc = Location.objects.create(
             event=self.event, user=user, name='Stage', snippet='Main stage', description='Big',
             category='Stage', website='https://example.com', image_url='https://example.com/s.jpg',
-            address='2 Main St', latitude=32.751, longitude=-97.331, tags=['live music'])
+            address='2 Main St', latitude=32.751, longitude=-97.331, tags=['live music'],
+            context={'about': 'Big stage', 'menu': [{'name': 'Taco', 'price': '$4', 'note': 'Vegetarian'}],
+                     'hours': '9–5', 'accessibility': 'Ramp', 'age_limit': 'All ages',
+                     'links': [{'title': 'Stage', 'url': 'https://example.com/stage'}]})
         ScheduledItem.objects.create(
             event=self.event, user=user, location=loc, name='Band', description='Live',
-            start_time=start, end_time=start + timedelta(hours=1), tags=['Music'])
+            start_time=start, end_time=start + timedelta(hours=1), tags=['Music'],
+            context={'about': 'Loud', 'performers': [{'name': 'Band', 'bio': 'From here', 'genres': ['rock']}],
+                     'age_limit': '18+', 'price': '$5', 'accessibility': 'Seats',
+                     'links': [{'title': 'Band', 'url': 'https://example.com/band'}]})
+        # API-018: every context key filled, so the snapshot records the whole shape.
+        self.event.context = {
+            'about': 'About', 'faq': [{'q': 'Q?', 'a': 'A.'}],
+            'amenities': [{'kind': 'water', 'name': 'Water', 'location_id': loc.id, 'note': 'Free'}],
+            'accessibility': 'Ramps', 'policies': 'Clear bags', 'getting_there': 'Bus 1', 'weather_plan': 'Tents',
+            'links': [{'title': 'Site', 'url': 'https://example.com'}]}
+        self.event.save()
         self.notification = Notification.objects.create(
             event=self.event, user=user, title='Hello', body='Doors open', send_time=start, sent=True, sent_at=start)
         self.urgent = Notification.objects.create(

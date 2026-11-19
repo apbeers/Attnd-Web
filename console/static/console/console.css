@@ -475,3 +475,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes live-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } .spinner { animation-duration: 2s; } }
+
+/* API-018: "Details for the assistant" on the event, location and schedule item forms */
+.assistant-context { margin: var(--space-4) 0; }
+.assistant-context > summary { padding: var(--space-1) 0; }

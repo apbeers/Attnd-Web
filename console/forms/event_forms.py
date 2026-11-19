@@ -7,6 +7,8 @@ from django import forms
 from events.display import (LABELS, LOCATIONS_STYLES, PRESETS, SCHEDULE_STYLES, SECONDARY_PANES, TABS)
 from django.utils import timezone
 
+from console.forms.assistant_context import AssistantContextMixin
+from events import context as assistant_context
 from events.models import Event, EventMember, Location, Notification, ScheduledItem, is_send_slot, normalize_tags
 
 DT_WIDGET = forms.DateTimeInput(attrs={'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M')
@@ -99,7 +101,9 @@ class BlankEventForm(StyledFormMixin, forms.ModelForm):
         fields = ['name', 'start_time', 'timezone', 'address']
 
 
-class EventForm(StyledFormMixin, forms.ModelForm):
+class EventForm(AssistantContextMixin, StyledFormMixin, forms.ModelForm):
+    context_kind = assistant_context.EVENT
+
     start_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS)
     end_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS, required=False)
     timezone = forms.ChoiceField(choices=TIMEZONE_CHOICES)
@@ -120,12 +124,20 @@ class EventForm(StyledFormMixin, forms.ModelForm):
             'accent_color': 'Tints buttons and highlights in the app.',
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_context()
+
     def clean_end_time(self):
         end = self.cleaned_data.get('end_time')
         start = self.cleaned_data.get('start_time')
         if end and start and end < start:
             raise forms.ValidationError('The end must be after the start.')
         return end
+
+    def save(self, commit=True):
+        self._save_context()
+        return super().save(commit)
 
 
 class SourcesForm(StyledFormMixin, forms.ModelForm):
@@ -191,7 +203,8 @@ class TagsFieldMixin:
         self.instance.tags = tags
 
 
-class LocationForm(TagsFieldMixin, StyledFormMixin, forms.ModelForm):
+class LocationForm(AssistantContextMixin, TagsFieldMixin, StyledFormMixin, forms.ModelForm):
+    context_kind = assistant_context.LOCATION
     tags_text = forms.CharField(label='Tags', required=False, help_text=TAGS_HELP)
 
     class Meta:
@@ -211,13 +224,16 @@ class LocationForm(TagsFieldMixin, StyledFormMixin, forms.ModelForm):
         self.fields['category'].widget.attrs['list'] = 'category-options'
         self.categories = categories
         self._init_tags()
+        self._init_context()
 
     def save(self, commit=True):
         self._save_tags()
+        self._save_context()
         return super().save(commit)
 
 
-class ScheduledItemForm(TagsFieldMixin, StyledFormMixin, forms.ModelForm):
+class ScheduledItemForm(AssistantContextMixin, TagsFieldMixin, StyledFormMixin, forms.ModelForm):
+    context_kind = assistant_context.ITEM
     start_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS)
     end_time = forms.DateTimeField(widget=DT_WIDGET, input_formats=DT_FORMATS, required=False)
     tags_text = forms.CharField(label='Tags', required=False, help_text=TAGS_HELP)
@@ -234,6 +250,7 @@ class ScheduledItemForm(TagsFieldMixin, StyledFormMixin, forms.ModelForm):
         self.fields['location'].required = False
         self.fields['location'].empty_label = '— No specific location —'
         self._init_tags()
+        self._init_context()
 
     def clean_end_time(self):
         end = self.cleaned_data.get('end_time')
@@ -244,6 +261,7 @@ class ScheduledItemForm(TagsFieldMixin, StyledFormMixin, forms.ModelForm):
 
     def save(self, commit=True):
         self._save_tags()
+        self._save_context()
         return super().save(commit)
 
 

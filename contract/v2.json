@@ -117,6 +117,33 @@
         "accent_color": "string",
         "address": "string",
         "content_version": "integer",
+        "context": {
+          "about": "string",
+          "accessibility": "string",
+          "amenities": [
+            {
+              "kind": "string",
+              "location_id": "integer",
+              "name": "string",
+              "note": "string"
+            }
+          ],
+          "faq": [
+            {
+              "a": "string",
+              "q": "string"
+            }
+          ],
+          "getting_there": "string",
+          "links": [
+            {
+              "title": "string",
+              "url": "string"
+            }
+          ],
+          "policies": "string",
+          "weather_plan": "string"
+        },
         "description": "string",
         "end_time": "string",
         "event_code": "string",
@@ -139,6 +166,25 @@
         {
           "address": "string",
           "category": "string",
+          "context": {
+            "about": "string",
+            "accessibility": "string",
+            "age_limit": "string",
+            "hours": "string",
+            "links": [
+              {
+                "title": "string",
+                "url": "string"
+              }
+            ],
+            "menu": [
+              {
+                "name": "string",
+                "note": "string",
+                "price": "string"
+              }
+            ]
+          },
           "description": "string",
           "id": "integer",
           "image_url": "string",
@@ -164,6 +210,27 @@
       ],
       "schedule": [
         {
+          "context": {
+            "about": "string",
+            "accessibility": "string",
+            "age_limit": "string",
+            "links": [
+              {
+                "title": "string",
+                "url": "string"
+              }
+            ],
+            "performers": [
+              {
+                "bio": "string",
+                "genres": [
+                  "string"
+                ],
+                "name": "string"
+              }
+            ],
+            "price": "string"
+          },
           "description": "string",
           "end_time": "string",
           "id": "integer",

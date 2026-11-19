@@ -4,6 +4,7 @@ The iOS, Android and web live suites (live_tests/) assert these facts against th
 servers. This test checks that load_demo_event still produces exactly them, so the generator and the
 shared spec can't drift apart: change both (and the app suites) together.
 """
+import json
 from datetime import datetime
 from io import StringIO
 
@@ -120,3 +121,28 @@ class DemoEventFactsTests(TestCase):
         unsent = Event.objects.get(pk=event_id).notification_set.filter(sent=False)
         self.assertEqual(set(unsent.values_list('title', flat=True)), {'Headliner soon', 'Day 2'})
         self.assertTrue(all(n.send_time > now for n in unsent))
+
+    def test_context_api_018(self):
+        """API-018: the DEMO event carries assistant context (the counts above stay as they are)."""
+        event_id = self.api('/api/v2/events/lookup/', q='DEMO')['event']['id']
+        b = self.api(f'/api/v2/events/{event_id}/bundle/')
+        ev = b['event']['context']
+        self.assertTrue(ev['about'])
+        self.assertGreaterEqual(len(ev['faq']), 8)
+        for key in ('accessibility', 'policies', 'getting_there', 'weather_plan'):
+            self.assertTrue(ev[key], key)
+        locations = {loc['id']: loc for loc in b['locations']}
+        self.assertTrue(all(a['location_id'] is None or a['location_id'] in locations for a in ev['amenities']))
+        self.assertTrue(any(a['location_id'] for a in ev['amenities']))
+        by_name = {loc['name']: loc for loc in b['locations']}
+        for food in ('Taco Row', 'BBQ Pit Lane', 'Sweet Spot', 'Craft Beer Garden', 'Lemonade Stand'):
+            self.assertTrue(by_name[food]['context']['menu'], food)
+        self.assertEqual(by_name['Craft Beer Garden']['context']['age_limit'], '21+ with ID')
+        music = [i for i in b['schedule'] if 'live music' in i['tags']]
+        self.assertEqual(len(music), 36)
+        for item in music:
+            performer = item['context']['performers'][0]
+            self.assertEqual(performer['name'], item['name'])
+            self.assertTrue(performer['bio'])
+            self.assertTrue(performer['genres'])
+        self.assertLess(len(json.dumps(b)), 150_000)

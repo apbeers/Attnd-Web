@@ -22,7 +22,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from events import usage
+from events import context, usage
 from events.content import batch_changes, save_revision
 from events.models import (Device, Event, EventInvite, EventMember, Location, Notification, ScheduledItem,
                            UsageCount, next_send_slot)
@@ -82,6 +82,130 @@ ACT_GENRES = {
 }
 DEMO_TAGS = {'Brisket 101': 'bbq', 'Street tacos at home': 'tacos', 'Kolache masterclass': 'desserts'}
 
+# API-018: details the apps' on-device assistant answers from (events.context). The live suites only check that they
+# are there; the counts above stay as they are.
+EVENT_CONTEXT = {
+    'about': 'The Fort Worth Food & Music Festival fills Panther Island with three days of Texas cooking, live music '
+             'and local makers. Three stages run from noon to late: headliners on the Main Stage every night, local '
+             'and acoustic acts on the Trinity Stage, and DJs on the waterfront Panther Island Pavilion after dark. '
+             'Regional chefs cook live in the Chef Demo Kitchen with free tastings, twelve taco trucks line Taco Row '
+             'and the pitmasters on BBQ Pit Lane start smoking at 4 am.\n\n'
+             'Entry is free. Food and drink are paid at each stand (cards and phones everywhere, cash at most). '
+             'Families are welcome: the Kids Zone has games, face painting, a climbing wall and a quiet tent.',
+    'faq': [
+        {'q': 'Is entry free?', 'a': 'Yes. Entry is free all three days; food and drinks are paid at each stand.'},
+        {'q': 'Where do I park?', 'a': 'Overflow Parking on Henderson St is $10 (cash or card), with shuttles to '
+                                      'the main gate every 10 minutes. There is no parking on Panther Island itself.'},
+        {'q': 'Is there a shuttle?', 'a': 'Free shuttles run from Overflow Parking to the main gate every 10 minutes '
+                                          'from an hour before the gates open until an hour after the last set.'},
+        {'q': 'What bags can I bring?', 'a': 'Clear bags up to 12 x 6 x 12 inches, or small clutches. Backpacks '
+                                             'are checked at the gate; diaper bags are fine.'},
+        {'q': 'Can I leave and come back?', 'a': 'Yes. Re-entry is allowed all day; keep your wristband on.'},
+        {'q': 'Can I bring a chair or blanket?', 'a': 'Blankets and low beach chairs are welcome on the Pavilion '
+                                                       'lawn. No chairs in front of the Main Stage.'},
+        {'q': 'Are pets allowed?', 'a': 'Only service animals.'},
+        {'q': 'Can I smoke?', 'a': 'Only in the marked smoking area by Restrooms South. Vaping counts as smoking.'},
+        {'q': 'Do vendors take cards?', 'a': 'Yes, every food and drink stand takes cards and phones. There is an '
+                                             'ATM at the Info Booth.'},
+        {'q': 'What if it rains?', 'a': 'The festival goes on in light rain. In a storm, sets pause and we send an '
+                                        'urgent update in the app with where to shelter.'},
+        {'q': 'Where is lost and found?', 'a': 'At the Info Booth by the main gate. Lost children go to First Aid.'},
+    ],
+    'amenities': [
+        {'kind': 'restrooms', 'name': 'Restrooms North', 'location_name': 'Restrooms North',
+         'note': 'Accessible, baby changing'},
+        {'kind': 'restrooms', 'name': 'Restrooms South', 'location_name': 'Restrooms South', 'note': ''},
+        {'kind': 'water', 'name': 'Free water refills', 'location_name': 'Lemonade Stand', 'note': 'Bring a bottle'},
+        {'kind': 'water', 'name': 'Water station', 'location_name': 'First Aid', 'note': ''},
+        {'kind': 'first_aid', 'name': 'First Aid tent', 'location_name': 'First Aid',
+         'note': 'EMTs all day; lost children; sunscreen'},
+        {'kind': 'atm', 'name': 'ATM', 'location_name': 'Info Booth', 'note': ''},
+        {'kind': 'charging', 'name': 'Phone charging', 'location_name': 'Info Booth', 'note': 'Free, 30 minutes'},
+        {'kind': 'info', 'name': 'Info Booth', 'location_name': 'Info Booth', 'note': 'Maps, lost and found'},
+        {'kind': 'accessible_entrance', 'name': 'Step-free entrance', 'location_name': None,
+         'note': 'Main gate, left lane'},
+        {'kind': 'parking', 'name': 'Overflow Parking', 'location_name': 'Overflow Parking', 'note': '$10'},
+        {'kind': 'shuttle', 'name': 'Parking shuttle', 'location_name': 'Overflow Parking',
+         'note': 'Every 10 minutes'},
+    ],
+    'accessibility': 'Step-free entrance in the left lane of the main gate. Paved paths link every stage; the '
+                     'Pavilion lawn is grass. Accessible viewing platforms at the Main Stage and Trinity Stage '
+                     '(first come, one companion). Accessible restrooms at Restrooms North. ASL interpreters for '
+                     'Main Stage headliners. The Kids Zone has a quiet tent; ear defenders at First Aid.',
+    'policies': 'Clear bags up to 12 x 6 x 12 inches or small clutches. Re-entry allowed with a wristband. 21+ '
+                'with ID in the Craft Beer Garden (wristbands at the gate). No outside alcohol, glass, drones, '
+                'weapons or pets (service animals welcome). Smoking and vaping only in the marked area.',
+    'getting_there': 'Panther Island, Fort Worth, TX 76102. Park at Overflow Parking on Henderson St ($10) and take '
+                     'the free shuttle (every 10 minutes). Rideshare pickup and drop-off is on Main St at 1st St. '
+                     'Trinity Metro buses 1 and 4 stop at Henderson and White Settlement Rd, a 5-minute walk. Bike '
+                     'racks at the main gate.',
+    'weather_plan': 'Light rain: everything goes on. Lightning within 8 miles: sets pause and the app sends an '
+                    'urgent update with shelter points. Heat: free water at the Lemonade Stand and First Aid, misting '
+                    'tents by the Main Stage.',
+    'links': [{'title': 'Festival website', 'url': SITE},
+              {'title': 'Site map', 'url': SITE + '/map'},
+              {'title': 'Lineup', 'url': SITE + '/lineup'}],
+}
+
+LOCATION_CONTEXT = {
+    'Main Stage': {'about': 'The festival\'s biggest stage, facing the river. Headliners play at 7 pm and 9 pm each '
+                            'night.', 'accessibility': 'Accessible viewing platform on the left of the sound desk.'},
+    'Trinity Stage': {'about': 'A shaded stage for local, acoustic and up-and-coming acts.',
+                      'accessibility': 'Accessible viewing area at the front right.'},
+    'Panther Island Pavilion': {'about': 'Waterfront lawn stage with DJ sets after dark.', 'age_limit': 'All ages',
+                                'hours': '4 pm – midnight'},
+    'Chef Demo Kitchen': {'about': 'A covered kitchen with seating for 120. Each demo ends with free tastings.',
+                          'hours': '1 pm – 9 pm'},
+    'Taco Row': {'hours': '11 am – 10 pm', 'menu': [
+        {'name': 'Al pastor taco', 'price': '$4', 'note': ''},
+        {'name': 'Brisket taco', 'price': '$5', 'note': ''},
+        {'name': 'Nopales taco', 'price': '$4', 'note': 'Vegetarian (trucks 3, 7 and 11)'},
+        {'name': 'Elote', 'price': '$6', 'note': 'Vegetarian'},
+        {'name': 'Horchata', 'price': '$4', 'note': ''}]},
+    'BBQ Pit Lane': {'hours': '11 am until sold out (usually 8 pm)', 'menu': [
+        {'name': 'Brisket plate', 'price': '$16', 'note': 'Gluten-free'},
+        {'name': 'Pork ribs (half rack)', 'price': '$18', 'note': ''},
+        {'name': 'Jalapeño cheddar sausage', 'price': '$9', 'note': ''},
+        {'name': 'Mac and cheese', 'price': '$5', 'note': 'Vegetarian'}]},
+    'Sweet Spot': {'hours': '10 am – 11 pm', 'menu': [
+        {'name': 'Kolache', 'price': '$3', 'note': 'Fruit or sausage'},
+        {'name': 'Paleta', 'price': '$4', 'note': 'Dairy-free options'},
+        {'name': 'Cold brew', 'price': '$5', 'note': ''},
+        {'name': 'Cupcake', 'price': '$4', 'note': ''}]},
+    'Craft Beer Garden': {'age_limit': '21+ with ID', 'hours': '12 pm – 11 pm', 'menu': [
+        {'name': 'Texas IPA', 'price': '$8', 'note': '16 oz'},
+        {'name': 'Mexican lager', 'price': '$7', 'note': '16 oz'},
+        {'name': 'Hard seltzer', 'price': '$7', 'note': 'Gluten-free'}]},
+    'Lemonade Stand': {'menu': [
+        {'name': 'Fresh lemonade', 'price': '$5', 'note': ''},
+        {'name': 'Agua fresca', 'price': '$5', 'note': 'Watermelon or hibiscus'},
+        {'name': 'Water refill', 'price': 'Free', 'note': ''}]},
+    'Kids Zone': {'hours': '11 am – 7 pm', 'age_limit': 'Ages 2–12 with an adult',
+                  'accessibility': 'Quiet tent for a sensory break.'},
+    'Makers Market': {'about': 'Sixty local makers: ceramics, prints, leather goods, jewelry and vintage.',
+                      'hours': '10 am – 8 pm'},
+}
+
+ACT_BIOS = {
+    'The Prairie Lights': 'Fort Worth country band known for big harmonies and a pedal steel.',
+    'Ana Morales Trio': 'Latin jazz trio led by pianist Ana Morales.',
+    'Cowtown Brass': 'A twelve-piece brass band playing New Orleans-style second lines.',
+    'DJ Lone Star': 'House and disco sets with a Texas twist.',
+    'Velvet Mesquite': 'Electric blues from Deep Ellum, all slide guitar and soul.',
+    'Sundown Choir': 'A forty-voice community gospel choir.',
+    'The Fort Worth Strings': 'A string quartet playing classical and pop covers.',
+    'Kid Rodeo': 'High-energy garage rock from Denton.',
+    'Neon Armadillo': 'Retro synth rock with a light show.',
+    'Juniper Lane': 'Singer-songwriter folk with fiddle and banjo.',
+    'Los Hermanos Flores': 'Three brothers playing Tejano and conjunto, accordion front and centre.',
+    'Big Sky Radio': 'Americana and classic country covers.',
+}
+DEMO_CONTEXT = {
+    'Brisket 101': 'Pitmaster Lou Garza shows how to trim, rub and smoke a brisket, then slices it for tastings.',
+    'Street tacos at home': 'Chef Maria Ruiz makes tortillas from scratch and three salsas.',
+    'Kolache masterclass': 'The Sweet Spot\'s bakers fold fruit and sausage kolaches; everyone gets one to try.',
+}
+
 ACTS = ['The Prairie Lights', 'Ana Morales Trio', 'Cowtown Brass', 'DJ Lone Star', 'Velvet Mesquite', 'Sundown Choir',
         'The Fort Worth Strings', 'Kid Rodeo', 'Neon Armadillo', 'Juniper Lane', 'Los Hermanos Flores', 'Big Sky Radio']
 
@@ -140,6 +264,10 @@ class Command(BaseCommand):
             locations = self._locations(event, owner_user)
             items = self._schedule(event, owner_user, locations, start, rng)
             notifications = self._notifications(event, owner_user, start, now)
+            # API-018: the event's context names its amenities' locations; stored with their ids.
+            ids = {loc.name: loc.id for loc in locations}
+            Event.objects.filter(pk=event.pk).update(context=context.resolve_named(
+                context.EVENT, EVENT_CONTEXT, ids.get))
         self._team(event, owner_user)
         self._history(event, owner_user, locations, items, now)
         self._watched_pages(event, now)
@@ -162,7 +290,7 @@ class Command(BaseCommand):
             out.append(Location.objects.create(
                 event=event, user=user, name=name, category=category, snippet=snippet, description=description,
                 latitude=lat, longitude=lng, sort_order=i, address='Panther Island, Fort Worth, TX',
-                tags=LOCATION_TAGS[name]))
+                tags=LOCATION_TAGS[name], context=LOCATION_CONTEXT.get(name, {})))
         # One without coordinates: shown in lists, never pinned on the map.
         out.append(Location.objects.create(
             event=event, user=user, name='Roaming Mariachi', category='Stage', sort_order=len(out),
@@ -187,18 +315,22 @@ class Command(BaseCommand):
                     items.append(ScheduledItem.objects.create(
                         event=event, user=user, location=stage, name=act, description=f'{act} live on the {stage.name}.',
                         start_time=t, end_time=t + timedelta(minutes=75),
-                        tags=['live music', ACT_GENRES[act]]))
+                        tags=['live music', ACT_GENRES[act]],
+                        context={'performers': [{'name': act, 'bio': ACT_BIOS[act], 'genres': [ACT_GENRES[act]]}],
+                                 'price': 'Free with entry', 'age_limit': 'All ages'}))
             for d, dish in enumerate(['Brisket 101', 'Street tacos at home', 'Kolache masterclass']):
                 t = day_start + timedelta(hours=3 + d * 3)
                 items.append(ScheduledItem.objects.create(
                     event=event, user=user, location=by_name['Chef Demo Kitchen'], name=dish,
                     description='Live demo with tastings.', start_time=t, end_time=t + timedelta(minutes=45),
-                    tags=['food', 'demo', DEMO_TAGS[dish]]))
+                    tags=['food', 'demo', DEMO_TAGS[dish]],
+                    context={'about': DEMO_CONTEXT[dish], 'price': 'Free; tastings while they last'}))
             t = day_start + timedelta(hours=5)
             items.append(ScheduledItem.objects.create(
                 event=event, user=user, location=by_name['Kids Zone'], name='Face painting & games',
                 start_time=t, end_time=t + timedelta(hours=4),
-                tags=['family', 'kid-friendly', 'free']))
+                tags=['family', 'kid-friendly', 'free'],
+                context={'price': 'Free', 'age_limit': 'Ages 2–12 with an adult'}))
         return items
 
     def _notifications(self, event, user, start, now):

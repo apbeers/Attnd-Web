@@ -135,10 +135,17 @@ class Event(CoordinatesMixin, models.Model):
     sources_checked_at = models.DateTimeField(null=True, blank=True)  # last cheap website check
     locked_fields = models.JSONField(default=list, blank=True,
                                      help_text='Fields edited by a person; AI refreshes will not overwrite them')
+    # API-018: details for the apps' on-device assistant (about, FAQ, amenities, policies…), events.context
+    context = models.JSONField(default=dict, blank=True)
 
     # Fields the AI / diff engine manages
     CONTENT_FIELDS = ['name', 'description', 'address', 'latitude', 'longitude',
-                      'start_time', 'end_time', 'timezone']
+                      'start_time', 'end_time', 'timezone', 'context']
+
+    def save(self, *args, **kwargs):
+        from events.context import EVENT, normalize
+        self.context = normalize(EVENT, self.context)
+        super().save(*args, **kwargs)
 
     @property
     def is_live(self):
@@ -214,6 +221,7 @@ class Location(CoordinatesMixin, models.Model):
     category = models.CharField(max_length=64, blank=True,
                                 help_text='e.g. Stage, Food, Vendor, Restroom')
     tags = models.JSONField(default=list, blank=True)  # API-010, normalize_tags
+    context = models.JSONField(default=dict, blank=True)  # API-018, events.context
     sort_order = models.IntegerField(default=0)
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
@@ -221,7 +229,7 @@ class Location(CoordinatesMixin, models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
     CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url',
-                      'address', 'latitude', 'longitude', 'category', 'tags']
+                      'address', 'latitude', 'longitude', 'category', 'tags', 'context']
 
     class Meta:
         indexes = [
@@ -230,7 +238,9 @@ class Location(CoordinatesMixin, models.Model):
         ordering = ['sort_order', 'name']
 
     def save(self, *args, **kwargs):
+        from events.context import LOCATION, normalize
         self.tags = normalize_tags(self.tags)
+        self.context = normalize(LOCATION, self.context)
         super().save(*args, **kwargs)
 
     @property
@@ -257,15 +267,18 @@ class ScheduledItem(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True)
     tags = models.JSONField(default=list, blank=True)
+    context = models.JSONField(default=dict, blank=True)  # API-018, events.context
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
 
-    CONTENT_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags']
+    CONTENT_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags', 'context']
 
     def save(self, *args, **kwargs):
+        from events.context import ITEM, normalize
         self.tags = normalize_tags(self.tags)
+        self.context = normalize(ITEM, self.context)
         super().save(*args, **kwargs)
 
     class Meta:
