@@ -16,7 +16,6 @@ from console.signups import INVITE_ONLY_MESSAGE, is_invited
 INVITE_ONLY_HTML = escape(INVITE_ONLY_MESSAGE)  # as the template renders it (apostrophes escaped)
 from events.models import Event, EventInvite, EventMember
 from scrape.models import IngestJob
-from studio.models import StudioAccess
 
 PASSWORD = 'a-strong-password-123'
 
@@ -72,8 +71,7 @@ class SignupGateTests(TestCase):
         self.assertEqual(EventMember.objects.get(event=self.event, user=helper).role, 'admin')
 
     def test_studio_access_is_not_an_invite(self):
-        """Only a pending team invite counts: old Studio beta rows and STUDIO_BETA_EMAILS don't."""
-        StudioAccess.objects.create(email='studio@example.com')
+        """Only a pending team invite counts: STUDIO_BETA_EMAILS doesn't."""
         for email in ('STUDIO@example.com', 'beta@example.com'):
             self.assertContains(self.post(email), INVITE_ONLY_HTML, status_code=403)
         self.assertFalse(User.objects.filter(email__in=['studio@example.com', 'beta@example.com']).exists())
@@ -84,7 +82,6 @@ class SignupGateTests(TestCase):
 
     def test_is_invited(self):
         EventInvite.objects.create(event=self.event, email='a@example.com')
-        StudioAccess.objects.create(email='b@example.com')
         self.assertTrue(is_invited('A@example.com'))
         for email in ('b@example.com', ' Beta@Example.com ', 'c@example.com', '', None):
             self.assertFalse(is_invited(email), email)

@@ -22,7 +22,7 @@ from console.testing import TwoFactorClient
 from events.models import Event, EventMember, Location, ScheduledItem
 from studio import hosting, publishing
 from studio.access import has_studio_access
-from studio.models import (FormSubmission, Site, SiteReport, SiteVersion, StudioAccess, StudioAsset, StudioRun,
+from studio.models import (FormSubmission, Site, SiteReport, SiteVersion, StudioAsset, StudioRun,
                            StudioUsage)
 
 SITES = 'sites.test'
@@ -91,11 +91,6 @@ class AccessTests(StudioTestCase):
         self.assertTrue(has_studio_access(staff))
         superuser = User.objects.create_user('su', 'su@example.com', 'pw', is_superuser=True)
         self.assertTrue(has_studio_access(superuser))
-
-    def test_old_beta_invites_grant_nothing(self):
-        StudioAccess.objects.create(email='later@example.com')  # the model stays; its rows are ignored
-        user = User.objects.create_user('later', 'later@example.com', 'pw')
-        self.assertFalse(has_studio_access(user))
 
     def test_default_setting_is_empty(self):
         import attnd.settings as module  # the real default, not this class's override

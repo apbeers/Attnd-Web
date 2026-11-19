@@ -143,8 +143,7 @@ A second tier (`Event.plan`: `standard` = import/manage, `studio` = Studio; no c
 organizer chats with an AI that writes the event's **website** (raw multi-page HTML/CSS/JS), makes **flyer art** and
 sets the **app's look**; Attnd hosts the site.
 - **Access** (`studio/access.py`, Nov 19, 2026: admins only): staff and superusers, plus emails in `STUDIO_BETA_EMAILS`
-  (an explicit override, default empty). `StudioAccess` rows (the old beta invites) are kept but grant nothing, and
-  the staff invite page is gone. Everyone else gets 404 on every Studio URL and sees no entry point (sidenav
+  (an explicit override, default empty). The old beta invite list (`StudioAccess`) and its staff page are gone. Everyone else gets 404 on every Studio URL and sees no entry point (sidenav
   "Studio"). Staff: `/console/studio/reports/` (abuse reports, take down/restore; topbar "Studio reports"). Team roles as today: any member edits drafts;
   owner/admins switch the plan, publish, unpublish and change the address.
 - **Models** (`studio/models.py`): `Site` (1:1 event, slug, `draft`/`published` → `SiteVersion`, suspended,

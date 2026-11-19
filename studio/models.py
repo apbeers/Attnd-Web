@@ -12,25 +12,6 @@ from django.utils.text import slugify
 from events.models import Event
 
 
-class StudioAccess(models.Model):
-    """An email invited to the Studio beta. Matched case-insensitively against the account's email, so it works before
-    the person has an account (like EventInvite)."""
-    email = models.EmailField(unique=True)
-    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
-    created_at = models.DateTimeField(default=dj_tz.now)
-
-    class Meta:
-        ordering = ['email']
-        verbose_name_plural = 'Studio access'
-
-    def save(self, *args, **kwargs):
-        self.email = (self.email or '').strip().lower()
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return self.email
-
-
 SLUG_RE = re.compile(r'^[a-z0-9](?:[a-z0-9-]{1,48})[a-z0-9]$')
 RESERVED_SLUGS = {'_attnd', 'admin', 'api', 'console', 'static', 'media', 'accounts', 'robots', 'robots-txt',
                   'favicon', 'well-known', 'health', 'join', 'attnd', 'studio', 'www', 'report', 'preview', 'p',

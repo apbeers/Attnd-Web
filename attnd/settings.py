@@ -335,7 +335,7 @@ STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))
 # homepage's anonymous AI import is closed). Attendees and existing accounts are unaffected.
 SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '').strip().lower() in ('1', 'true', 'yes', 'on')
 # Studio is for admins (staff and superusers) only. These emails (comma-separated, default none) are an explicit
-# override that also get Studio; StudioAccess rows no longer grant anything.
+# override that also get Studio.
 STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', '').split(',') if e.strip()]
 # AI: auto = Anthropic when ANTHROPIC_API_KEY is set, else OpenAI (the existing OPENAI_API_KEY).
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')

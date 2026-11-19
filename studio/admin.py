@@ -1,12 +1,6 @@
 from django.contrib import admin
 
-from studio.models import FormSubmission, Site, SiteReport, SiteVersion, StudioAccess, StudioAsset, StudioRun, StudioUsage
-
-
-@admin.register(StudioAccess)
-class StudioAccessAdmin(admin.ModelAdmin):
-    list_display = ['email', 'invited_by', 'created_at']
-    search_fields = ['email']
+from studio.models import FormSubmission, Site, SiteReport, SiteVersion, StudioAsset, StudioRun, StudioUsage
 
 
 @admin.register(Site)

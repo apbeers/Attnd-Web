@@ -1,4 +1,4 @@
-# Attnd Studio spec (invite-only beta) — Nov 15, 2026
+# Attnd Studio spec (admins only since Nov 19, 2026) — Nov 15, 2026
 
 An organizer designs the whole event with AI (website, flyer, the app's look) and Attnd hosts the website.
 Server-only feature plus one additive API key (**API-016** `event.website_url`). Code: the `studio/` Django app.
@@ -8,10 +8,10 @@ Server-only feature plus one additive API key (**API-016** `event.website_url`).
   (AI designs everything, Attnd hosts the site). No payments yet (Stripe later, `ROADMAP.md`). Staff, or an event's
   owner/admin who has Studio access, switch an event to Studio on its Studio page. Prices are not shown anywhere new
   (the home page only has its existing pricing line).
-- **Invite-only beta**: a person has Studio access when they are staff/superuser, their email is in
-  `STUDIO_BETA_EMAILS` (default `apbeers@icloud.com`), or a `StudioAccess` row matches their email
-  (case-insensitive; works before they have an account, like `EventInvite`). Without access every Studio URL is a 404
-  and no entry point is shown (sidenav item, import checkbox, staff links).
+- **Admins only** (Nov 19, 2026; it was an invite-only beta before): a person has Studio access when they are
+  staff/superuser, or their email is in `STUDIO_BETA_EMAILS` (an explicit override, default empty; case-insensitive).
+  The beta invite list (`StudioAccess` model and its staff page) was removed (migration `studio.0003`). Without access
+  every Studio URL is a 404 and no entry point is shown (sidenav item, import checkbox, staff links).
 - **Who edits**: the event's team with today's roles. Any team member (with Studio access) edits drafts, chats with the
   AI, uploads assets and reads form submissions; publishing, unpublishing, the site address and switching the plan
   need the owner or an event admin (`Event.can_manage_team`), like publishing the event.
@@ -19,7 +19,6 @@ Server-only feature plus one additive API key (**API-016** `event.website_url`).
 ## 2. Data model (`studio/models.py`; `events.Event.plan`)
 | Model | Fields |
 |---|---|
-| `StudioAccess` | email (unique, lower case), invited_by, created_at |
 | `Site` | event (1:1), slug (unique, `[a-z0-9-]`, 3–50, reserved words refused), draft → `SiteVersion`, published → `SiteVersion` (null = not live), published_at/by, suspended (+reason; staff takedown), preview_secret (rotating revokes every preview link), notify_on_forms, created_at |
 | `SiteVersion` | site, number (1, 2, …), files `{path: text}`, app_look `{accent_color, logo_url, display}`, flyer_asset, summary, source (ai/code/restore/import/start), created_by, run, created_at |
 | `StudioAsset` | id (UUID, unguessable), event, file (raw storage: Cloudinary raw when configured), name, kind image/svg/pdf/font, content_type, size, width/height, description, alt, tags, colors, generated (AI image), origin_url (imported), sha256 (imports reuse an identical file), created_by, created_at |
@@ -65,7 +64,7 @@ version" works for any version. **Unpublish** = `published = null` (bumps too).
   page gets `<base href="/<slug>/">` (or the preview base) right after `<head>`, and a small Attnd footer
   ("Made with Attnd · Report this site") before `</body>`.
 - Known limitation of path-based hosting: all sites share one origin (they could read each other's `localStorage`).
-  Accepted for the invite-only beta; custom domains (one origin per site) fix it.
+  Accepted while Studio is admins only; custom domains (one origin per site) fix it.
 - **Abuse**: "Report this site" (`/<slug>/_attnd/report`, rate limited) → `SiteReport`, listed for staff at
   `/console/studio/reports/` with **Take down** (suspend) / restore / resolve. Publishing requires the Studio plan and
   Studio access. **AI spend cap**: `STUDIO_DAILY_SPEND_CAP_USD` (default $10; was $5, but a full import costs about
@@ -207,9 +206,9 @@ Bundle `event.website_url`: `https://<SITES_HOST>/<slug>/` while the site is pub
 `null`. Additive. Apps show a "Website" link (event info / Options) that opens it in the browser.
 
 ## 11. Console entry points
-Sidenav "Studio" (beta badge) for users with access; topbar "Studio beta" (staff: access list + reports); AI import
-opt-out checkbox "Also rebuild the website in Attnd Studio" (ticked); the event overview's import notice. Staff pages `/console/studio/access/` (add/remove emails) and
-`/console/studio/reports/`.
+Sidenav "Studio" (beta badge) for users with access; topbar "Studio reports" (staff); AI import opt-out checkbox
+"Also rebuild the website in Attnd Studio" (ticked, staff only); the event overview's import notice. Staff page
+`/console/studio/reports/` (the access list page is gone since Nov 19, 2026).
 
 ## 12. Settings
 `SITES_HOST`, `STUDIO_BETA_EMAILS`, `STUDIO_AI_PROVIDER`, `ANTHROPIC_API_KEY`, `STUDIO_OPENAI_MODEL`,
@@ -224,7 +223,7 @@ and shows the DNS target; the middleware maps `Host` → site and serves it at `
 relative links work); per-site origin removes the shared-origin limitation. Costs: Heroku's domain limits per app.
 
 ## 14. Tests (`studio/tests*.py`)
-Access/beta gating (setting, `StudioAccess` before sign-up, staff page, 404s), team roles (contributor edits, can't
+Access gating (staff, `STUDIO_BETA_EMAILS`, 404s), team roles (contributor edits, can't
 publish), sites host isolation (console/admin/api/static 404, no cookies, CSP, no X-Frame-Options, no service workers,
 attnd.app never routes site paths), page routing + base/footer injection, data.json (draft events leak nothing),
 forms (store, honeypot, rate limits, CSV, email), assets (sniffing, limits, serving), versions/publish/rollback/undo +

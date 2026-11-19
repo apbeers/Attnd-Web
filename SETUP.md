@@ -680,7 +680,7 @@ To rotate or if leaked: revoke it on the same GitHub page, make a new one and ru
 
 ## 15. Attnd Studio: the sites domain (15 min, optional until real customers)
 
-Attnd Studio (invite-only beta, `docs/specs/studio_spec.md`) hosts event websites at `https://<SITES_HOST>/<slug>/`.
+Attnd Studio (admins only, `docs/specs/studio_spec.md`) hosts event websites at `https://<SITES_HOST>/<slug>/`.
 They must live on a **different registrable domain** from attnd.app (never `sites.attnd.app`): the sites run the
 organizers' own JavaScript, and a separate site keeps it away from the console's cookies.
 

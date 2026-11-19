@@ -16,8 +16,7 @@ def is_staff(user):
 
 
 def has_studio_access(user):
-    """Staff and superusers only, plus an explicit STUDIO_BETA_EMAILS override (default none; case-insensitive).
-    StudioAccess rows (the old beta invites) no longer grant access."""
+    """Staff and superusers only, plus an explicit STUDIO_BETA_EMAILS override (default none; case-insensitive)."""
     if not user or not user.is_authenticated:
         return False
     if is_staff(user):

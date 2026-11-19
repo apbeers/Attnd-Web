@@ -226,7 +226,7 @@ out, show tickets the person holds, and scan at the door, offline. Additive: two
 - Same unit and live tests as iOS (shared token fixture). Later (owner: "Android app later"): not started.
 
 ### API-016: event website link (Attnd Studio)
-**Why:** Attnd Studio (invite-only beta, `docs/specs/studio_spec.md`) lets an organizer design the event's website
+**Why:** Attnd Studio (invite-only beta then, admins only since Nov 19, 2026; `docs/specs/studio_spec.md`) lets an organizer design the event's website
 with AI, and Attnd hosts it. The apps should link to it. Additive: one new nullable key; nothing else changes.
 **Server (attnd-web):**
 - Every v2 event object (`bundle/`, `lookup/`, `nearby/`) has `website_url`: `https://<SITES_HOST>/<slug>/` while
