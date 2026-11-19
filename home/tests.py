@@ -52,3 +52,7 @@ class SiteIconTests(TestCase):
             self.assertContains(response, '<link rel="icon" href="/favicon.ico" sizes="any">')
             self.assertContains(response, '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">')
             self.assertContains(response, '<link rel="manifest" href="/site.webmanifest">')
+
+    def test_webmanifest_content_type(self):
+        from django.conf import settings
+        self.assertEqual('application/manifest+json', settings.WHITENOISE_MIMETYPES['.webmanifest'])
