@@ -14,7 +14,6 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -25,7 +24,7 @@ from attestation.ios_attest import verify_attestation, AttestationError
 from attestation.android_attest import verify_integrity_token, AndroidAttestationError
 from attestation.models import AttestationNonce, AttestedDevice
 from attestation import tokens
-from attnd.ratelimit import client_ip
+from attnd.ratelimit import RateLimit, client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +52,7 @@ def purge_expired_nonces() -> int:
     return deleted
 
 
-def _client_ip(request) -> str:
-    return client_ip(request)  # right-most X-Forwarded-For hop (the one Heroku's router added)
-
-
-_NONCE_RATE_PER_MINUTE = 30
+NONCE_LIMIT = RateLimit('attest_nonce_ip')  # settings.RATE_LIMITS['attest_nonce_ip'], 30 per minute
 
 
 # ---------------------------------------------------------------------------
@@ -69,11 +64,10 @@ class NonceView(View):
     """GET /api/v1/attest/nonce/ — returns a one-time challenge."""
 
     def get(self, request):
-        key = f'attest:nonce-rate:{_client_ip(request)}'
-        count = cache.get(key, 0)
-        if count >= _NONCE_RATE_PER_MINUTE:
+        ip = client_ip(request)
+        if NONCE_LIMIT.exceeded(ip):
             return JsonResponse({'error': 'Too many requests'}, status=429)
-        cache.set(key, count + 1, 60)
+        NONCE_LIMIT.hit(ip)
         nonce = _issue_nonce()
         return JsonResponse({'nonce': nonce})
 

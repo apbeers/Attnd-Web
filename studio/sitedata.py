@@ -2,12 +2,11 @@
 
 from django.conf import settings
 
+from attnd.links import join_url
 from events import content
 from events.models import Event
 
 
-def join_url(event):
-    return f'https://attnd.app/join/{event.event_code}/'
 
 
 def site_data(site, base_url):

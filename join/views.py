@@ -11,6 +11,7 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
+from attnd.links import join_url, qr_svg, shared_plan_url
 
 from events.models import Event
 
@@ -67,7 +68,7 @@ def _landing(request, event, kind, extra=None):
     else:
         context = {
             'event': event, 'kind': kind,
-            'join_url': f'https://attnd.app/join/{event.event_code}/',  # exactly what the QR code encodes
+            'join_url': join_url(event),  # exactly what the QR code encodes
             'qr_url': reverse('join:join_qr', args=[event.event_code]),
             'ios_url': settings.IOS_APP_STORE_URL, 'android_url': play_url(event.event_code),
             'app_store_id': _app_store_id(),
@@ -183,7 +184,7 @@ class SharedPlanRedirect(View):
             return _landing(request, event, kind)
         ids, day = decoded
         payload = payload.strip().rstrip('=')
-        share_url = f'https://attnd.app/p/{event.event_code}/{payload}'
+        share_url = shared_plan_url(event.event_code, payload)
         return _landing(request, event, kind, {
             'shared_plan': True,
             'plan_items': shared_plan_items(event, ids),
@@ -195,29 +196,22 @@ class SharedPlanRedirect(View):
 
 def join_qr(request, event_code):
     """SVG QR code for the join link (the desktop page shows it)."""
-    import qrcode
-    import qrcode.image.svg
     event = Event.objects.filter(event_code__iexact=event_code).exclude(status=Event.STATUS_DRAFT).first()
     if event is None:
         raise Http404
-    img = qrcode.make(f'https://attnd.app/join/{event.event_code}/', image_factory=qrcode.image.svg.SvgPathImage,
-                      box_size=12, border=2)
-    response = HttpResponse(img.to_string(), content_type='image/svg+xml')
+    response = HttpResponse(qr_svg(join_url(event), box_size=12), content_type='image/svg+xml')
     response['Cache-Control'] = 'public, max-age=3600'
     return response
 
 
 def shared_plan_qr(request, event_code, payload):
     """SVG QR code for a shared plan link (the desktop page shows it)."""
-    import qrcode
-    import qrcode.image.svg
+    import qrcode.constants
     event = _visible_event(event_code)
     if event is None or decode_share_payload(payload) is None:
         raise Http404
-    url = f'https://attnd.app/p/{event.event_code}/{payload.strip().rstrip("=")}'
-    img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage, box_size=12, border=2,
-                      error_correction=qrcode.constants.ERROR_CORRECT_L)
-    response = HttpResponse(img.to_string(), content_type='image/svg+xml')
+    response = HttpResponse(qr_svg(shared_plan_url(event.event_code, payload), box_size=12,
+                                   error_correction=qrcode.constants.ERROR_CORRECT_L), content_type='image/svg+xml')
     response['Cache-Control'] = 'public, max-age=3600'
     return response
 

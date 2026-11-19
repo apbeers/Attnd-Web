@@ -17,6 +17,7 @@ from django.http import (Http404, HttpResponse, HttpResponseNotAllowed, HttpResp
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
+from attnd.links import qr_svg
 from attnd.ratelimit import RateLimit, client_ip
 from events.models import Event
 from studio import hosting
@@ -158,10 +159,7 @@ def _data(request, target):
 
 
 def _qr(target):
-    import qrcode
-    import qrcode.image.svg
-    img = qrcode.make(join_url(target.site.event), image_factory=qrcode.image.svg.SvgPathImage, box_size=10, border=2)
-    response = HttpResponse(img.to_string(), content_type='image/svg+xml')
+    response = HttpResponse(qr_svg(join_url(target.site.event)), content_type='image/svg+xml')
     response['Cache-Control'] = 'public, max-age=86400'
     response['Access-Control-Allow-Origin'] = '*'
     return response

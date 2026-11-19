@@ -192,6 +192,8 @@ RATE_LIMITS = {
     'studio_form_ip': _rate('studio_form_ip', '10/600'),       # Studio site form posts per IP per site, 10 min
     'studio_form_site': _rate('studio_form_site', '300/3600'),  # Studio site form posts per site, 1 hour
     'studio_report_ip': _rate('studio_report_ip', '5/3600'),    # "Report this site" per IP, 1 hour
+    'scrape_ip': _rate('scrape_ip', '5/3600'),                  # homepage trial AI imports per IP, 1 hour
+    'attest_nonce_ip': _rate('attest_nonce_ip', '30/60'),       # attestation challenges per IP, 1 minute
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).

@@ -5,15 +5,12 @@ Every event page runs with the event's time zone active, so datetime fields disp
 the organizer's local time.
 """
 
-import io
 import json
 import logging
 import re
 from datetime import timedelta
 from functools import wraps
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import qrcode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -26,6 +23,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from attnd.links import join_url, qr_png
 
 from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, LocationForm,
                                        NotificationForm, RefreshForm, ScheduledItemForm, SourcesForm,
@@ -36,6 +34,7 @@ from events.display import LABELS, clean_overrides, event_stats, resolve_display
 from events.models import (Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
                            ScheduledItem, events_for_user, generate_event_code, next_send_slot)
 from scrape import diff, jobs
+from scrape.diff import tz_or_utc
 from scrape.models import Change, ChangeSet, IngestJob
 
 logger = logging.getLogger(__name__)
@@ -46,10 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _tz(event):
-    try:
-        return ZoneInfo(event.timezone or 'UTC')
-    except (ZoneInfoNotFoundError, ValueError):
-        return ZoneInfo('UTC')
+    return tz_or_utc(event.timezone)
 
 
 def event_view(view):
@@ -135,12 +131,7 @@ def event_new(request):
         if _wants_json(request):
             return JsonResponse({'error': ' '.join(e for errs in ai_form.errors.values() for e in errs)}, status=400)
     elif request.method == 'POST' and mode == 'blank':
-        tz_name = request.POST.get('blank-timezone') or 'UTC'
-        try:
-            tz = ZoneInfo(tz_name)
-        except (ZoneInfoNotFoundError, ValueError):
-            tz = ZoneInfo('UTC')
-        with timezone.override(tz):
+        with timezone.override(tz_or_utc(request.POST.get('blank-timezone'))):
             blank_form = BlankEventForm(request.POST, prefix='blank')
             if blank_form.is_valid():
                 event = blank_form.save(commit=False)
@@ -269,7 +260,7 @@ def event_overview(request, event):
         recent_jobs=event.ingest_jobs.all()[:5],
         changesets=event.changesets.exclude(status=ChangeSet.EMPTY)[:5],
         display=resolve_display(event, stats),
-        join_url=f'https://attnd.app/join/{event.event_code}/',
+        join_url=join_url(event),
     ))
 
 
@@ -381,10 +372,7 @@ def event_delete(request, event):
 
 @event_view
 def event_qr(request, event):
-    img = qrcode.make(f'https://attnd.app/join/{event.event_code}/', box_size=16, border=2)
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    resp = HttpResponse(buf.getvalue(), content_type='image/png')
+    resp = HttpResponse(qr_png(join_url(event), box_size=16), content_type='image/png')
     resp['Cache-Control'] = 'private, max-age=86400'  # the event code never changes; shown on several pages
     if request.GET.get('download'):
         safe = re.sub(r'[^a-zA-Z0-9]+', '_', event.name).strip('_') or 'event'
@@ -395,7 +383,7 @@ def event_qr(request, event):
 @event_view
 def event_poster(request, event):
     return render(request, 'console/poster.html', {'event': event,
-                                                   'join_url': f'https://attnd.app/join/{event.event_code}/'})
+                                                   'join_url': join_url(event)})
 
 
 # ---------------------------------------------------------------------------
@@ -616,7 +604,6 @@ def display_settings(request, event):
 
 
 def _preview_html(event, resolved):
-    from scrape.diff import tz_or_utc
     tz = tz_or_utc(event.timezone)
     locations = list(event.location_set.filter(hidden=False).order_by('sort_order', 'name')[:8])
     items = list(event.scheduleditem_set.filter(hidden=False).select_related('location').order_by('start_time')[:8])

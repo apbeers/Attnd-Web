@@ -10,6 +10,7 @@ import threading
 
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
+from attnd.links import join_url
 
 from events import context as ctx
 from events.models import Event, EventRevision, Location, Notification, ScheduledItem, normalize_tags
@@ -104,7 +105,7 @@ def event_v2(event, request=None):
         'accent_color': event.accent_color or None,
         'logo_url': app_image_url(event.logo_url, 'logo') or None,
         'content_version': event.content_version,
-        'join_url': f'https://attnd.app/join/{event.event_code}/',
+        'join_url': join_url(event),
         # API-016: the event's Attnd Studio website while it is published, else null.
         'website_url': _website_url(event),
         # API-017: ticketing is parked (git branch parked/tickets): always null, kept for installed apps.

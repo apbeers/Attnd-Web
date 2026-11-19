@@ -3,8 +3,6 @@ Passkey (WebAuthn) endpoints are in views_passkeys.py."""
 
 from urllib.parse import urlencode
 
-import qrcode
-import qrcode.image.svg
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import views as auth_views
@@ -14,6 +12,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 
+from attnd.links import qr_svg
 from attnd.ratelimit import RateLimit, client_ip
 from console import totp, twofactor, webauthn
 from console.mail import email_enabled
@@ -159,8 +158,7 @@ def two_factor_verify(request):
 
 
 def _qr_svg(text: str) -> str:
-    image = qrcode.make(text, image_factory=qrcode.image.svg.SvgPathImage, box_size=8, border=2)
-    return image.to_string(encoding='unicode')
+    return qr_svg(text, box_size=8)
 
 
 @login_required
