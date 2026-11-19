@@ -1,0 +1,89 @@
+{% extends 'console/base.html' %}
+{% load static console_tags %}
+{% block title %}{{ p.name }} · Prospects{% endblock %}
+{% block content %}
+{% include 'prospects/_nav.html' %}
+<div class="stack">
+<a class="back-link" href="{% url 'prospects:list' %}">← All prospects</a>
+<div class="cluster">
+  <h2 class="title-3 grow">{{ p.name }}</h2>
+  <span class="badge badge--{{ p.fit_tone }}" title="Fit score, 0–100">Fit {{ p.fit_score }}</span>
+  <span class="badge badge--neutral">{{ p.get_status_display }}</span>
+</div>
+
+<div class="split">
+<div class="split__main stack">
+  <section class="panel stack">
+    {% if p.summary %}<p>{{ p.summary }}</p>{% endif %}
+    <dl class="grid grid--2 small">
+      <div><dt class="eyebrow">Organizer</dt><dd>{{ p.organizer|default:"–" }}</dd></div>
+      <div><dt class="eyebrow">Dates</dt><dd>{% if p.start_date %}{{ p.start_date|date:"D M j, Y" }}{% if p.end_date and p.end_date != p.start_date %} – {{ p.end_date|date:"D M j, Y" }}{% endif %}{% else %}Unknown{% endif %}</dd></div>
+      <div><dt class="eyebrow">City</dt><dd>{{ p.city|default:"–" }}</dd></div>
+      <div><dt class="eyebrow">Venue or area</dt><dd>{{ p.venue|default:"–" }}</dd></div>
+    </dl>
+    {% if p.fit_reasons %}<div><h3 class="title-4">Why it fits</h3><ul class="list">{% for r in p.fit_reasons %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
+    {% if p.trait_labels %}<div class="cluster">{% for t in p.trait_labels %}<span class="badge badge--muted">{{ t }}</span>{% endfor %}</div>{% endif %}
+    {% if p.urls %}<div><h3 class="title-4">{% icon "link" %} Links</h3><ul class="list">{% for u in p.urls %}<li><a href="{{ u }}" rel="noopener noreferrer nofollow" target="_blank">{{ u|truncatechars:90 }}</a></li>{% endfor %}</ul></div>{% endif %}
+  </section>
+
+  <section class="panel stack">
+    <h3 class="title-4">{% icon "people" %} Contacts</h3>
+    {% include 'prospects/_outreach_note.html' %}
+    {% for c in contacts %}
+    <div class="panel{% if c.do_not_contact %} panel--faded{% endif %} stack stack--tight">
+      <div class="cluster">
+        <strong class="grow">{{ c.name|default:c.organization }}</strong>
+        {% if c.do_not_contact %}<span class="badge badge--danger">Do not contact</span>{% endif %}
+      </div>
+      {% if c.role or c.organization and c.name %}<div class="muted small">{{ c.role }}{% if c.role and c.organization and c.name %} · {% endif %}{% if c.name %}{{ c.organization }}{% endif %}</div>{% endif %}
+      {% if not c.do_not_contact %}
+      <div class="cluster small">
+        {% if c.email %}<span class="mono">{{ c.email }}</span><button type="button" class="button button--ghost button--small" data-copy="{{ c.email }}">Copy email</button>{% endif %}
+        {% if c.phone %}<span class="mono">{{ c.phone }}</span><button type="button" class="button button--ghost button--small" data-copy="{{ c.phone }}">Copy phone</button>{% endif %}
+        {% if c.website %}<a href="{{ c.website }}" rel="noopener noreferrer nofollow" target="_blank">Website</a>{% endif %}
+        {% if c.profile_url %}<a href="{{ c.profile_url }}" rel="noopener noreferrer nofollow" target="_blank">Profile</a>{% endif %}
+      </div>{% endif %}
+      <div class="small muted">Found on <a href="{{ c.source_url }}" rel="noopener noreferrer nofollow" target="_blank">{{ c.source_url|truncatechars:70 }}</a></div>
+      <form method="post" class="cluster">{% csrf_token %}<input type="hidden" name="contact" value="{{ c.pk }}">
+        <button class="button button--outline button--small" name="action" value="dnc">{% if c.do_not_contact %}Allow contact again{% else %}Mark do not contact{% endif %}</button>
+        <button class="button button--ghost button--small" name="action" value="delete_contact" data-confirm="Remove this contact?">Remove</button>
+      </form>
+    </div>
+    {% empty %}<p class="muted small">No organizer contacts were published on the pages that were read.</p>{% endfor %}
+  </section>
+
+  <section class="panel stack">
+    <h3 class="title-4">{% icon "history" %} Activity</h3>
+    <ul class="list small">{% for a in activity %}<li><span class="muted nowrap">{{ a.created_at|date:"M j, g:i A" }}</span> {{ a.text }}{% if a.user %} <span class="muted">({{ a.user.email }})</span>{% endif %}</li>{% empty %}<li class="muted">Nothing yet.</li>{% endfor %}</ul>
+    {% if p.first_seen_run %}<p class="small muted">First found by <a href="{% url 'prospects:run' p.first_seen_run.pk %}">run {{ p.first_seen_run.pk }}</a>.</p>{% endif %}
+  </section>
+</div>
+
+<aside class="split__aside stack">
+  <form method="post" class="panel stack">{% csrf_token %}
+    <label class="field"><span class="field__label">Status</span><select name="status">
+      {% for value, label in statuses %}<option value="{{ value }}"{% if p.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="field"><span class="field__label">Notes</span><textarea name="notes" rows="6">{{ p.notes }}</textarea></label>
+    <button class="button button--primary" name="action" value="save">Save</button>
+  </form>
+
+  <section class="panel stack">
+    <h3 class="title-4">{% icon "phone" %} Test event</h3>
+    {% if p.event %}
+      <p><a class="strong" href="{% url 'console:event' p.event.pk %}">{{ p.event.name }}</a></p>
+      <div class="cluster">{% include 'console/_status_badges.html' with e=p.event %}</div>
+      <p class="small">Event code <span class="mono strong">{{ p.event.event_code }}</span> <button type="button" class="button button--ghost button--small" data-copy="{{ p.event.event_code }}">Copy</button></p>
+      {% if p.event.user_id == user.pk or user.is_superuser %}<img class="two-factor-qr" src="{% url 'console:event_qr' p.event.pk %}" alt="QR code to open {{ p.event.name }} in the app" width="180" height="180">{% endif %}
+      <p class="muted small">Published but unlisted: open it in the app with the code or the QR. Never in nearby search or watched.</p>
+    {% elif active_job %}
+      <p class="small"><span class="spinner"></span> Importing… <a href="{% url 'console:job' active_job.pk %}">Follow the import</a></p>
+    {% else %}
+      {% if p.ingest_job.status == 'failed' %}<div class="notice notice--error small">The last import failed: {{ p.ingest_job.error }}</div>{% endif %}
+      <p class="muted small">The AI import reads {{ p.urls|length }} link(s) and makes a published, unlisted Demo event owned by you, for testing only. Nobody is invited or emailed.</p>
+      <form method="post">{% csrf_token %}<button class="button button--secondary" name="action" value="create_test_event"{% if not p.urls %} disabled{% endif %}>{% icon "plus" %} Create test event</button></form>
+    {% endif %}
+  </section>
+</aside>
+</div>
+</div>
+{% endblock %}

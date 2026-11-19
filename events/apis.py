@@ -32,6 +32,7 @@ def nearby_events(latitude, longitude, now=None):
     radius = decimal.Decimal('0.5')
     events = Event.objects.filter(
         public=True,
+        testing_only=False,  # staff test copies of prospects' events are never listed
         status=Event.STATUS_PUBLISHED,
         latitude__isnull=False,
         longitude__isnull=False,

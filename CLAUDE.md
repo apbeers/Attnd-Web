@@ -83,6 +83,7 @@ scrape/         # AI import/refresh: crawl + OpenAI extraction, jobs, diff/chang
 attestation/    # Apple App Attest + Google Play Integrity + JWT issuance
 diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, request log middleware, staff panel
 studio/         # Attnd Studio (admins only): AI-designed event websites hosted on SITES_HOST, flyer art, app look
+prospects/      # Staff only: sales pipeline (web-search discovery of events that suit the app, organizer contacts, test events)
 public/         # Files served at root by Whitenoise (robots.txt, favicon.ico + icons + site.webmanifest from scripts/make_icons.py)
 brand/          # app-icon-1024.png: the source of every website icon (scripts/make_icons.py)
 ```
@@ -137,6 +138,44 @@ event name the apps may log are in **`LOG_EVENTS.md`** (add a row there before a
   with paste-and-retrace, API-014 performance buckets. App text is untrusted: templates escape it, the JS only uses
   `textContent`; no inline scripts.
 - **API-014:** `perf_*` usage metrics with bucket details (`events/usage.py` `PERF_METRICS`); not interactions.
+
+## Prospects (staff only; `prospects/`)
+
+A sales pipeline for the growth plan (offer organizers the free app first, then sell Attnd Studio): find upcoming
+events in a region that suit the app (outdoor or mostly outdoor, people walk between several stops), keep the
+organizer contacts their own pages publish, and make testing-only copies of them.
+- **Access**: `/console/prospects/` (topbar "Prospects" for staff), `is_staff` or superuser, else 404
+  (`diagnostics.views.staff_required`; the console's 2FA middleware applies). Tabs: Prospects (search, filters, sort,
+  bulk actions, CSV), Runs (Run now, log, cost), Settings.
+- **Models** (`prospects/models.py`): `ProspectSettings` (singleton pk 1: region, time zone, themes one per line,
+  horizon days, new events per run, schedule on/off + interval days, last run), `ProspectRun` (trigger, status,
+  found/new/updated/skipped, cost, log), `Prospect` (event, organizer, dates, city, venue, urls, fit 0–100 + reasons,
+  traits, pipeline status, notes, dedupe keys `url_key` (host without www + path) and `name_key` (normalised name +
+  year), linked `Event` and `IngestJob`), `ProspectContact` (`source_url` required, `do_not_contact`),
+  `ProspectActivity`.
+- **Discovery** (`prospects/discover.py`): A) OpenAI **Responses API with the built-in `web_search` tool** and a strict
+  JSON schema (`PROSPECT_MODEL` gpt-5.5 → `PROSPECT_FALLBACK_MODEL` gpt-5 only when unavailable), 5 themes per call;
+  B) each unknown candidate (not a known prospect by either key, not an `Event.source_urls`) is read with Studio's
+  SSRF-guarded `studio.importer.fetch` + `scrape.service._page_text` (its page plus ≤ 2 same-site about / contact /
+  sponsor / vendor pages), then one structured call scores the fit and lists contacts. **Contacts are checked in code**:
+  the `source_url` must be a page we fetched and an email / phone is kept only when it is written on that page (never
+  guessed). Known prospects are merged (dates, links, blanks), never their status or notes. Cost = `studio.ai.token_cost`
+  (`STUDIO_PRICES`) + `PROSPECT_WEB_SEARCH_CALL_USD` per `web_search_call`. A run stops at `PROSPECT_RUN_MAX_MINUTES`,
+  at its cap of new events, or at `PROSPECT_DAILY_SPEND_CAP_USD` (all runs, UTC day). `claim` locks the settings row,
+  so runs never overlap (a running one older than the time cap + 10 min counts as interrupted).
+- **Running it**: "Run now" (a daemon thread in the web dyno, like AI imports), `python manage.py find_prospects
+  [--max N]` (inline), or the schedule: `run_scheduled_tasks` calls `prospects.schedule.maybe_run()` (inline, only
+  when enabled and `interval_days` have passed since the last run started; off by default; a scheduled run stops
+  after 8 minutes so it ends before the next scheduler dyno).
+- **Test events** (`prospects/testing.py`): "Create test event" (detail or bulk) queues the normal AI import
+  (`IngestJob`, `trigger='prospect'`, `testing_only=True`) owned by the staff member who clicked. The event is
+  published, `public=False`, `paid=False` (Demo) and `Event.testing_only=True`: never in `nearby` (`events.apis`),
+  never website-watched (`refresh_schedule` off, `watch.due_events` excludes it), never brought into Studio; lookup by
+  code / QR and join work. Console badge "Testing only". `testing_only` is not in the API (the contract is unchanged).
+  When the job is done the prospect links the event and moves to "Test event created". Nobody is invited or emailed.
+- **Outreach rules**: Attnd never emails prospects itself. People who reach out follow CAN-SPAM (identify the sender,
+  a physical mailing address, an easy opt-out that is honoured) and never contact a contact marked do not contact (the
+  CSV leaves out their email, phone and profile). The dashboard says so. CSV export is formula-safe (`csv_safe`).
 
 ## Attnd Studio (admins only; `studio/`, spec `docs/specs/studio_spec.md`)
 
@@ -311,7 +350,7 @@ uv run python manage.py runserver
 ## Background work
 
 - **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
-- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events and keeps the DEMO event happening now.
+- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events, keeps the DEMO event happening now and runs a scheduled prospect discovery when it is on and due.
 - **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged. Urgent notifications (API-011) go to every device with a token (time-sensitive APNs alert, high-priority FCM data message) plus an APNs `liveactivity` update to every `Device.live_activity_token` in the event; at most `URGENT_MAX_PER_HOUR` (3) per event, beyond that they go out as normal. iOS tokens are sent per APNs topic (API-019, `send_apns_groups`): App Clip devices (`Device.app_clip`) on `APNS_CLIP_TOPIC` (default `<APNS_TOPIC>.clip`, Live Activities `+ .push-type.liveactivity`), the app's on `APNS_TOPIC`.
 
 ## Running Tests
@@ -321,7 +360,7 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer) and `events/tests_contract.py` (the v2 contract snapshot).
+Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `prospects/tests.py` (staff-only pages, discovery with OpenAI and HTTP mocked, contact source rule, caps, schedule, test events, CSV), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer) and `events/tests_contract.py` (the v2 contract snapshot).
 
 Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (no `staticfiles/` needed), `django.request` logs only errors (tests hit 4xx on purpose), and a 32+ byte test JWT secret. CI also runs `manage.py check` with `-W error::DeprecationWarning`; run the whole suite that way when upgrading Django/Python.
 
@@ -382,6 +421,9 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `STUDIO_MAX_STEPS` / `STUDIO_PREVIEW_LINK_DAYS` | No | Model calls per AI run (24) / private preview link lifetime (7 days) |
 | `STUDIO_IMPORT_MAX_STEPS` / `STUDIO_RUN_MAX_MINUTES` | No | Model calls per import run (40) / wall clock per run (25 min; stops and keeps the work) |
 | `STUDIO_IMPORT_SECONDS` / `STUDIO_IMPORT_MAX_MB` | No | Per import run: time (300 s) and bytes (150 MB) for crawling the old site and copying its files |
+| `PROSPECT_MODEL` / `PROSPECT_FALLBACK_MODEL` | No | Prospects discovery (staff), default `gpt-5.5` / `gpt-5` (fallback only when the model is unavailable); uses `OPENAI_API_KEY` and OpenAI's web search tool |
+| `PROSPECT_DAILY_SPEND_CAP_USD` | No | AI spend of all prospect runs per UTC day, default `5` |
+| `PROSPECT_RUN_MAX_MINUTES` | No | Wall clock per prospect run, default `20` (stops and keeps what it found) |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |
 | `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60), `STUDIO_FORM_IP` (10/600, form posts per IP per site), `STUDIO_FORM_SITE` (300/3600), `STUDIO_REPORT_IP` (5/3600), `SCRAPE_IP` (5/3600, homepage trial imports), `ATTEST_NONCE_IP` (30/60, attestation challenges) |

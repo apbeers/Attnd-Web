@@ -105,6 +105,21 @@ currently suppresses the deprecation (`PushNotifications.kt`, `AttndMessagingSer
 entry: what `push_token` carries, how `events/push.py` sends to it (FCM HTTP v1 target), and a transition where
 the server accepts both. Do it before the old API is removed.
 
+## Growth: prospects → free app → Studio (dashboard built Nov 19, 2026)
+
+The funnel: find events that suit the app (staff **Prospects** dashboard, `/console/prospects/`, DFW first), make a
+testing-only copy to show the organizer the app with their own event, offer the app free, then sell Attnd Studio (we
+build their website; they always keep the app). Outreach is by a person, CAN-SPAM compliant, do-not-contact honoured.
+Follow-ups:
+- "Refresh details" on one prospect (re-read its pages for new contacts and dates; today only new prospects are read).
+- A way to hand a testing-only event to the organizer once they say yes (transfer ownership, clear `testing_only`,
+  publish to nearby, turn on website watching), and a printable one-pager with the QR for the pitch.
+- Outreach templates (sender identity, physical address, opt-out line) and a log of who was contacted when; a
+  suppression list across prospects so do-not-contact follows the person, not one prospect row.
+- More regions: several `ProspectSettings` profiles (Austin, Houston, …) instead of one row.
+- Robots.txt check before reading a prospect's pages (the shared fetch has none today).
+- Check the real cost of a full 40-event run on dev and tune `PROSPECT_DAILY_SPEND_CAP_USD` / per-run caps.
+
 ## Attnd Studio (admins only for now; after that)
 
 ### Stripe checkout for the two tiers

@@ -158,13 +158,19 @@ def _run_create(job):
     owner = trial_user() if is_trial else job.created_by
     event, notes = diff.create_event_from_extraction(
         data, owner,
-        # Trial events are joinable by code/QR straight away but stay out of nearby search until claimed.
-        status=Event.STATUS_PUBLISHED if is_trial else Event.STATUS_DRAFT,
+        # Trial events are joinable by code/QR straight away but stay out of nearby search until claimed; so are
+        # staff test copies of prospects' events (testing_only).
+        status=Event.STATUS_PUBLISHED if is_trial or job.testing_only else Event.STATUS_DRAFT,
         public=False,
         fallback_tz=job.timezone or 'UTC',
         source_urls=job.urls,
         source_text=job.text,
     )
+    if job.testing_only:
+        # Unlisted Demo copy for staff testing: never in nearby search, never website-watched, no Studio.
+        Event.objects.filter(pk=event.pk).update(testing_only=True, public=False, paid=False,
+                                                 refresh_schedule=Event.REFRESH_OFF)
+        event.refresh_from_db()
     from scrape import watch
     watch.sync_pages(event, discovered=data.get('source_pages', []))
     job.event = event
@@ -181,8 +187,14 @@ def _run_create(job):
         'notes': ' '.join(filter(None, [data.get('notes', '')] + notes)),
     }
     job.save()
-    if job.studio_import and job.urls and job.created_by_id:
+    if job.studio_import and job.urls and job.created_by_id and not job.testing_only:
         _bring_into_studio(job, event)
+    if job.testing_only:
+        try:
+            from prospects.testing import job_finished
+            job_finished(job)
+        except Exception:
+            logger.exception('Could not link test event %s to its prospect', event.pk)
 
 
 def _bring_into_studio(job, event):
@@ -190,7 +202,7 @@ def _bring_into_studio(job, event):
     organizer can untick it on the import form): the whole site is crawled, its files copied and the AI rebuilds it.
     Only for staff and superusers (checked again here, when the job runs)."""
     from studio.access import is_staff
-    if not is_staff(job.created_by):
+    if not is_staff(job.created_by) or event.testing_only:
         return
     try:
         from studio import importer, publishing

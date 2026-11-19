@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'attestation.apps.AttestationConfig',
     'diagnostics.apps.DiagnosticsConfig',
     'studio.apps.StudioConfig',
+    'prospects.apps.ProspectsConfig',
 ]
 
 MIDDLEWARE = [
@@ -369,6 +370,14 @@ STUDIO_PRICES = {
     'claude-opus-5-5': (4.0, 20.0),
     'image': 0.25,
 }
+
+# Prospects (prospects/, staff only): find events in a region that suit the app (OpenAI web search), read their
+# pages for organizer contacts, and make testing-only copies of them. Runs by hand or on its own schedule.
+PROSPECT_MODEL = os.getenv('PROSPECT_MODEL', 'gpt-5.5')
+PROSPECT_FALLBACK_MODEL = os.getenv('PROSPECT_FALLBACK_MODEL', 'gpt-5')  # only when PROSPECT_MODEL is unavailable
+PROSPECT_DAILY_SPEND_CAP_USD = float(os.getenv('PROSPECT_DAILY_SPEND_CAP_USD', '5'))  # all runs per UTC day
+PROSPECT_RUN_MAX_MINUTES = int(os.getenv('PROSPECT_RUN_MAX_MINUTES', '20'))  # wall clock per run
+PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # OpenAI's web_search tool: $10 per 1,000 calls (+ its content as input tokens)
 
 # ---------------------------------------------------------------------------
 # Content Security Policy (Django's built-in CSP middleware)

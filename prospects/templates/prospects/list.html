@@ -1,0 +1,62 @@
+{% extends 'console/base.html' %}
+{% load static console_tags %}
+{% block title %}Prospects{% endblock %}
+{% block content %}
+{% include 'prospects/_nav.html' %}
+<div class="stack">
+<p class="muted small">Upcoming events that suit the app (outdoor, people walk between several stops), found on the web, with the organizer contacts their own pages publish. Free app first, then Attnd Studio.</p>
+{% include 'prospects/_outreach_note.html' %}
+{% if running %}<div class="notice notice--info"><span class="spinner"></span> Discovery run {{ running.pk }} is {{ running.get_status_display|lower }}. <a href="{% url 'prospects:run' running.pk %}">See its log</a>.</div>{% endif %}
+
+<div class="cluster">
+  <span class="badge badge--neutral">{{ total }} prospects</span>
+  {% for value, label, n in status_counts %}<a class="badge badge--muted" href="?status={{ value }}">{{ label }}: {{ n }}</a>{% endfor %}
+  <span class="grow"></span>
+  <form method="post" action="{% url 'prospects:runs' %}">{% csrf_token %}<button class="button button--primary button--small"{% if running %} disabled{% endif %}>{% icon "refresh" %} Run now</button></form>
+  <a class="button button--outline button--small" href="{% url 'prospects:export' %}{% if export_query %}?{{ export_query }}{% endif %}">{% icon "download" %} CSV</a>
+</div>
+
+<form method="get" class="panel">
+  <div class="grid grid--4">
+    <label class="field field--small"><span class="field__label">Search</span><input name="q" value="{{ filters.q }}" placeholder="Name, organizer, city, contact"></label>
+    <label class="field field--small"><span class="field__label">Status</span><select name="status">
+      <option value="">Any</option><option value="open"{% if filters.status == 'open' %} selected{% endif %}>Open (not lost or dismissed)</option>
+      {% for value, label in statuses %}<option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="field field--small"><span class="field__label">Minimum fit</span><input type="number" name="min_fit" min="0" max="100" value="{{ filters.min_fit }}" placeholder="60"></label>
+    <label class="field field--small"><span class="field__label">Sort</span><select name="sort">
+      <option value="fit"{% if filters.sort == 'fit' or not filters.sort %} selected{% endif %}>Best fit</option>
+      <option value="date"{% if filters.sort == 'date' %} selected{% endif %}>Soonest</option>
+      <option value="newest"{% if filters.sort == 'newest' %} selected{% endif %}>Newest found</option></select></label>
+    <label class="field field--small"><span class="field__label">On or after</span><input type="date" name="since" value="{{ filters.since }}"></label>
+    <label class="field field--small"><span class="field__label">Starts by</span><input type="date" name="until" value="{{ filters.until }}"></label>
+    <label class="field field--check"><input type="checkbox" name="contacts" value="1"{% if filters.contacts == '1' %} checked{% endif %}> Has contacts</label>
+  </div>
+  <div class="cluster"><button class="button button--primary">Filter</button><a class="button button--ghost" href="{% url 'prospects:list' %}">Clear</a></div>
+</form>
+
+<form method="post" class="stack stack--tight" data-bulk>
+  {% csrf_token %}<input type="hidden" name="back" value="{{ export_query }}">
+  <div class="cluster">
+    <button class="button button--secondary button--small" name="action" value="create_test_events" data-confirm="Import the selected events as testing-only events (AI import, owned by you)?">{% icon "plus" %} Create test events</button>
+    <select name="status" aria-label="New status"><option value="">Set status…</option>{% for value, label in statuses %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+    <button class="button button--outline button--small" name="action" value="status">Apply status</button>
+    <button class="button button--ghost button--small" name="action" value="dismiss">{% icon "close" %} Dismiss</button>
+  </div>
+  <div class="panel panel--flush"><div class="scroll-x"><table class="data-table">
+    <thead><tr><th><input type="checkbox" data-select-all aria-label="Select all"></th><th>Fit</th><th>Event</th><th>Dates</th><th>City</th><th>Top contact</th><th>Status</th><th>Test event</th></tr></thead>
+    <tbody>{% for p in prospects %}<tr>
+      <td><input type="checkbox" name="ids" value="{{ p.pk }}" aria-label="Select {{ p.name }}"></td>
+      <td><span class="badge badge--{{ p.fit_tone }}">{{ p.fit_score }}</span></td>
+      <td><a class="strong" href="{% url 'prospects:detail' p.pk %}">{{ p.name }}</a>{% if p.organizer %}<br><span class="muted small">{{ p.organizer }}</span>{% endif %}</td>
+      <td class="nowrap">{% if p.start_date %}{{ p.start_date|date:"M j, Y" }}{% if p.end_date and p.end_date != p.start_date %} – {{ p.end_date|date:"M j" }}{% endif %}{% else %}<span class="muted">?</span>{% endif %}</td>
+      <td>{{ p.city|default:"–" }}</td>
+      <td class="small">{% with c=p.top_contact %}{% if c %}{{ c.name|default:c.organization }}{% if c.email %}<br><span class="muted">{{ c.email }}</span>{% endif %}{% else %}<span class="muted">none</span>{% endif %}{% endwith %}{% if p.contact_count > 1 %} <span class="muted">+{{ p.contact_count|add:"-1" }}</span>{% endif %}</td>
+      <td><span class="badge badge--neutral">{{ p.get_status_display }}</span></td>
+      <td>{% if p.event %}<a href="{% url 'console:event' p.event.pk %}" class="mono">{{ p.event.event_code }}</a>{% elif p.ingest_job and not p.ingest_job.is_finished %}<span class="muted small">Importing…</span>{% elif p.ingest_job.status == 'failed' %}<span class="badge badge--danger">Import failed</span>{% else %}–{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="8" class="muted">No prospects yet. Press Run now (or turn on the schedule in Settings).</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+  {% if prospects|length == page_size %}<p class="muted small">Showing the first {{ page_size }}; narrow the filters to see more.</p>{% endif %}
+</form>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{% static 'prospects/prospects.js' %}"></script>{% endblock %}

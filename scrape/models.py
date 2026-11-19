@@ -20,6 +20,7 @@ class IngestJob(models.Model):
     TRIGGER_TRIAL, TRIGGER_CONSOLE, TRIGGER_SCHEDULE = 'trial', 'console', 'schedule'
     # The website watcher saw pages change: re-read only those pages (job.urls), without crawling.
     TRIGGER_WATCH = 'watch'
+    TRIGGER_PROSPECT = 'prospect'  # a staff test copy of a prospect's event (prospects.testing)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     kind = models.CharField(max_length=16, choices=KIND_CHOICES)
@@ -38,6 +39,8 @@ class IngestJob(models.Model):
     timezone = models.CharField(max_length=64, blank=True)
     # Attnd Studio: when the import finishes, also bring the first source website into Studio (studio.importer).
     studio_import = models.BooleanField(default=False)
+    # Prospects (staff): the event is a published, unlisted, testing-only copy (Event.testing_only).
+    testing_only = models.BooleanField(default=False)
 
     # Progress / output
     progress = models.CharField(max_length=256, blank=True)

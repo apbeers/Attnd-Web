@@ -67,6 +67,16 @@ class Command(BaseCommand):
         # The demo event (store reviewers and sales demos use it) must always be happening now.
         keep_demo_current(self.stdout)
 
+        # Prospects (staff): a discovery run when its schedule is on and due (inline; never overlaps another run).
+        try:
+            from prospects.schedule import maybe_run
+            run = maybe_run()
+            if run is not None:
+                self.stdout.write(f'prospects run {run.pk}: {run.status}, {run.new} new, ${run.cost_usd:.4f}')
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Prospect discovery failed')
+
         # Inline jobs run in daemon threads; give them a moment to finish in this one-off dyno.
         import threading
         import time

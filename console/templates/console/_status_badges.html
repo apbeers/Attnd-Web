@@ -9,4 +9,5 @@
 {% elif t == 'ended' and e.status != 'archived' %}<span class="badge badge--ended">Ended</span>{% endif %}
 {% endwith %}
 {% if e.refresh_schedule == 'watch' %}<span class="badge badge--neutral" title="Attnd keeps the app in sync with the event website">{% icon "refresh" %} Watching website</span>{% endif %}
+{% if e.testing_only %}<span class="badge badge--warning" title="Staff test copy of a prospect's event: published but unlisted (code / QR only), never watched">Testing only</span>{% endif %}
 {% if e.user_id is None %}<span class="badge badge--warning" title="The owner's account was deleted">Unassigned</span>{% endif %}

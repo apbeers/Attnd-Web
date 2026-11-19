@@ -82,7 +82,11 @@ Accounts and services:
   untick it with the next profile); App Attest.
 - App Store Connect: Attnd (id1470627406), App Clip, TestFlight.
 - Google Play Console: `com.arcu.attnd` (upload key, Play App Signing), publishing service account.
-- OpenAI (server key: AI import, website watching, Studio, image generation).
+- OpenAI (server key: AI import, website watching, Studio, image generation, and since Nov 19, 2026 the staff
+  Prospects dashboard's web search tool: billed per search call on the same key/project).
+- Prospects data (staff sales pipeline, `prospects/`): organizer contact details scraped from public event pages,
+  with do-not-contact flags. Moves with the database; outreach from the LLC must identify the LLC and its physical
+  mailing address (CAN-SPAM).
 - **Parked with ticketing (git branch `parked/tickets`, Nov 19, 2026): the Stripe, Apple Wallet and Google Wallet items
   below.** Nothing on `develop` uses them; keep them listed so they move to the LLC if ticketing comes back.
 - Stripe (tickets, parked; built Nov 16, 2026, not set up): the platform account + Connect (Express, destination charges,

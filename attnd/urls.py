@@ -25,6 +25,7 @@ urlpatterns = [
     path(settings.ADMIN_URL_PATH, admin.site.urls),
     path('csp-report/', attnd_views.csp_report, name='csp_report'),
     path('console/diagnostics/', include('diagnostics.urls')),  # staff only (API-013)
+    path('console/prospects/', include('prospects.urls')),  # staff only: the sales pipeline
     path('console/', include('studio.urls')),  # Attnd Studio editor + staff pages (beta users only, else 404)
     path('console/', include('console.urls'), name='console'),
     path('api/v2/', include('events.urls_v2')),

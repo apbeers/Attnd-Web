@@ -47,6 +47,7 @@ _PATHS = {
     'upload': '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
     'undo': '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
     'cursor': '<path d="M5 3l14 7-6 2-2 6z"/>',
+    'target': '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
     'brush': '<path d="M14 4l6 6-8 8H6v-6z"/><path d="M6 18l-3 3"/>',
 }
 

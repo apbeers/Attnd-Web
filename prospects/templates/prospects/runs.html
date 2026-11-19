@@ -1,0 +1,27 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Runs · Prospects{% endblock %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
+{% block content %}
+{% include 'prospects/_nav.html' %}
+<div class="stack">
+<div class="grid grid--4 grid--stats panel">
+  <div><div class="stat__value">${{ spent_today|floatformat:2 }}</div><div class="eyebrow">AI spend today of ${{ cap|floatformat:2 }} (UTC)</div></div>
+  <div><div class="stat__value">{% if conf.schedule_enabled %}Every {{ conf.interval_days }} d{% else %}Off{% endif %}</div><div class="eyebrow">Schedule</div></div>
+  <div><div class="stat__value">{{ conf.last_run_at|date:"M j"|default:"Never" }}</div><div class="eyebrow">Last run</div></div>
+  <div><form method="post">{% csrf_token %}<button class="button button--primary"{% if running %} disabled{% endif %}>{% icon "refresh" %} Run now</button></form>
+    <div class="eyebrow">Or <span class="mono">manage.py find_prospects</span></div></div>
+</div>
+<div class="panel panel--flush"><div class="scroll-x"><table class="data-table">
+  <thead><tr><th>Run</th><th>Started</th><th>Trigger</th><th>Status</th><th class="num">Found</th><th class="num">New</th><th class="num">Updated</th><th class="num">Skipped</th><th class="num">Cost</th></tr></thead>
+  <tbody>{% for r in runs %}<tr>
+    <td><a href="{% url 'prospects:run' r.pk %}">#{{ r.pk }}</a></td>
+    <td class="nowrap">{{ r.started_at|default:r.created_at|date:"M j, g:i A" }}</td>
+    <td>{{ r.get_trigger_display }}{% if r.started_by %} <span class="muted small">{{ r.started_by.email }}</span>{% endif %}</td>
+    <td>{% if r.status == 'failed' %}<span class="badge badge--danger">Failed</span>{% elif r.status == 'done' %}<span class="badge badge--success">Done</span>{% elif r.is_finished %}<span class="badge badge--muted">{{ r.get_status_display }}</span>{% else %}<span class="badge badge--info">{{ r.get_status_display }}</span>{% endif %}</td>
+    <td class="num">{{ r.found }}</td><td class="num">{{ r.new }}</td><td class="num">{{ r.updated }}</td><td class="num">{{ r.skipped }}</td>
+    <td class="num">${{ r.cost_usd|floatformat:3 }}</td>
+  </tr>{% empty %}<tr><td colspan="9" class="muted">No runs yet.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+</div>
+{% endblock %}

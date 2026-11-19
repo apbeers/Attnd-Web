@@ -19,6 +19,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
 | 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15); optional `ANTHROPIC_API_KEY`. |
 | 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026): moved to git branch `parked/tickets` (API-017), organizers use Eventbrite for now. The setup steps live on that branch. Optional: drop dev's orphan `tickets_*` tables (step 16). |
+| 17. Prospects (staff) | ✅ No setup: it uses the existing `OPENAI_API_KEY` (OpenAI's web search tool, ~$0.01 per search + tokens). The schedule is off until turned on in `/console/prospects/settings/`. Optional: `PROSPECT_MODEL`, `PROSPECT_DAILY_SPEND_CAP_USD` (default 5), `PROSPECT_RUN_MAX_MINUTES` (step 17). |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
@@ -915,3 +916,16 @@ DEMO event and register `ci-` test devices.
 | Heroku API token ("Heroku API token (Claude)") | `api.heroku.com` | ✅ saved; Claude can manage both Heroku apps |
 
 Revoke it any time with `heroku authorizations` / `heroku authorizations:revoke <id>`, or from the environment's settings.
+
+## 17. Prospects (staff sales dashboard): nothing to set up
+
+`/console/prospects/` (staff and superusers only) finds events in a region that suit the app with OpenAI's web
+search tool, reads their pages for organizer contacts and can make testing-only copies of them. It uses the existing
+`OPENAI_API_KEY` (web search must be allowed for the key's project; it is by default). Optional settings:
+```bash
+heroku config:set -a attnd-dev PROSPECT_DAILY_SPEND_CAP_USD=5 PROSPECT_RUN_MAX_MINUTES=20 PROSPECT_MODEL=gpt-5.5
+```
+Region, themes, caps and the schedule (off by default; Heroku Scheduler's `run_scheduled_tasks` starts it when due)
+are edited on the dashboard's Settings tab. Manual run from a shell: `heroku run -a attnd-dev python manage.py
+find_prospects --max 10`. Outreach is done by a person and must follow CAN-SPAM (who you are, a physical mailing
+address, an opt-out that is honoured); Attnd never emails prospects.

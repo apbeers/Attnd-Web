@@ -192,7 +192,8 @@ def check_event(event, now=None, client=None):
 
 
 def due_events(now):
-    candidates = Event.objects.filter(refresh_schedule=Event.REFRESH_WATCH).exclude(status=Event.STATUS_ARCHIVED)
+    candidates = (Event.objects.filter(refresh_schedule=Event.REFRESH_WATCH, testing_only=False)
+                  .exclude(status=Event.STATUS_ARCHIVED))
     for event in candidates:
         if not event.source_urls:
             continue
