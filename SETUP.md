@@ -30,9 +30,8 @@ Do these steps once, in order. Each step says which values go where. For any sin
       "Set time change" (`heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com`, then the
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
-- [ ] iOS WeatherKit + manual CI signing (Nov 19, 2026): WeatherKit on `com.arcu.Attnd`, an Apple Distribution
-      certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). **Open:**
-      `IOS_PROFILE_APP_B64` was saved empty: set it again (step 3f, its line alone). No App Group: the "Now & Next"
+- [x] iOS WeatherKit + manual CI signing (Nov 19, 2026; first manually signed build 145 uploaded): WeatherKit on `com.arcu.Attnd`, an Apple Distribution
+      certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). No App Group: the "Now & Next"
       widget, its only user, was removed (Nov 19, 2026; Live Activities only); `group.com.arcu.Attnd` can stay
       registered unused.
 - [x] Google Weather API (Nov 19, 2026): `weather.googleapis.com` enabled in `attnd-df28e` and added to the Android
