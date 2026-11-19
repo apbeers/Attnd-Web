@@ -188,7 +188,7 @@ sets the **app's look**; Attnd hosts the site.
 Attnd Tickets (API-017: Stripe Checkout + Connect, QR tokens, Wallet passes, door mode) was moved off `develop` on
 Nov 19, 2026 (owner: organizers use Eventbrite for now). The whole `tickets/` app, its settings, URLs, console tools,
 Studio element, AI drafts, tests, CI steps and spec are on the git branch **`parked/tickets`** (cut from `develop`
-before the removal; the tag `tickets-parked-2026-11-19` is still to be pushed). On `develop` the bundle's `event.tickets_url` and
+before the removal, tag `tickets-parked-2026-11-19` on the same commit). On `develop` the bundle's `event.tickets_url` and
 `bundle.tickets` stay in v2 and are always `null` (installed apps decode them; `events/tests_contract.py` checks it);
 the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-picking from that branch.
 
