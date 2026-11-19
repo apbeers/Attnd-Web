@@ -48,6 +48,12 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass`); Google Wallet issuer id + `attnd-wallet` JSON key and
       Event Ticket publishing access (16c). Then on dev: `heroku run -a attnd-dev python manage.py load_ticket_demo --owner apbeers@icloud.com`.
 - [ ] Later (before outside organizers or payments): move everything to a Texas LLC — `docs/LLC_MIGRATION.md`.
+- [x] Repos made public (Nov 19, 2026); history scan found old secrets: the OpenAI key in `_set_heroku_env.command`
+      (revoked Apr 29, 2026) and the 2021 service-account keys `attnd-prod` (`bf9dce7d…`) and `attnd-742` (`73dbb440…`),
+      deleted Nov 19, 2026. Heroku uses neither. To check: the two old Maps keys in history (`AIzaSyC_f5…` web 2021,
+      `AIzaSyD5d9fk…` Android) are deleted or restricted; turn on GitHub secret scanning + push protection on all three
+      repos (`gh api -X PATCH repos/apbeers/<repo> -F security_and_analysis[secret_scanning][status]=enabled
+      -F security_and_analysis[secret_scanning_push_protection][status]=enabled`).
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
