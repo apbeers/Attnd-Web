@@ -5,8 +5,7 @@ stored: callers pass no device ID, and the ingest endpoint never reads one.
 """
 from datetime import timedelta, timezone as dt_timezone
 
-from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db import connection
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -70,18 +69,31 @@ hour_bucket = bucket_start  # old name
 
 
 def record(event, metric, *, detail='', platform='', count=1, at=None):
-    """Add `count` to one bucket. Safe under concurrency (update, else create, else update)."""
-    if count <= 0:
+    """Add `count` to one bucket. Safe under concurrency (one upsert)."""
+    _add([(event.pk if event is not None else None, bucket_start(at), metric, detail, platform, count)])
+
+
+def _add(rows):
+    """Add to many buckets in one statement: INSERT … ON CONFLICT (usage_bucket_unique) DO UPDATE count + n.
+
+    `rows`: (event_id, bucket, metric, detail, platform, count). Atomic per row under concurrency, like the
+    old update / create / update sequence, but one query for a whole batch instead of 1–4 per bucket."""
+    merged = {}
+    for event_id, bucket, metric, detail, platform, count in rows:
+        if count <= 0:
+            continue
+        key = (event_id, bucket, metric, str(detail or '')[:32], platform if platform in ('ios', 'android') else '')
+        merged[key] = merged.get(key, 0) + count
+    if not merged:
         return
-    key = {'event': event, 'bucket': bucket_start(at), 'metric': metric, 'detail': str(detail or '')[:32],
-           'platform': platform if platform in ('ios', 'android') else ''}
-    if UsageCount.objects.filter(**key).update(count=F('count') + count):
-        return
-    try:
-        with transaction.atomic():
-            UsageCount.objects.create(count=count, **key)
-    except IntegrityError:
-        UsageCount.objects.filter(**key).update(count=F('count') + count)
+    table = connection.ops.quote_name(UsageCount._meta.db_table)
+    values = ', '.join(['(%s, %s, %s, %s, %s, %s)'] * len(merged))
+    params = [p for key, count in merged.items() for p in (*key, count)]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f'INSERT INTO {table} (event_id, bucket, metric, detail, platform, count) VALUES {values} '
+            f'ON CONFLICT ON CONSTRAINT usage_bucket_unique DO UPDATE SET count = {table}.count + EXCLUDED.count',
+            params)
 
 
 def ingest(event, platform, entries, now=None, save=True):
@@ -148,6 +160,5 @@ def ingest(event, platform, entries, now=None, save=True):
         accepted += 1
     if not save:
         return accepted
-    for (metric, detail, bucket), count in totals.items():
-        record(event, metric, detail=detail, platform=platform, count=count, at=bucket)
+    _add([(event.pk, bucket, metric, detail, platform, count) for (metric, detail, bucket), count in totals.items()])
     return accepted

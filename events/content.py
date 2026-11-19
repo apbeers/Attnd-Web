@@ -5,6 +5,7 @@ Shared by the v1/v2 API, the organizer console, and the AI change engine.
 """
 
 import contextlib
+import re
 import threading
 
 from django.conf import settings
@@ -61,6 +62,29 @@ def _abs(request, url):
     return request.build_absolute_uri(url)
 
 
+# Phone-sized images (v2 only): Cloudinary delivers a resized, recompressed copy in the best format the app
+# accepts (f_auto: WebP/AVIF/JPEG), so the apps download a fraction of an organizer's original photo.
+# Deterministic, so the URL stays the same for the same image (the apps cache images by URL).
+APP_IMAGE_WIDTH = {'location': 1200, 'logo': 512, 'flyer': 2000}
+_CLOUDINARY_UPLOAD = re.compile(r'^(https?://res\.cloudinary\.com/[^/]+/image/upload/)(.+)$')
+_RASTER = ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.avif', '.bmp', '.tif', '.tiff')
+_TRANSFORM_SEGMENT = re.compile(r'^[a-z]{1,3}_[^/]*$')  # e.g. w_800,c_fill (already transformed: leave it)
+
+
+def app_image_url(url, kind):
+    """`url` with Cloudinary delivery transformations for phones, or unchanged (other hosts, PDFs, GIFs,
+    URLs that already carry a transformation)."""
+    if not url:
+        return url
+    match = _CLOUDINARY_UPLOAD.match(url)
+    if not match:
+        return url
+    rest = match.group(2)
+    if not rest.split('?', 1)[0].lower().endswith(_RASTER) or _TRANSFORM_SEGMENT.match(rest.split('/', 1)[0]):
+        return url
+    return f'{match.group(1)}f_auto,q_auto,c_limit,w_{APP_IMAGE_WIDTH[kind]}/{rest}'
+
+
 def event_v2(event, request=None):
     return {
         'id': event.id,
@@ -76,9 +100,9 @@ def event_v2(event, request=None):
         'status': event.status,
         'paid': event.paid,
         'is_demo': not event.paid,
-        'flyer_url': _abs(request, event.flyer.url) if event.flyer else None,
+        'flyer_url': app_image_url(_abs(request, event.flyer.url), 'flyer') if event.flyer else None,
         'accent_color': event.accent_color or None,
-        'logo_url': event.logo_url or None,
+        'logo_url': app_image_url(event.logo_url, 'logo') or None,
         'content_version': event.content_version,
         'join_url': f'https://attnd.app/join/{event.event_code}/',
         # API-016: the event's Attnd Studio website while it is published, else null.
@@ -108,7 +132,7 @@ def location_v2(location, request=None):
         'description': location.description,
         'category': location.category or None,
         'website': location.website or None,
-        'image_url': _abs(request, location.resolved_image_url),
+        'image_url': app_image_url(_abs(request, location.resolved_image_url), 'location'),
         'address': location.address,
         'latitude': _coord(location.latitude),
         'longitude': _coord(location.longitude),
@@ -150,7 +174,7 @@ def bundle(event, request=None):
         .select_related('location').order_by('start_time', 'name')
     )
     notifications = list(event.notification_set.filter(sent=True).order_by('-send_time'))
-    stats = event_stats(event)
+    stats = event_stats(event, locations)
     categories = sorted({loc.category for loc in locations if loc.category})
     return {
         'schema_version': 2,

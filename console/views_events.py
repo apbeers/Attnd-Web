@@ -19,7 +19,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -33,7 +34,7 @@ from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm
 from events import push
 from events.content import mark_locked, restore, save_revision
 from events.display import LABELS, clean_overrides, event_stats, resolve_display
-from events.models import (CI_DEVICE_PREFIX, Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
+from events.models import (Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
                            ScheduledItem, events_for_user, generate_event_code, next_send_slot)
 from scrape import diff, jobs
 from scrape.models import Change, ChangeSet, IngestJob
@@ -87,13 +88,21 @@ def _job_from_form(form, **kwargs):
 # Dashboard & creation
 # ---------------------------------------------------------------------------
 
+def _count(queryset, field='event'):
+    """COUNT(*) of `queryset` rows pointing at the outer event, as a subquery annotation."""
+    rows = queryset.filter(**{field: OuterRef('pk')}).order_by().values(field).annotate(n=Count('pk')).values('n')
+    return Coalesce(Subquery(rows, output_field=IntegerField()), 0)
+
+
 @login_required
 def dashboard(request):
+    # One correlated COUNT subquery per number: joining all four relations and counting DISTINCT multiplied
+    # the rows (locations × items × devices × change sets: ~300,000 for the DEMO event, ~1.7 s).
     events = (events_for_user(request.user)
-              .annotate(n_locations=Count('location', distinct=True),
-                        n_items=Count('scheduleditem', distinct=True),
-                        n_devices=Count('device', filter=~Q(device__id__startswith=CI_DEVICE_PREFIX), distinct=True),
-                        n_pending=Count('changesets', filter=Q(changesets__status=ChangeSet.PENDING), distinct=True))
+              .annotate(n_locations=_count(Location.objects.all()),
+                        n_items=_count(ScheduledItem.objects.all()),
+                        n_devices=_count(Device.objects.real()),
+                        n_pending=_count(ChangeSet.objects.filter(status=ChangeSet.PENDING)))
               .order_by('-start_time'))
     now = timezone.now()
     upcoming = [e for e in events if (e.end_time or e.start_time) >= now - timedelta(days=1)]
@@ -247,14 +256,13 @@ def manifest(request):
 @event_view
 def event_overview(request, event):
     stats = event_stats(event)
-    devices = Device.objects.real().filter(event=event)
-    audience = {
-        'joined': devices.count(),
-        'subscribed': devices.filter(subscribed=True).exclude(push_token='').count(),
-        'active_today': devices.filter(last_seen__gte=timezone.now() - timedelta(hours=24)).count(),
-        'ios': devices.filter(platform='ios').count(),
-        'android': devices.filter(platform='android').count(),
-    }
+    audience = Device.objects.real().filter(event=event).aggregate(  # one query instead of five
+        joined=Count('pk'),
+        subscribed=Count('pk', filter=Q(subscribed=True) & ~Q(push_token='')),
+        active_today=Count('pk', filter=Q(last_seen__gte=timezone.now() - timedelta(hours=24))),
+        ios=Count('pk', filter=Q(platform='ios')),
+        android=Count('pk', filter=Q(platform='android')),
+    )
     sources_form = SourcesForm(instance=event)
     from console.usage import most_hearted
     return render(request, 'console/event_overview.html', _ctx(
@@ -381,6 +389,7 @@ def event_qr(request, event):
     buf = io.BytesIO()
     img.save(buf, format='PNG')
     resp = HttpResponse(buf.getvalue(), content_type='image/png')
+    resp['Cache-Control'] = 'private, max-age=86400'  # the event code never changes; shown on several pages
     if request.GET.get('download'):
         safe = re.sub(r'[^a-zA-Z0-9]+', '_', event.name).strip('_') or 'event'
         resp['Content-Disposition'] = f'attachment; filename="{safe}_QR.png"'

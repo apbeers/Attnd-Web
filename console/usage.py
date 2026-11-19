@@ -3,6 +3,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.db.models import Count, Sum
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 from django.utils import timezone
 
 from events.models import Device, Event, Location, Notification, ScheduledItem, UsageCount
@@ -68,11 +70,12 @@ def line_chart(series, tz, *, start=None, end=None):
             values.append(running if s.get('cumulative') else per_step.get(k, 0))
         top = max(values) or 1
         coords, dots = [], []
+        sparse = not s.get('cumulative') and sum(1 for value in values if value) <= 40
         for i, v in enumerate(values):
             x = 0 if n == 1 else round(i / (n - 1) * CHART_W, 1)
             y = round(CHART_H - 4 - v / top * (CHART_H - 14), 1)
             coords.append(f'{x},{y}')
-            if not s.get('cumulative') and v and sum(1 for value in values if value) <= 40:
+            if sparse and v:
                 dots.append({'x': x, 'y': y})  # sparse data: mark each point so a single one is visible
         if n == 1:
             coords.append(f'{CHART_W},{coords[0].split(",")[1]}')
@@ -86,7 +89,12 @@ def line_chart(series, tz, *, start=None, end=None):
               'title': keys[i].astimezone(tz).strftime(fmt) + ': ' + ', '.join(f"{s['label']} {s['values'][i]}" for s in out)}
              for i in range(n)]
     step_label = {300: '5 minutes', 3600: 'hour', 86400: 'day'}[int(step.total_seconds())]
-    return {'series': out, 'ticks': ticks, 'hover': hover, 'width': CHART_W, 'height': CHART_H, 'step': step_label}
+    # Up to ~600 hover areas per chart: built here as one string (the template loop took most of the page's time).
+    hover_svg = mark_safe(''.join(
+        f'<rect class="hover" x="{h["x"]}" y="0" width="{h["w"]}" height="{CHART_H}"><title>{escape(h["title"])}</title></rect>'
+        for h in hover))
+    return {'series': out, 'ticks': ticks, 'hover': hover, 'hover_svg': hover_svg, 'width': CHART_W, 'height': CHART_H,
+            'step': step_label}
 
 
 def _named(event_rows, model, event):

@@ -71,6 +71,8 @@ MIDDLEWARE = [
     'diagnostics.middleware.RequestLogMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # gzip for the API's JSON and the HTML pages (after WhiteNoise, which serves static files pre-compressed).
+    'attnd.middleware.CompressionMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

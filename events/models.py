@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models.functions import Upper
 from django.urls import reverse
 from django.utils import timezone as dj_tz
 
@@ -187,7 +188,10 @@ class Event(CoordinatesMixin, models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['user', 'name', 'event_code', 'latitude', 'longitude'])
+            models.Index(fields=['user', 'name', 'event_code', 'latitude', 'longitude']),
+            # `event_code__iexact` / `name__iexact` (lookup, /join/, /p/, the DEMO checks) compare UPPER(…).
+            models.Index(Upper('event_code'), name='event_code_upper_idx'),
+            models.Index(Upper('name'), name='event_name_upper_idx'),
         ]
 
     def get_absolute_url(self):
@@ -437,7 +441,9 @@ def events_for_user(user):
         return Event.objects.none()
     if user.is_superuser:
         return Event.objects.all()
-    return Event.objects.filter(models.Q(user=user) | models.Q(members__user=user)).distinct()
+    # A subquery instead of a join + DISTINCT: no duplicate rows, so annotations (counts) stay cheap and exact.
+    member_of = EventMember.objects.filter(user=user).values('event_id')
+    return Event.objects.filter(models.Q(user=user) | models.Q(id__in=member_of))
 
 
 class UsageCount(models.Model):

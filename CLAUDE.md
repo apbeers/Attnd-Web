@@ -255,6 +255,19 @@ Studio access get 404 and see no "Tickets" link). **Tickets are sold only on att
   on dev only, `TICKETS_DEV_TOOLS`), CI-key dev endpoints for the live suites (`tickets/test-inbox|test/order|test/pay/`).
   Live suite `live_tests/live_tickets.py`; browser e2e `e2e/tickets_e2e.py` (job "E2E · dev", CI_FULL only).
 
+## Performance
+
+- **Bundle** (`events/apis_v2.py`): with `If-None-Match` the 304 is answered from `content_version` alone (one
+  query, the bundle is never built); the serialized bundle is cached per (event, content_version, origin) for 5 min
+  in Django's cache; a device's `last_seen` is written at most every 10 min by polls.
+- **gzip**: `attnd.middleware.CompressionMiddleware` (after WhiteNoise) compresses text responses (API JSON, HTML;
+  the DEMO bundle 22 KB → 4 KB) and keeps ETags strong, because every view compares `If-None-Match` exactly.
+- **Images for the apps**: v2 rewrites Cloudinary image URLs to `f_auto,q_auto,c_limit,w_<n>` (locations 1200,
+  logo 512, flyer 2000; `content.app_image_url`); other hosts, PDFs and GIFs are untouched.
+- Usage counts are one `INSERT … ON CONFLICT` per batch (`events/usage.py`). Console lists count related rows with
+  subqueries, never with joins + DISTINCT (the dashboard took 1.7 s on the DEMO event that way).
+- Query-count regression tests: `events/tests_perf.py`.
+
 ## Accounts
 
 People only ever see and sign in with their **email** (`console.auth_backends.EmailOrUsernameBackend`, case-insensitive). The account's `username` is an internal generated id (`u` + 10 hex, `console.accounts.new_username`), so an email can change (Account page, `/console/account/`) without losing the account. Emails are unique case-insensitively (Postgres index `auth_user_email_lower_uniq` + `email_in_use`). Create a site admin with `python manage.py create_admin you@example.com` (they set up two-factor sign-in at their first sign-in; see Security). Deleting an account never deletes events: they become unassigned.
