@@ -19,7 +19,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
 | 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15); optional `ANTHROPIC_API_KEY`. |
 | 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026): moved to git branch `parked/tickets` (API-017), organizers use Eventbrite for now. The setup steps live on that branch. Optional: drop dev's orphan `tickets_*` tables (step 16). |
-| 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
+| 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
@@ -30,13 +30,19 @@ Do these steps once, in order. Each step says which values go where. For any sin
       "Set time change" (`heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com`, then the
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
-- [x] iOS WeatherKit + manual CI signing (Nov 19, 2026; first manually signed build 145 uploaded): WeatherKit on `com.arcu.Attnd`, an Apple Distribution
+- [x] iOS manual CI signing (Nov 19, 2026; first manually signed build 145 uploaded): an Apple Distribution
       certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). No App Group: the "Now & Next"
       widget, its only user, was removed (Nov 19, 2026; Live Activities only); `group.com.arcu.Attnd` can stay
-      registered unused.
-- [x] Google Weather API (Nov 19, 2026): `weather.googleapis.com` enabled in `attnd-df28e` and added to the Android
-      Maps key `af7cec96-…` (Android weather on the planner page, not built yet). Optional: a daily quota cap in
-      Cloud Console → APIs & Services → Weather API → Quotas.
+      registered unused. WeatherKit is no longer used (removed from iOS Nov 19, 2026: not offered for App Clip App
+      IDs); the capability can be unticked on `com.arcu.Attnd` whenever its profile is regenerated.
+- [x] Google Weather API **disabled** (Nov 19, 2026, owner): it was enabled in `attnd-df28e` and on the Android Maps key
+      `af7cec96-…` the same day for planner weather, which neither app builds now. Nothing is billed.
+- [x] iOS app icon (Nov 19, 2026): iOS went back from the Icon Composer icon (`AppIcon.icon`) to a PNG app icon set,
+      because the Icon Composer build made `Assets.car` about 5 MB (App Clip size). The website's
+      `brand/app-icon-1024.png` and the site icons (`scripts/make_icons.py`) stay as they are.
+- [x] App Review sample events: FWFM2026, ATIS2026 and DACN2026 on production are **kept on purpose**: App Review uses
+      them (owner, Nov 19, 2026). The release phase's `seed_test_data` keeps them current; don't delete them or the
+      command.
 - [ ] Attnd Studio (step 15): buy a separate domain for hosted event sites (not a subdomain of attnd.app), then
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
       with a go-ahead; until then sites are served on the Heroku hostnames. Optional: `ANTHROPIC_API_KEY`.

@@ -1,5 +1,11 @@
 # Attnd event assistant spec (iOS + Android; small web parts) — agreed Nov 15, 2026
 
+> **iOS update, Nov 19, 2026 (owner):** the App Clip is now the same as the app, and App Clips can't use App Intents,
+> background tasks or WeatherKit, so iOS **removed Siri / App Intents / Shortcuts / Spotlight, the "Now & Next" Home
+> Screen widget, Add to Calendar (the `add_to_calendar` action and `calendar` block) and "Tell me when I arrive"**.
+> On iOS the plan is a full page from a floating button, not a tab (planner_view_spec.md). Those parts below are
+> marked "Android only / removed on iOS Nov 19, 2026"; the rest is unchanged and shared.
+
 The planner grows into an **event assistant**: one screen where a person can do everything the app can do — search, ask,
 explore, like, plan, tweak the plan, follow on the Lock Screen, set reminders, share — and every answer is shown with
 the best-fitting native mini UI. The manual tabs stay exactly as they are. Everything runs on the device; the on-device
@@ -10,7 +16,7 @@ the same fixtures and expected outputs (as was done for the planner).
 
 ## 0. Rename "hearted" → "liked" (user-facing only)
 All UI text, accessibility labels, chips ("Liked"), reasons ("Because you liked X", "You liked this", "At X, which you
-liked"), onboarding, Siri phrases ("What have I liked in Attnd") and intent titles, Gemini AppFunctions descriptions
+liked"), onboarding, Siri phrases ("What have I liked in Attnd") and intent titles (removed on iOS Nov 19, 2026), Gemini AppFunctions descriptions
 (function names may stay; descriptions say "liked"), store text if it mentions hearts, the console ("likes" instead of
 hearts in labels). The heart icon stays. Storage keys, Kotlin/Swift identifiers where renaming is risky, and the server
 usage names (`location_heart`, …) do NOT change.
@@ -18,13 +24,13 @@ usage names (`location_heart`, …) do NOT change.
 ## 1. Action layer (one registry, used everywhere)
 Pure description + one executor per platform. Every action: `name`, typed params, `mutates` (bool), `confirm` (none /
 chip / sheet), result type. Used by the assistant (model tool calls and rule-based routing), the manual screens' buttons
-(where practical), Siri/App Intents, Android AppFunctions, Live Activity / Live Update buttons and widgets. Names:
+(where practical), Siri/App Intents (removed on iOS Nov 19, 2026; only the Live Activity buttons are App Intents), Android AppFunctions, Live Activity / Live Update buttons and widgets (iOS: Live Activity only). Names:
 - read: `search(query, kinds?)`, `get_item(id)`, `get_location(id)`, `get_update(id)`, `event_info()`, `now_next(at?)`,
   `whats_on(range: {from,to} | day)`, `liked()`, `plan()`, `near_me(kind?)` (needs location), `why_not(item)`,
   `route(to_location, from?)`, `day_route(day?)` (the plan's walking legs)
 - write (mutates): `like(kind,id)`, `unlike(kind,id)`, `plan_make(request)`, `plan_edit(ops[])` (§4), `plan_undo()`,
   `plan_version(kind: chill|everything)`, `checkoff(item, done)`, `follow_lock_screen(on)` (confirm chip),
-  `reminders(on)` (confirm chip), `notifications(on)` (confirm chip; may prompt OS permission), `add_to_calendar(items|plan)`
+  `reminders(on)` (confirm chip), `notifications(on)` (confirm chip; may prompt OS permission), `add_to_calendar(items|plan)` (Android only / removed on iOS Nov 19, 2026)
   (OS sheet), `share_plan()` / `share_item(id)` (OS share sheet), `open(screen, id?)` (navigate to a manual screen:
   map, locations, schedule, updates, flyer, options, tour), `directions(location)` (opens Maps app; confirm none).
 - Never available to the assistant: leave event, debug mode, account/support copy (manual only).
@@ -52,7 +58,7 @@ Block types (component catalogue; native SwiftUI / Compose, reused by the manual
 | `setting` | `setting`: follow_lock_screen | reminders | notifications | toggle card |
 | `summary` | `kind`: walking | recap | liked_counts | stats card |
 | `share` | `target`: plan | item:<id> | QR + share button |
-| `calendar` | `ids[]` or plan | "Add to Calendar" card |
+| `calendar` | `ids[]` or plan | "Add to Calendar" card (Android only / removed on iOS Nov 19, 2026) |
 | `chips` | `chips[]`: {label, action, params} (≤ 5) | follow-up quick actions |
 | `confirm` | `action`, `params`, `prompt` | Yes/No for a mutating action |
 Layout rules for the rule-based renderer (and validation caps for the model): 1 result → `item_card`/`place_card`;
@@ -111,8 +117,9 @@ opens the full map with that leg.
 - **Organizer changes**: planned items changed/removed → inline card in the plan with "Re-plan" (exists) and the diff.
 - **Like clash**: liking an item that overlaps a planned one → chip "Add to plan instead of X?".
 - Live Activity / Live Update show the plan's next item + walk leg + running-late "Leave now"; widgets
-  (iOS WidgetKit in AttndWidgets; Android Glance widget): "Now / Next in my plan" with walk time; Siri + Gemini:
-  "What's next on my plan", "Swap my next thing", "I already ate" (plan_edit).
+  (Android Glance widget; the iOS WidgetKit "Now & Next" widget was removed Nov 19, 2026): "Now / Next in my plan" with
+  walk time; Gemini (Siri: removed on iOS Nov 19, 2026): "What's next on my plan", "Swap my next thing", "I already
+  ate" (plan_edit).
 
 ## 7. Extras
 - **Share** (`share_plan`, `share_item`): link `https://attnd.app/p/<EVENT_CODE>/<payload>` where payload = base64url of
@@ -122,7 +129,7 @@ opens the full map with that leg.
   normal planner. QR in the `share` block. SERVER (web): `/p/<code>/<payload>` route (same OS detection as /join/: app
   open via AASA/assetlinks paths, store redirect with the event code, desktop landing listing the items by name), AASA +
   assetlinks include `/p/*`.
-- **Calendar**: iOS EventKit (`EKEventEditViewController` for one item, write-only access for the plan) / Android
+- **Calendar** (Android only / removed on iOS Nov 19, 2026): iOS EventKit (`EKEventEditViewController` for one item, write-only access for the plan) / Android
   `CalendarContract` insert intent (one per item; plan → a chooser that inserts each); event tz, location name.
 - **Why not X?**: explains with the planner's own reasons: clashes with <planned/liked item>, outside your window,
   filtered (food constraint, kid-friendly, walk limit), score too low → "Swap it in" chip (`plan_edit add`).

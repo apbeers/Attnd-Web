@@ -28,7 +28,8 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
 - Production config: ✅ `GOOGLE_MAPS_BROWSER_KEY`, `IOS_APP_STORE_URL` (Nov 15, 2026); ✅ `APNS_USE_SANDBOX` unset (production APNs);
   ✅ `APPLE_ATTEST_ENVIRONMENT` unset = production (TestFlight and App Store builds use production too).
 - ✅ Production DEMO event loaded (Nov 15, 2026; the prod integration tests pass against it). Still to do: the App Review account (`create_review_account`); both stores' review notes tell reviewers to use code DEMO on attnd.app.
-- Production cleanup (SETUP step 7): list users and demo events, delete with a go-ahead.
+- Production cleanup (SETUP step 7): list users and demo events, delete with a go-ahead. Keep DEMO and the App Review
+  sample events FWFM2026 / ATIS2026 / DACN2026 (kept for App Review, owner Nov 19, 2026; `seed_test_data` keeps them current).
 - Heroku Postgres: check the version and upgrade to 18 (SETUP step 2).
 - First app releases to `main` (iOS App Review, Play production), then Play production lock-down (SETUP 4d).
 
@@ -76,8 +77,9 @@ is the reference. Web parts:
 Built on both apps: relative times, distance + compass, walking routes, map/list glanceables, hearts, the
 on-device planner (identical rules on both, Android's `Planner.kt` is the reference), onboarding, Live
 Activity / Live Update (device-driven; server only for urgent announcements), reminders. Still open:
-- Home-screen widgets ("Happening now / Next in my plan"): Android Glance widget and iOS WidgetKit widget
-  (the `AttndWidgets` extension already exists).
+- Home-screen widgets ("Happening now / Next in my plan"): Android has its Glance widget. iOS built a "Now & Next"
+  WidgetKit widget and removed it on Nov 19, 2026 (its App Group can't be used by the App Clip, which is the app);
+  `AttndWidgets` is the Live Activity only. Not planned again for iOS.
 - Android venue arrival: needs `ACCESS_BACKGROUND_LOCATION` + the Play Console background-location
   declaration (code is in place, off). Owner decision.
 - Align small differences: iOS reminders use a fixed 15 min lead (Android adds walk time); iOS Live Activity

@@ -128,7 +128,7 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 
 | Event | Category | Level | Fields | When |
 |-------|----------|-------|--------|------|
-| `background.wake` | `background` | info | **`reason`** (`silent_push`/`app_refresh`/`alarm`/`geofence`/`boot`/`region`/`intent`) | the system woke the app |
+| `background.wake` | `background` | info | **`reason`** (`silent_push`/`app_refresh`/`alarm`/`geofence`/`boot`/`region`/`intent`) | the system woke the app (`app_refresh`, `region`, `geofence`: Android only / removed on iOS Nov 19, 2026) |
 | `background.refresh.started` | `background` | info | **`task`** (`bundle`/`live`/`reminders`/`images`), `reason` | background work started |
 | `background.refresh.finished` | `background` | info | **`task`**, **`ms`**, `result` (`new_data`/`no_data`) | it finished |
 | `background.refresh.failed` | `background` | warning | **`task`**, **`ms`**, **`error`** | it failed |
@@ -149,7 +149,7 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `live.wake.scheduled` | `live` | debug | **`at`**, **`reason`** | the next recompute was scheduled |
 | `live.reminder.scheduled` | `live` | debug | **`count`** | reminders were (re)scheduled |
 | `live.reminder.shown` | `live` | info | **`item_id`**, `walk_min` | a reminder fired |
-| `live.arrival` | `live` | notice | **`action`** (`entered`/`prompted`/`started`), `radius_m` | the venue geofence / `CLMonitor` circle |
+| `live.arrival` | `live` | notice | **`action`** (`entered`/`prompted`/`started`), `radius_m` | the venue geofence (Android only, still off there; iOS `CLMonitor` removed Nov 19, 2026) |
 | `live.follow.changed` | `live` | notice | **`on`** (bool), `default` (bool) | "Follow on Lock Screen" changed |
 | `live.running_late` | `live` | notice | **`item_id`**, **`minutes_left`**, `walk_min`, `action` (`shown`/`left_now`/`swap_offered`/`swapped`/`dismissed`) | the running-late check fired at departure time (assistant spec §6; no coordinates) |
 | `live.checkoff` | `live` | info | **`item_id`**, **`source`** (`auto`/`tap`), **`done`** (bool), `minutes_near` | a planned item was checked off (or un-checked) |
@@ -191,12 +191,12 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 
 | Event | Category | Level | Fields | When |
 |-------|----------|-------|--------|------|
-| `assistant.request` | `assistant` | info | **`kind`** (`intent`/`appfunction`/`ask`/`spotlight`/`shortcut`), **`name`** (intent / function name), **`ms`**, **`ok`** (bool), `results`, `query_len` | a Siri intent, AppFunction or Ask finished |
+| `assistant.request` | `assistant` | info | **`kind`** (`intent`/`appfunction`/`ask`/`spotlight`/`shortcut`), **`name`** (intent / function name), **`ms`**, **`ok`** (bool), `results`, `query_len` | a Siri intent, AppFunction or Ask finished (`intent`/`spotlight`/`shortcut`: removed on iOS Nov 19, 2026) |
 | `assistant.model.status` | `assistant` | info | **`status`** (`available`/`downloadable`/`downloading`/`unavailable`), `reason` | Apple Intelligence / Gemini Nano availability |
 | `assistant.model.download` | `assistant` | info | **`state`** (`started`/`progress`/`finished`/`failed`), `pct` | Gemini Nano download |
 | `assistant.answer` | `assistant` | debug | **`ms`**, **`citations`**, `tool_calls`, `fallback` (bool) | the model answered (no text) |
 | `assistant.error` | `assistant` | warning | **`kind`**, **`error`**, `domain`, `code` | the model or an intent failed |
-| `assistant.index` | `assistant` | debug | **`ms`**, **`entities`**, `action` (`reindexed`/`removed`) | Spotlight entities / shortcuts updated |
+| `assistant.index` | `assistant` | debug | **`ms`**, **`entities`**, `action` (`reindexed`/`removed`) | Spotlight entities / shortcuts updated (Android dynamic shortcuts only; Spotlight removed on iOS Nov 19, 2026) |
 | `assistant.turn` | `assistant` | info | **`path`** (`model`/`rules`), **`intent`** (router intent, e.g. `search`/`plan_edit`/`like`/`why_not`/`question`), **`ms`**, **`blocks`**, `query_len`, `fallback` (bool: model output invalid → rules), `tool_calls` | one assistant turn finished (event assistant, spec §3; never the text in production) |
 | `assistant.block` | `assistant` | debug | **`type`** (block type, e.g. `item_card`/`carousel`/`timeline`/`map`/`plan_diff`), **`ids`** (count), `dropped` (unknown ids dropped) | a response block was rendered |
 | `assistant.action` | `assistant` | info | **`name`** (action registry name, e.g. `like`/`plan_edit`/`follow_lock_screen`/`share_plan`), **`result`** (`applied`/`confirmed`/`declined`/`undone`/`failed`), `confirm` (`none`/`chip`/`sheet`) | an action was run from the assistant |
@@ -261,6 +261,9 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `logging.report.sent` | `logging` | info | **`kind`**, **`count`**, **`status`** | crash/hang reports were uploaded |
 
 ### tickets (API-017; never emails, names, codes, tokens or QR strings)
+
+Parked with ticketing (git branch `parked/tickets`, Nov 19, 2026): no app logs these now; kept for when it comes back.
+
 
 | Event | Category | Level | Fields | When |
 |-------|----------|-------|--------|------|

@@ -4,6 +4,11 @@ Agreed with the user on Nov 15, 2026. Same rules and same unit-test cases on bot
 search_spec.md). Everything is on the
 device unless marked SERVER. No third-party libraries (CLAUDE.md of each repo).
 
+> **iOS update, Nov 19, 2026 (owner):** the App Clip is the same as the app, so iOS removed what App Clips can't run:
+> Siri / App Intents (except the Live Activity buttons), Spotlight, the Home Screen widget, background app refresh and
+> the venue arrival geofence (`CLMonitor`, "Tell me when I arrive"). Those parts below are marked "Android only /
+> removed on iOS Nov 19, 2026".
+
 ## 1. Relative time + distance formatting (bug fix: "thousands of hours")
 Pure function `relativeStart(start, end?, now, eventTimeZone)` → text; tests with a fixed `now`, America/Chicago.
 - ended (end < now): "Ended"; started (start ≤ now < end): "Started 20 min ago" (< 1 h), "Now" otherwise / "Now · ends 8:30 PM" where there's room
@@ -11,7 +16,7 @@ Pure function `relativeStart(start, end?, now, eventTimeZone)` → text; tests w
   next day "tomorrow 7:30 PM"; < 7 days "in 3 days" (calendar days in the event tz); < 5 weeks "in 2 weeks"; < 12 months "in 4 months";
   else "in 1 year" / "in 2 years". Never hours ≥ 6.
 - Applies to: launch-screen nearby events (server sends `starts_in_hours`: convert to a date, don't print hours), schedule rows/detail
-  "starts in", search detail lines, AppFunctions/Siri text where relevant.
+  "starts in", search detail lines, AppFunctions/Siri text where relevant (Siri: removed on iOS Nov 19, 2026).
 - Distance in the phone's region units: US/UK/Liberia/Myanmar → feet under 0.1 mi ("500 ft"), else miles with 1 decimal under 10 ("0.6 mi"),
   whole miles above; elsewhere metres under 1 km ("350 m"), km with 1 decimal under 10. Use the platform measurement formatter where it
   matches these rules. iOS LaunchScreen currently hard-codes "%.1f mi away".
@@ -53,7 +58,7 @@ Pure function `relativeStart(start, end?, now, eventTimeZone)` → text; tests w
 - "Hearted" filter chip on Schedule, Locations, Map (only hearted pins) and in search (a "Hearted" suggestion chip).
 - Anonymous usage (SERVER, API-009): metrics `location_heart`, `location_unheart` (detail = location id), `schedule_item_heart`,
   `schedule_item_unheart` (detail = item id), sent through the existing usage reporter (same buckets, no device id).
-- Siri/AppFunctions: heart/unheart an item; "what have I hearted".
+- Siri/AppFunctions: heart/unheart an item; "what have I hearted". (Android AppFunctions only; Siri removed on iOS Nov 19, 2026.)
 
 ## 6. Planner ("build me a plan") — only when the on-device model is available
 - No model (old phone, Apple Intelligence off, no Gemini Nano): no Ask, no planner, no planner onboarding; classic search + hearts.
@@ -91,10 +96,11 @@ Pure function `relativeStart(start, end?, now, eventTimeZone)` → text; tests w
 - Start: iOS can only start while the app is in the foreground: start automatically when the app is open on an event day within 2 h of the
   first relevant item (or gates open); otherwise a local notification at that time ("Prairie Lights in 1 h · tap to follow on your Lock
   Screen") opens the app at the item and starts it; a venue geofence (CLMonitor / region monitoring, radius from the event's spread) sends the
-  same local notification on arrival. Re-start each day (8 h limit). Android: start/update from the background (AlarmManager inexact
+  same local notification on arrival (Android only / removed on iOS Nov 19, 2026; Android's needs background location,
+  not declared yet). Re-start each day (8 h limit). Android: start/update from the background (AlarmManager inexact
   windows, WorkManager, Play services geofence); Android 16 promoted ongoing notification (ProgressStyle + status chip); older: ongoing
   notification. Toggle in Options per event ("Follow on Lock Screen"); default on when the user has hearts/plan.
-- Updates: background app refresh, location changes, the existing silent content_updated push.
+- Updates: background app refresh (Android only / removed on iOS Nov 19, 2026), location changes, the existing silent content_updated push.
 - URGENT (SERVER, API-011): organizers mark a notification "Urgent" (e.g. cancellation). The server sends it to every device in the event
   with a token (regardless of `subscribed`), high priority; iOS additionally sends an APNs `liveactivity` update (apns-push-type
   liveactivity, topic <bundle id>.push-type.liveactivity, event "update", content-state {"urgent": {...}}, alert so it lights up) to each
@@ -103,6 +109,6 @@ Pure function `relativeStart(start, end?, now, eventTimeZone)` → text; tests w
   front and centre until dismissed or 12 h; tap → Updates at that notification.
 
 ## 9. Order
-Wave 1 (apps): §1, §2, §3, §4, §5. Wave 2 (apps): §6, §7, §8 (+ widgets if time allows: "Happening now / next in my plan").
+Wave 1 (apps): §1, §2, §3, §4, §5. Wave 2 (apps): §6, §7, §8 (+ widgets if time allows: "Happening now / next in my plan"; Android only, the iOS widget was removed Nov 19, 2026).
 SERVER first (attnd-web): API-009 heart metrics, API-010 AI tags (locations get `tags`; import AI fills tags for locations and schedule
 items; backfill command; demo data tagged), API-011 urgent announcements + live activity tokens.

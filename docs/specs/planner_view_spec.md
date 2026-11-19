@@ -1,7 +1,12 @@
-# Planner as a trip-style page + offline AI context (plan, not built; Nov 19, 2026)
+# Planner as a trip-style page + offline AI context (Nov 19, 2026)
+
+> **Update, Nov 19, 2026 (owner, after the iOS build):** iOS shipped the plan page **without weather** (§4: WeatherKit
+> isn't offered for App Clip App IDs, and the App Clip is the app) and **without Add to calendar** ("nobody will do
+> that"). The Google Weather API is **disabled** too, so Android won't get weather either. The text below is kept as
+> written, with those parts marked.
 
 iOS first; Android later where Google has a native equivalent. Reuses the existing planner, plan edits, previews/undo,
-swap alternatives, walk legs, live hints, shared links and calendar export.
+swap alternatives, walk legs, live hints, shared links and calendar export (calendar: Android only; removed on iOS Nov 19, 2026).
 
 ## 1. Who sees the AI planner
 Only devices with an on-device model: Apple Intelligence (Foundation Models) on iOS, Gemini Nano (ML Kit GenAI) on
@@ -21,17 +26,20 @@ replaces the earlier "router-only planner without the model" decision. Everythin
 - Sticky chips at the top: days ("1 Sat", "2 Sun") for multi-day events, else Morning / Afternoon / Evening; tap
   scrolls, the current one highlights.
 - Timeline rail with icon per row:
-  - **Day header**: date, **weather chip** (§4), count, a one-line on-device AI summary + "Read more".
+  - **Day header**: date, ~~weather chip (§4)~~ (removed Nov 19, 2026), count, a one-line on-device AI summary + "Read more".
   - **Item card**: location photo, time, name, place, tags, reason, like heart, Now/Next/"in 20 min"; **Change** and
     **Remove**.
   - **Walk leg** between items ("Main Stage → Taco Row · 6 min walk", route bar); Change → closer option / leave earlier.
   - **Meal break** ("Lunch · 12:15 · Taco Row") with Change; **gap row** ("45 min free · 3 ideas nearby").
 - **Change** opens a sheet of alternatives for that slot (reason, time/walk difference, Compare); picking one previews
   in place (crossed-out / dashed rows), Apply commits with Undo. Remove offers "Also fill this gap?".
-- **Bottom bar**: "8 items · 10 AM – 11 PM · 2.1 mi walking", Share, Add to calendar, Undo.
+- **Bottom bar**: "8 items · 10 AM – 11 PM · 2.1 mi walking", Share, ~~Add to calendar~~ (removed on iOS Nov 19, 2026), Undo.
 - Tapping a card opens the item's normal detail.
 
-## 4. Weather (WeatherKit, on the device)
+## 4. Weather (WeatherKit, on the device): removed Nov 19, 2026
+
+**Not built / removed.** iOS dropped WeatherKit (not offered for App Clip App IDs) and the owner disabled the Google
+Weather API, so neither app shows weather. Kept for reference:
 - iOS: WeatherKit (`WeatherService`) daily + hourly forecast for the event's coordinate, fetched when online and
   **cached on disk** so the last forecast shows offline ("as of 2:14 PM"). Requires Apple's attribution (Apple Weather
   mark + legal link) wherever weather shows.
@@ -55,7 +63,7 @@ replaces the earlier "router-only planner without the model" decision. Everythin
 
 ## 6. Order
 1. Server: context extraction + bundle fields (API-018), console review/edit.
-2. iOS: plan page, Change sheet, bottom bar, keyboard bar; hide AI without a model; WeatherKit + cache + attribution.
+2. iOS: plan page, Change sheet, bottom bar, keyboard bar; hide AI without a model; ~~WeatherKit + cache + attribution~~ (removed).
 3. iOS wide layout with the chat column (iPhone Duo).
 4. Retire the snapping panel.
-5. Android later (weather through the Weather API).
+5. Android later (no weather: the Weather API is disabled).
