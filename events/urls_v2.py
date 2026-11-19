@@ -1,8 +1,8 @@
+from django.conf import settings
 from django.urls import path
 
 from diagnostics import api as diagnostics_api
 from events import apis_v2
-from tickets import api as tickets_api
 
 app_name = 'events_v2'
 urlpatterns = [
@@ -16,20 +16,27 @@ urlpatterns = [
     # API-013: debug log uploads and anonymous crash/hang reports.
     path('diagnostics/logs/', diagnostics_api.DiagnosticLogsV2.as_view(), name='diagnostics_logs'),
     path('diagnostics/reports/', diagnostics_api.DiagnosticReportsV2.as_view(), name='diagnostics_reports'),
-    # API-017: tickets. "My tickets" (buyer email code → buyer token) and door mode (door token, offline lists).
-    path('tickets/code/', tickets_api.SendCode.as_view(), name='tickets_code'),
-    path('tickets/verify/', tickets_api.Verify.as_view(), name='tickets_verify'),
-    path('tickets/mine/', tickets_api.MyTickets.as_view(), name='tickets_mine'),
-    path('tickets/signout/', tickets_api.SignOut.as_view(), name='tickets_signout'),
-    path('tickets/test-inbox/', tickets_api.TestInbox.as_view(), name='tickets_test_inbox'),
-    path('tickets/test/order/', tickets_api.TestOrder.as_view(), name='tickets_test_order'),
-    path('tickets/test/pay/', tickets_api.TestPay.as_view(), name='tickets_test_pay'),
-    path('door/code/', tickets_api.DoorSendCode.as_view(), name='door_code'),
-    path('door/verify/', tickets_api.DoorVerify.as_view(), name='door_verify'),
-    path('door/signout/', tickets_api.DoorSignOut.as_view(), name='door_signout'),
-    path('door/events/', tickets_api.DoorEvents.as_view(), name='door_events'),
-    path('door/events/<int:event_id>/manifest/', tickets_api.DoorManifest.as_view(), name='door_manifest'),
-    path('door/events/<int:event_id>/revocations/', tickets_api.DoorRevocations.as_view(), name='door_revocations'),
-    path('door/events/<int:event_id>/checkins/', tickets_api.DoorCheckins.as_view(), name='door_checkins'),
-    path('door/events/<int:event_id>/counts/', tickets_api.DoorCounts.as_view(), name='door_counts'),
 ]
+
+# API-017: tickets. "My tickets" (buyer email code → buyer token) and door mode (door token, offline lists).
+# Parked: these endpoints exist only with TICKETS_ENABLED (API_V2.md → Tickets).
+if settings.TICKETS_ENABLED:
+    from tickets import api as tickets_api
+
+    urlpatterns += [
+        path('tickets/code/', tickets_api.SendCode.as_view(), name='tickets_code'),
+        path('tickets/verify/', tickets_api.Verify.as_view(), name='tickets_verify'),
+        path('tickets/mine/', tickets_api.MyTickets.as_view(), name='tickets_mine'),
+        path('tickets/signout/', tickets_api.SignOut.as_view(), name='tickets_signout'),
+        path('tickets/test-inbox/', tickets_api.TestInbox.as_view(), name='tickets_test_inbox'),
+        path('tickets/test/order/', tickets_api.TestOrder.as_view(), name='tickets_test_order'),
+        path('tickets/test/pay/', tickets_api.TestPay.as_view(), name='tickets_test_pay'),
+        path('door/code/', tickets_api.DoorSendCode.as_view(), name='door_code'),
+        path('door/verify/', tickets_api.DoorVerify.as_view(), name='door_verify'),
+        path('door/signout/', tickets_api.DoorSignOut.as_view(), name='door_signout'),
+        path('door/events/', tickets_api.DoorEvents.as_view(), name='door_events'),
+        path('door/events/<int:event_id>/manifest/', tickets_api.DoorManifest.as_view(), name='door_manifest'),
+        path('door/events/<int:event_id>/revocations/', tickets_api.DoorRevocations.as_view(), name='door_revocations'),
+        path('door/events/<int:event_id>/checkins/', tickets_api.DoorCheckins.as_view(), name='door_checkins'),
+        path('door/events/<int:event_id>/counts/', tickets_api.DoorCounts.as_view(), name='door_counts'),
+    ]

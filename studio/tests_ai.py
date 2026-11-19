@@ -647,10 +647,19 @@ class ImporterTests(StudioTestCase):
         with mock.patch('studio.importer.socket.getaddrinfo', return_value=[(2, 1, 6, '', ('93.184.216.34', 0))]):
             self.assertIsNotNone(handler.redirect_request(request, None, 302, 'Found', {}, 'https://example.com/b'))
 
+    def as_staff(self):
+        """Bringing an imported website into Studio automatically is for staff and superusers only."""
+        from console.testing import TwoFactorClient
+        self.owner.is_staff = True
+        self.owner.save()
+        self.client = TwoFactorClient()
+        self.client.force_login(self.owner)
+
     def test_import_creates_the_studio_run_automatically(self):
         from scrape import jobs
         from scrape.models import IngestJob
         from scrape.tests import _sample_data
+        self.as_staff()
         with self.captureOnCommitCallbacks(execute=False):
             self.client.post('/console/new/', {'mode': 'ai', 'ai-urls': 'https://new.example/'})  # no checkbox needed
         job = IngestJob.objects.get()
@@ -671,6 +680,7 @@ class ImporterTests(StudioTestCase):
     def test_import_opt_out_and_access(self):
         from scrape import jobs
         from scrape.models import IngestJob
+        self.as_staff()
         with self.captureOnCommitCallbacks(execute=False):
             self.client.post('/console/new/', {'mode': 'ai', 'ai-urls': 'https://new.example/',
                                                'studio_import_shown': '1'})  # the box was unticked
@@ -678,17 +688,30 @@ class ImporterTests(StudioTestCase):
         self.assertEqual(list(IngestJob.objects.order_by('created_at').values_list('studio_import', flat=True)),
                          [False, False])
         self.assertContains(self.client.get(reverse('console:event_new')), 'name="studio_import" value="1" checked')
-        # Someone without Studio access never gets a run, even with the flag set.
+        # Someone who isn't staff never gets a run, even with the flag set (Studio access alone isn't enough).
         stranger = User.objects.create_user('s', 's@example.com', 'pw')
-        job = IngestJob.objects.create(kind=IngestJob.KIND_CREATE, urls=['https://artsfair.example/'],
-                                       created_by=stranger, studio_import=True)
-        with mock.patch('studio.importer.start_import') as start:
-            jobs._bring_into_studio(job, self.event)
-        start.assert_not_called()
+        beta = User.objects.create_user('b', 'b@example.com', 'pw')
+        for user in (stranger, beta):
+            job = IngestJob.objects.create(kind=IngestJob.KIND_CREATE, urls=['https://artsfair.example/'],
+                                           created_by=user, studio_import=True)
+            with override_settings(STUDIO_BETA_EMAILS=['b@example.com']), \
+                    mock.patch('studio.importer.start_import') as start:
+                jobs._bring_into_studio(job, self.event)
+            start.assert_not_called()
+
+    def test_no_automatic_import_for_non_staff(self):
+        from scrape.models import IngestJob
+        # The owner has Studio access (STUDIO_BETA_EMAILS) but isn't staff: no checkbox, no flag.
+        self.assertNotContains(self.client.get(reverse('console:event_new')), 'studio_import')
+        with self.captureOnCommitCallbacks(execute=False):
+            self.client.post('/console/new/', {'mode': 'ai', 'ai-urls': 'https://new.example/', 'studio_import': '1',
+                                               'studio_import_shown': '1'})
+        self.assertFalse(IngestJob.objects.get().studio_import)
 
     def test_import_option_on_ai_import(self):
         from scrape import jobs
         from scrape.models import IngestJob
+        self.as_staff()
         job = IngestJob.objects.create(kind=IngestJob.KIND_CREATE, urls=['https://artsfair.example/'],
                                        created_by=self.owner, studio_import=True)
         event = self.event
@@ -702,6 +725,7 @@ class ImporterTests(StudioTestCase):
 
     def test_ai_import_form_sets_the_flag(self):
         from scrape.models import IngestJob
+        self.as_staff()
         with self.captureOnCommitCallbacks(execute=False):
             self.client.post('/console/new/', {'mode': 'ai', 'ai-urls': 'https://new.example/', 'studio_import': '1',
                                                'studio_import_shown': '1'})

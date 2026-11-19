@@ -15,7 +15,7 @@
       <input type="hidden" name="mode" value="ai"><input type="hidden" name="browser_tz" id="browser_tz">
       {% for err in ai_form.non_field_errors %}<div class="notice notice--error notice--compact">{{ err }}</div>{% endfor %}
       {% for field in ai_form %}{% include 'console/_field.html' %}{% endfor %}
-      {% if studio_access %}<input type="hidden" name="studio_import_shown" value="1">
+      {% if studio_staff %}<input type="hidden" name="studio_import_shown" value="1">
         <label class="check field" for="studio_import"><input type="checkbox" id="studio_import" name="studio_import" value="1" checked>
         Also rebuild the website in Attnd Studio <span class="badge badge--neutral badge--pill">Beta</span>
         <span class="field__help">Studio copies every page, image, font and PDF of the website and the AI builds a matching site. Open Studio to watch it.</span></label>{% endif %}

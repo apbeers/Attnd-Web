@@ -72,6 +72,12 @@ jobs:
         run: uv run python manage.py makemigrations --check --dry-run
       - name: Tests (in parallel, one Postgres test database per CPU)
         run: uv run python manage.py test --parallel auto
+      - name: Parked ticketing still works (TICKETS_ENABLED=1)
+        env:
+          TICKETS_ENABLED: '1'
+        run: |
+          uv run python manage.py makemigrations --check --dry-run
+          uv run python manage.py test tickets events.tests_contract --parallel auto
       - name: Deprecation check (Django / Python deprecations are errors)
         run: uv run python -W error::DeprecationWarning -W error::PendingDeprecationWarning manage.py check
       - name: Dependency freshness (informational)
@@ -140,7 +146,8 @@ jobs:
   e2e-dev:
     name: E2E · dev (tickets)
     # Browser end-to-end of ticketing on dev with Stripe test mode (e2e/tickets_e2e.py). LEAN MODE: CI_FULL only.
-    if: vars.CI_FULL == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
+    # Ticketing is parked: also only with the repo variable TICKETS_ENABLED=true (and the same config var on dev).
+    if: vars.CI_FULL == 'true' && vars.TICKETS_ENABLED == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
     needs: deploy-dev
     runs-on: ubuntu-latest
     timeout-minutes: 15

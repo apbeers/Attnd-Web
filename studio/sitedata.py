@@ -41,8 +41,9 @@ def site_data(site, base_url):
         if loc.get('image_url') and not loc['image_url'].startswith(('http://', 'https://')):
             loc['image_url'] = None
     data['schedule'] = bundle['schedule']
-    from tickets.content import site_tickets
-    data['tickets'] = site_tickets(event)
+    if settings.TICKETS_ENABLED:  # parked: no ticket data, so <attnd-tickets> renders nothing
+        from tickets.content import site_tickets
+        data['tickets'] = site_tickets(event)
     data['updates'] = [{'id': n['id'], 'title': n['title'], 'body': n['body'], 'sent_at': n['send_time'],
                         'priority': n['priority']} for n in bundle['notifications']]
     return data

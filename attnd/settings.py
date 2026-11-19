@@ -5,6 +5,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 DEBUG = bool(os.getenv('DEBUG'))
 
+# Attnd Tickets (tickets/) is parked: the code stays in the repo, but with this off (the default) the app is not
+# installed, none of its URLs, links, tasks or AI drafts exist and nothing imports it; the bundle's ticket keys are
+# null (API-017). Organizers sell tickets elsewhere (Eventbrite) for now. TICKETS_ENABLED=1 brings it all back.
+TICKETS_ENABLED = os.getenv('TICKETS_ENABLED', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
 SECRET_KEY = os.getenv('SECRET_KEY', '')
 if not SECRET_KEY:
     if DEBUG or os.getenv('CI'):
@@ -56,7 +61,7 @@ INSTALLED_APPS = [
     'attestation.apps.AttestationConfig',
     'diagnostics.apps.DiagnosticsConfig',
     'studio.apps.StudioConfig',
-    'tickets.apps.TicketsConfig',
+    *(['tickets.apps.TicketsConfig'] if TICKETS_ENABLED else []),  # parked unless TICKETS_ENABLED
 ]
 
 MIDDLEWARE = [
@@ -340,9 +345,9 @@ STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))
 # Organizer sign-ups (console.signups): off = invite-only (only invited emails can create an account, and the
 # homepage's anonymous AI import is closed). Attendees and existing accounts are unaffected.
 SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '').strip().lower() in ('1', 'true', 'yes', 'on')
-# Invite-only beta: these emails (comma-separated) always have Studio access, plus staff and StudioAccess rows.
-STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', 'apbeers@icloud.com').split(',')
-                      if e.strip()]
+# Studio is for admins (staff and superusers) only. These emails (comma-separated, default none) are an explicit
+# override that also get Studio; StudioAccess rows no longer grant anything.
+STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', '').split(',') if e.strip()]
 # AI: auto = Anthropic when ANTHROPIC_API_KEY is set, else OpenAI (the existing OPENAI_API_KEY).
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 STUDIO_AI_PROVIDER = os.getenv('STUDIO_AI_PROVIDER', 'auto').strip().lower()
@@ -375,7 +380,8 @@ STUDIO_PRICES = {
 }
 
 # ---------------------------------------------------------------------------
-# Attnd Tickets (tickets/, docs/specs/tickets_spec.md): Stripe Checkout + Connect, QR tokens, Wallet passes
+# Attnd Tickets (tickets/, docs/specs/tickets_spec.md): Stripe Checkout + Connect, QR tokens, Wallet passes.
+# Parked: only used with TICKETS_ENABLED (top of this file).
 # ---------------------------------------------------------------------------
 # Stripe (all money). Without STRIPE_SECRET_KEY paid tickets can't be sold (free tickets still work) and the console
 # says what's missing. Dev uses test-mode keys (sk_test_…); production refuses test-mode webhooks and the other way
@@ -455,7 +461,8 @@ CSP_POLICY = {
     'frame-ancestors': [CSP.NONE],
     'base-uri': [CSP.SELF],
     # Tickets: forms that redirect to Stripe's hosted Checkout and Connect onboarding (browsers check redirects).
-    'form-action': [CSP.SELF, 'https://checkout.stripe.com', 'https://connect.stripe.com'],
+    'form-action': [CSP.SELF, *(['https://checkout.stripe.com', 'https://connect.stripe.com'] if TICKETS_ENABLED
+                                else [])],
     'object-src': [CSP.NONE],
     'report-uri': '/csp-report/',
 }

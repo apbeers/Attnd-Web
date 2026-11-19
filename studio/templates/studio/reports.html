@@ -3,7 +3,7 @@
 {% block title %}Studio site reports{% endblock %}
 {% block content %}
 <div class="column stack stack--loose">
-  <div class="cluster"><h1>{% icon "warning" %} Studio site reports</h1><a class="button button--secondary button--small push" href="{% url 'studio:access' %}">Beta access</a></div>
+  <h1>{% icon "warning" %} Studio site reports</h1>
   <p class="muted">Visitors report hosted sites with the "Report this site" link in every site's footer. Take a site down to stop serving it (the organizer keeps their versions).</p>
   {% if suspended %}<div class="panel stack stack--tight"><h2 class="title-4">Taken down</h2>
     {% for s in suspended %}<div class="cluster"><span class="grow mono">{{ s.slug }}</span><span class="small muted">{{ s.event.name }} · {{ s.suspended_reason }}</span>

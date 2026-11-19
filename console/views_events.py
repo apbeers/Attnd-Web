@@ -14,6 +14,7 @@ from functools import wraps
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import qrcode
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -110,13 +111,13 @@ def event_new(request):
     if request.method == 'POST' and mode == 'ai':
         ai_form = AIImportForm(request.POST, request.FILES, prefix='ai')
         if ai_form.is_valid():
-            from studio.access import has_studio_access
+            from studio.access import is_staff
             job = _job_from_form(ai_form, kind=IngestJob.KIND_CREATE, trigger=IngestJob.TRIGGER_CONSOLE,
                                  created_by=request.user,
                                  timezone=request.POST.get('browser_tz', '')[:64],
-                                 # Attnd Studio (beta): the website comes into Studio automatically when the
-                                 # import is done; the form's checkbox (on by default) is only an opt-out.
-                                 studio_import=bool(ai_form.cleaned_data.get('urls') and has_studio_access(request.user)
+                                 # Attnd Studio (admins only): the website comes into Studio automatically when
+                                 # the import is done; the form's checkbox (on by default) is only an opt-out.
+                                 studio_import=bool(ai_form.cleaned_data.get('urls') and is_staff(request.user)
                                                     and not (request.POST.get('studio_import_shown')
                                                              and not request.POST.get('studio_import'))))
             jobs.enqueue(job)
@@ -665,7 +666,8 @@ def changeset_detail(request, changeset_id):
                 cs.save()
                 messages.info(request, 'Discarded all suggestions.')
                 return redirect('console:changesets', event_id=event.pk)
-            if (cs.changes.filter(entity__in=[Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS]).exists()
+            if (settings.TICKETS_ENABLED
+                    and cs.changes.filter(entity__in=[Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS]).exists()
                     and not event.can_manage_team(request.user)):
                 messages.error(request, 'Only the owner and event admins can apply ticket changes.')
                 return redirect('console:changeset', changeset_id=cs.pk)
@@ -699,9 +701,10 @@ FIELD_LABELS = {'start_time': 'Starts', 'end_time': 'Ends', 'image_url': 'Image'
 
 def _fmt(field, value):
     from django.utils.dateparse import parse_datetime
-    from tickets.ai import format_value
-    if (money := format_value(field, value)) is not None:
-        return money
+    if settings.TICKETS_ENABLED:
+        from tickets.ai import format_value
+        if (money := format_value(field, value)) is not None:
+            return money
     if value is None or value == '' or value == []:
         return '—'
     if field in ('start_time', 'end_time') and isinstance(value, str):
@@ -715,7 +718,10 @@ def _fmt(field, value):
 
 def _changes_for_review(cs):
     rows = []
-    for ch in cs.changes.all():
+    changes = cs.changes.all()
+    if not settings.TICKETS_ENABLED:  # ticketing parked: ticket drafts are ignored
+        changes = changes.exclude(entity__in=[Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS])
+    for ch in changes:
         fields = []
         if ch.op == Change.OP_UPDATE:
             for f, v in ch.data.items():

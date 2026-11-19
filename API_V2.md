@@ -299,6 +299,12 @@ Used only by attnd-ios's `symbolicate.yml`, which the panel dispatches with a on
 
 ## Tickets (API-017)
 
+> **Parked (Nov 19, 2026).** Ticketing is switched off on every server (`TICKETS_ENABLED` unset): `event.tickets_url`
+> and `bundle.tickets` are always `null` (the keys stay, so installed apps decode as before), and the `tickets/…` and
+> `door/…` endpoints below don't exist (plain JSON `404`). Apps hide every ticket UI while both keys are `null` (they
+> already do). Organizers sell tickets elsewhere (e.g. Eventbrite) for now. The contract below is unchanged and comes
+> back as is when the server sets `TICKETS_ENABLED=1`.
+
 Tickets are **sold only on the website** (`https://attnd.app/t/<EVENT_CODE>/`, Stripe Checkout). The apps never sell,
 take payments or show a payment UI: they open the ticket page in the browser ("Get tickets"), show tickets the person
 already has ("My tickets", by verified email), and scan tickets at the door ("Door mode"). Every call below also needs

@@ -64,7 +64,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-014 | Anonymous performance metrics: `perf_*` usage names with bucket details | additive (new usage names) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
 | API-015 | Shared plan links `/p/<EVENT_CODE>/<payload>` (web page + store routing like `/join/`), claimed in apple-app-site-association (app + App Clip) and opened by the apps | additive (new web route, new app link paths; no API endpoint) | ✅ dev · ⬜ prod | ✅ | ✅ |
 | API-016 | Attnd Studio: `event.website_url` (the event's Studio-hosted website, or null) in every v2 event object | additive (new key) | ✅ dev · ⬜ prod | ✅ | ✅ |
-| API-017 | Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | ✅ dev · ⬜ prod | ✅ | ⬜ (later) |
+| API-017 | **Parked (Nov 19, 2026): `TICKETS_ENABLED` off, keys always `null`, endpoints 404.** Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | ⏸ parked (built; off) | ✅ | ⬜ (later) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -74,6 +74,13 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 Newest first. Each entry says what changed and what each app must do.
 
 ### API-017: tickets (Get tickets, My tickets, door mode with offline scanning)
+**Parked (Nov 19, 2026, owner):** ticketing is kept in the code but included in nothing: the server runs with
+`TICKETS_ENABLED` off (default), so `event.tickets_url` and `bundle.tickets` are always `null` (keys kept; the
+contract test compares the ticket endpoints only with `TICKETS_ENABLED=1`) and the `tickets/…` / `door/…` endpoints
+return a JSON 404. **Apps:** Get tickets already hides itself while both keys are `null`. iOS's My tickets and Scan
+tickets (Options and the launch screen, not tied to an event's keys) call the parked endpoints and would get a 404:
+hide them too (follow-up in attnd-ios). Don't start Android's part. Organizers use Eventbrite for now.
+Re-enabling = `TICKETS_ENABLED=1` on the server (CLAUDE.md → Attnd Tickets).
 **Why:** Attnd Tickets (`docs/specs/tickets_spec.md`, owner-approved Nov 15–16, 2026): Eventbrite-style ticketing for
 events on the $499 Studio + tickets plan. Buying happens **only on the website** (Stripe Checkout); the apps link
 out, show tickets the person holds, and scan at the door, offline. Additive: two new keys and new endpoints.

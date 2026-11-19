@@ -24,7 +24,6 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from scrape.models import Change, ChangeSet, IngestJob
-from studio.models import StudioAccess
 from tickets import holders, inventory, payments, signing, wallet
 from tickets.fakes import STRIPE_SETTINGS, FakeStripe, completed_event, ticketed_event, webhook
 from tickets.models import (DoorStaff, Order, RefundRequest, Ticket, TicketSettings, TicketType, WaitlistEntry,
@@ -283,12 +282,13 @@ class WalletTests(TestCase):
                                          secure=True).status_code, 404)
 
 
-@override_settings(**STRIPE_SETTINGS, SITE_URL='https://attnd.app', STUDIO_BETA_EMAILS=[])
+# Studio (and so Tickets in the console) is admins only; STUDIO_BETA_EMAILS is the explicit override.
+@override_settings(**STRIPE_SETTINGS, SITE_URL='https://attnd.app',
+                   STUDIO_BETA_EMAILS=['owner@example.com', 'h@example.com'])
 class ConsoleTests(TestCase):
     def setUp(self):
         self.stripe = FakeStripe().install(self)
         self.owner = User.objects.create_user('owner', 'owner@example.com', 'pw')
-        StudioAccess.objects.create(email='owner@example.com')
         self.event, self.ga, self.free = ticketed_event(owner=self.owner)
         self.client.force_login(self.owner)
         self.base = f'/console/events/{self.event.id}/tickets/'
@@ -337,7 +337,6 @@ class ConsoleTests(TestCase):
 
     def test_contributors_cannot_move_money(self):
         helper = User.objects.create_user('h', 'h@example.com', 'pw')
-        StudioAccess.objects.create(email='h@example.com')
         from events.models import EventMember
         EventMember.objects.create(event=self.event, user=helper, role='contributor')
         self.client.force_login(helper)

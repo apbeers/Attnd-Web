@@ -20,6 +20,7 @@ from decimal import Decimal
 from difflib import SequenceMatcher
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -419,6 +420,8 @@ def apply_changeset(changeset, decisions, user=None, partial_ok=False):
 
 def _apply_one(event, owner, ch, fields, ref_ids):
     if ch.entity in (Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS):
+        if not settings.TICKETS_ENABLED:
+            return False  # ticketing parked: ticket changes are ignored (rejected)
         from tickets.ai import apply_change
         return apply_change(event, owner, ch, fields)
     if ch.entity == Change.ENTITY_EVENT and ch.op == Change.OP_UPDATE:

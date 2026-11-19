@@ -1,4 +1,4 @@
-"""Who may use Attnd Studio (invite-only beta) and what they may do on an event."""
+"""Who may use Attnd Studio (admins only for now) and what they may do on an event."""
 
 from functools import wraps
 
@@ -16,18 +16,14 @@ def is_staff(user):
 
 
 def has_studio_access(user):
-    """Staff, an email listed in STUDIO_BETA_EMAILS, or an invited email (StudioAccess); case-insensitive."""
+    """Staff and superusers only, plus an explicit STUDIO_BETA_EMAILS override (default none; case-insensitive).
+    StudioAccess rows (the old beta invites) no longer grant access."""
     if not user or not user.is_authenticated:
         return False
     if is_staff(user):
         return True
     email = (user.email or '').strip().lower()
-    if not email:
-        return False
-    if email in settings.STUDIO_BETA_EMAILS:
-        return True
-    from studio.models import StudioAccess
-    return StudioAccess.objects.filter(email__iexact=email).exists()
+    return bool(email) and email in settings.STUDIO_BETA_EMAILS
 
 
 def cached_access(request):
@@ -46,7 +42,7 @@ def can_publish(event, user):
 
 
 def studio_required(view):
-    """login + Studio access, else 404 (no Studio entry points for people outside the beta)."""
+    """login + Studio access, else 404 (no Studio entry points for anyone else)."""
     @login_required
     @wraps(view)
     def wrapper(request, *args, **kwargs):

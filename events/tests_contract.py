@@ -11,6 +11,10 @@ compares:
       UPDATE_CONTRACT=1 uv run python manage.py test events.tests_contract
 
   and document it in API_V2.md and API_CHANGES.md in the same commit.
+
+Ticketing (API-017) is parked: without TICKETS_ENABLED its `tickets/` and `door/` endpoints aren't routed, so they
+are compared only with TICKETS_ENABLED=1 (the bundle's `tickets` / `event.tickets_url` keys stay, null). Refresh the
+snapshot with TICKETS_ENABLED=1 too, so it keeps them.
 """
 import json
 import os
@@ -28,6 +32,14 @@ from events import push
 from events.models import Device, Event, Location, Notification, ScheduledItem
 
 CONTRACT = Path(settings.BASE_DIR) / 'contract' / 'v2.json'
+# API-017 endpoints that exist only with TICKETS_ENABLED (ticketing parked).
+PARKED_PREFIXES = ('tickets/', 'door/')
+
+
+def parked(name):
+    """A ticketing endpoint (path or "METHOD path" response key) while ticketing is parked."""
+    path = name.split(' ', 1)[-1]
+    return not settings.TICKETS_ENABLED and path.startswith(PARKED_PREFIXES)
 AUTH = {'HTTP_AUTHORIZATION': 'Bearer contract-key'}
 
 
@@ -101,6 +113,9 @@ class ApiContractTests(TestCase):
             event=self.event, user=user, title='Cancelled', body='Rain', send_time=start, priority='urgent')
         Device.objects.create(id='contract-device', platform='ios', push_token='tok', subscribed=True,
                               event=self.event)
+        self.client = Client()
+        if not settings.TICKETS_ENABLED:
+            return  # parked: no ticket data (bundle.tickets and event.tickets_url are null)
         # API-017: ticketing on, one ticket held by buyer@example.com, a door team member, a revocation.
         from tickets import payments
         from tickets.models import DoorStaff, Order, OrderItem, PayoutAccount, TicketSettings, TicketType
@@ -116,7 +131,6 @@ class ApiContractTests(TestCase):
         payments.void(order.tickets.last())
         DoorStaff.objects.create(event=self.event, email='door@example.com')
         self.ticket_type = ga
-        self.client = Client()
 
     def call(self, method, path, body=None):
         if method == 'get':
@@ -198,7 +212,7 @@ class ApiContractTests(TestCase):
                 'platform': 'android', 'reports': [{'kind': 'crash', 'stack': 'x'}]}),
             # Unversioned, CI only (attnd-android's release job).
             'POST /api/diagnostics/symbols/': self.symbols(),
-            **self.tickets(),
+            **(self.tickets() if settings.TICKETS_ENABLED else {}),
         }
         payloads = {}
 
@@ -239,11 +253,15 @@ class ApiContractTests(TestCase):
     def test_contract_matches_snapshot(self):
         current = self.build()
         if os.environ.get('UPDATE_CONTRACT'):
+            self.assertTrue(settings.TICKETS_ENABLED, 'Update the contract with TICKETS_ENABLED=1, so it keeps the '
+                                                      'parked ticketing endpoints (API-017).')
             CONTRACT.parent.mkdir(exist_ok=True)
             CONTRACT.write_text(json.dumps(current, indent=2) + '\n')
             self.skipTest(f'wrote {CONTRACT}')
         self.assertTrue(CONTRACT.exists(), 'contract/v2.json is missing: run with UPDATE_CONTRACT=1')
         saved = json.loads(CONTRACT.read_text())
+        saved['endpoints'] = [p for p in saved['endpoints'] if not parked(p)]
+        saved['responses'] = {k: v for k, v in saved['responses'].items() if not parked(k)}
 
         breaking = [f'endpoint {p} removed' for p in saved['endpoints'] if p not in current['endpoints']]
         additive = [f'endpoint {p} added' for p in current['endpoints'] if p not in saved['endpoints']]

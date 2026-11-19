@@ -129,6 +129,8 @@ def run_job(job_id, already_claimed=False):
         if job.kind == IngestJob.KIND_CREATE:
             _run_create(job)
         elif job.kind == IngestJob.KIND_TICKETS:
+            if not settings.TICKETS_ENABLED:
+                raise ValueError('Ticketing is turned off.')  # parked: no ticket drafts
             from tickets.ai import run_job as run_tickets_draft
             run_tickets_draft(job)
         else:
@@ -187,11 +189,11 @@ def _run_create(job):
 
 
 def _bring_into_studio(job, event):
-    """Attnd Studio (beta): an import that creates an event brings its website into Studio automatically (the
+    """Attnd Studio (admins only): an import that creates an event brings its website into Studio automatically (the
     organizer can untick it on the import form): the whole site is crawled, its files copied and the AI rebuilds it.
-    Only for people with Studio access (checked again here, when the job runs)."""
-    from studio.access import has_studio_access
-    if not has_studio_access(job.created_by):
+    Only for staff and superusers (checked again here, when the job runs)."""
+    from studio.access import is_staff
+    if not is_staff(job.created_by):
         return
     try:
         from studio import importer, publishing

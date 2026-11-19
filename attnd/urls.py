@@ -25,7 +25,8 @@ urlpatterns = [
     path(settings.ADMIN_URL_PATH, admin.site.urls),
     path('csp-report/', attnd_views.csp_report, name='csp_report'),
     path('console/diagnostics/', include('diagnostics.urls')),  # staff only (API-013)
-    path('console/', include('tickets.urls_console')),  # Tickets in the console (Studio + tickets plan)
+    # Tickets in the console (Studio + tickets plan); parked: only with TICKETS_ENABLED.
+    *([path('console/', include('tickets.urls_console'))] if settings.TICKETS_ENABLED else []),
     path('console/', include('studio.urls')),  # Attnd Studio editor + staff pages (beta users only, else 404)
     path('console/', include('console.urls'), name='console'),
     path('api/v1/events/', include('events.urls'), name='events'),
@@ -41,7 +42,8 @@ urlpatterns = [
     path('p/<str:event_code>/<str:payload>/', join_views.SharedPlanRedirect.as_view(), name='shared_plan'),
     path('p/<str:event_code>/<str:payload>', join_views.SharedPlanRedirect.as_view()),
     path('scrape/', include('scrape.urls')),
-    path('', include('tickets.urls')),  # /t/<code>/ ticket pages, /tickets/…, Stripe webhook, /wallet/v1/…
+    # /t/<code>/ ticket pages, /tickets/…, Stripe webhook, /wallet/v1/…; parked: only with TICKETS_ENABLED.
+    *([path('', include('tickets.urls'))] if settings.TICKETS_ENABLED else []),
     path('accounts/login/', views_auth.SignInView.as_view(), name='login'),
     path('accounts/2fa/', views_auth.two_factor_verify, name='two_factor_verify'),
     path('accounts/2fa/setup/', views_auth.two_factor_setup, name='two_factor_setup'),

@@ -82,8 +82,8 @@ join/           # /join/<code>/ redirect + AASA & assetlinks well-known files
 scrape/         # AI import/refresh: crawl + OpenAI extraction, jobs, diff/changesets
 attestation/    # Apple App Attest + Google Play Integrity + JWT issuance
 diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, request log middleware, staff panel
-studio/         # Attnd Studio (beta): AI-designed event websites hosted on SITES_HOST, flyer art, app look
-tickets/        # Attnd Tickets: Stripe Checkout + Connect, QR tokens, Wallet passes, door check-in, console tools (API-017)
+studio/         # Attnd Studio (admins only): AI-designed event websites hosted on SITES_HOST, flyer art, app look
+tickets/        # Attnd Tickets, PARKED (only with TICKETS_ENABLED): Stripe Checkout + Connect, QR tokens, Wallet passes, door check-in, console tools (API-017)
 static/         # Project-level static assets
 public/         # Files served at root by Whitenoise (robots.txt, etc.)
 ```
@@ -137,15 +137,15 @@ event name the apps may log are in **`LOG_EVENTS.md`** (add a row there before a
   `textContent`; no inline scripts.
 - **API-014:** `perf_*` usage metrics with bucket details (`events/usage.py` `PERF_METRICS`); not interactions.
 
-## Attnd Studio (invite-only beta; `studio/`, spec `docs/specs/studio_spec.md`)
+## Attnd Studio (admins only; `studio/`, spec `docs/specs/studio_spec.md`)
 
 A second tier (`Event.plan`: `standard` = import/manage, `studio` = Studio; no checkout yet, Stripe later): the
 organizer chats with an AI that writes the event's **website** (raw multi-page HTML/CSS/JS), makes **flyer art** and
 sets the **app's look**; Attnd hosts the site.
-- **Access** (`studio/access.py`): staff/superusers, emails in `STUDIO_BETA_EMAILS` (default `apbeers@icloud.com`) or a
-  `StudioAccess` row (case-insensitive, works before sign-up). Everyone else gets 404 on every Studio URL and sees no
-  entry point (sidenav "Studio", the AI-import checkbox). Staff: `/console/studio/access/` (invite/remove) and
-  `/console/studio/reports/` (abuse reports, take down/restore). Team roles as today: any member edits drafts;
+- **Access** (`studio/access.py`, Nov 19, 2026: admins only): staff and superusers, plus emails in `STUDIO_BETA_EMAILS`
+  (an explicit override, default empty). `StudioAccess` rows (the old beta invites) are kept but grant nothing, and
+  the staff invite page is gone. Everyone else gets 404 on every Studio URL and sees no entry point (sidenav
+  "Studio"). Staff: `/console/studio/reports/` (abuse reports, take down/restore; topbar "Studio reports"). Team roles as today: any member edits drafts;
   owner/admins switch the plan, publish, unpublish and change the address.
 - **Models** (`studio/models.py`): `Site` (1:1 event, slug, `draft`/`published` → `SiteVersion`, suspended,
   preview secret), `SiteVersion` (files `{path: text}`, app look, flyer asset; every AI run, code save and restore makes
@@ -173,7 +173,8 @@ sets the **app's look**; Attnd hosts the site.
   costs ~$2–4) over `StudioUsage` (cached input at a tenth); vision describes uploads. Scrape extraction, tags and
   vision stay on Chat Completions with structured output (no tools, still supported).
 - **Import** (`importer.py`, spec §9): an AI import that creates an event brings its website into Studio
-  automatically for Studio users (opt-out checkbox, `IngestJob.studio_import`; not refreshes); the Studio page's
+  automatically for staff and superusers only (opt-out checkbox shown only to them, `IngestJob.studio_import`,
+  checked again when the job runs; not refreshes); the Studio page's
   "Bring into Studio" does the same. Crawls ≤ 25 same-host pages, copies every image (srcset, picture, lazy, CSS
   backgrounds, og:image, icons, logo, sponsors), self-hosted font and PDF as assets (deduped by SHA-256, library
   budget), per-run caps `STUDIO_IMPORT_SECONDS`/`STUDIO_IMPORT_MAX_MB`, SSRF guard on every fetch and redirect; the AI
@@ -183,7 +184,30 @@ sets the **app's look**; Attnd hosts the site.
   are copied onto the event + `content_version` bump; the bundle's `event.website_url` (API-016) is the live URL.
 - Custom domains are designed (spec §13), not built.
 
-## Attnd Tickets (beta with Studio; `tickets/`, spec `docs/specs/tickets_spec.md`, API-017)
+## Attnd Tickets: parked (TICKETS_ENABLED off; `tickets/`, spec `docs/specs/tickets_spec.md`, API-017)
+
+**Parked (Nov 19, 2026, owner): the code stays, but it is included in nothing.** Organizers who want to sell tickets
+use Eventbrite for now. With `TICKETS_ENABLED` off (the default, `attnd/settings.py`):
+- `tickets` is not in `INSTALLED_APPS` and nothing imports it: its URLs (console, `/t/`, `/tickets/`, `/wallet/`, API
+  `tickets/…` and `door/…`) aren't routed, there are no console links (sidenav, topbar "Tickets demo"), Stripe isn't
+  in the CSP's `form-action`, `run_scheduled_tasks` skips ticket work, Studio's `data.json` has `tickets: null` (so
+  `<attnd-tickets>` renders nothing) and the AI prompt doesn't offer the element, an IngestJob of kind `tickets` fails
+  ("Ticketing is turned off"), ticket ChangeSet entities are hidden in review and rejected when applied, revisions
+  carry no ticket types. Every import of `tickets` elsewhere is behind `settings.TICKETS_ENABLED`; keep it that way.
+- API: `event.tickets_url` and `bundle.tickets` stay in v2 and are always `null`; the ticket endpoints are a JSON 404.
+  `events/tests_contract.py` compares the ticket endpoints only with the setting on (update the snapshot with
+  `TICKETS_ENABLED=1 UPDATE_CONTRACT=1 …`).
+- Database: `scrape` keeps its ticket choices (no migration depends on `tickets`); with the app uninstalled its tables
+  stay where they exist (dev) and a fresh database simply doesn't get them. `migrate` and `makemigrations --check`
+  are clean both ways. TIXDEMO on dev is deleted separately.
+- Tests: `tickets/__init__.py`'s `load_tests` finds nothing while parked; run them with
+  `TICKETS_ENABLED=1 uv run python manage.py test tickets events.tests_contract --parallel auto` (CI's "Parked
+  ticketing still works" step). The live suite skips itself when the server's ticket endpoints 404; the e2e job also
+  needs the repo variable `TICKETS_ENABLED=true`.
+- **Re-enable**: set `TICKETS_ENABLED=1` (Heroku config var; the release phase migrates `tickets`), repo variable
+  `TICKETS_ENABLED=true` for the e2e job, then SETUP step 16. Everything below then works exactly as built.
+
+As built:
 
 Ticketing is part of the $499 **Studio + tickets** plan (`Event.plan == studio`) and gated like Studio (people without
 Studio access get 404 and see no "Tickets" link). **Tickets are sold only on attnd.app**; the apps link out, show
@@ -234,7 +258,7 @@ Studio access get 404 and see no "Tickets" link). **Tickets are sold only on att
 ## Accounts
 
 People only ever see and sign in with their **email** (`console.auth_backends.EmailOrUsernameBackend`, case-insensitive). The account's `username` is an internal generated id (`u` + 10 hex, `console.accounts.new_username`), so an email can change (Account page, `/console/account/`) without losing the account. Emails are unique case-insensitively (Postgres index `auth_user_email_lower_uniq` + `email_in_use`). Create a site admin with `python manage.py create_admin you@example.com` (they set up two-factor sign-in at their first sign-in; see Security). Deleting an account never deletes events: they become unassigned.
-- **Invite-only** (`console/signups.py`, `SIGNUPS_OPEN`, default off): `/console/signup/` shows "Invite only" with the form folded under "Have an invite?"; only emails with a pending `EventInvite`, a `StudioAccess` row or in `STUDIO_BETA_EMAILS` can create an account (anyone else gets the same 403 invite-only answer, checked before "already exists", so it never reveals who is invited or has an account; the signup rate limit still applies; claiming a trial event follows the same rule). The homepage's anonymous AI import is closed (`POST /scrape/` → 403 JSON for anonymous visitors, no job; the homepage shows the invite-only notice instead of the form and its sign-up CTAs; signed-in organizers keep it). Sign-in and everything attendees use (apps, API, `/join/`, `/p/`, Studio sites) are unaffected. `SIGNUPS_OPEN=1` restores open sign-ups.
+- **Invite-only** (`console/signups.py`, `SIGNUPS_OPEN`, default off): `/console/signup/` shows "Invite only" with the form folded under "Have an invite?"; only emails with a pending `EventInvite` can create an account (Studio access and `STUDIO_BETA_EMAILS` don't count) (anyone else gets the same 403 invite-only answer, checked before "already exists", so it never reveals who is invited or has an account; the signup rate limit still applies; claiming a trial event follows the same rule). The homepage's anonymous AI import is closed (`POST /scrape/` → 403 JSON for anonymous visitors, no job; the homepage shows the invite-only notice instead of the form and its sign-up CTAs; signed-in organizers keep it). Sign-in and everything attendees use (apps, API, `/join/`, `/p/`, Studio sites) are unaffected. `SIGNUPS_OPEN=1` restores open sign-ups.
 
 ## Security
 
@@ -344,7 +368,7 @@ uv run python manage.py runserver
 ## Background work
 
 - **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
-- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events, and for tickets: expires lapsed holds, finishes cancellation refunds, releases payouts after events.
+- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events, and for tickets (only with `TICKETS_ENABLED`): expires lapsed holds, finishes cancellation refunds, releases payouts after events.
 - **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged. Urgent notifications (API-011) go to every device with a token (time-sensitive APNs alert, high-priority FCM data message) plus an APNs `liveactivity` update to every `Device.live_activity_token` in the event; at most `URGENT_MAX_PER_HOUR` (3) per event, beyond that they go out as normal.
 
 ## Running Tests
@@ -354,7 +378,7 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer), `tickets/tests_core.py` (fees, signing, holds, oversell race), `tickets/tests_payments.py` (Stripe flows, webhooks, refunds, payouts), `tickets/tests_api.py` (My tickets, door, offline merge, CI scope), `tickets/tests_web.py` (web flows, Wallet signing with generated certs, console, AI drafts, demo facts) and `events/tests_integration.py`.
+Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer), the parked ticket suites, collected only with `TICKETS_ENABLED=1`: `tickets/tests_core.py` (fees, signing, holds, oversell race), `tickets/tests_payments.py` (Stripe flows, webhooks, refunds, payouts), `tickets/tests_api.py` (My tickets, door, offline merge, CI scope), `tickets/tests_web.py` (web flows, Wallet signing with generated certs, console, AI drafts, demo facts) and `events/tests_integration.py`.
 
 Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (no `staticfiles/` needed), `django.request` logs only errors (tests hit 4xx on purpose), and a 32+ byte test JWT secret. CI also runs `manage.py check` with `-W error::DeprecationWarning`; run the whole suite that way when upgrading Django/Python.
 
@@ -406,7 +430,8 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `GITHUB_SYMBOLICATE_TOKEN` | No | Fine-grained GitHub token (Attnd-iOS, Actions: read and write) for the panel's Symbolicate (SETUP.md step 14) |
 | `GITHUB_SYMBOLICATE_REPO` / `GITHUB_SYMBOLICATE_REF` | No | Default `apbeers/Attnd-iOS` / `main` |
 | `SITES_HOST` | No | Attnd Studio's sites domain (no scheme), e.g. `attndsites.com`. Default: the Heroku app's herokuapp.com hostname for attnd.app / dev.attnd.app, `127.0.0.1:8000` with `DEBUG` |
-| `STUDIO_BETA_EMAILS` | No | Comma-separated emails with Studio access (besides staff and the staff page's list), default `apbeers@icloud.com` |
+| `STUDIO_BETA_EMAILS` | No | Comma-separated emails that also get Studio (an explicit override; Studio is otherwise staff/superusers only), default empty |
+| `TICKETS_ENABLED` | No | Default off = Attnd Tickets parked (not installed, no URLs/links/tasks, bundle ticket keys null). `1` = ticketing as built |
 | `ANTHROPIC_API_KEY` | No | Studio uses Claude (`STUDIO_ANTHROPIC_MODEL`, default `claude-opus-5-5`) when set; `STUDIO_AI_PROVIDER=auto/openai/anthropic` |
 | `STUDIO_OPENAI_MODEL` / `STUDIO_OPENAI_FALLBACK_MODEL` | No | Default `gpt-5.5` / `gpt-5` |
 | `STUDIO_IMAGE_MODEL` / `STUDIO_IMAGE_FALLBACK_MODEL` / `STUDIO_VISION_MODEL` | No | Default `gpt-image-2` / `gpt-image-1` / `OPENAI_MODEL` |

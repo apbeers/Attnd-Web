@@ -71,25 +71,22 @@ class SignupGateTests(TestCase):
         helper = User.objects.get(email='helper@example.com')
         self.assertEqual(EventMember.objects.get(event=self.event, user=helper).role, 'admin')
 
-    def test_studio_access_can_sign_up(self):
+    def test_studio_access_is_not_an_invite(self):
+        """Only a pending team invite counts: old Studio beta rows and STUDIO_BETA_EMAILS don't."""
         StudioAccess.objects.create(email='studio@example.com')
-        self.assertEqual(self.post('STUDIO@example.com').status_code, 302)
-        self.assertTrue(User.objects.filter(email='studio@example.com').exists())
-
-    def test_studio_beta_email_can_sign_up(self):
-        self.assertEqual(self.post('beta@example.com').status_code, 302)
-        self.assertTrue(User.objects.filter(email='beta@example.com').exists())
+        for email in ('STUDIO@example.com', 'beta@example.com'):
+            self.assertContains(self.post(email), INVITE_ONLY_HTML, status_code=403)
+        self.assertFalse(User.objects.filter(email__in=['studio@example.com', 'beta@example.com']).exists())
 
     def test_invited_email_with_an_account_gets_the_usual_message(self):
-        StudioAccess.objects.create(email='owner@example.com')
+        EventInvite.objects.create(event=self.event, email='owner@example.com')
         self.assertContains(self.post('owner@example.com'), 'An account with this email already exists.')
 
     def test_is_invited(self):
         EventInvite.objects.create(event=self.event, email='a@example.com')
         StudioAccess.objects.create(email='b@example.com')
-        for email in ('A@example.com', 'b@example.com', ' Beta@Example.com '):
-            self.assertTrue(is_invited(email), email)
-        for email in ('c@example.com', '', None):
+        self.assertTrue(is_invited('A@example.com'))
+        for email in ('b@example.com', ' Beta@Example.com ', 'c@example.com', '', None):
             self.assertFalse(is_invited(email), email)
 
     def _trial_event(self):
@@ -104,7 +101,7 @@ class SignupGateTests(TestCase):
         trial.refresh_from_db()
         self.assertEqual(trial.user.username, 'trialuser')
 
-        StudioAccess.objects.create(email='invited@example.com')
+        EventInvite.objects.create(event=self.event, email='invited@example.com')
         response = self.post('invited@example.com', claim='TRIAL123')
         trial.refresh_from_db()
         self.assertEqual(trial.user.email, 'invited@example.com')

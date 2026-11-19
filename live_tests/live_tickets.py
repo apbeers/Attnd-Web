@@ -4,6 +4,9 @@ Read-only checks run everywhere (production included). The end-to-end flow (hold
 → My tickets → offline QR check → door check-in) runs only where the server has dev tools on and a CI key: the
 TIXDEMO event from `manage.py load_ticket_demo`, test addresses @ci.attnd.test (never mailed; codes come from the
 dev test inbox). LEAN CI: this file runs with the other live tests, which only run with the CI_FULL variable.
+
+Ticketing is parked (TICKETS_ENABLED off on the server): the ticket and door endpoints don't exist, so everything but
+the bundle's always-present (null) keys is skipped there.
 """
 import base64
 import json
@@ -17,11 +20,27 @@ DOMAIN = 'ci.attnd.test'
 DEMO_CODE = 'TIXDEMO'
 
 
+_PARKED = {}
+
+
+def tickets_parked():
+    """True when the server has ticketing parked: its ticket endpoints fall through to the API's plain JSON 404."""
+    if 'parked' not in _PARKED:
+        resp = get('/api/v2/tickets/mine/', headers={'X-Attnd-Buyer': 'probe'})
+        _PARKED['parked'] = resp.status == 404 and resp.json().get('error') == 'Not found'
+    return _PARKED['parked']
+
+
 def unb64(text):
     return base64.urlsafe_b64decode(text + '=' * (-len(text) % 4))
 
 
 class TicketsReadOnlyTests(LiveBase):
+    def setUp(self):
+        super().setUp()
+        if tickets_parked() and self._testMethodName != 'test_bundle_has_tickets_key':
+            self.skipTest('ticketing is parked on this server (TICKETS_ENABLED off)')
+
     def test_tokens_required(self):
         self.assertStatus(get('/api/v2/tickets/mine/'), 401)
         self.assertStatus(get('/api/v2/door/events/'), 401)
@@ -44,6 +63,8 @@ class TicketsFlowTests(LiveBase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        if tickets_parked():
+            raise unittest.SkipTest('ticketing is parked on this server (TICKETS_ENABLED off)')
         probe = get('/api/v2/tickets/test-inbox/', params={'email': f'probe@{DOMAIN}'})
         if probe.status == 401 or (probe.status == 404 and probe.json().get('message') == 'Not found'):
             raise unittest.SkipTest('ticket dev tools are off on this server (production): flow skipped')

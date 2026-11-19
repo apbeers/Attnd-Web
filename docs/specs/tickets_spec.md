@@ -1,4 +1,10 @@
-# Attnd Tickets — plan (approved Nov 15, 2026; web + server built Nov 16, 2026, API-017; apps next)
+# Attnd Tickets — plan (approved Nov 15, 2026; web + server built Nov 16, 2026, API-017; parked Nov 19, 2026)
+
+**Status (Nov 19, 2026): parked.** The owner parked ticketing: the code stays in `tickets/` but is included in nothing
+while `TICKETS_ENABLED` is off (the default): the app isn't installed, no URLs, console links, scheduled tasks or AI
+drafts, Studio's `<attnd-tickets>` renders nothing, and the API's `event.tickets_url` / `bundle.tickets` are always
+null (API-017 in `API_CHANGES.md`). Organizers who want to sell tickets use Eventbrite for now. `TICKETS_ENABLED=1`
+brings everything back as built; its tests run with `TICKETS_ENABLED=1 uv run python manage.py test tickets`.
 
 **Build status (Nov 16, 2026):** everything in the web/server scope below is built in `tickets/` (CLAUDE.md → Attnd
 Tickets): Stripe Connect Express onboarding + Checkout destination charges + webhooks + refunds + payouts after the

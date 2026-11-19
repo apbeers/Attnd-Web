@@ -1,7 +1,7 @@
 """Who may create an organizer account (SIGNUPS_OPEN).
 
 Attnd is invite-only for now: with `SIGNUPS_OPEN` off (the default) only invited emails can sign up (a pending team
-invite, Studio beta access, or STUDIO_BETA_EMAILS), and the homepage's anonymous AI import is closed. Existing
+invite; Studio access and STUDIO_BETA_EMAILS don't count), and the homepage's anonymous AI import is closed. Existing
 accounts sign in as usual, and nothing changes for attendees (apps, bundle API, /join/, /p/, Studio sites).
 """
 from django.conf import settings
@@ -24,16 +24,12 @@ def trial_import_open(request):
 
 
 def is_invited(email):
-    """A pending team invite, Studio beta access or a STUDIO_BETA_EMAILS entry for this email (any case)."""
+    """A pending team invite for this email (any case). Only EventInvite counts."""
     email = normalize_email(email)
     if not email:
         return False
-    if email in settings.STUDIO_BETA_EMAILS:
-        return True
     from events.models import EventInvite
-    from studio.models import StudioAccess
-    return (EventInvite.objects.filter(email__iexact=email).exists()
-            or StudioAccess.objects.filter(email__iexact=email).exists())
+    return EventInvite.objects.filter(email__iexact=email).exists()
 
 
 def may_sign_up(email):

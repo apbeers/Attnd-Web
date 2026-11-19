@@ -4,7 +4,6 @@ from studio import views as v
 
 app_name = 'studio'
 urlpatterns = [
-    path('studio/access/', v.access_list, name='access'),
     path('studio/reports/', v.reports, name='reports'),
     path('events/<int:event_id>/studio/', v.editor, name='editor'),
     path('events/<int:event_id>/studio/state/', v.state, name='state'),

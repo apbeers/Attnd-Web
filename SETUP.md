@@ -18,7 +18,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 13. CI keys (live tests) | ✅ Nov 15, 2026: `CI_API_KEYS` set on production (release v109; takes effect once API-008 is released to `main`), `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web. |
 | 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
 | 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15); optional `ANTHROPIC_API_KEY`. |
-| 16. Tickets (Stripe, Wallet) | ⬜ Code built (API-017). To do: Stripe account + Connect in the LLC's name, test keys + webhooks on dev (16a); Apple Wallet certificate PEMs on Heroku (16b); Google Wallet issuer id + service account key (16c). |
+| 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026: `TICKETS_ENABLED` off, organizers use Eventbrite for now). Code built (API-017). When it comes back: Stripe account + Connect in the LLC's name, test keys + webhooks on dev (16a); Apple Wallet certificate PEMs on Heroku (16b); Google Wallet issuer id + service account key (16c). |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
@@ -43,7 +43,8 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass` on the owner's Mac, plus the password manager), and a Google Pay & Wallet Console business
       profile with its Issuer ID, the Google Wallet API enabled in `attnd-df28e` and a service account
       `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` added as a Developer user. Plan: `docs/specs/tickets_spec.md`.
-- [ ] Tickets (step 16, code built Nov 16, 2026): Stripe account + Connect **in the LLC's name** (test keys and the two
+- [ ] ⏸ Parked, not a task now (Nov 19, 2026: ticketing off, `TICKETS_ENABLED` unset; Eventbrite for now). When it
+      comes back — Tickets (step 16, code built Nov 16, 2026): Stripe account + Connect **in the LLC's name** (test keys and the two
       webhook endpoints on dev first, 16a); Apple Wallet certificate + key + WWDR G4 as PEM config vars (16b, files in
       `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass`); Google Wallet issuer id + `attnd-wallet` JSON key and
       Event Ticket publishing access (16c). Then on dev: `heroku run -a attnd-dev python manage.py load_ticket_demo --owner apbeers@icloud.com`.
@@ -668,13 +669,20 @@ On those hostnames the app serves only the sites (console, admin and API are 404
    same for dev with a second domain or a subdomain of it (`dev.attndsites.com`, `-a attnd-dev`).
 
 **Optional settings:** `ANTHROPIC_API_KEY` (Studio then uses Claude, `claude-opus-5-5`; otherwise OpenAI `gpt-5.5`
-with `gpt-5` as fallback), `STUDIO_DAILY_SPEND_CAP_USD` (default 5), `STUDIO_BETA_EMAILS` (default
-`apbeers@icloud.com`; more people can be invited from the console's **Studio beta** page).
+with `gpt-5` as fallback), `STUDIO_DAILY_SPEND_CAP_USD` (default 5). Studio is for admins only (staff and
+superusers; Nov 19, 2026): `STUDIO_BETA_EMAILS` (default empty) is only an explicit override, and the old **Studio
+beta** invite page is gone.
 ```bash
 heroku config:set -a attnd-dev ANTHROPIC_API_KEY=sk-ant-PASTE_HERE
 ```
 
-## 16. Tickets: Stripe, Apple Wallet, Google Wallet (owner tasks; the code is built)
+## 16. Tickets: Stripe, Apple Wallet, Google Wallet (⏸ parked; the code is built)
+
+> **Parked (Nov 19, 2026, owner):** ticketing is switched off (`TICKETS_ENABLED` unset on both Heroku apps): the
+> `tickets` app isn't installed and nothing links to it; organizers use Eventbrite for now. Nothing below is needed
+> until it comes back. Its tables stay in the dev database (harmless); the TIXDEMO demo event on dev is deleted
+> separately. To bring it back: `heroku config:set -a attnd-dev TICKETS_ENABLED=1` (the release phase migrates the
+> `tickets` app), then this step, then `load_ticket_demo`.
 
 Attnd Tickets (`docs/specs/tickets_spec.md`, CLAUDE.md → Attnd Tickets) works without any of this for **free
 tickets**; paid tickets need Stripe, and the Wallet buttons appear only once their keys are set. Dev first (test mode),

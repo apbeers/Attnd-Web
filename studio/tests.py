@@ -83,23 +83,23 @@ class StudioTestCase(TestCase):
 
 class AccessTests(StudioTestCase):
     def test_who_has_access(self):
-        self.assertTrue(has_studio_access(self.owner))  # STUDIO_BETA_EMAILS
+        """Admins only: staff and superusers, plus the explicit STUDIO_BETA_EMAILS override."""
+        self.assertTrue(has_studio_access(self.owner))  # STUDIO_BETA_EMAILS (this class's override)
         other = User.objects.create_user('o', 'Other@Example.com', 'pw')
         self.assertFalse(has_studio_access(other))
-        StudioAccess.objects.create(email='OTHER@example.com')
-        self.assertTrue(has_studio_access(other))
-        self.assertEqual(StudioAccess.objects.get().email, 'other@example.com')
         staff = User.objects.create_user('s', 's@example.com', 'pw', is_staff=True)
         self.assertTrue(has_studio_access(staff))
+        superuser = User.objects.create_user('su', 'su@example.com', 'pw', is_superuser=True)
+        self.assertTrue(has_studio_access(superuser))
 
-    def test_invite_works_before_the_account_exists(self):
-        StudioAccess.objects.create(email='later@example.com')
+    def test_old_beta_invites_grant_nothing(self):
+        StudioAccess.objects.create(email='later@example.com')  # the model stays; its rows are ignored
         user = User.objects.create_user('later', 'later@example.com', 'pw')
-        self.assertTrue(has_studio_access(user))
+        self.assertFalse(has_studio_access(user))
 
-    def test_default_setting_includes_the_owner(self):
+    def test_default_setting_is_empty(self):
         import attnd.settings as module  # the real default, not this class's override
-        self.assertIn('apbeers@icloud.com', module.STUDIO_BETA_EMAILS)
+        self.assertEqual(module.STUDIO_BETA_EMAILS, [])
 
     def test_without_access_everything_is_404_and_hidden(self):
         member = User.objects.create_user('m', 'member@example.com', 'pw')
@@ -112,33 +112,32 @@ class AccessTests(StudioTestCase):
         overview = client.get(reverse('console:event', args=[self.event.pk]))
         self.assertNotContains(overview, reverse('studio:editor', args=[self.event.pk]))
         self.assertNotContains(client.get(reverse('console:event_new')), 'studio_import')
-        self.assertEqual(client.get(reverse('studio:access')).status_code, 404)
 
-    def test_beta_user_sees_the_entry_points(self):
+    def test_access_user_sees_the_entry_points(self):
         overview = self.client.get(reverse('console:event', args=[self.event.pk]))
         self.assertContains(overview, reverse('studio:editor', args=[self.event.pk]))
-        self.assertContains(self.client.get(reverse('console:event_new')), 'studio_import')
-
-    def test_not_on_the_team_is_404(self):
-        stranger = User.objects.create_user('x', 'x@example.com', 'pw')
-        StudioAccess.objects.create(email='x@example.com')
-        client = Client()
-        client.force_login(stranger)
-        self.assertEqual(client.get(reverse('studio:editor', args=[self.event.pk])).status_code, 404)
-
-    def test_staff_access_page(self):
+        # Bringing an imported website into Studio automatically is for staff only.
+        self.assertNotContains(self.client.get(reverse('console:event_new')), 'studio_import')
         staff = User.objects.create_user('staff', 'staff@example.com', 'pw', is_staff=True)
         client = TwoFactorClient()
         client.force_login(staff)
-        self.assertEqual(client.get(reverse('studio:access')).status_code, 200)
-        client.post(reverse('studio:access'), {'email': 'New@Example.com'})
-        self.assertTrue(StudioAccess.objects.filter(email='new@example.com').exists())
-        page = client.get(reverse('studio:access'))
-        self.assertContains(page, 'new@example.com')
-        self.assertContains(page, 'no account yet')
-        client.post(reverse('studio:access'), {'email': 'new@example.com', 'action': 'remove'})
-        self.assertFalse(StudioAccess.objects.exists())
-        self.assertContains(client.get(reverse('console:dashboard')), reverse('studio:access'))
+        self.assertContains(client.get(reverse('console:event_new')), 'studio_import')
+
+    def test_not_on_the_team_is_404(self):
+        stranger = User.objects.create_user('x', 'x@example.com', 'pw')
+        client = Client()
+        client.force_login(stranger)
+        with override_settings(STUDIO_BETA_EMAILS=['owner@example.com', 'x@example.com']):
+            self.assertEqual(client.get(reverse('studio:editor', args=[self.event.pk])).status_code, 404)
+
+    def test_no_beta_access_page(self):
+        staff = User.objects.create_user('staff', 'staff@example.com', 'pw', is_staff=True)
+        client = TwoFactorClient()
+        client.force_login(staff)
+        self.assertEqual(client.get('/console/studio/access/').status_code, 404)
+        dashboard = client.get(reverse('console:dashboard'))
+        self.assertNotContains(dashboard, '/console/studio/access/')
+        self.assertContains(dashboard, reverse('studio:reports'))
 
     def test_switching_an_event_to_studio(self):
         event = Event.objects.create(name='Market', event_code='MKT1', user=self.owner, start_time=timezone.now())
@@ -158,7 +157,7 @@ class AccessTests(StudioTestCase):
     def test_contributor_cannot_switch_or_publish(self):
         event = Event.objects.create(name='Market', event_code='MKT2', user=self.owner, start_time=timezone.now())
         helper = User.objects.create_user('h', 'helper@example.com', 'pw')
-        StudioAccess.objects.create(email='helper@example.com')
+        self.enterContext(override_settings(STUDIO_BETA_EMAILS=['owner@example.com', 'helper@example.com']))
         EventMember.objects.create(event=event, user=helper, role=EventMember.ROLE_CONTRIBUTOR)
         EventMember.objects.create(event=self.event, user=helper, role=EventMember.ROLE_CONTRIBUTOR)
         client = Client()

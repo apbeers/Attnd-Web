@@ -11,14 +11,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from console.accounts import normalize_email
 from events.display import resolve_display
 from events.models import Event
 from studio import agent, ai, hosting, importer, publishing
 from studio.access import can_publish, can_switch_plan, staff_required, studio_event_view
 from studio.assets import AssetError, asset_brief, create_asset, delete_asset, parse_tags
-from studio.models import (RESERVED_SLUGS, SLUG_RE, FormSubmission, Site, SiteReport, SiteVersion, StudioAccess,
-                           StudioAsset, StudioMessage, StudioRun)
+from studio.models import (RESERVED_SLUGS, SLUG_RE, FormSubmission, Site, SiteReport, SiteVersion, StudioAsset,
+                           StudioMessage, StudioRun)
 
 MAX_UPLOAD_FILES = 20
 IDEAS = ['Design the site', 'Add a schedule page', 'Add a sponsors section with a sponsorship form',
@@ -451,30 +450,8 @@ def form_delete(request, event, submission_id):
 
 
 # ---------------------------------------------------------------------------
-# Staff: beta access and reports
+# Staff: abuse reports (Studio itself is admins only; the old beta-access page is gone)
 # ---------------------------------------------------------------------------
-
-@staff_required
-def access_list(request):
-    if request.method == 'POST':
-        email = normalize_email(request.POST.get('email'))
-        if request.POST.get('action') == 'remove':
-            StudioAccess.objects.filter(email__iexact=email).delete()
-            messages.info(request, f'{email} no longer has Studio access (unless they are staff or in STUDIO_BETA_EMAILS).')
-        elif '@' not in email or len(email) > 254:
-            messages.error(request, 'Enter an email address.')
-        else:
-            StudioAccess.objects.get_or_create(email=email, defaults={'invited_by': request.user})
-            messages.success(request, f'{email} can use Studio. It works as soon as they sign in or sign up with it.')
-        return redirect('studio:access')
-    from django.contrib.auth.models import User
-    rows = list(StudioAccess.objects.select_related('invited_by'))
-    known = {u.email.lower() for u in User.objects.filter(email__in=[r.email for r in rows])}
-    for row in rows:
-        row.has_account = row.email in known
-    return render(request, 'studio/access.html', {'rows': rows, 'setting_emails': settings.STUDIO_BETA_EMAILS,
-                                                  'section': None})
-
 
 @staff_required
 def reports(request):

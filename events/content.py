@@ -7,6 +7,7 @@ Shared by the v1/v2 API, the organizer console, and the AI change engine.
 import contextlib
 import threading
 
+from django.conf import settings
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
@@ -88,6 +89,8 @@ def event_v2(event, request=None):
 
 
 def _tickets_url(event):
+    if not settings.TICKETS_ENABLED:  # ticketing parked: always null (the key stays for installed apps)
+        return None
     from tickets.content import tickets_url
     return tickets_url(event)
 
@@ -164,6 +167,8 @@ def bundle(event, request=None):
 
 
 def _tickets_summary(event):
+    if not settings.TICKETS_ENABLED:  # ticketing parked: always null
+        return None
     from tickets.content import summary
     return summary(event)
 
@@ -221,6 +226,8 @@ def snapshot(event):
 
 
 def _tickets_snapshot(event):
+    if not settings.TICKETS_ENABLED:  # ticketing parked: revisions carry no ticket types
+        return None
     from tickets.content import snapshot as tickets_snapshot
     return tickets_snapshot(event)
 
@@ -280,7 +287,7 @@ def restore(revision, user=None):
                 obj.hidden = it['hidden']
                 obj.locked_fields = it['locked_fields']
                 obj.save()
-            if data.get('tickets'):
+            if data.get('tickets') and settings.TICKETS_ENABLED:  # parked: older snapshots' ticket types stay put
                 from tickets.content import restore as restore_tickets
                 restore_tickets(event, data['tickets'])
     return event
