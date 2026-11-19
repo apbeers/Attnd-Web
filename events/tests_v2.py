@@ -76,7 +76,6 @@ class BundleTests(V2Base):
         self.event.save()
         self.assertEqual(self.get(f'/api/v2/events/{self.event.id}/bundle/').status_code, 404)
         self.assertEqual(self.get('/api/v2/events/lookup/?q=FAIR2026').status_code, 404)
-        self.assertEqual(self.get(f'/api/v1/events/lookup/?q=FAIR2026').status_code, 404)
 
     def test_lookup_case_insensitive(self):
         self.assertEqual(self.get('/api/v2/events/lookup/?q=fair2026').json()['event']['id'], self.event.id)
@@ -106,21 +105,9 @@ class BundleTests(V2Base):
         self.assertEqual(self.post(f'/api/v2/events/{self.event.id}/join/', {}).status_code, 400)
 
 
-class V1CompatTests(V2Base):
-    def test_v1_locations_fall_back_to_event_pin(self):
-        data = self.get(f'/api/v1/events/{self.event.id}/locations/').json()
-        tent = next(l for l in data['results'] if l['name'] == 'Mystery Tent')
-        self.assertEqual(tent['latitude'], 32.75)
-
-    def test_v1_schedule_skips_items_without_location(self):
-        data = self.get(f'/api/v1/events/{self.event.id}/schedule/').json()
-        self.assertEqual([i['name'] for i in data['results']], ['Band'])
-
-
 class ApiVersionTrackingTests(V2Base):
     def test_devices_record_the_api_version_they_use(self):
-        self.client.post(f'/api/v1/events/{self.event.id}/join/old-phone/', '{"platform": "ios"}',
-                         content_type='application/json', secure=True, **AUTH)
+        Device.objects.create(id='old-phone', platform='ios', api_version=1)  # joined through API v1
         self.post(f'/api/v2/events/{self.event.id}/join/', {'device_id': 'new-phone', 'platform': 'android',
                                                              'api_version': 9})
         self.assertEqual(Device.objects.get(id='old-phone').api_version, 1)
@@ -300,7 +287,7 @@ class RevokedKeyTests(V2Base):
 
 @override_settings(APP_MIN_VERSION_IOS='2.0.50', APP_LATEST_VERSION_IOS='2.0.90', APP_MIN_VERSION_ANDROID='',
                    APP_LATEST_VERSION_ANDROID='', IOS_APP_STORE_URL='https://apps.apple.com/app/id123',
-                   SUPPORTED_API_VERSIONS=[1, 2])
+                   SUPPORTED_API_VERSIONS=[2])
 class AppStatusTests(TestCase):
     def status(self, **params):
         return self.client.get('/api/app-status/', params, secure=True).json()
@@ -320,27 +307,37 @@ class AppStatusTests(TestCase):
         self.assertIn('play.google.com/store/apps/details?id=', body['update_url'])
 
     def test_unsupported_api_version_requires_update(self):
-        self.assertEqual(self.status(platform='android', version='9.9', api=1)['update'], 'none')
-        with self.settings(SUPPORTED_API_VERSIONS=[2]):
-            self.assertEqual(self.status(platform='android', version='9.9', api=1)['update'], 'required')
+        self.assertEqual(self.status(platform='android', version='9.9', api=1)['update'], 'required')
+        with self.settings(SUPPORTED_API_VERSIONS=[1, 2]):
+            self.assertEqual(self.status(platform='android', version='9.9', api=1)['update'], 'none')
+
+    def test_default_supports_only_v2(self):
+        from attnd import settings as project_settings
+        self.assertEqual(project_settings.SUPPORTED_API_VERSIONS, [2])
 
     def test_unparseable_versions_do_not_prompt(self):
         self.assertEqual(self.status(platform='ios', version='', api=2)['update'], 'none')
         self.assertEqual(self.status(platform='ios', version='beta', api='x')['update'], 'none')
 
     def test_retired_api_version_returns_410(self):
-        resp = self.client.get('/api/v1/events/', secure=True, HTTP_USER_AGENT='Attnd/85 CFNetwork Darwin/27.2.0')
-        self.assertEqual(resp.status_code, 404)  # v1 is still supported: an unknown path is just a 404
-        resp = self.client.get('/api/v3/events/', secure=True)
-        self.assertEqual(resp.status_code, 410)
-        self.assertEqual(resp.json()['error'], 'update_required')
-        with self.settings(SUPPORTED_API_VERSIONS=[2]):
-            resp = self.client.get('/api/v1/events/9/', secure=True, HTTP_USER_AGENT='Attnd/85 CFNetwork Darwin/27.2.0')
-        # Routed v1 endpoints still exist until their urls are removed; the catch-all covers removed ones.
-        self.assertIn(resp.status_code, (401, 404, 410))
+        # API v1's events endpoints were retired (Nov 19, 2026): every one answers 410 update_required.
+        for path in ('/api/v1/events/', '/api/v1/events/9/', '/api/v1/events/lookup/?q=DEMO',
+                     '/api/v1/events/nearby_events/32.7/-97.3/', '/api/v1/events/9/join/dev-1/', '/api/v3/events/'):
+            resp = self.client.get(path, secure=True, HTTP_USER_AGENT='Attnd/85 CFNetwork Darwin/27.2.0',
+                                   HTTP_AUTHORIZATION='Bearer test-key')
+            self.assertEqual(resp.status_code, 410, path)
+            self.assertEqual(resp.json()['error'], 'update_required')
+        self.assertEqual(self.client.post('/api/v1/events/9/join/dev-1/', secure=True).status_code, 410)
+        with self.settings(SUPPORTED_API_VERSIONS=[1, 2]):  # a supported version's unknown path is a 404
+            self.assertEqual(self.client.get('/api/v1/events/', secure=True).status_code, 404)
 
     def test_attestation_routes_are_not_swallowed_by_the_catch_all(self):
+        # /api/v1/attest/ stays: both apps attest there.
         self.assertEqual(self.client.get('/api/v1/attest/nonce/', secure=True).status_code, 200)
+        self.assertNotEqual(self.client.post('/api/v1/attest/ios/', '{}', content_type='application/json',
+                                             secure=True).status_code, 410)
+        self.assertNotEqual(self.client.post('/api/v1/attest/android/', '{}', content_type='application/json',
+                                             secure=True).status_code, 410)
 
 
 class UsageTests(V2Base):

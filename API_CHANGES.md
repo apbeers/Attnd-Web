@@ -42,7 +42,7 @@ Avoid them. There is almost always an additive alternative: add the new key next
    When v2 devices drop to near zero, or after a notice period you're happy with, remove v2 in its own logged entry. Until then v2 stays fully working.
 4. If some devices never update, a minimum-version prompt (proposed in API-003) lets the server tell old builds to update instead of breaking silently.
 
-**v1** (`API.md`) is the legacy API for app builds released before v2. It is frozen, and its devices are recorded as `api_version = 1`. Retire it the same way, once `api_usage` shows no v1 devices.
+**v1** was the legacy API for app builds released before v2. Its events API was retired on Nov 19, 2026 (API-020: `410` `update_required`); `/api/v1/attest/` stays because both current apps use it.
 
 ## Tracker
 
@@ -50,18 +50,484 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 
 | ID | Change | Type | Web | iOS | Android |
 |----|--------|------|-----|-----|---------|
-| API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ⬜ prod | ✅ dev (TestFlight, App Attest verified on a real iPhone) · ⬜ prod | ✅ dev · ⬜ prod |
-| API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ⬜ prod | — | — |
-| API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
-| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages (5-minute buckets) | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
-| API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
-| API-007 | Live updates via silent push to every device; slow safety poll; offline caching | additive (behaviour only, no shape change) | ✅ dev · ⬜ prod | ✅ dev (f7c1d9c) | ✅ dev (c03cc2d) |
-| API-008 | CI keys: DEMO-only API access for live integration tests (`CI_API_KEYS`); `ci-` devices not counted | additive (server only, new key type) | ✅ dev (not deployed yet) · ⬜ prod | — (CI uses it: live tests) | — (CI uses it: live tests) |
-| API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-001 | API v2: bundle, display config, devices | additive (new version alongside v1) | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev (TestFlight, App Attest verified on a real iPhone) · ⬜ prod | ✅ dev · ⬜ prod |
+| API-002 | Record each device's API version for sunset decisions | server only | ✅ dev · ✅ prod (Nov 15, 2026) | — | — |
+| API-004 | Build and support info in Options; support-code lookup in the console | app only (no API change) | ✅ dev (lookup) · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-005 | Anonymous usage counts: `POST events/<id>/usage/`, console Usage pages (5-minute buckets) | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-006 | Live updates: content push on every change, 5 s foreground polling | behaviour only | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+| API-007 | Live updates via silent push to every device; slow safety poll; offline caching | additive (behaviour only, no shape change) | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev (f7c1d9c) | ✅ dev (c03cc2d) |
+| API-008 | CI keys: DEMO-only API access for live integration tests (`CI_API_KEYS`); `ci-` devices not counted | additive (server only, new key type) | ✅ dev · ✅ prod (Nov 15, 2026) | — (CI uses it: live tests) | — (CI uses it: live tests) |
+| API-009 | Anonymous heart counts: usage metrics `location_heart` / `location_unheart` / `schedule_item_heart` / `schedule_item_unheart`; net hearts in the console | additive (new usage names) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (e1802d9) | ✅ dev (41291f1) |
+| API-010 | Tags: `Location.tags` in the bundle, all tags lower case; AI import/refresh tags everything; `backfill_tags`; DEMO tags | additive (new key; tag case normalised) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (e1802d9) | ✅ dev (41291f1) |
+| API-011 | Urgent announcements: `Notification.priority`, `priority` in notification pushes, urgent = every device + time-sensitive/high priority; iOS Live Activity push via `POST devices/` `live_activity_token` | additive (new keys, new optional request field, new push variant) | ✅ dev (443e1dc) · ⬜ prod | ✅ dev (b3cb181, d688ed0) | ✅ dev (d491c93) |
+| API-013 | Diagnostics: debug log upload (`POST diagnostics/logs/`), crash/hang reports, `X-Request-Id` / `X-Diag-Session`, Android R8 symbols + retrace, iOS symbolication workflow, staff Diagnostics panel | additive (new endpoints, new request headers) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
+| API-014 | Anonymous performance metrics: `perf_*` usage names with bucket details | additive (new usage names) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
+| API-015 | Shared plan links `/p/<EVENT_CODE>/<payload>` (web page + store routing like `/join/`), claimed in apple-app-site-association (app + App Clip) and opened by the apps | additive (new web route, new app link paths; no API endpoint) | ✅ dev · ⬜ prod | ✅ | ✅ |
+| API-016 | Attnd Studio: `event.website_url` (the event's Studio-hosted website, or null) in every v2 event object | additive (new key) | ✅ dev · ⬜ prod | ✅ | ✅ |
+| API-017 | **Parked (Nov 19, 2026): moved to git branch `parked/tickets`; keys always `null`, the 15 `tickets/` / `door/` endpoints removed from v2.** Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | ⏸ parked (on branch `parked/tickets`) | ✅ | ⬜ (later) |
+| API-018 | Rich context for the apps' on-device assistant: `event.context`, `locations[].context`, `schedule[].context` in `bundle/` (about, FAQ, amenities, policies, getting there, weather plan, menus, hours, age limits, performers with bios and genres, links); AI import/refresh extracts it, console "Details for the assistant" edits it (locks), DEMO has it | additive (new keys, `bundle/` only) | ✅ dev (5beae38) · ⬜ prod | ✅ (173575f; tools, search, detail screens) | ⬜ (later) |
+| API-019 | App Clip push topic: optional `app_clip` boolean in `POST events/<id>/join/` and `POST devices/` bodies; iOS sends `true` from the App Clip; the server sends clip devices' pushes (alerts, urgent, silent `content_updated`, Live Activity updates) on the clip's APNs topic | additive (new optional request field) | ✅ dev (4ff0467) · ⬜ prod | ✅ (c07ec37, local, not pushed yet) | n/a (no App Clip) |
+| API-020 | Retire the v1 events API: `SUPPORTED_API_VERSIONS` default `2`, `/api/v1/events/…` → `410` `update_required`; `/api/v1/attest/` unchanged | breaking for v1 only (no current app uses v1) | ✅ dev · ⬜ prod (needs a release + owner go-ahead) | — (uses v2) | — (uses v2) |
+| API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
+
+API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
 
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-020: API v1 events API retired
+**Why:** no shipped app calls `/api/v1/events/` any more (owner, Nov 19, 2026: "nobody uses it"); both apps use v2 and
+attest at `/api/v1/attest/`.
+**Server (attnd-web):** the v1 routes (`events/urls.py`), views and serializers are gone, with `API.md` and the v1 tests;
+`SUPPORTED_API_VERSIONS` defaults to `2`, so every `/api/v1/events/…` path answers `410` `{"error": "update_required",
+"update_url": …}` through `retired_api_view` (tests in `events/tests_v2.py`), and `/api/app-status/?api=1` says
+`update: required`. `/api/v1/attest/nonce|ios|android/` are unchanged. The unused iOS App Attest assertion endpoint
+(`/api/v1/attest/ios/assert/`) was removed at the same time.
+**Production:** on dev now. Production gets it with the next release (`develop` → `main`), with the owner's go-ahead;
+if production's config sets `SUPPORTED_API_VERSIONS`, change it to `2` then.
+**iOS / Android:** nothing (they use v2).
+
+### API-019: App Clip devices get pushes on the clip's APNs topic
+**Why:** the iOS App Clip (`com.arcu.Attnd.clip`) is now the same as the app: it registers for APNs and starts Live
+Activities. APNs needs the token's own bundle id as `apns-topic`, so the server must know which devices are the clip.
+The team-wide APNs auth key works for both topics. Additive: one new optional request field.
+**Server (attnd-web):**
+- `Device.app_clip` (migration 0038, default `false`), set from `app_clip` in `join/` and `devices/` bodies only when it
+  is a boolean (missing or anything else keeps the stored value).
+- `events/push.py`: iOS tokens are split into the app's and the clip's (`ios_token_groups`) and sent per topic
+  (`send_apns_groups`, `apns_topic`): app → `APNS_TOPIC`, clip → `APNS_CLIP_TOPIC` (default `<APNS_TOPIC>.clip`), Live
+  Activity tokens + `.push-type.liveactivity`. Every APNs path: organizer alerts, urgent alerts, silent
+  `content_updated`, Live Activity urgent updates. Invalid tokens are forgotten per group as before.
+
+**iOS:** send `"app_clip": true` in `join/` and `devices/` bodies from the App Clip and `false` from the app (runtime
+check: the bundle id ends in `.clip`).
+
+**Android:** nothing (no App Clip); never send the key.
+
+### API-018: rich event context for the on-device assistant
+**Why:** the apps' assistants (Apple's Foundation Models, Gemini Nano) answer questions fully offline, so the bundle
+must carry what the event's pages say beyond the description (`docs/specs/planner_view_spec.md` §5). Additive: three
+new nullable keys in `bundle/`; nothing else changes.
+**Server (attnd-web):**
+- `context` JSON on `Event`, `Location`, `ScheduledItem` (migration 0037), normalised by `events/context.py` on save
+  and on output (trim, cut at a word boundary, drop empties and unknown keys, https links only, limits per
+  `API_V2.md` → Context). Snapshots/History restore it; any edit bumps `content_version`.
+- Bundle: `event.context`, `locations[].context`, `schedule[].context` (`null` when empty), amenity `location_id`s
+  only for visible locations (else `null`), all context together ≤ ~150 KB (item, then location `about` texts dropped
+  last first, logged). Not in `lookup/` / `nearby/`, not in v1.
+- AI import/refresh (`scrape/service.py` strict schema + `CONTEXT_RULES`, `scrape/diff.py`): extracts the context per
+  event / location / item; one field `context` per entity in changesets (minor), merged key by key onto the current
+  one (empty AI values never blank data; performers / menu entries keep bios / prices the AI left out), locked
+  `context` → conflict (unticked); amenities name their location and get its id when applied. Review shows a summary
+  ("FAQ +2 · Hours added").
+- Console: "Details for the assistant" (collapsible) on Details, location edit and schedule item edit; text fields
+  plus validated line formats for FAQ / amenities / menu / performers / links. Editing locks `context`.
+- DEMO: event about / FAQ (11) / amenities (11, with location ids) / accessibility / policies / getting there /
+  weather plan / links; menus and hours on the food and drink places; performers (bio + genre) on all 36 music
+  items; chef demo and kids items with about / price / age limit. Counts unchanged; `events/tests_context.py`.
+
+**iOS:**
+- Decode `context` on `Event` (bundle only), `Location` and `ScheduleItem` leniently: every key optional, `null` /
+  missing = none, unknown keys and amenity kinds (→ `other`) ignored, entries' optional parts (`note`, `price`, `bio`,
+  `genres`) may be missing. Save it with the offline bundle like everything else.
+- Feed it to the on-device assistant's retrieval (Foundation Models tools / `AssistantModel.retrieve`): event FAQ,
+  amenities (with their location), policies, getting there, weather plan; location menus / hours / age limits;
+  performers' bios and genres. Cite the items as today.
+- Show it on detail pages where useful (e.g. a location's menu and hours, an item's performers and price, an "Event
+  info" FAQ in Options / `EventInfoView`). Links open in the browser.
+
+**Android (later):** the same: decode leniently (`@Serializable`, every field defaulted), store with the bundle, use
+in `AssistantModel.retrieve` / `AssistantPrompt.context` and the event facts for AppFunctions, show on details.
+
+### API-017: tickets (Get tickets, My tickets, door mode with offline scanning)
+**Moved to a branch (Nov 19, 2026, owner: "move ticketing to the git branch"):** the `tickets/` app, its settings,
+URLs, console tools, Studio `<attnd-tickets>` element, AI drafts, tests, live/e2e suites, CI steps and
+`docs/specs/tickets_spec.md` were removed from `develop`; everything is on the git branch `parked/tickets` (cut from
+`develop` before the removal). `event.tickets_url` and `bundle.tickets` stay in v2, always `null`
+(`events/tests_contract.py` checks it). The 15 `tickets/…` / `door/…` endpoints were removed from `contract/v2.json` and
+`API_V2.md` (owner decision: no app calls them). Restoring = merge or cherry-pick from `parked/tickets` (its
+`TICKETS_ENABLED` switch, migrations of the `tickets` app, contract entries). Dev's database keeps its orphan
+`tickets_*` tables (SETUP.md §16).
+**Earlier (Nov 19, 2026, owner):** ticketing is kept in the code but included in nothing: the server runs with
+`TICKETS_ENABLED` off (default), so `event.tickets_url` and `bundle.tickets` are always `null` (keys kept; the
+contract test compares the ticket endpoints only with `TICKETS_ENABLED=1`) and the `tickets/…` / `door/…` endpoints
+return a JSON 404. **Apps:** Get tickets already hides itself while both keys are `null`. iOS's My tickets and Scan
+tickets (Options and the launch screen, not tied to an event's keys) call the parked endpoints and would get a 404:
+hide them too (follow-up in attnd-ios). Don't start Android's part. Organizers use Eventbrite for now.
+Re-enabling = `TICKETS_ENABLED=1` on the server (CLAUDE.md → Attnd Tickets).
+**Why:** Attnd Tickets (`docs/specs/tickets_spec.md`, owner-approved Nov 15–16, 2026): Eventbrite-style ticketing for
+events on the $499 Studio + tickets plan. Buying happens **only on the website** (Stripe Checkout); the apps link
+out, show tickets the person holds, and scan at the door, offline. Additive: two new keys and new endpoints.
+**Server (attnd-web):**
+- `event.tickets_url` in every v2 event object and `bundle.tickets` (`on_sale`, `state`, `sold_out`, `url`,
+  `min_price_cents` / `max_price_cents` **all-in** (fee included), `currency`, `price_text`, `prices_include_fees`), or
+  `null`. On-sale changes and sold-out flips bump `content_version`.
+- My tickets: `POST tickets/code/` → `POST tickets/verify/` (6-digit email code → `buyer_token`, 180 days) →
+  `GET tickets/mine/` (header `X-Attnd-Buyer`, ETag) with each ticket's QR string, status, Wallet links, event;
+  `POST tickets/signout/`.
+- Door mode: `POST door/code/` → `POST door/verify/` (`door_token`, 30 days, + the events this email may scan: door
+  staff from the console, or the event's team), header `X-Attnd-Door`: `GET door/events/`,
+  `GET door/events/<id>/manifest/` (Ed25519 public keys, ticket types, tickets with name + email hash only),
+  `GET door/events/<id>/revocations/?since=`, `POST door/events/<id>/checkins/` (batches ≤ 500, idempotent by
+  `client_id`, device scan times kept, earliest admission wins, later ones flagged), `GET door/events/<id>/counts/`,
+  `POST door/signout/`.
+- QR = `ATK1.<payload>.<sig>` Ed25519 (exact format in `API_V2.md` → Tickets), verifiable offline; transfers,
+  refunds and voids bump the ticket version and add a revocation.
+- No enumeration (code requests answer the same for any address), rate limits on codes, wrong codes and door calls.
+- CI keys: DEMO + the ticket demo event only, test addresses only (`@ci.attnd.test`, never mailed); dev-only
+  `tickets/test-inbox/`, `tickets/test/order/`, `tickets/test/pay/` for the live suites.
+- Documented in `API_V2.md` → Tickets; contract snapshot updated; tests in `tickets/tests_*.py`.
+- **DEMO ticket facts** (`manage.py load_ticket_demo`, `tickets.tests_web.DemoFactsTests`): event `TIXDEMO` (Studio
+  plan, a week ahead, America/Chicago); 7 ticket types in order General Admission $25 ×200, VIP $75 ×20 (pool "Venue"
+  250), Kids under 12 free ×50, Support the artists pay-what-you-want from $5, Parking add-on $10 ×40 (re-entry),
+  Backstage hidden (unlock `BACKSTAGE`) $150 ×10, Early Bird $15 ×10 (sold out, waitlist); promo `SAVE10` (10% off GA and
+  VIP); door staff `door@ci.attnd.test`; 14 valid tickets (buyer1 ×2 General Admission, one checked in at "Gate A";
+  buyer2 VIP + Parking; buyer3 ×10 Early Bird) and 1 refunded (buyer4), buyers `buyerN@ci.attnd.test`.
+
+**iOS:**
+- Decode `event.tickets_url` (`URL?`) and `bundle.tickets` leniently (every field optional, unknown `state` = don't
+  show a buy button). Show **Get tickets** (with `price_text`, e.g. "From $26.06", already including fees) when
+  `on_sale`, else the state ("Sold out", "Not on sale yet", "Event cancelled"), in the event's Options header and the
+  search event detail (and wherever the design puts it). It opens `url` in Safari (`openURL` / `SFSafariViewController`),
+  never an in-app purchase; nothing else is sold in the app (App Review 3.1.3(e): goods used outside the app). The App
+  Clip may show the same link.
+- **My tickets** (Options and/or a Tickets entry; works without joining the event): email → `tickets/code/` → code
+  field (`.oneTimeCode`) → `tickets/verify/`; keep `buyer_token` in the Keychain. `GET tickets/mine/` on open and pull to
+  refresh (with `If-None-Match`); persist the response (Application Support, excluded from backup) and show it offline:
+  event, type, holder, code, the QR (Core Image `CIQRCodeGenerator` from `qr`, correction level M, brightness up while
+  shown), status, checked-in time. "Add to Apple Wallet" downloads `apple_wallet_url` and presents
+  `PKAddPassesViewController` (no entitlement needed for adding); "Manage" opens `ticket_url` in Safari (transfer,
+  refund, resend). `401` → sign in again. Sign out = `tickets/signout/` + delete the stored copy.
+- **Door mode** (Options → Door mode): email code (`door/code/`, `door/verify/`), pick the event, **Download tickets**
+  (`manifest/`, store it + the keys), then scan with VisionKit `DataScannerViewController` (existing QR code) and verify
+  offline per `API_V2.md` → "Scanning offline" (CryptoKit `Curve25519.Signing.PublicKey(rawRepresentation:)
+  .isValidSignature`): full-screen green / red / amber "Already checked in 7:42 PM at Gate B", haptics + sound; gate
+  name setting; manual search (name, code, order ref; email via the same SHA-256 hash); re-entry (scan out) for types
+  with `reentry`. Queue every scan (`client_id` UUID, scan time, `device_result`) on disk; upload in batches of ≤ 500
+  when online (and every ~15 s while online), poll `revocations/?since=` every ~30 s, show `counts/`. Everything works
+  in airplane mode; a sync summary shows flagged results.
+- Unit tests: token parse/verify against a fixed key + token (generate one with `tickets.signing` and paste it into
+  the tests), revocation rules, the offline duplicate rules, queue/merge; the live suite: My tickets via the dev test
+  inbox (`tickets/test-inbox/`, CI key, `@ci.attnd.test`), download the TIXDEMO manifest, verify a QR offline, upload a
+  check-in, Wallet pass download (content type `application/vnd.apple.pkpass`) when configured.
+- LOG_EVENTS: the `tickets.*` rows in `LOG_EVENTS.md` (new category `tickets`), never emails, names, codes, tokens
+  or QR strings.
+
+**Android:**
+- Decode `tickets_url` / `tickets` (`String? = null`, all fields defaulted). **Get tickets** opens `url` with
+  `Intent.ACTION_VIEW` / Custom Tabs (no WebView, no payment code or Google Pay; Play's payments policy allows
+  linking out for physical event tickets).
+- **My tickets** as on iOS (token in encrypted prefs / DataStore, offline copy in `filesDir`, QR via the in-house
+  `domain/QrCode.kt` encoder at level M); "Save to Google Wallet" opens `google_wallet_url`.
+- **Door mode** as on iOS: CameraX + ML Kit barcode scanning (existing), Ed25519 with `Signature.getInstance("Ed25519")`
+  (API 33+, minSdk 35), offline verification, queue in Room/prefs, WorkManager-free foreground sync while the screen
+  is open, counts, manual search, re-entry.
+- Same unit and live tests as iOS (shared token fixture). Later (owner: "Android app later"): not started.
+
+### API-016: event website link (Attnd Studio)
+**Why:** Attnd Studio (invite-only beta then, admins only since Nov 19, 2026; `docs/specs/studio_spec.md`) lets an organizer design the event's website
+with AI, and Attnd hosts it. The apps should link to it. Additive: one new nullable key; nothing else changes.
+**Server (attnd-web):**
+- Every v2 event object (`bundle/`, `lookup/`, `nearby/`) has `website_url`: `https://<SITES_HOST>/<slug>/` while
+  the event is on the Studio plan and its site is published and not taken down, else `null`. Publishing,
+  unpublishing, a takedown, changing the address or the plan bump `content_version`, so apps refetch the bundle.
+- The site lives on a separate registrable domain (`SITES_HOST`, a herokuapp.com hostname until a domain is bought),
+  never on attnd.app. Documented in `API_V2.md` → Event; contract snapshot updated; tests in `studio/tests.py`
+  (`DataTests.test_bundle_website_url_api_016`).
+
+**iOS:**
+- Decode `website_url` leniently (`String?`, missing = nil; ignore values that aren't `https` URLs).
+- When set, show a **Website** row in Options (event header) and in `EventInfoView` (search's event result), opening
+  it with `openURL` (Safari, not in-app). No `X-Device-Id`, tokens or cookies go to it. Not in the App Clip's tab bar.
+- App Intents: `EventEntity` may expose it as a URL property (optional).
+
+**Android:**
+- Decode `website_url` (`String? = null`, ignore non-`https`).
+- When set, show a **Website** item in Options (event section) and on the search screen's event detail, opened with
+  `Intent.ACTION_VIEW` (the browser / Custom Tab, not a WebView). Nothing from the app is sent to it.
+
+### API-015: shared plan links
+**Why:** the event assistant (assistant spec §7, Nov 15, 2026) shares a plan or an item as a link that opens the
+shared plan in the app and still works for someone without it. Additive: a new web route and new Universal Link / App
+Link paths; no API endpoint, no new key, nothing stored on the server.
+**Server (attnd-web):**
+- `GET /p/<EVENT_CODE>/<payload>` (also with a trailing `/`): `payload` = base64url without padding of compact JSON
+  `{"v":1,"ids":[<schedule item ids>],"d":"YYYY-MM-DD"?}`, at most 1,500 characters. Known string:
+  `{"v":1,"ids":[101,114],"d":"2026-11-14"}` → `eyJ2IjoxLCJpZHMiOlsxMDEsMTE0XSwiZCI6IjIwMjYtMTEtMTQifQ`.
+- Same routing as `/join/<code>/` (`join/views.py` `SharedPlanRedirect`): Android → Google Play with
+  `referrer=event_code%3D<code>`; iPhone → the join page with the App Clip banner and the App Store link, plus the
+  shared items; desktop → the join page listing the shared items by name, time (event's time zone) and place, both
+  store links and a QR code of the share link (`/p/<code>/<payload>/qr.svg`). Unknown, hidden or other events' ids are
+  skipped; an invalid payload shows the plain join page; an unknown or draft event is the join `404`. Opens are counted
+  as `link_open` (by device kind), like join links. Pages are `noindex`.
+- `/.well-known/apple-app-site-association`: `/p/*` added for the app and the App Clip (the same `appIDs` entry as
+  `/join/*`), with `/p/*/*/qr.svg` excluded. `assetlinks.json` is domain-wide (`handle_all_urls`), so it already covers
+  `/p/*`; which paths open the Android app is decided by the app's intent filter.
+- Documented in `API_V2.md` → "Outside the version: shared plan links"; tests in `join/tests.py`
+  (`SharedPlanLinkTests`, AASA paths).
+
+**iOS:**
+- Make share links as above (encode: compact JSON, base64url, strip `=`; ids only, no personal data; stay ≤ 1,500
+  characters, e.g. by sharing one day) and unit-test the codec against the known string (shared with Android).
+- `/p/*` arrives through the existing Universal Links handler (the `applinks:attnd.app` entitlement already covers the
+  domain; the AASA now lists the path): join the event if needed (code from the path), then show the read-only
+  "Shared plan" with "Use this plan" and "Merge with mine" (spec §7). Ids not in the bundle are skipped; a payload the
+  app can't read (`v` ≠ 1) just joins the event.
+- App Clip: a `/p/` link opens the clip like `/join/` (it joins the event; no share import, spec §8). The App Clip
+  card for `/p/` URLs only appears if App Store Connect's App Clip experiences cover that prefix (the default
+  experience covers the meta-tag banner on the page); add an advanced experience for `https://attnd.app/p/` if
+  scanning a share QR should show the card.
+- Log `share.created` / `share.opened` (LOG_EVENTS.md).
+
+**Android:**
+- Same codec and known string; `share_plan` / `share_item` through the system share sheet.
+- **App Links need the app's intent filter:** add `https://attnd.app/p/` (`android:pathPrefix="/p/"`) to the
+  `autoVerify="true"` intent filter that handles `/join/` in `AndroidManifest.xml` (assetlinks.json needs no change),
+  and route it in `MainActivity` / `domain/JoinLinks.kt`: join the event by its code, then show the shared plan.
+  Without the app, the link goes to Play with the event code as install referrer, so a first install joins the
+  event (the shared plan itself isn't carried through the referrer).
+- Log `share.created` / `share.opened` (LOG_EVENTS.md).
+
+### API-014: anonymous performance metrics in usage
+**Why:** see how fast launches, bundle fetches, push refreshes, the planner and the map are in production, and how
+often calls fail, without any per-person logs. Agreed in the logging spec §6 (Nov 15, 2026).
+**Server (additive, new usage names):** `POST events/<id>/usage/` accepts `perf_launch_cold`, `perf_launch_warm`,
+`perf_bundle_fetch`, `perf_bundle_304`, `perf_api_error`, `perf_push_refresh_delay`, `perf_live_start_fail`,
+`perf_planner_ms`, `perf_map_first_render`, each with `detail` = a bucket label from the table in `API_V2.md` → usage
+→ Performance (an unknown or missing bucket drops the entry; `perf_live_start_fail` may have none). They are not
+"interactions" (organizer Usage pages ignore them); staff see them in Diagnostics → Sessions → App performance.
+Older servers drop the unknown names harmlessly.
+
+**iOS / Android (same rules on both):**
+- Measure on the device, map the value to its bucket (`<X` = less than X; buckets don't overlap: 500 ms is `<1s`) and
+  record it through the existing usage reporter (`track(.perfBundleFetch, detail: "<500ms")`), same 5-minute
+  buckets, flushes and retry rules, never a device id. A value measured outside an event goes into the next flush made
+  while in an event (keep at most ~50 pending), or is dropped.
+- `perf_launch_cold`: process start (iOS: `ProcessInfo`/`kinfo_proc` start time or the earliest `main`; Android:
+  `Process.getStartUptimeMillis()`) → first frame of the event UI. `perf_launch_warm`: foreground → interactive. Only
+  while in an event (launches to the launch screen aren't counted).
+- `perf_bundle_fetch` / `perf_bundle_304`: `GET bundle/` start → decoded (200) / answered (304), every refresh source.
+- `perf_api_error`: every failed API call: `4xx` (except 304), `5xx`, `timeout`, `offline` (no connection / DNS).
+- `perf_push_refresh_delay`: `content_updated` received → new bundle applied (includes the 0–10 s random delay);
+  not counted when the push was skipped as not newer.
+- `perf_live_start_fail`: `disabled` (user turned Live Activities/promoted notifications off), `denied` (no
+  notification permission), `limit` (ActivityKit too many activities), `error` (anything else).
+- `perf_planner_ms`: one `Planner` run (not the model's preference extraction).
+- `perf_map_first_render`: Map tab shown → first pins drawn (iOS: first `MapCameraUpdate`/annotations rendered;
+  Android: `GoogleMap` `onMapLoaded` with pins).
+- Also log each measurement as `perf.metric` (LOG_EVENTS.md) so debug sessions show it.
+- Unit-test the bucket function on both (edges: 249/250/499/500 ms, 0.5 s, 4 s, 60 s).
+
+### API-013: diagnostics: debug logs, crash reports, symbols, admin panel
+**Why:** when something goes wrong on a phone at an event, staff need the app's own timeline (network, push,
+background, Live Activity, location, planner, assistant…) next to the server's, without collecting anything personal.
+Agreed in the logging spec (Nov 15, 2026): storage in our Postgres with strict caps, production debug mode only when the
+user turns it on (never remotely), dev builds always. The shared record format and every event name are in
+[`LOG_EVENTS.md`](LOG_EVENTS.md).
+**Server (additive: new endpoints, new request headers, server-only tables):**
+- `POST /api/v2/diagnostics/logs/` (app auth, gzip JSON, ≤ 500 entries / 256 KB; per-record validation; 20,000 entries
+  per session per 10 min; `429` + `Retry-After` over caps or when the storage is full; CI keys discarded).
+- `POST /api/v2/diagnostics/reports/` (anonymous crash / hang / ANR / exit reports, ≤ 20 per request).
+- `POST /api/diagnostics/symbols/` (CI key or dev static key): Android R8 `mapping.txt` per build (gzip in the DB,
+  newest 20 kept); a pure-Python R8 retrace (`diagnostics/retrace.py`).
+- `GET|POST /api/diagnostics/symbolicate/<id>/`: the callback of attnd-ios's `symbolicate.yml`, which the panel
+  dispatches through the GitHub API (`GITHUB_SYMBOLICATE_TOKEN`, SETUP.md step 14) with a one-time token.
+- Every `/api/` request: one JSON log line on stdout (method, path **template**, status, ms, `req_id`, `diag`),
+  `X-Request-Id` echoed (or made) in the response, timings per endpoint (p50/p95 in the panel); with
+  `X-Diag-Session` the line is also stored in that session (`server.request`, category `server`).
+- Retention (`run_scheduled_tasks`, also `manage.py purge_diagnostics`): dev 7 days, debug mode 14 days, reports 30
+  days; total 250 MB (`pg_total_relation_size`), oldest sessions first, then VACUUM FULL.
+- Console → **Diagnostics** (staff, strong 2FA): sessions (search by code, time, platform, version, event, errors,
+  reason), session timeline (category lanes, server lines next to the app's by `req_id`, filters: level, category,
+  event, text, status ≥ 400, slower than N ms, fg/bg, ±30 s), network waterfall, summaries (errors grouped, slowest
+  requests, launch times, pushes received vs handled, background wakes), .jsonl export; reports grouped by problem
+  with retrace (Android) / Symbolicate (iOS); endpoint timings; Android mappings with a paste-and-retrace tool.
+- Privacy page: a paragraph on crash reports and debug logging.
+
+**iOS:**
+- **Logging facade** `AppLog` (one file, shared with the App Clip and the widget extension where useful):
+  `AppLog.debug(.net, "net.request.finished", "GET bundle 304 in 182 ms", ["method": …])` and `trace/info/notice/
+  warning/error/fault`. Check the level first (cheap when off); build the record and write it off the main thread
+  (a serial queue/actor). Each record goes to `os.Logger(subsystem: "com.arcu.Attnd", category: <cat>)` (dynamic
+  values `.public` only when the redaction rules say they're safe, else `.private`) **and** to the ring buffer.
+- Record format v1 exactly as `LOG_EVENTS.md` (`ts` UTC with ms and `Z`, `mono_ms` from `ContinuousClock`/
+  `mach_continuous_time` since launch, `seq` per install, `app`, `build`, `os` "iOS 27.2", `model` from `utsname`,
+  `state` fg/bg, `net` from `NWPathMonitor`, `event_id`, `diag`). Only event names from `LOG_EVENTS.md`.
+- **Redaction**, unit-tested (`LogRedactionTests`): never search/Ask/plan text (log `query_len`; `DEV` builds may log
+  `query`), never tokens/keys/push or Live Activity tokens/JWTs/emails/device id/support code; URLs only as path
+  templates (`/api/v2/events/{id}/bundle/`, no query, no host); coordinates rounded to 0.01° or distances only.
+- **Ring buffer:** JSON lines in `Application Support/attnd-logs/` (excluded from backup), ~2 MB, newest kept (two
+  rotating files are fine). Feeds the viewer, the export and uploads.
+- **Signposts:** `OSSignposter` intervals around launch, bundle fetch + decode, planner, map first render (also logged
+  as `perf.signpost` with `ms`).
+- **Every API call** sends `X-Request-Id` (new random 16 hex per request; retries get a new one) and logs it as
+  `req_id` in `net.request.started/finished/failed`; while a debug session is on, also `X-Diag-Session: D-XXXXX`.
+- **Levels:** `Dev` builds `debug` + continuous upload (`reason: "dev"`, one persistent code per install, made once,
+  stored in UserDefaults); production `warning`, local only.
+- **Debug mode** (production, About & support): "Turn on debug logging for 10 minutes" with a consent line ("Sends a
+  technical log of what the app does, labelled only with this code, for 10 minutes. No search text, location or
+  anything that identifies you."), a countdown, the code `D-XXXXX` (5 random Crockford base32 characters
+  `0-9A-HJKMNP-TV-Z`, new each time) with Copy, and Stop. While on: level `debug`, upload every ~10 s and on
+  background, plus the previous 5 minutes from the ring buffer (pre-roll) first. Store the code and expiry
+  (UserDefaults) so it survives restarts; at expiry go back to normal and log `logging.debug_mode on=false`. Never
+  link the code to the device id (not in support info, not sent with `devices/`). Never started remotely.
+- **Uploads:** `POST /api/v2/diagnostics/logs/` gzip (`Content-Encoding: gzip`), ≤ 500 entries and ≤ 256 KB per
+  request (split), off the main thread, never an error in the UI. On `429` wait `Retry-After` seconds; on other
+  failures keep the records and retry with the next batch. Not in screenshot mode. The App Clip: dev builds only.
+- **Log viewer** (Dev builds always; production while debug mode is on, and About & support → "Recent logs"): filter
+  by level, category, text, errors only; share/export `.jsonl` (ShareLink).
+- **Reports:** subscribe to MetricKit (`MXMetricManager.shared.add`); for each `MXDiagnosticPayload`, send its crash,
+  hang, CPU-exception, disk-write and app-launch diagnostics to `POST /api/v2/diagnostics/reports/` (`kind` crash/
+  hang/cpu/disk_write/launch, `payload` = `jsonRepresentation()` decoded to an object, `summary` e.g.
+  "EXC_BAD_ACCESS (SIGSEGV)", per-report `app`/`build`/`os` from `metaData`, `diag` if a debug session was on). No
+  device id. Keep unsent ones (≤ 20) and retry at the next launch. Don't send daily `MXMetricPayload`s.
+- **Dev configuration:** add a `Dev` build configuration copied from Debug (`-Onone`, `DEBUG` + `DEV` compilation
+  conditions, assertions on), archived by `ios.yml` for `develop` → TestFlight with distribution signing; `Release`
+  for `main`. dSYMs: keep uploading them to App Store Connect, and in the archive job also upload
+  `…xcarchive/dSYMs/` as the artifact **`dsyms-<build number>`** (`actions/upload-artifact`, `retention-days: 90`,
+  one per build, every branch) so `symbolicate.yml` finds them.
+- **Workflow:** add `.github/workflows/symbolicate.yml` (content in this entry's notes, provided by attnd-web; it
+  must be on `main` to be dispatchable). No secret is needed in attnd-ios (it uses `github.token`).
+- **Privacy labels** (App Store Connect → App Privacy): "Diagnostics → Crash data, Performance data, Other diagnostic
+  data: not linked to the user's identity, not used for tracking".
+- Commit with `API-013:`; tick the iOS column.
+
+**Android:**
+- **Logging facade** `AppLog` (`AppLog.debug(Cat.NET, "net.request.finished", "…", mapOf(…))`): level checked first,
+  records written on a single background dispatcher (`Dispatchers.IO.limitedParallelism(1)`). Each record goes to
+  `android.util.Log` with tag `Attnd/<cat>` **and** the ring buffer. Same record format, names and redaction rules
+  as iOS, unit-tested on the JVM (`LogRedactionTest`, `LogRecordTest`).
+- **Ring buffer:** JSON lines in `filesDir/logs/` (excluded from backup in `data_extraction_rules.xml`), ~2 MB, newest
+  kept.
+- **Trace sections:** `android.os.Trace` (`trace("bundle_fetch") { … }`) around launch, bundle fetch + decode,
+  planner, map first render (also `perf.signpost` with `ms`).
+- **Every API call** (`AttndApi`/`HttpClient`) sends `X-Request-Id` and logs it as `req_id`; while a debug session
+  is on also `X-Diag-Session`.
+- **Levels:** `BuildConfig.DEV` builds `debug` + continuous upload (`reason: "dev"`, one persistent code per install
+  in `DevicePrefs`); production `warning`, local only.
+- **Debug mode:** the same Options → About & support flow as iOS (consent, countdown, code with Copy, Stop, 10 min,
+  5-min pre-roll, survives restarts via `DevicePrefs`, never linked to the device id, never remote).
+- **Uploads:** the same endpoint and rules as iOS (gzip, ≤ 500 / 256 KB, `Retry-After`, background, never blocking).
+- **Log viewer:** dev builds always; production while debug mode is on and "Recent logs" in About & support; filters
+  level/category/text/errors only; export `.jsonl` through the share sheet (a `FileProvider` only if needed; or
+  `Intent.ACTION_SEND` with the text for small exports).
+- **Reports:** at launch read `ActivityManager.getHistoricalProcessExitReasons(packageName, 0, 10)` newer than the
+  last one handled (timestamp in `DevicePrefs`): `REASON_CRASH`/`REASON_CRASH_NATIVE` → `crash`, `REASON_ANR` → `anr`
+  (with `getTraceInputStream()` text as `stack`, ≤ 128 KB), `REASON_LOW_MEMORY` → `low_memory`, others (excluding
+  user-requested / exit-self) → `exit`; `reason` = the reason's name, `occurred_at` = `timestamp`. Add an uncaught
+  exception handler (chained to the previous one) that writes the **obfuscated** Java stack trace + exception
+  type/first message line to `filesDir/logs/crash.txt`; send it with the matching exit info (or alone) at the next
+  launch as `crash` with `stack`. `build` = `versionCode` (that's what the mapping is keyed by). No device id.
+- **Build types:** add `dev` (`initWith(release)`: release-signed, **not debuggable** (Play rejects debuggable
+  bundles), `isMinifyEnabled = false`, `buildConfigField DEV = true`) for `develop` → Play internal testing;
+  `release` keeps R8 minify with `DEV = false` for `main` → production. Debug builds also count as DEV for logging.
+- **Mapping upload (CI, `android.yml`, every minified release build):** in the same Play edit as the bundle upload,
+  `edits.deobfuscationfiles.upload` (`deobfuscationFileType: proguard`) for the version code; and upload the same file
+  to attnd-web: `POST /api/diagnostics/symbols/?platform=android&version=<versionName>&build=<versionCode>` with
+  `Authorization: Bearer $ATTND_PROD_CI_KEY` (production server) / `$ATTND_API_KEY` (dev server), body gzip (see
+  `API_V2.md`). A failed attnd-web upload is a warning, never a failed release. (Native symbols: none today.)
+- **Play data safety:** "Crash logs" and "Diagnostics" collected, not shared, not linked, debug logs optional.
+- Commit with `API-013:`; tick the Android column.
+
+**Notes — `symbolicate.yml` for attnd-ios** (inputs `report_id`, `build`, `version`, `server`, `token`; runs on
+`macos-latest`; reads the frames from `GET /api/diagnostics/symbolicate/<id>/`, downloads artifact `dsyms-<build>`,
+maps `binaryUUID` → DWARF with `dwarfdump --uuid`, `atos -arch <arch> -o <DWARF> -l 0x100000000 <0x100000000 +
+offset>…`, posts `{frames: [{uuid, offset, symbol}]}` or `{error}`; only ever to `https://attnd.app` or
+`https://dev.attnd.app`). The file content was handed to attnd-ios with this entry.
+
+
+### API-011: urgent announcements and Live Activity push
+**Why:** organizers need one way to reach everyone at once for a cancellation, a weather hold or a safety notice, and
+iPhone attendees who follow the event on their Lock Screen (Live Activity, shared spec §8) should see it there.
+**Server (additive):**
+- `Notification.priority`: `normal` (default) or `urgent`. The console's "Send an update" form has an **Urgent**
+  checkbox with a warning (everyone in the event, right away, Lock Screen Live Activities); urgent ones are highlighted.
+- Bundle: every notification gains `"priority": "normal" | "urgent"`. Notification pushes gain `priority` (APNs top-level
+  key next to `aps`; FCM `data`), for normal ones too.
+- An urgent notification goes to **every** device in the event with a push token, whatever `subscribed` says:
+  - APNs alert, `aps.interruption-level: "time-sensitive"` (never `critical`), priority 10, `apns-collapse-id:
+    notification-<id>`, expires after 12 h.
+  - FCM **data-only**, Android priority `high`, TTL 12 h; `data` = `type: notification`, `event_id`, `notification_id`,
+    `priority: urgent`, `title`, `body` (no `notification` block, so the app chooses the channel).
+  - plus, for iOS, an ActivityKit push to every `live_activity_token` registered in the event: `apns-push-type:
+    liveactivity`, topic `<bundle id>.push-type.liveactivity`, priority 10, payload
+    `aps: {timestamp, event: "update", content-state: {"urgent": {id, title, body, sent_at}}, alert: {title, body, sound},
+    stale-date: sent + 12 h, relevance-score: 100}` (`sent_at` is an ISO 8601 string). APNs `410` / `BadDeviceToken` /
+    `Unregistered` clears that device's `live_activity_token`.
+- Limit: at most 3 urgent notifications per event per hour (`URGENT_MAX_PER_HOUR`). The console refuses a 4th "Send
+  now"; a scheduled one over the limit goes out as normal (and is stored as normal).
+- `POST devices/` (and `join/`) accept an optional `live_activity_token` (hex; `null` or `""` clears it; non-hex is
+  ignored; leaving it out keeps it). It is cleared when the device leaves or joins another event.
+- DEMO: the sent "Set time change" notification is `urgent`; the other three are `normal`.
+
+**iOS:**
+- Decode `Notification.priority` (default `normal`, unknown → normal). Highlight urgent updates in the Updates tab and
+  use them for the urgent block of the Live Activity (§8).
+- Push: an alert with `priority = "urgent"` (top-level key) is shown time-sensitive by iOS: add the **Time Sensitive
+  Notifications** capability (entitlement `com.apple.developer.usernotifications.time-sensitive`). Don't add Critical
+  Alerts. Tapping opens Updates at `notification_id`, as today; refresh the bundle.
+- Live Activity: start activities with `pushType: .token`; send each token from `pushTokenUpdates` (hex) with
+  `POST devices/` as `live_activity_token`; send `null` when the activity ends or the user turns "Follow on Lock Screen"
+  off. Not needed after leave/switch (the server clears it), but harmless.
+- `ContentState`: every property optional, so a push that carries **only** `urgent` decodes (the push replaces the whole
+  state). `urgent: {id: Int, title: String, body: String, sent_at: String}` — `sent_at` is ISO 8601 text, **not** `Date`
+  (ActivityKit's default decoder would read a `Date` as seconds since 2001). When the app next updates the activity
+  itself, keep `urgent` until it's dismissed or 12 h old, and refill the other fields. The alert lights up the screen /
+  expands the Dynamic Island; the push also sets `stale-date` = sent + 12 h, which the app's next update replaces.
+- The App Clip: decode `priority` only (no Live Activity, no token).
+
+**Android:**
+- Decode `Notification.priority` (default `normal`). Highlight urgent updates in the Updates tab.
+- FCM data `type=notification` with `priority=urgent`: data-only (title/body in `data`), high priority. Show it on a new
+  **urgent** notification channel (high importance) whenever `POST_NOTIFICATIONS` is granted, **even if the in-app
+  notification preference is off** (the organizer marked it urgent; the server sends it to every device with a token).
+  Tap → Updates at `notification_id`; refresh the bundle; switch the Live Update (§8) to urgent mode for up to 12 h or
+  until dismissed. Normal notifications are unchanged (they now carry `priority=normal` in `data`).
+- Never send `live_activity_token`.
+
+### API-010: tags for locations and schedule items
+**Why:** "Hearted" filters, the planner and search (shared spec §5–6) work on genre/category/audience tags
+("live music", "country", "bbq", "kid-friendly", "free"), so every location and schedule item needs a few consistent ones.
+**Server (additive, plus a case change):**
+- `Location.tags` (new, in the bundle's locations). Lockable like other fields: a person's edit is never overwritten by
+  the AI. The console editors show and edit tags (comma separated) and list them.
+- Tags are normalised everywhere (`events.models.normalize_tags`): lower case, trimmed, single-spaced, de-duplicated, at
+  most 8 of at most 32 characters. Schedule item tags already in the database were normalised by migration `0034`
+  (which bumped those events' `content_version`), so **`"Music"` is now `"music"`**.
+- AI import/refresh (`scrape/service.py`, strict structured output): a per-event `tag_vocabulary` and 2–6 tags per
+  location and item from it; refreshes are given the current vocabulary and tags to reuse; `scrape/tags.py` folds
+  spelling variants ("Kids friendly", "BBQs") onto the event's existing spelling. Tag changes count as minor.
+- `manage.py backfill_tags (<code|id> … | --all) [--dry-run]` tags existing events with the AI: only things with fewer
+  than 2 tags, keeping their tags first, never touching locked tags; one revision and one version bump per event; safe
+  to re-run.
+- DEMO (hand-written, counts unchanged): every location and item has 2–6 tags; music items `["live music", <genre>]` (36),
+  chef demos `["food", "demo", …]` (9), "Face painting & games" `["family", "kid-friendly", "free"]` (3), the general items
+  `["general", "free"]` (3); Main Stage `["live music", "headliners", "free"]`.
+
+**iOS / Android:**
+- Decode `Location.tags` (default `[]`) like `ScheduleItem.tags`. Treat tags as lower-case values: filter and search on
+  them as sent; capitalise only for display (e.g. "Live music").
+- Search already weighs tags 2 for schedule items: apply the same weight to location tags (update the shared search
+  spec cases if they assert on tags).
+- **Live tests (DEMO facts changed, update all three suites together):** `tags == ["General"]` → `["general", "free"]`;
+  `"Music" in tags` → `"live music" in tags` (still 36, all on the three stages); `Food`/`Demo` → `food`/`demo` (still 9,
+  all at Chef Demo Kitchen); Face painting `["Family"]` → contains `family` and `kid-friendly`. New facts: every location
+  and item has 2–6 lower-case tags; Main Stage's are `["live music", "headliners", "free"]`. The web suite
+  (`live_tests/`) is already updated; it and the app suites pass against a server only after DEMO is reloaded there.
+
+### API-009: anonymous heart counts
+**Why:** attendees heart locations and schedule items (shared spec §5); organizers want to see what people liked,
+without knowing who.
+**Server (additive):** `POST events/<id>/usage/` accepts `location_heart` / `location_unheart` (detail = location id) and
+`schedule_item_heart` / `schedule_item_unheart` (detail = schedule item id), validated like `location_view` (a heart
+without an id, or an id from another event, is dropped). CI keys keep discarding usage. Console: **Usage** shows hearts
+given/removed and the most hearted locations and items (net = hearts − unhearts over the event, never below 0); the
+Locations and Schedule lists show each one's net count; the event overview has a **Most hearted** list.
+**iOS / Android:** hearts are stored on the device per event (spec §5). Each time the attendee turns a heart on, record
+`location_heart` / `schedule_item_heart` with the id; each time they turn it off, the `…_unheart` metric. Use the existing
+usage reporter (same 5-minute buckets, flushes and retry rules, never a device id). Don't record anything when hearts are
+restored at launch, re-joined or cleared because the event was left.
 
 ### API-008: CI keys for live integration tests
 **Why:** the three repos run live integration tests against dev *and* production. Production will turn the static key off

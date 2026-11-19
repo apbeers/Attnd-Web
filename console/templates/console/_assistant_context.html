@@ -1,0 +1,8 @@
+{% load console_tags %}{# API-018: the context the apps' on-device assistant answers from. Needs `form` and `locked`. #}
+<details class="panel assistant-context"{% if form.context_errors %} open{% endif %}>
+  <summary class="strong">Details for the assistant {% if 'context' in locked %}{% icon "lock" "lock small" %}{% endif %}</summary>
+  <div class="details-body stack stack--tight">
+    <p class="small muted">Attendees’ phones answer questions from these details, even offline. Only add what attendees may see.{% if 'context' in locked %} You’ve edited them, so AI updates only suggest changes.{% endif %}</p>
+    {% for field in form.context_fields %}{% include 'console/_field.html' %}{% endfor %}
+  </div>
+</details>

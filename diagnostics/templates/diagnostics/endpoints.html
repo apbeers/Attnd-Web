@@ -1,0 +1,20 @@
+{% extends 'console/base.html' %}
+{% load static console_tags %}
+{% block title %}Endpoint timings · Diagnostics{% endblock %}
+{% block content %}
+{% include 'diagnostics/_nav.html' with tab='endpoints' %}
+<div class="stack">
+<div class="cluster">
+  <p class="muted small grow">Server time per API endpoint (path templates, from the request log), slowest p95 first. Percentiles are interpolated from histogram buckets.</p>
+  <div class="cluster cluster--tight">{% for w in windows %}<a class="button button--small {% if w == window %}button--primary{% else %}button--outline{% endif %}" href="?window={{ w }}">{{ w }}</a>{% endfor %}</div>
+</div>
+<div class="panel panel--flush"><div class="scroll-x"><table class="data-table">
+  <thead><tr><th>Method</th><th>Endpoint</th><th class="num">Requests</th><th class="num">4xx</th><th class="num">5xx</th><th class="num">Avg</th><th class="num">p50</th><th class="num">p95</th><th class="num">Max</th></tr></thead>
+  <tbody>{% for r in rows %}<tr>
+    <td>{{ r.method }}</td><td class="mono">{{ r.route }}</td><td class="num">{{ r.count }}</td>
+    <td class="num">{{ r.client_errors }}</td><td class="num">{% if r.server_errors %}<span class="tone-danger strong">{{ r.server_errors }}</span>{% else %}0{% endif %}</td>
+    <td class="num">{{ r.avg|default:"–" }} ms</td><td class="num">{{ r.p50|default:"–" }} ms</td><td class="num strong">{{ r.p95|default:"–" }} ms</td><td class="num">{{ r.max }} ms</td>
+  </tr>{% empty %}<tr><td colspan="9" class="muted">No API requests in this window yet.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+</div>
+{% endblock %}

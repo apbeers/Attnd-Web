@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  {% include 'home/_icons.html' with app_manifest=True %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Console{% endblock %} — Attnd</title>
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
   <link rel="manifest" href="{% url 'console:manifest' %}">
   <meta name="theme-color" content="#431f86">
-  <link rel="apple-touch-icon" href="{% static 'console/icons/icon-192.png' %}">
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -16,6 +16,8 @@
   <a class="topbar__link" href="{% url 'console:dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %}>{% icon "list" %} Your events</a>
   <div class="topbar__actions">
     <a class="button button--primary button--small" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>
+    {% if user.is_staff or user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'diagnostics:overview' %}">{% icon "gauge" %} Diagnostics</a>
+    <a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>{% endif %}
     {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
     <a class="button button--secondary button--small" href="{% url 'admin:index' %}">Admin</a>{% endif %}
     <a class="button button--ghost button--small muted topbar__account" href="{% url 'console:account' %}" title="Account">{{ user.email }}</a>
@@ -59,6 +61,7 @@
         <a class="sidenav__link" {% if section == 'schedule' %}aria-current="page"{% endif %} href="{% url 'console:schedule' event.id %}">{% icon "calendar" %}Schedule</a>
         <a class="sidenav__link" {% if section == 'notifications' %}aria-current="page"{% endif %} href="{% url 'console:notifications' event.id %}">{% icon "bell" %}Notifications</a>
         <a class="sidenav__link" {% if section == 'display' %}aria-current="page"{% endif %} href="{% url 'console:display' event.id %}">{% icon "phone" %}App layout</a>
+        {% if studio_access %}<a class="sidenav__link" {% if section == 'studio' %}aria-current="page"{% endif %} href="{% url 'studio:editor' event.id %}">{% icon "brush" %}Studio <span class="badge badge--neutral badge--pill">Beta</span></a>{% endif %}
         <a class="sidenav__link" {% if section == 'changes' %}aria-current="page"{% endif %} href="{% url 'console:changesets' event.id %}">{% icon "stars" %}AI updates
           {% if pending_changes %}<span class="badge badge--primary badge--pill">{{ pending_changes }}</span>{% endif %}</a>
         <a class="sidenav__link" {% if section == 'usage' %}aria-current="page"{% endif %} href="{% url 'console:usage' event.id %}">{% icon "chart" %}Usage</a>

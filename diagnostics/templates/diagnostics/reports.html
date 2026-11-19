@@ -1,0 +1,28 @@
+{% extends 'console/base.html' %}
+{% load static console_tags %}
+{% block title %}Reports · Diagnostics{% endblock %}
+{% block content %}
+{% include 'diagnostics/_nav.html' with tab='reports' %}
+<div class="stack">
+<p class="muted small">Anonymous crash, hang and exit reports (iOS MetricKit, Android ApplicationExitInfo and the crash handler). No device id. Kept 30 days.</p>
+<form method="get" class="panel cluster">
+  <label class="field field--small"><span class="field__label">Platform</span><select name="platform">
+    <option value="">Any</option><option value="ios"{% if filters.platform == 'ios' %} selected{% endif %}>iOS</option><option value="android"{% if filters.platform == 'android' %} selected{% endif %}>Android</option></select></label>
+  <label class="field field--small"><span class="field__label">Kind</span><select name="kind"><option value="">Any</option>
+    {% for k in kinds %}<option value="{{ k }}"{% if filters.kind == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+  <label class="field field--small"><span class="field__label">App version or build</span><input name="app" value="{{ filters.app }}"></label>
+  {% if filters.signature %}<input type="hidden" name="signature" value="{{ filters.signature }}"><span class="badge badge--neutral">One problem group</span>{% endif %}
+  <button class="button button--primary">Filter</button><a class="button button--ghost" href="{% url 'diagnostics:reports' %}">Clear</a>
+</form>
+<div class="panel panel--flush"><div class="scroll-x"><table class="data-table">
+  <thead><tr><th>Received</th><th>Kind</th><th>Platform</th><th>App</th><th>Device</th><th>Summary</th><th></th></tr></thead>
+  <tbody>{% for r in reports %}<tr>
+    <td class="nowrap">{{ r.received_at|date:"M j, g:i A" }}</td><td>{{ r.kind }}</td><td>{{ r.platform }}</td>
+    <td>{{ r.app_version|default:"?" }} <span class="muted small">({{ r.build|default:"?" }})</span></td>
+    <td class="small">{{ r.model }} {{ r.os }}</td>
+    <td><a href="{% url 'diagnostics:report' r.id %}">{{ r.summary|default:r.reason|default:"(no message)"|truncatechars:90 }}</a></td>
+    <td><a class="small" href="?signature={{ r.signature }}">same</a></td>
+  </tr>{% empty %}<tr><td colspan="7" class="muted">No reports.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+</div>
+{% endblock %}

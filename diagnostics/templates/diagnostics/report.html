@@ -1,0 +1,47 @@
+{% extends 'console/base.html' %}
+{% load static console_tags %}
+{% block title %}Report {{ report.id }} · Diagnostics{% endblock %}
+{% block content %}
+{% include 'diagnostics/_nav.html' with tab='reports' %}
+<div class="stack stack--loose">
+<div class="panel">
+  <div class="cluster cluster--loose">
+    <div class="grow">
+      <h2 class="title-3">{{ report.kind }}: {{ report.summary|default:report.reason|default:"(no message)" }}</h2>
+      <p class="small muted">{{ report.platform }} · app {{ report.app_version|default:"?" }} ({{ report.build|default:"?" }}) · {{ report.model }} · {{ report.os }}
+        · happened {{ report.occurred_at|date:"M j, g:i A"|default:"?" }} · received {{ report.received_at|date:"M j, g:i A" }}
+        {% if report.reason %} · reason {{ report.reason }}{% endif %}
+        {% if report.diag %} · session <a class="mono" href="{% url 'diagnostics:session' report.diag %}">{{ report.diag }}</a>{% endif %}</p>
+      <p class="small"><a href="{% url 'diagnostics:reports' %}?signature={{ report.signature }}">{{ same }} report{{ same|pluralize }} of this problem</a></p>
+    </div>
+    <form method="post">{% csrf_token %}<button class="button button--ghost button--small tone-danger" name="action" value="delete" data-confirm="Delete this report?">Delete</button></form>
+  </div>
+</div>
+
+{% if report.platform == 'android' %}
+<div class="panel">
+  <div class="cluster"><h2 class="title-4 grow">Stack trace</h2>
+    {% if mapping %}<span class="badge badge--success">Retraced with mapping {{ mapping.app_version }} ({{ mapping.build }})</span>
+    <form method="post">{% csrf_token %}<button class="button button--outline button--small" name="action" value="retrace">{% icon "refresh" %} Retrace again</button></form>
+    {% else %}<span class="badge badge--warning">No R8 mapping for build {{ report.build|default:"?" }}</span>{% endif %}</div>
+  {% if report.retraced %}<pre class="code-block">{{ report.retraced }}</pre>
+  <details><summary class="small">Obfuscated original</summary><pre class="code-block">{{ report.stack }}</pre></details>
+  {% elif report.stack %}<pre class="code-block">{{ report.stack }}</pre>
+  {% else %}<p class="muted">No stack trace in this report (Android gives none for some exit reasons).</p>{% endif %}
+</div>
+{% else %}
+<div class="panel">
+  <div class="cluster"><h2 class="title-4 grow">Call stacks</h2>
+    {% if report.symbolicate_status == 'done' %}<span class="badge badge--success">Symbolicated</span>
+    {% elif report.symbolicate_status == 'requested' %}<span class="badge badge--info">Symbolicating since {{ report.symbolicate_requested_at|date:"g:i A" }}</span>
+    {% elif report.symbolicate_status == 'failed' %}<span class="badge badge--danger">Symbolication failed</span>{% endif %}
+    {% if can_symbolicate %}<form method="post">{% csrf_token %}<button class="button button--primary button--small" name="action" value="symbolicate"{% if not symbolicate_configured %} disabled title="Set GITHUB_SYMBOLICATE_TOKEN (SETUP.md)"{% endif %}>Symbolicate</button></form>{% endif %}</div>
+  {% if report.symbolicate_error %}<div class="notice notice--error notice--compact">{{ report.symbolicate_error }}</div>{% endif %}
+  {% if not symbolicate_configured and can_symbolicate %}<p class="small muted">Symbolication runs attnd-ios's symbolicate.yml workflow and needs <code>GITHUB_SYMBOLICATE_TOKEN</code> (SETUP.md → Diagnostics).</p>{% endif %}
+  {% if ios_text %}<pre class="code-block">{{ ios_text }}</pre>{% else %}<p class="muted">No call stack in this report.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if payload_json %}<details class="panel"><summary class="strong">Raw payload</summary><pre class="code-block">{{ payload_json }}</pre></details>{% endif %}
+</div>
+{% endblock %}

@@ -4,8 +4,7 @@
 name: Upgrade dependencies
 
 on:
-  schedule:
-    - cron: '17 14 * * 1'
+  # Weekly schedule (cron '17 14 * * 1') is off in lean CI mode (docs/CI_PIPELINES.md); run it by hand.
   workflow_dispatch:
 
 permissions:

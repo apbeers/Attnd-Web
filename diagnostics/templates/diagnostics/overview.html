@@ -1,0 +1,73 @@
+{% extends 'console/base.html' %}
+{% load static console_tags %}
+{% block title %}Diagnostics{% endblock %}
+{% block content %}
+{% include 'diagnostics/_nav.html' with tab='sessions' %}
+<div class="stack stack--loose">
+<div class="grid grid--4 grid--stats panel">
+  <div><div class="stat__value">{{ sessions|length }}{% if sessions|length == 200 %}+{% endif %}</div><div class="eyebrow">Sessions shown</div></div>
+  <div><div class="stat__value">{{ used_mb|floatformat:1 }} MB</div><div class="eyebrow">Stored of {{ cap_mb|floatformat:0 }} MB ({{ used_pct }} %)</div>
+    <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ used_pct }}" aria-label="Storage used"><span style="width: {{ used_pct }}%"></span></div></div>
+  <div><div class="stat__value">{{ report_groups|length }}</div><div class="eyebrow">Problem groups, 7 days</div></div>
+  <div><div class="stat__value">{{ symbol_count }}</div><div class="eyebrow">Android mappings</div></div>
+</div>
+
+<form method="get" class="panel">
+  <h2 class="title-4">Find a session</h2>
+  <div class="grid grid--4">
+    <label class="field field--small"><span class="field__label">Debug code</span><input name="q" value="{{ filters.q }}" placeholder="D-7K3QX" autocomplete="off"></label>
+    <label class="field field--small"><span class="field__label">Platform</span><select name="platform">
+      <option value="">Any</option><option value="ios"{% if filters.platform == 'ios' %} selected{% endif %}>iOS</option><option value="android"{% if filters.platform == 'android' %} selected{% endif %}>Android</option></select></label>
+    <label class="field field--small"><span class="field__label">Reason</span><select name="reason">
+      <option value="">Any</option>{% for r in reasons %}<option value="{{ r }}"{% if filters.reason == r %} selected{% endif %}>{% if r == 'dev' %}Dev build{% else %}Debug mode{% endif %}</option>{% endfor %}</select></label>
+    <label class="field field--small"><span class="field__label">App version or build</span><input name="app" value="{{ filters.app }}" placeholder="2.0.131"></label>
+    <label class="field field--small"><span class="field__label">Event (id or code)</span><input name="event" value="{{ filters.event }}" placeholder="DEMO"></label>
+    <label class="field field--small"><span class="field__label">Active since</span><input type="date" name="since" value="{{ filters.since }}"></label>
+    <label class="field field--small"><span class="field__label">Started before</span><input type="date" name="until" value="{{ filters.until }}"></label>
+    <label class="field field--check"><input type="checkbox" name="errors" value="1"{% if filters.errors %} checked{% endif %}> Has errors</label>
+  </div>
+  <div class="cluster"><button class="button button--primary">Search</button><a class="button button--ghost" href="{% url 'diagnostics:overview' %}">Clear</a></div>
+</form>
+
+<div class="panel panel--flush">
+  <div class="scroll-x"><table class="data-table">
+    <thead><tr><th>Code</th><th>Reason</th><th>Platform</th><th>App</th><th>Device</th><th>Event</th><th class="num">Entries</th><th class="num">Errors</th><th>Last upload</th></tr></thead>
+    <tbody>{% for s in sessions %}<tr>
+      <td><a class="mono strong" href="{% url 'diagnostics:session' s.code %}">{{ s.code }}</a></td>
+      <td>{% if s.reason == 'dev' %}<span class="badge badge--info">Dev build</span>{% else %}<span class="badge badge--primary">Debug mode</span>{% endif %}</td>
+      <td>{{ s.platform|default:"?" }}</td>
+      <td>{{ s.app_version|default:"–" }}{% if s.build %} <span class="muted small">({{ s.build }})</span>{% endif %}</td>
+      <td class="small">{{ s.model|default:"" }} {{ s.os|default:"" }}</td>
+      <td>{% if s.event_name %}{{ s.event_name }}{% elif s.event_id %}#{{ s.event_id }}{% else %}–{% endif %}</td>
+      <td class="num">{{ s.entry_count }}</td>
+      <td class="num">{% if s.error_count %}<span class="badge badge--danger">{{ s.error_count }}</span>{% else %}0{% endif %}</td>
+      <td class="nowrap">{{ s.last_entry_at|date:"M j, g:i A" }}</td>
+    </tr>{% empty %}<tr><td colspan="9" class="muted">No sessions match. Dev builds upload all the time; production apps only while someone turned on debug logging (About &amp; support).</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div class="split">
+  <div class="split__main panel">
+    <h2 class="title-4">{% icon "warning" %} Crash &amp; hang reports, last 7 days</h2>
+    <div class="scroll-x"><table class="data-table"><thead><tr><th>Problem</th><th>Kind</th><th>Platform</th><th class="num">Reports</th><th>Latest</th></tr></thead><tbody>
+    {% for g in report_groups %}<tr>
+      <td><a href="{% url 'diagnostics:report' g.last_id %}">{{ g.report.summary|default:g.report.reason|default:"(no message)"|truncatechars:90 }}</a></td>
+      <td>{{ g.kind }}</td><td>{{ g.platform }}</td>
+      <td class="num"><a href="{% url 'diagnostics:reports' %}?signature={{ g.signature }}">{{ g.n }}</a></td>
+      <td class="nowrap">{{ g.latest|date:"M j, g:i A" }}</td></tr>
+    {% empty %}<tr><td colspan="5" class="muted">No reports. That's good.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+  <div class="split__aside panel">
+    <h2 class="title-4">{% icon "chart" %} App performance, 7 days</h2>
+    <p class="small muted">Anonymous buckets from the usage counts (API-014), every event.</p>
+    {% for m in perf %}
+      <h3 class="small strong mono">{{ m.metric }} <span class="muted">({{ m.total }})</span></h3>
+      <table class="data-table data-table--compact"><thead><tr><th>Bucket</th><th class="num">iOS</th><th class="num">Android</th></tr></thead><tbody>
+      {% for r in m.rows %}<tr><td class="mono">{{ r.bucket }}</td><td class="num">{{ r.ios }}</td><td class="num">{{ r.android }}</td></tr>{% endfor %}
+      </tbody></table>
+    {% empty %}<p class="muted small">No performance counts yet.</p>{% endfor %}
+  </div>
+</div>
+</div>
+{% endblock %}

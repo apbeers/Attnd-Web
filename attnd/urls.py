@@ -24,19 +24,25 @@ urlpatterns = [
     path(settings.ADMIN_URL_PATH + 'login/', views_auth.admin_login),
     path(settings.ADMIN_URL_PATH, admin.site.urls),
     path('csp-report/', attnd_views.csp_report, name='csp_report'),
+    path('console/diagnostics/', include('diagnostics.urls')),  # staff only (API-013)
+    path('console/', include('studio.urls')),  # Attnd Studio editor + staff pages (beta users only, else 404)
     path('console/', include('console.urls'), name='console'),
-    path('api/v1/events/', include('events.urls'), name='events'),
     path('api/v2/', include('events.urls_v2')),
     path('api/app-status/', app_status_view, name='app_status'),
+    path('api/diagnostics/', include('diagnostics.urls_api')),  # CI symbol uploads, iOS symbolication (API-013)
     path('api/v1/attest/', include('attestation.urls'), name='attestation'),
-    # Any other /api/vN/ path: 410 + update_required for retired versions, JSON 404 otherwise.
+    # Any other /api/vN/ path (v1's events API since Nov 19, 2026): 410 + update_required for retired
+    # versions, JSON 404 otherwise.
     re_path(r'^api/v(?P<version>\d+)/', retired_api_view),
     path('join/', include('join.urls')),
+    # Shared plan links (API-015), with or without the trailing slash (the apps write them without).
+    path('p/<str:event_code>/<str:payload>/qr.svg', join_views.shared_plan_qr, name='shared_plan_qr'),
+    path('p/<str:event_code>/<str:payload>/', join_views.SharedPlanRedirect.as_view(), name='shared_plan'),
+    path('p/<str:event_code>/<str:payload>', join_views.SharedPlanRedirect.as_view()),
     path('scrape/', include('scrape.urls')),
     path('accounts/login/', views_auth.SignInView.as_view(), name='login'),
     path('accounts/2fa/', views_auth.two_factor_verify, name='two_factor_verify'),
     path('accounts/2fa/setup/', views_auth.two_factor_setup, name='two_factor_setup'),
-    path('accounts/2fa/recovery-codes/', views_auth.recovery_codes, name='two_factor_recovery_codes'),
     path('accounts/passkeys/auth/options/', views_passkeys.auth_options, name='passkey_auth_options'),
     path('accounts/passkeys/auth/', views_passkeys.auth_verify, name='passkey_auth'),
     path('accounts/passkeys/register/options/', views_passkeys.register_options, name='passkey_register_options'),

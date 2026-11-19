@@ -1,5 +1,5 @@
 """
-Apple App Attest verification (attestation + assertion).
+Apple App Attest verification (attestation).
 
 References:
   https://developer.apple.com/documentation/devicecheck/validating-apps-that-connect-to-your-server
@@ -14,10 +14,7 @@ Flow
 4. Client POSTs {key_id, attestation, challenge} to /api/v1/attest/ios/.
 5. This module verifies the attestation and returns the device's public key.
 
-After attestation, for each API call:
-6. Client builds clientData = {challenge, bundle_id, ...} and signs it with DCAppAttestService.generateAssertion()
-7. Client sends {assertion, clientData} along with the request.
-8. Backend verifies with verify_assertion() using the stored public key.
+6. The view issues a short-lived JWT the app sends as its bearer token (no per-request assertions).
 
 Attestation object (CBOR) structure
 ------------------------------------
@@ -47,9 +44,7 @@ import cbor2
 from datetime import datetime, timezone
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric.ec import ECDSA
-from cryptography.x509.oid import ExtensionOID
+from cryptography.hazmat.primitives import serialization
 
 logger = logging.getLogger(__name__)
 
@@ -205,61 +200,6 @@ def verify_attestation(
 
     logger.info("iOS App Attest: verified key_id=%s app=%s", key_id[:16], app_id)
     return AttestationResult(key_id=key_id, public_key_pem=public_key_pem)
-
-
-def verify_assertion(
-    *,
-    assertion_b64: str,
-    client_data: bytes,
-    stored_public_key_pem: str,
-    stored_sign_count: int,
-    bundle_id: str,
-    team_id: str,
-) -> int:
-    """
-    Verify a DCAppAttestService assertion (for ongoing API calls after initial attestation).
-
-    Returns the new sign_count to persist.
-    Raises AssertionError on any failure.
-    """
-    try:
-        assertion_bytes = base64.b64decode(assertion_b64 + '==')
-        obj = cbor2.loads(assertion_bytes)
-    except Exception as exc:
-        raise AttestationError(f"Cannot decode assertion: {exc}") from exc
-
-    signature: bytes = obj.get('signature', b'')
-    auth_data: bytes = obj.get('authenticatorData', b'')
-
-    if len(auth_data) < 37:
-        raise AttestationError("authenticatorData too short in assertion")
-
-    # Verify rpIdHash
-    rp_id_hash = auth_data[0:32]
-    if _matching_app_id(rp_id_hash, team_id, bundle_id) is None:
-        raise AttestationError("rpIdHash mismatch in assertion")
-
-    # Sign count must be strictly greater than stored value
-    sign_count = struct.unpack('>I', auth_data[33:37])[0]
-    if sign_count <= stored_sign_count:
-        raise AttestationError(
-            f"sign_count replay: stored={stored_sign_count}, received={sign_count}"
-        )
-
-    # The device signs nonce = SHA-256(authenticatorData || SHA-256(clientData)) with ECDSA-SHA256,
-    # so the signature is checked against the nonce (which ECDSA-SHA256 hashes once more).
-    client_data_hash = hashlib.sha256(client_data).digest()
-    nonce = hashlib.sha256(auth_data + client_data_hash).digest()
-
-    try:
-        from cryptography.hazmat.primitives.serialization import load_pem_public_key
-        pub_key = load_pem_public_key(stored_public_key_pem.encode())
-        pub_key.verify(signature, nonce, ECDSA(hashes.SHA256()))
-    except Exception as exc:
-        raise AttestationError(f"Assertion signature verification failed: {exc}") from exc
-
-    logger.debug("iOS assertion verified, new sign_count=%d", sign_count)
-    return sign_count
 
 
 # ---------------------------------------------------------------------------

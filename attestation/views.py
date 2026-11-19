@@ -6,7 +6,6 @@ URL pattern summary
 GET  /api/v1/attest/nonce/          → generate a one-time challenge
 POST /api/v1/attest/ios/            → verify Apple App Attest attestation
 POST /api/v1/attest/android/        → verify Google Play Integrity token
-POST /api/v1/attest/ios/assert/     → verify Apple App Attest assertion (per-request auth)
 """
 
 import json
@@ -15,18 +14,17 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from attestation.ios_attest import verify_attestation, verify_assertion, AttestationError
+from attestation.ios_attest import verify_attestation, AttestationError
 from attestation.android_attest import verify_integrity_token, AndroidAttestationError
 from attestation.models import AttestationNonce, AttestedDevice
 from attestation import tokens
-from attnd.ratelimit import client_ip
+from attnd.ratelimit import RateLimit, client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +52,7 @@ def purge_expired_nonces() -> int:
     return deleted
 
 
-def _client_ip(request) -> str:
-    return client_ip(request)  # right-most X-Forwarded-For hop (the one Heroku's router added)
-
-
-_NONCE_RATE_PER_MINUTE = 30
+NONCE_LIMIT = RateLimit('attest_nonce_ip')  # settings.RATE_LIMITS['attest_nonce_ip'], 30 per minute
 
 
 # ---------------------------------------------------------------------------
@@ -70,11 +64,10 @@ class NonceView(View):
     """GET /api/v1/attest/nonce/ — returns a one-time challenge."""
 
     def get(self, request):
-        key = f'attest:nonce-rate:{_client_ip(request)}'
-        count = cache.get(key, 0)
-        if count >= _NONCE_RATE_PER_MINUTE:
+        ip = client_ip(request)
+        if NONCE_LIMIT.exceeded(ip):
             return JsonResponse({'error': 'Too many requests'}, status=429)
-        cache.set(key, count + 1, 60)
+        NONCE_LIMIT.hit(ip)
         nonce = _issue_nonce()
         return JsonResponse({'nonce': nonce})
 
@@ -207,70 +200,4 @@ class AndroidAttestView(View):
             device.touch()
 
         token = tokens.issue(device_key=device_id, platform='android')
-        return JsonResponse({'token': token})
-
-
-# ---------------------------------------------------------------------------
-# iOS assertion (per-request verification)
-# ---------------------------------------------------------------------------
-
-@method_decorator(csrf_exempt, name='dispatch')
-class IOSAssertView(View):
-    """
-    POST /api/v1/attest/ios/assert/
-
-    Verifies a DCAppAttestService assertion for a specific API request.
-    The client sends this alongside the actual API request body.
-
-    Body (JSON):
-        key_id      – base64url key identifier (same as used during attestation)
-        assertion   – base64-encoded CBOR assertion from DCAppAttestService
-        client_data – the raw JSON bytes that were signed (as a UTF-8 string)
-
-    Returns a new short-lived JWT on success.
-    """
-
-    def post(self, request):
-        try:
-            body = json.loads(request.body)
-        except (json.JSONDecodeError, ValueError):
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
-        key_id = body.get('key_id', '').strip()
-        assertion_b64 = body.get('assertion', '').strip()
-        client_data_str = body.get('client_data', '')
-
-        if not key_id or not assertion_b64 or not client_data_str:
-            return JsonResponse({'error': 'key_id, assertion, and client_data are required'}, status=400)
-
-        device = AttestedDevice.objects.filter(
-            device_key=key_id,
-            platform=AttestedDevice.PLATFORM_IOS,
-        ).first()
-        if device is None:
-            return JsonResponse({'error': 'Device not attested'}, status=404)
-
-        bundle_id = getattr(settings, 'APPLE_APP_BUNDLE_ID', '')
-        team_id = getattr(settings, 'APPLE_TEAM_ID', '')
-
-        try:
-            new_sign_count = verify_assertion(
-                assertion_b64=assertion_b64,
-                client_data=client_data_str.encode('utf-8'),
-                stored_public_key_pem=device.public_key_pem,
-                stored_sign_count=device.sign_count,
-                bundle_id=bundle_id,
-                team_id=team_id,
-            )
-        except AttestationError as exc:
-            logger.warning("iOS assertion failed for key_id=%s: %s", key_id[:16], exc)
-            return JsonResponse({'error': str(exc)}, status=400)
-        except Exception as exc:
-            logger.exception("Unexpected error during iOS assertion")
-            return JsonResponse({'error': 'Internal error'}, status=500)
-
-        device.sign_count = new_sign_count
-        device.save(update_fields=['sign_count', 'last_seen'])
-
-        token = tokens.issue(device_key=key_id, platform='ios')
         return JsonResponse({'token': token})

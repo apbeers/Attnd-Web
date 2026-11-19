@@ -5,12 +5,15 @@ Shared by the v1/v2 API, the organizer console, and the AI change engine.
 """
 
 import contextlib
+import re
 import threading
 
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
+from attnd.links import join_url
 
-from events.models import Event, EventRevision, Location, Notification, ScheduledItem
+from events import context as ctx
+from events.models import Event, EventRevision, Location, Notification, ScheduledItem, normalize_tags
 
 _state = threading.local()
 
@@ -60,6 +63,29 @@ def _abs(request, url):
     return request.build_absolute_uri(url)
 
 
+# Phone-sized images (v2 only): Cloudinary delivers a resized, recompressed copy in the best format the app
+# accepts (f_auto: WebP/AVIF/JPEG), so the apps download a fraction of an organizer's original photo.
+# Deterministic, so the URL stays the same for the same image (the apps cache images by URL).
+APP_IMAGE_WIDTH = {'location': 1200, 'logo': 512, 'flyer': 2000}
+_CLOUDINARY_UPLOAD = re.compile(r'^(https?://res\.cloudinary\.com/[^/]+/image/upload/)(.+)$')
+_RASTER = ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.avif', '.bmp', '.tif', '.tiff')
+_TRANSFORM_SEGMENT = re.compile(r'^[a-z]{1,3}_[^/]*$')  # e.g. w_800,c_fill (already transformed: leave it)
+
+
+def app_image_url(url, kind):
+    """`url` with Cloudinary delivery transformations for phones, or unchanged (other hosts, PDFs, GIFs,
+    URLs that already carry a transformation)."""
+    if not url:
+        return url
+    match = _CLOUDINARY_UPLOAD.match(url)
+    if not match:
+        return url
+    rest = match.group(2)
+    if not rest.split('?', 1)[0].lower().endswith(_RASTER) or _TRANSFORM_SEGMENT.match(rest.split('/', 1)[0]):
+        return url
+    return f'{match.group(1)}f_auto,q_auto,c_limit,w_{APP_IMAGE_WIDTH[kind]}/{rest}'
+
+
 def event_v2(event, request=None):
     return {
         'id': event.id,
@@ -75,12 +101,21 @@ def event_v2(event, request=None):
         'status': event.status,
         'paid': event.paid,
         'is_demo': not event.paid,
-        'flyer_url': _abs(request, event.flyer.url) if event.flyer else None,
+        'flyer_url': app_image_url(_abs(request, event.flyer.url), 'flyer') if event.flyer else None,
         'accent_color': event.accent_color or None,
-        'logo_url': event.logo_url or None,
+        'logo_url': app_image_url(event.logo_url, 'logo') or None,
         'content_version': event.content_version,
-        'join_url': f'https://attnd.app/join/{event.event_code}/',
+        'join_url': join_url(event),
+        # API-016: the event's Attnd Studio website while it is published, else null.
+        'website_url': _website_url(event),
+        # API-017: ticketing is parked (git branch parked/tickets): always null, kept for installed apps.
+        'tickets_url': None,
     }
+
+
+def _website_url(event):
+    from studio.publishing import website_url
+    return website_url(event)
 
 
 def location_v2(location, request=None):
@@ -91,11 +126,13 @@ def location_v2(location, request=None):
         'description': location.description,
         'category': location.category or None,
         'website': location.website or None,
-        'image_url': _abs(request, location.resolved_image_url),
+        'image_url': app_image_url(_abs(request, location.resolved_image_url), 'location'),
         'address': location.address,
         'latitude': _coord(location.latitude),
         'longitude': _coord(location.longitude),
         'sort_order': location.sort_order,
+        'tags': normalize_tags(location.tags),
+        'context': ctx.for_bundle(ctx.LOCATION, location.context),  # API-018
     }
 
 
@@ -108,7 +145,8 @@ def item_v2(item):
         'end_time': _dt(item.end_time),
         'location_id': item.location_id,
         'location_name': item.location.name if item.location_id else None,
-        'tags': item.tags or [],
+        'tags': normalize_tags(item.tags),
+        'context': ctx.for_bundle(ctx.ITEM, item.context),  # API-018
     }
 
 
@@ -118,6 +156,7 @@ def notification_v2(n):
         'title': n.title,
         'body': n.body,
         'send_time': _dt(n.sent_at or n.send_time),
+        'priority': n.priority or Notification.PRIORITY_NORMAL,
     }
 
 
@@ -131,18 +170,25 @@ def bundle(event, request=None):
         .select_related('location').order_by('start_time', 'name')
     )
     notifications = list(event.notification_set.filter(sent=True).order_by('-send_time'))
-    stats = event_stats(event)
+    stats = event_stats(event, locations)
     categories = sorted({loc.category for loc in locations if loc.category})
+    location_rows = [location_v2(loc, request) for loc in locations]
+    item_rows = [item_v2(i) for i in items]
+    # API-018: the event's assistant context only in the bundle (not in lookup / nearby), within one budget.
+    event_row = event_v2(event, request)
+    event_row['context'] = ctx.for_bundle(ctx.EVENT, event.context, location_ids={loc.id for loc in locations})
+    ctx.apply_budget(event_row['context'], location_rows, item_rows, label=f'event {event.pk}')
     return {
         'schema_version': 2,
         'content_version': event.content_version,
         'updated_at': _dt(event.content_updated_at),
-        'event': event_v2(event, request),
+        'event': event_row,
         'display': resolve_display(event, stats),
         'categories': categories,
-        'locations': [location_v2(loc, request) for loc in locations],
-        'schedule': [item_v2(i) for i in items],
+        'locations': location_rows,
+        'schedule': item_rows,
         'notifications': [notification_v2(n) for n in notifications],
+        'tickets': None,  # API-017: ticketing parked (git branch parked/tickets), always null
     }
 
 
@@ -177,6 +223,7 @@ def snapshot(event):
             'end_time': _dt(item.end_time),
             'location_id': item.location_id,
             'tags': item.tags,
+            'context': item.context,
             'hidden': item.hidden,
             'locked_fields': item.locked_fields,
         })
@@ -190,6 +237,7 @@ def snapshot(event):
             'start_time': _dt(event.start_time),
             'end_time': _dt(event.end_time),
             'timezone': event.timezone,
+            'context': event.context,
             'locked_fields': event.locked_fields,
         },
         'locations': locations,
@@ -221,6 +269,8 @@ def restore(revision, user=None):
             event.longitude = ev['longitude']
             event.start_time = parse_datetime(ev['start_time'])
             event.end_time = parse_datetime(ev['end_time']) if ev['end_time'] else None
+            if 'context' in ev:  # API-018; older snapshots keep the current context
+                event.context = ev['context']
             event.save()
 
             owner = event.user
@@ -249,6 +299,8 @@ def restore(revision, user=None):
                 obj.end_time = parse_datetime(it['end_time']) if it['end_time'] else None
                 obj.location_id = id_map.get(it['location_id'])
                 obj.tags = it['tags']
+                if 'context' in it:
+                    obj.context = it['context']
                 obj.hidden = it['hidden']
                 obj.locked_fields = it['locked_fields']
                 obj.save()

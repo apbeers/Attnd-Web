@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 import datetime
@@ -17,6 +17,7 @@ def _make_trial_user():
     return user
 
 
+@override_settings(SIGNUPS_OPEN=True)
 class SignUpViewTests(TestCase):
 
     def setUp(self):
@@ -177,7 +178,7 @@ class ConsoleTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         item = ScheduledItem.objects.get(name='Talk')
         self.assertEqual(item.start_time.astimezone(datetime.timezone.utc).hour, 23)  # 18:00 CDT
-        self.assertEqual(item.tags, ['Talks', 'Kids'])
+        self.assertEqual(item.tags, ['talks', 'kids'])  # API-010: normalised to lower case
 
     def test_publish_and_list(self):
         self.client.post(self.url('event_status'), {'action': 'publish'}, secure=True)
@@ -186,15 +187,12 @@ class ConsoleTests(TestCase):
         self.assertEqual(self.event.status, Event.STATUS_PUBLISHED)
         self.assertTrue(self.event.public)
 
-    def test_display_settings_saved_and_previewed(self):
+    def test_display_settings_saved(self):
         data = {'preset': 'festival', 'customize_tabs': 'on', 'tabs': ['schedule', 'map'],
                 'tab_order': 'schedule,map,locations,flyer,notifications', 'default_tab': '',
                 'locations_style': 'cards', 'schedule_style': '', 'secondary_pane': '',
                 'map_clustering': '0', 'map_fit_all': '', 'show_location_images': '', 'enable_search': '',
                 'group_by_category': '', 'accent_color': '#123456'}
-        preview = self.client.post(self.url('display_preview'), data, secure=True)
-        self.assertEqual(preview.status_code, 200)
-        self.assertEqual(preview.json()['resolved']['tabs'], ['schedule', 'map'])
         self.client.post(self.url('display'), data, secure=True)
         self.event.refresh_from_db()
         self.assertEqual(self.event.display_config, {
@@ -345,6 +343,7 @@ class UsagePageTests(ConsoleTests):
         self.assertEqual(self.client.get(self.url('usage')).status_code, 200)
 
 
+@override_settings(SIGNUPS_OPEN=True)
 class AccountEmailTests(TestCase):
     def test_signup_rejects_an_email_already_used_by_any_account(self):
         User.objects.create_superuser('u8741', 'Owner@Example.com', 'pw')

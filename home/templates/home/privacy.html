@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Privacy policy for Attnd.">
   <title>Privacy Policy | Attnd</title>
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
-  <link rel="icon" type="image/png" href="{% static 'home/img/favicon.png' %}">
 </head>
 <body>
 <nav class="site-nav"><div class="wrap">
@@ -15,7 +15,7 @@
 </div></nav>
 <main class="page">
   <h1>Privacy Policy</h1>
-  <p class="muted">Effective date: November 14, 2026</p>
+  <p class="muted">Effective date: November 15, 2026</p>
 
   <p>Attnd helps people follow live events (maps, schedules and updates) and helps organizers run them. We collect as little as we can. Attendees never create an account, and we don't use advertising, tracking or third-party analytics services. We don't sell or share personal information.</p>
 
@@ -26,6 +26,8 @@
     <li><strong>Your location</strong>, only when you look for nearby events or choose to show your position on the map. To find nearby events, the app sends your approximate position to our server for that search. We don't store it. The blue dot on the map never leaves your device.</li>
     <li><strong>App and device verification.</strong> To make sure requests come from the genuine Attnd app on an unmodified device, the app uses Apple App Attest on iPhone and Google Play Integrity on Android. Apple and Google tell us whether the app and device pass their checks. We keep the verification result and a cryptographic key identifier, not personal information.</li>
     <li><strong>Anonymous usage counts.</strong> The app tells us how often features are used, for example "the Map tab was opened" or "a location was viewed", so organizers can see how their event's app was used. These counts are sent without any identifier and stored only as hourly totals, so they can't be linked to you or your device.</li>
+    <li><strong>Crash and performance reports.</strong> When the app crashes, freezes or is stopped by the system, it may send us a technical report (the app and system version, the phone model and where in our code it happened) and anonymous performance counts such as how long a launch or a refresh took. These are sent without any identifier, so they can't be linked to you or your device. We use them only to fix problems, and delete reports after 30 days.</li>
+    <li><strong>Debug logging, only if you turn it on.</strong> If you contact us about a problem, we may ask you to turn on "debug logging" in the app's About &amp; support section. For the next 10 minutes, starting from the moment you turn it on (nothing from before), the app sends us a technical log of what it did: screens opened, network requests and their timings, errors and push notifications received. The log is labelled only with a random debug code that the app shows you, never your app ID; it never contains what you typed into search or the assistant, your exact location, push tokens or anything that identifies you. It stops by itself after 10 minutes, only our staff can read it, and we delete it after 14 days. Test builds of the app used by our team send these logs all the time and keep them for 7 days.</li>
     <li><strong>Camera</strong>, only while you scan an event QR code. Scanning happens on your device, and no images are sent to us.</li>
   </ul>
 
@@ -49,6 +51,7 @@
   <h2>How long we keep data</h2>
   <ul>
     <li><strong>App records:</strong> the app ID and its push token are deleted after 12 months without use. Push tokens are also removed as soon as Apple or Google reports them invalid.</li>
+    <li><strong>Debug logs</strong> are deleted after 14 days (7 days from our own test builds), <strong>crash and performance reports</strong> after 30 days.</li>
     <li><strong>Trial events</strong> created on our homepage and never claimed are deleted after 7 days.</li>
     <li><strong>Organizer accounts and their events</strong> are kept until you delete the event or ask us to delete your account.</li>
   </ul>

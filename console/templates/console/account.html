@@ -20,7 +20,7 @@
       <button class="button button--primary">Change password</button></form>
   </div>
   {% if recovery_codes %}<div class="panel span-all">
-    <h2 class="title-4">{% icon "lock" %} New recovery codes</h2>
+    <h2 class="title-4">{% icon "lock" %} Your recovery codes</h2>
     {% include 'console/_recovery_codes.html' %}
   </div>{% endif %}
 
@@ -74,7 +74,7 @@
       {% if totp_removable %}
       <form method="post" class="cluster cluster--bottom">{% csrf_token %}<input type="hidden" name="action" value="2fa_disable">
         <div class="field field--small field--bare"><label class="field__label" for="id_disable_code">Code or recovery code</label>
-          <input class="mono" id="id_disable_code" name="code" autocomplete="one-time-code" required></div>
+          <input class="mono" id="id_disable_code" name="code" inputmode="numeric" autocomplete="one-time-code" required></div>
         <button class="button button--danger button--small" data-confirm="Turn off the authenticator app?">Turn off</button></form>
       {% else %}<p class="small muted">Admin accounts need a passkey or an authenticator app: add a passkey before turning this off.</p>{% endif %}
     {% else %}
@@ -101,9 +101,13 @@
   </div>
 
   {% if has_second_factor %}
-  <div class="panel span-all">
+  <div class="panel span-all" id="recovery-codes">
     <h2 class="title-4">{% icon "lock" %} Recovery codes</h2>
-    <p class="small">{{ recovery_codes_left }} recovery code{{ recovery_codes_left|pluralize }} left. Each one replaces the second step once, if you lose your phone or passkey.</p>
+    {% if recovery_codes_left %}
+    <p class="small">{{ recovery_codes_left }} recovery code{{ recovery_codes_left|pluralize }} left. Each one replaces the second step once, if you lose your phone or passkey. New codes replace the old ones.</p>
+    {% else %}
+    <p class="small muted">Optional: one-time codes to keep somewhere safe, in case you ever lose your phone or passkey.</p>
+    {% endif %}
     <form method="post" class="cluster cluster--bottom">{% csrf_token %}<input type="hidden" name="action" value="2fa_codes">
       {% if two_factor %}
       <div class="field field--small field--bare"><label class="field__label" for="id_codes_code">Code from your app</label>
@@ -112,7 +116,7 @@
       <div class="field field--small field--bare"><label class="field__label" for="id_codes_password">Your password</label>
         <input type="password" id="id_codes_password" name="password" autocomplete="current-password" required></div>
       {% endif %}
-      <button class="button button--secondary button--small">New recovery codes</button></form>
+      <button class="button button--secondary button--small">{% if recovery_codes_left %}New recovery codes{% else %}Set up recovery codes{% endif %}</button></form>
   </div>
   {% endif %}
 </div>

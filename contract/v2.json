@@ -1,6 +1,8 @@
 {
   "endpoints": [
     "devices/",
+    "diagnostics/logs/",
+    "diagnostics/reports/",
     "events/<int:event_id>/bundle/",
     "events/<int:event_id>/join/",
     "events/<int:event_id>/leave/",
@@ -32,7 +34,9 @@
             "paid": "boolean",
             "start_time": "string",
             "status": "string",
-            "timezone": "string"
+            "tickets_url": "null",
+            "timezone": "string",
+            "website_url": "string"
           },
           "starts_in_hours": "number"
         }
@@ -57,7 +61,9 @@
         "paid": "boolean",
         "start_time": "string",
         "status": "string",
-        "timezone": "string"
+        "tickets_url": "null",
+        "timezone": "string",
+        "website_url": "string"
       }
     },
     "GET events/<id>/bundle/": {
@@ -96,6 +102,33 @@
         "accent_color": "string",
         "address": "string",
         "content_version": "integer",
+        "context": {
+          "about": "string",
+          "accessibility": "string",
+          "amenities": [
+            {
+              "kind": "string",
+              "location_id": "integer",
+              "name": "string",
+              "note": "string"
+            }
+          ],
+          "faq": [
+            {
+              "a": "string",
+              "q": "string"
+            }
+          ],
+          "getting_there": "string",
+          "links": [
+            {
+              "title": "string",
+              "url": "string"
+            }
+          ],
+          "policies": "string",
+          "weather_plan": "string"
+        },
         "description": "string",
         "end_time": "string",
         "event_code": "string",
@@ -110,12 +143,33 @@
         "paid": "boolean",
         "start_time": "string",
         "status": "string",
-        "timezone": "string"
+        "tickets_url": "null",
+        "timezone": "string",
+        "website_url": "string"
       },
       "locations": [
         {
           "address": "string",
           "category": "string",
+          "context": {
+            "about": "string",
+            "accessibility": "string",
+            "age_limit": "string",
+            "hours": "string",
+            "links": [
+              {
+                "title": "string",
+                "url": "string"
+              }
+            ],
+            "menu": [
+              {
+                "name": "string",
+                "note": "string",
+                "price": "string"
+              }
+            ]
+          },
           "description": "string",
           "id": "integer",
           "image_url": "string",
@@ -124,6 +178,9 @@
           "name": "string",
           "snippet": "string",
           "sort_order": "integer",
+          "tags": [
+            "string"
+          ],
           "website": "string"
         }
       ],
@@ -131,12 +188,34 @@
         {
           "body": "string",
           "id": "integer",
+          "priority": "string",
           "send_time": "string",
           "title": "string"
         }
       ],
       "schedule": [
         {
+          "context": {
+            "about": "string",
+            "accessibility": "string",
+            "age_limit": "string",
+            "links": [
+              {
+                "title": "string",
+                "url": "string"
+              }
+            ],
+            "performers": [
+              {
+                "bio": "string",
+                "genres": [
+                  "string"
+                ],
+                "name": "string"
+              }
+            ],
+            "price": "string"
+          },
           "description": "string",
           "end_time": "string",
           "id": "integer",
@@ -150,6 +229,7 @@
         }
       ],
       "schema_version": "integer",
+      "tickets": "null",
       "updated_at": "string"
     },
     "POST events/<id>/join/": {
@@ -174,6 +254,22 @@
       "min_version": "null",
       "update": "string",
       "update_url": "string"
+    },
+    "POST diagnostics/logs/": {
+      "accepted": "integer",
+      "rejected": "integer",
+      "status": "string"
+    },
+    "POST diagnostics/reports/": {
+      "accepted": "integer",
+      "rejected": "integer",
+      "status": "string"
+    },
+    "POST /api/diagnostics/symbols/": {
+      "bytes": "integer",
+      "id": "integer",
+      "sha256": "string",
+      "status": "string"
     }
   },
   "push": {
@@ -185,6 +281,27 @@
       "event_id": "integer",
       "type": "string"
     },
+    "apns:liveactivity": {
+      "aps": {
+        "alert": {
+          "body": "string",
+          "sound": "string",
+          "title": "string"
+        },
+        "content-state": {
+          "urgent": {
+            "body": "string",
+            "id": "integer",
+            "sent_at": "string",
+            "title": "string"
+          }
+        },
+        "event": "string",
+        "relevance-score": "integer",
+        "stale-date": "integer",
+        "timestamp": "integer"
+      }
+    },
     "apns:notification": {
       "aps": {
         "alert": {
@@ -195,6 +312,22 @@
       },
       "event_id": "integer",
       "notification_id": "integer",
+      "priority": "string",
+      "type": "string"
+    },
+    "apns:notification:urgent": {
+      "aps": {
+        "alert": {
+          "body": "string",
+          "title": "string"
+        },
+        "interruption-level": "string",
+        "relevance-score": "number",
+        "sound": "string"
+      },
+      "event_id": "integer",
+      "notification_id": "integer",
+      "priority": "string",
       "type": "string"
     },
     "fcm:content_updated": {
@@ -209,12 +342,24 @@
       "data": {
         "event_id": "integer",
         "notification_id": "integer",
+        "priority": "string",
         "type": "string"
       },
       "notification": {
         "body": "string",
         "title": "string"
       }
+    },
+    "fcm:notification:urgent": {
+      "data": {
+        "body": "string",
+        "event_id": "integer",
+        "notification_id": "integer",
+        "priority": "string",
+        "title": "string",
+        "type": "string"
+      },
+      "notification": "null"
     }
   }
 }

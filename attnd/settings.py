@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sitemaps',
+    'django.contrib.postgres',  # GIN trigram + BRIN indexes for diagnostics (built into Django)
     'cloudinary_storage',
     'cloudinary',
     'events.apps.EventsConfig',
@@ -53,11 +54,19 @@ INSTALLED_APPS = [
     'join.apps.JoinConfig',
     'scrape.apps.ScrapeConfig',
     'attestation.apps.AttestationConfig',
+    'diagnostics.apps.DiagnosticsConfig',
+    'studio.apps.StudioConfig',
 ]
 
 MIDDLEWARE = [
+    # Attnd Studio's hosted sites (SITES_HOST): only site routes there, no cookies, the sites' own CSP.
+    'studio.middleware.SitesHostMiddleware',
+    # First, so it times the whole request: one JSON line per /api/ request + X-Request-Id (API-013).
+    'diagnostics.middleware.RequestLogMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # gzip for the API's JSON and the HTML pages (after WhiteNoise, which serves static files pre-compressed).
+    'attnd.middleware.CompressionMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -83,6 +92,9 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.csp',
                 'console.context_processors.maps',
+                'console.context_processors.store_links',
+                'console.context_processors.signups',
+                'studio.context_processors.studio',
             ],
         },
     },
@@ -114,6 +126,7 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 WHITENOISE_ROOT = os.path.join(BASE_DIR, 'public')
+WHITENOISE_MIMETYPES = {'.webmanifest': 'application/manifest+json'}
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
@@ -174,6 +187,13 @@ RATE_LIMITS = {
     'passkey_ip': _rate('passkey_ip', '20/900'),      # failed passkey sign-ins per IP, 15 min
     'email_code_user': _rate('email_code_user', '3/900'),  # sign-in codes emailed per account, 15 min
     'csp_report_ip': _rate('csp_report_ip', '60/60'),  # CSP violation reports logged per IP, 1 min
+    'diagnostics_ip': _rate('diagnostics_ip', '600/600'),  # debug log uploads per IP, 10 min (API-013)
+    'diagnostics_reports_ip': _rate('diagnostics_reports_ip', '60/3600'),  # crash/hang report uploads per IP
+    'studio_form_ip': _rate('studio_form_ip', '10/600'),       # Studio site form posts per IP per site, 10 min
+    'studio_form_site': _rate('studio_form_site', '300/3600'),  # Studio site form posts per site, 1 hour
+    'studio_report_ip': _rate('studio_report_ip', '5/3600'),    # "Report this site" per IP, 1 hour
+    'scrape_ip': _rate('scrape_ip', '5/3600'),                  # homepage trial AI imports per IP, 1 hour
+    'attest_nonce_ip': _rate('attest_nonce_ip', '30/60'),       # attestation challenges per IP, 1 minute
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
@@ -211,8 +231,9 @@ GOOGLE_MAPS_MAP_ID = os.getenv('GOOGLE_MAPS_MAP_ID', 'DEMO_MAP_ID')
 DEMO_EVENT_CODE = os.getenv('DEMO_EVENT_CODE', 'DEMO')
 
 # Store links, used by /join/<code>/ and the apps' update prompt (/api/app-status/).
-IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', '')  # https://apps.apple.com/app/id<numeric Apple ID>
+IOS_APP_STORE_URL = os.getenv('IOS_APP_STORE_URL', 'https://apps.apple.com/us/app/attnd/id1470627406')
 ANDROID_PACKAGE_NAME = os.getenv('ANDROID_PACKAGE_NAME', 'com.arcu.attnd')
+ANDROID_PLAY_STORE_URL = f'https://play.google.com/store/apps/details?id={ANDROID_PACKAGE_NAME}'
 
 # Update prompt (API_CHANGES.md, API-003). Builds older than APP_MIN_VERSION_<PLATFORM> must update;
 # builds older than APP_LATEST_VERSION_<PLATFORM> are told an update is available. Empty = no prompt.
@@ -222,13 +243,30 @@ APP_LATEST_VERSION_IOS = os.getenv('APP_LATEST_VERSION_IOS', '')
 APP_LATEST_VERSION_ANDROID = os.getenv('APP_LATEST_VERSION_ANDROID', '')
 APP_UPDATE_MESSAGE = os.getenv('APP_UPDATE_MESSAGE', '')
 # API versions the server still serves. An app on any other version is told to update.
-SUPPORTED_API_VERSIONS = [int(v) for v in os.getenv('SUPPORTED_API_VERSIONS', '1,2').split(',') if v.strip()]
+SUPPORTED_API_VERSIONS = [int(v) for v in os.getenv('SUPPORTED_API_VERSIONS', '2').split(',') if v.strip()]
 # Production should set STATIC_API_KEY_ENABLED=0 so only attested official apps can call the API.
 STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', 'false', 'False')
 # CI keys (API-008): comma-separated bearer tokens for the apps' live integration tests against production.
 # Separate from API_KEY and still accepted with STATIC_API_KEY_ENABLED=0, but only for the DEMO event
 # (lookup, nearby, its bundle/join/leave/usage) and for `ci-…` device ids; usage they post is discarded.
 CI_API_KEYS = [k.strip() for k in os.getenv('CI_API_KEYS', '').split(',') if k.strip()]
+
+# Diagnostics (API-013, diagnostics/): debug log sessions, crash reports, R8 mappings, endpoint timings.
+# The tables together stay under DIAGNOSTICS_MAX_MB (Heroku essential-0 Postgres has 1 GB in all); log entries
+# are kept 7 days from dev builds and 14 days from production debug mode (purged by run_scheduled_tasks).
+DIAGNOSTICS_MAX_BYTES = int(os.getenv('DIAGNOSTICS_MAX_MB', '250')) * 1024 * 1024
+DIAGNOSTICS_RETENTION_DAYS = {'dev': int(os.getenv('DIAGNOSTICS_DEV_DAYS', '7')),
+                              'debug_mode': int(os.getenv('DIAGNOSTICS_DEBUG_DAYS', '14'))}
+DIAGNOSTICS_SESSION_WINDOW = 600  # seconds
+DIAGNOSTICS_SESSION_MAX_ENTRIES = int(os.getenv('DIAGNOSTICS_SESSION_MAX_ENTRIES', '20000'))  # per window
+DIAGNOSTICS_MAX_SYMBOL_FILES = int(os.getenv('DIAGNOSTICS_MAX_SYMBOL_FILES', '20'))
+DIAGNOSTICS_VACUUM_FULL = True
+DIAGNOSTICS_TIMING = not TESTING  # endpoint timings (tests turn it on where they check it)
+# iOS symbolication: the panel dispatches symbolicate.yml in attnd-ios (fine-grained token with
+# "Actions: read and write" on that repo only). Unset = the Symbolicate button explains what's missing.
+GITHUB_SYMBOLICATE_TOKEN = os.getenv('GITHUB_SYMBOLICATE_TOKEN', '')
+GITHUB_SYMBOLICATE_REPO = os.getenv('GITHUB_SYMBOLICATE_REPO', 'apbeers/Attnd-iOS')
+GITHUB_SYMBOLICATE_REF = os.getenv('GITHUB_SYMBOLICATE_REF', 'main')
 
 # Public base URL of this deployment, for links in emails (dev: https://dev.attnd.app).
 SITE_URL = os.getenv('SITE_URL', 'https://attnd.app').rstrip('/')
@@ -281,6 +319,58 @@ MAILERS = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ---------------------------------------------------------------------------
+# Attnd Studio (studio/, docs/specs/studio_spec.md): AI-designed event websites hosted by Attnd
+# ---------------------------------------------------------------------------
+# Hosted sites live on a SEPARATE registrable domain, path-based: https://<SITES_HOST>/<slug>/. Until a domain is
+# bought, each Heroku app's own herokuapp.com hostname is used (herokuapp.com is on the Public Suffix List, so it is a
+# different site from attnd.app and can never read its cookies). Empty = no hosting (the editor still works).
+_HEROKU_SITES_HOSTS = {'attnd.app': 'attnd-web-7a02b020850d.herokuapp.com',
+                       'dev.attnd.app': 'attnd-dev-7ab893f37020.herokuapp.com'}
+SITES_HOST = os.getenv('SITES_HOST', '').strip().lower().rstrip('/') or (
+    '127.0.0.1:8000' if DEBUG else _HEROKU_SITES_HOSTS.get(_site.hostname or '', ''))
+if SITES_HOST and '*' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(SITES_HOST.split(':')[0])  # a bought sites domain isn't under .attnd.app/.herokuapp.com
+SITES_ORIGIN = f"{'http' if DEBUG and SITES_HOST.startswith(('127.0.0.1', 'localhost')) else 'https'}://{SITES_HOST}"
+# Console origins allowed to frame hosted pages (the editor's preview); nobody else may frame them.
+STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))
+# Organizer sign-ups (console.signups): off = invite-only (only invited emails can create an account, and the
+# homepage's anonymous AI import is closed). Attendees and existing accounts are unaffected.
+SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '').strip().lower() in ('1', 'true', 'yes', 'on')
+# Studio is for admins (staff and superusers) only. These emails (comma-separated, default none) are an explicit
+# override that also get Studio.
+STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', '').split(',') if e.strip()]
+# AI: auto = Anthropic when ANTHROPIC_API_KEY is set, else OpenAI (the existing OPENAI_API_KEY).
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+STUDIO_AI_PROVIDER = os.getenv('STUDIO_AI_PROVIDER', 'auto').strip().lower()
+STUDIO_OPENAI_MODEL = os.getenv('STUDIO_OPENAI_MODEL', 'gpt-5.5')
+STUDIO_OPENAI_FALLBACK_MODEL = os.getenv('STUDIO_OPENAI_FALLBACK_MODEL', 'gpt-5')
+STUDIO_ANTHROPIC_MODEL = os.getenv('STUDIO_ANTHROPIC_MODEL', 'claude-opus-5-5')
+STUDIO_IMAGE_MODEL = os.getenv('STUDIO_IMAGE_MODEL', 'gpt-image-2')
+STUDIO_IMAGE_FALLBACK_MODEL = os.getenv('STUDIO_IMAGE_FALLBACK_MODEL', 'gpt-image-1')
+STUDIO_VISION_MODEL = os.getenv('STUDIO_VISION_MODEL', '') or os.getenv('OPENAI_MODEL', 'gpt-5-mini')
+# AI spend per event per UTC day (all Studio calls: chat, images, asset descriptions). 0 = no Studio AI.
+# $10: a full import (a 10-25 page site rebuilt in one run) costs roughly $2-4 with gpt-5.5 and prompt caching, up
+# to ~$6 on Claude, so $5 left little or nothing for the chat turns that follow it on the same day.
+STUDIO_DAILY_SPEND_CAP_USD = float(os.getenv('STUDIO_DAILY_SPEND_CAP_USD', '10'))
+STUDIO_MAX_STEPS = int(os.getenv('STUDIO_MAX_STEPS', '24'))
+STUDIO_IMPORT_MAX_STEPS = int(os.getenv('STUDIO_IMPORT_MAX_STEPS', '40'))  # model calls of an import run
+STUDIO_RUN_MAX_MINUTES = int(os.getenv('STUDIO_RUN_MAX_MINUTES', '25'))  # wall clock per run (stops, keeps the work)
+# Bring into Studio: per run, time and bytes for crawling the old site and copying its files.
+STUDIO_IMPORT_SECONDS = int(os.getenv('STUDIO_IMPORT_SECONDS', '300'))
+STUDIO_IMPORT_MAX_MB = int(os.getenv('STUDIO_IMPORT_MAX_MB', '150'))
+STUDIO_PREVIEW_LINK_DAYS = int(os.getenv('STUDIO_PREVIEW_LINK_DAYS', '7'))
+# USD per 1M input / output tokens, and per generated image. Conservative estimates (check the providers' price
+# pages); a model missing here is priced at STUDIO_PRICES['default'] so the cap errs on the safe side.
+STUDIO_PRICES = {
+    'default': (10.0, 40.0),
+    'gpt-5.5': (5.0, 30.0),
+    'gpt-5': (1.25, 10.0),
+    'gpt-5-mini': (0.25, 2.0),
+    'claude-opus-5-5': (4.0, 20.0),
+    'image': 0.25,
+}
+
+# ---------------------------------------------------------------------------
 # Content Security Policy (Django's built-in CSP middleware)
 # ---------------------------------------------------------------------------
 # CSP_MODE=enforce (default) | report (Content-Security-Policy-Report-Only: browsers only report) | off.
@@ -307,10 +397,11 @@ CSP_POLICY = {
     # https: because organizers can point location images and event logos at any website (image_url,
     # logo_url); Cloudinary (res.cloudinary.com), OpenStreetMap tiles (tile.openstreetmap.org, console.js)
     # and Google Maps tiles are covered by it. data: = generated QR codes, blob: = Maps.
-    'img-src': [CSP.SELF, 'data:', 'blob:', 'https:'],
+    'img-src': [CSP.SELF, 'data:', 'blob:', 'https:', *([SITES_ORIGIN] if SITES_HOST else [])],  # + Studio assets
     'font-src': [CSP.SELF, *(['https://fonts.gstatic.com'] if _MAPS else [])],
     'connect-src': [CSP.SELF, *_MAPS_CONNECT],
-    'frame-src': ['*.google.com'] if _MAPS else [CSP.SELF],
+    # Studio's draft previews come from the sites host (a separate site), always in a sandboxed iframe.
+    'frame-src': (['*.google.com'] if _MAPS else [CSP.SELF]) + ([SITES_ORIGIN] if SITES_HOST else []),
     'worker-src': [CSP.SELF, 'blob:'],  # /console/sw.js; Maps uses blob: workers
     'frame-ancestors': [CSP.NONE],
     'base-uri': [CSP.SELF],
@@ -333,11 +424,19 @@ LOGGING = {
             "format": "[{levelname}] {name}: {message}",
             "style": "{",
         },
+        "message": {
+            "format": "{message}",
+            "style": "{",
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
+        },
+        "request": {
+            "class": "logging.StreamHandler",
+            "formatter": "message",
         },
     },
     "root": {
@@ -345,6 +444,12 @@ LOGGING = {
         "level": "INFO",
     },
     "loggers": {
+        # One JSON line per API request (diagnostics.middleware), the message alone.
+        "attnd.request": {
+            "handlers": ["request"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "attnd.csp": {
             "handlers": ["console"],
             "level": "WARNING",
@@ -361,6 +466,7 @@ if TESTING:
     # Many tests deliberately get 4xx answers (404, 401, 429...), which django.request logs as warnings.
     # Only its errors (5xx, unhandled exceptions) stay visible in test output.
     LOGGING["loggers"]["django.request"] = {"handlers": ["console"], "level": "ERROR", "propagate": False}
+    LOGGING["loggers"]["attnd.request"]["level"] = "WARNING"  # one line per API call would flood the output
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 
@@ -402,6 +508,7 @@ APNS_AUTH_KEY = os.getenv('APNS_AUTH_KEY', '')
 APNS_KEY_ID = os.getenv('APNS_KEY_ID', '')
 APNS_TEAM_ID = os.getenv('APNS_TEAM_ID', '')
 APNS_TOPIC = os.getenv('APNS_TOPIC', '')
+APNS_CLIP_TOPIC = os.getenv('APNS_CLIP_TOPIC', '')  # API-019: default '<APNS_TOPIC>.clip'
 APNS_USE_SANDBOX = bool(os.getenv('APNS_USE_SANDBOX'))
 FCM_PROJECT_ID = os.getenv('FCM_PROJECT_ID', '')
 FCM_SERVICE_ACCOUNT_JSON = os.getenv('FCM_SERVICE_ACCOUNT_JSON', '')

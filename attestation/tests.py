@@ -228,7 +228,7 @@ class ApiKeyAuthTests(TestCase):
 
     def test_static_api_key_accepted(self):
         resp = self.client.get(
-            '/api/v1/events/lookup/?q=test',
+            '/api/v2/events/lookup/?q=test',
             **self._auth_header('test-static-api-key'),
         )
         # 404 is fine — we just want to confirm it passed auth
@@ -237,18 +237,18 @@ class ApiKeyAuthTests(TestCase):
     def test_attestation_jwt_accepted(self):
         token = tokens.issue(device_key='device-abc', platform='ios')
         resp = self.client.get(
-            '/api/v1/events/lookup/?q=test',
+            '/api/v2/events/lookup/?q=test',
             **self._auth_header(token),
         )
         self.assertNotEqual(resp.status_code, 401)
 
     def test_no_auth_rejected(self):
-        resp = self.client.get('/api/v1/events/lookup/?q=test')
+        resp = self.client.get('/api/v2/events/lookup/?q=test')
         self.assertEqual(resp.status_code, 401)
 
     def test_wrong_key_rejected(self):
         resp = self.client.get(
-            '/api/v1/events/lookup/?q=test',
+            '/api/v2/events/lookup/?q=test',
             **self._auth_header('wrong-key'),
         )
         self.assertEqual(resp.status_code, 401)
@@ -483,3 +483,30 @@ class KeyIdTests(unittest.TestCase):
         nums = key.public_numbers()
         point = b'\x04' + nums.x.to_bytes(32, 'big') + nums.y.to_bytes(32, 'big')
         self.assertEqual(key_id_for(key), base64.b64encode(hashlib.sha256(point).digest()).decode())
+
+
+class PlayIntegrityRequestTests(TestCase):
+    """verify_integrity_token's call to Google (httpx), with Google's answer mocked."""
+
+    def _call(self, response):
+        import httpx
+        from attestation import android_attest
+        response.request = httpx.Request('POST', 'https://playintegrity.googleapis.com/')
+        with patch.object(android_attest, '_get_google_credentials', return_value='google-token'), \
+                patch('attestation.android_attest.httpx.post', return_value=response) as post, \
+                patch.object(android_attest, 'check_verdict', side_effect=lambda payload, **kw: payload):
+            result = android_attest.verify_integrity_token(token='tok', nonce='n', package_name='com.arcu.attnd')
+        return result, post
+
+    def test_decodes_the_token_with_a_bearer_token(self):
+        import httpx
+        result, post = self._call(httpx.Response(200, json={'tokenPayloadExternal': {'ok': True}}))
+        self.assertEqual(result, {'ok': True})
+        self.assertEqual(post.call_args.kwargs['json'], {'integrity_token': 'tok'})
+        self.assertEqual(post.call_args.kwargs['headers']['Authorization'], 'Bearer google-token')
+        self.assertIn('com.arcu.attnd:decodeIntegrityToken', post.call_args.args[0])
+
+    def test_http_errors_become_attestation_errors(self):
+        import httpx
+        with self.assertRaisesRegex(AndroidAttestationError, '403'):
+            self._call(httpx.Response(403, text='denied'))

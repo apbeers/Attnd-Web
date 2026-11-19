@@ -4,6 +4,7 @@ The iOS, Android and web live suites (live_tests/) assert these facts against th
 servers. This test checks that load_demo_event still produces exactly them, so the generator and the
 shared spec can't drift apart: change both (and the app suites) together.
 """
+import json
 from datetime import datetime
 from io import StringIO
 
@@ -79,29 +80,69 @@ class DemoEventFactsTests(TestCase):
         self.assertEqual(main['snippet'], 'Headliners every night')
         self.assertTrue(main['description'].startswith('The big one: headliners each night'))
 
+        # API-010: tags. Lower case, 2-6 on everything; one vocabulary across the event.
+        self.assertEqual(main['tags'], ['live music', 'headliners', 'free'])
+        for thing in locs + b['schedule']:
+            self.assertTrue(2 <= len(thing['tags']) <= 6, thing['name'])
+            self.assertTrue(all(t == t.lower() for t in thing['tags']), thing['name'])
+        self.assertEqual({l['name'] for l in locs if 'live music' in l['tags']},
+                         {'Main Stage', 'Trinity Stage', 'Panther Island Pavilion', 'Roaming Mariachi'})
+        self.assertEqual({l['name'] for l in locs if 'food' in l['tags']},
+                         {'Chef Demo Kitchen', 'Taco Row', 'BBQ Pit Lane', 'Sweet Spot'})
+
         items = b['schedule']
         self.assertEqual(len(items), 51)
         general = [i for i in items if i['location_id'] is None]
         self.assertEqual(sorted(i['name'] for i in general), ['Gates open', 'Gates open', 'Opening ceremony'])
-        self.assertTrue(all(i['tags'] == ['General'] for i in general))
+        self.assertTrue(all(i['tags'] == ['general', 'free'] for i in general))
         stages = {'Main Stage', 'Trinity Stage', 'Panther Island Pavilion'}
-        music = [i for i in items if 'Music' in i['tags']]
+        music = [i for i in items if 'live music' in i['tags']]
         self.assertEqual(len(music), 36)
         self.assertTrue(all(i['location_name'] in stages for i in music))
-        demos = [i for i in items if 'Food' in i['tags'] or 'Demo' in i['tags']]
+        demos = [i for i in items if {'food', 'demo'} & set(i['tags'])]
         self.assertEqual(len(demos), 9)
-        self.assertTrue(all(i['location_name'] == 'Chef Demo Kitchen' for i in demos))
+        self.assertTrue(all(i['location_name'] == 'Chef Demo Kitchen' and {'food', 'demo'} <= set(i['tags'])
+                            for i in demos))
         kids = [i for i in items if i['name'] == 'Face painting & games']
         self.assertEqual(len(kids), 3)
-        self.assertTrue(all(i['location_name'] == 'Kids Zone' and i['tags'] == ['Family'] for i in kids))
+        self.assertTrue(all(i['location_name'] == 'Kids Zone' and {'family', 'kid-friendly'} <= set(i['tags'])
+                            for i in kids))
         for i in items:
             self.assertLess(datetime.fromisoformat(i['start_time']), datetime.fromisoformat(i['end_time']), i['name'])
         self.assertTrue(any(datetime.fromisoformat(i['end_time']) > now for i in items))  # now/next not empty
 
         self.assertEqual({n['title'] for n in b['notifications']}, SENT_TITLES)
         self.assertEqual(len(b['notifications']), 4)
+        # API-011: the set time change went out as urgent, the others as normal.
+        self.assertEqual({n['title'] for n in b['notifications'] if n['priority'] == 'urgent'}, {'Set time change'})
+        self.assertTrue(all(n['priority'] in ('normal', 'urgent') for n in b['notifications']))
         # Scheduled, not yet sent. On a live server the scheduler sends them when due, so the live suites accept
         # these titles too (4 to 6 notifications), never one in the future.
         unsent = Event.objects.get(pk=event_id).notification_set.filter(sent=False)
         self.assertEqual(set(unsent.values_list('title', flat=True)), {'Headliner soon', 'Day 2'})
         self.assertTrue(all(n.send_time > now for n in unsent))
+
+    def test_context_api_018(self):
+        """API-018: the DEMO event carries assistant context (the counts above stay as they are)."""
+        event_id = self.api('/api/v2/events/lookup/', q='DEMO')['event']['id']
+        b = self.api(f'/api/v2/events/{event_id}/bundle/')
+        ev = b['event']['context']
+        self.assertTrue(ev['about'])
+        self.assertGreaterEqual(len(ev['faq']), 8)
+        for key in ('accessibility', 'policies', 'getting_there', 'weather_plan'):
+            self.assertTrue(ev[key], key)
+        locations = {loc['id']: loc for loc in b['locations']}
+        self.assertTrue(all(a['location_id'] is None or a['location_id'] in locations for a in ev['amenities']))
+        self.assertTrue(any(a['location_id'] for a in ev['amenities']))
+        by_name = {loc['name']: loc for loc in b['locations']}
+        for food in ('Taco Row', 'BBQ Pit Lane', 'Sweet Spot', 'Craft Beer Garden', 'Lemonade Stand'):
+            self.assertTrue(by_name[food]['context']['menu'], food)
+        self.assertEqual(by_name['Craft Beer Garden']['context']['age_limit'], '21+ with ID')
+        music = [i for i in b['schedule'] if 'live music' in i['tags']]
+        self.assertEqual(len(music), 36)
+        for item in music:
+            performer = item['context']['performers'][0]
+            self.assertEqual(performer['name'], item['name'])
+            self.assertTrue(performer['bio'])
+            self.assertTrue(performer['genres'])
+        self.assertLess(len(json.dumps(b)), 150_000)

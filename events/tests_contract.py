@@ -11,6 +11,9 @@ compares:
       UPDATE_CONTRACT=1 uv run python manage.py test events.tests_contract
 
   and document it in API_V2.md and API_CHANGES.md in the same commit.
+
+Ticketing (API-017) is parked on git branch `parked/tickets`: its `tickets/` and `door/` endpoints are gone from
+v2 (no app calls them), but the bundle's `tickets` and `event.tickets_url` keys stay, always null.
 """
 import json
 import os
@@ -72,7 +75,7 @@ def diff(old, new, path='$'):
     return breaking, additive
 
 
-@override_settings(API_KEY='contract-key')
+@override_settings(API_KEY='contract-key', SITES_HOST='sites.example')
 class ApiContractTests(TestCase):
     """Builds a fully populated event so every field has a real (non-null) value."""
 
@@ -83,20 +86,38 @@ class ApiContractTests(TestCase):
             name='Contract Fair', event_code='CONTRACT', description='Desc', address='1 Main St',
             latitude=32.75, longitude=-97.33, start_time=start, end_time=start + timedelta(hours=8),
             timezone='America/Chicago', user=user, public=True, paid=True, accent_color='#FF6600',
-            logo_url='https://example.com/logo.png')
+            logo_url='https://example.com/logo.png', plan=Event.PLAN_STUDIO)
+        # API-016: a published Attnd Studio site, so event.website_url is a string in the sample.
+        from studio import publishing
+        site = publishing.ensure_site(self.event, user)
+        publishing.publish(site, publishing.new_version(site, user, files={'index.html': '<h1>Fair</h1>'}), user)
         loc = Location.objects.create(
             event=self.event, user=user, name='Stage', snippet='Main stage', description='Big',
             category='Stage', website='https://example.com', image_url='https://example.com/s.jpg',
-            address='2 Main St', latitude=32.751, longitude=-97.331)
+            address='2 Main St', latitude=32.751, longitude=-97.331, tags=['live music'],
+            context={'about': 'Big stage', 'menu': [{'name': 'Taco', 'price': '$4', 'note': 'Vegetarian'}],
+                     'hours': '9–5', 'accessibility': 'Ramp', 'age_limit': 'All ages',
+                     'links': [{'title': 'Stage', 'url': 'https://example.com/stage'}]})
         ScheduledItem.objects.create(
             event=self.event, user=user, location=loc, name='Band', description='Live',
-            start_time=start, end_time=start + timedelta(hours=1), tags=['Music'])
+            start_time=start, end_time=start + timedelta(hours=1), tags=['Music'],
+            context={'about': 'Loud', 'performers': [{'name': 'Band', 'bio': 'From here', 'genres': ['rock']}],
+                     'age_limit': '18+', 'price': '$5', 'accessibility': 'Seats',
+                     'links': [{'title': 'Band', 'url': 'https://example.com/band'}]})
+        # API-018: every context key filled, so the snapshot records the whole shape.
+        self.event.context = {
+            'about': 'About', 'faq': [{'q': 'Q?', 'a': 'A.'}],
+            'amenities': [{'kind': 'water', 'name': 'Water', 'location_id': loc.id, 'note': 'Free'}],
+            'accessibility': 'Ramps', 'policies': 'Clear bags', 'getting_there': 'Bus 1', 'weather_plan': 'Tents',
+            'links': [{'title': 'Site', 'url': 'https://example.com'}]}
+        self.event.save()
         self.notification = Notification.objects.create(
             event=self.event, user=user, title='Hello', body='Doors open', send_time=start, sent=True, sent_at=start)
+        self.urgent = Notification.objects.create(
+            event=self.event, user=user, title='Cancelled', body='Rain', send_time=start, priority='urgent')
         Device.objects.create(id='contract-device', platform='ios', push_token='tok', subscribed=True,
                               event=self.event)
         self.client = Client()
-
     def call(self, method, path, body=None):
         if method == 'get':
             resp = self.client.get(path, secure=True, **AUTH)
@@ -104,6 +125,12 @@ class ApiContractTests(TestCase):
             resp = self.client.post(path, json.dumps(body or {}), content_type='application/json',
                                     secure=True, **AUTH)
         self.assertEqual(resp.status_code, 200, f'{method.upper()} {path}: {resp.content[:300]}')
+        return resp.json()
+
+    def symbols(self):
+        resp = self.client.post('/api/diagnostics/symbols/?platform=android&version=2.0.1&build=2001',
+                                b'com.a.B -> a.a:\n    void b() -> b\n', content_type='text/plain', secure=True, **AUTH)
+        self.assertEqual(resp.status_code, 200, resp.content)
         return resp.json()
 
     def build(self):
@@ -121,22 +148,41 @@ class ApiContractTests(TestCase):
                 'platform': 'ios', 'events': [{'name': 'tab_view', 'detail': 'map', 'count': 2}]}),
             # Unversioned and frozen: old builds rely on it to learn they must update.
             'GET /api/app-status/': self.call('get', '/api/app-status/?platform=ios&version=2.0.1&api=2'),
+            # API-013: debug logs and anonymous crash/hang reports.
+            'POST diagnostics/logs/': self.call('post', '/api/v2/diagnostics/logs/', {
+                'session': 'D-7K3QX', 'platform': 'ios', 'reason': 'debug_mode', 'entries': [{
+                    'v': 1, 'ts': timezone.now().isoformat(), 'level': 'info', 'cat': 'net',
+                    'event': 'net.request.finished', 'msg': 'ok'}]}),
+            'POST diagnostics/reports/': self.call('post', '/api/v2/diagnostics/reports/', {
+                'platform': 'android', 'reports': [{'kind': 'crash', 'stack': 'x'}]}),
+            # Unversioned, CI only (attnd-android's release job).
+            'POST /api/diagnostics/symbols/': self.symbols(),
         }
         payloads = {}
 
-        def apns(tokens, payload, **kwargs):
-            payloads[f"apns:{payload['type']}"] = payload
+        # Keys: "<service>:<type>", plus ":urgent" for urgent announcements (API-011) and "apns:liveactivity"
+        # for the Live Activity update that goes with them.
+        def apns(tokens, payload, push_type='alert', **kwargs):
+            if push_type == 'liveactivity':
+                payloads['apns:liveactivity'] = payload
+            else:
+                urgent = ':urgent' if payload.get('priority') == 'urgent' else ''
+                payloads[f"apns:{payload['type']}{urgent}"] = payload
             return push.SendResult()
 
         def fcm(tokens, data, notification=None, **kwargs):
-            payloads[f"fcm:{data['type']}"] = {'data': data, 'notification': notification}
+            urgent = ':urgent' if data.get('priority') == 'urgent' else ''
+            payloads[f"fcm:{data['type']}{urgent}"] = {'data': data, 'notification': notification}
             return push.SendResult()
 
         Device.objects.create(id='contract-android', platform='android', push_token='tok2', subscribed=True,
                               event=self.event)
+        Device.objects.create(id='contract-ios', platform='ios', push_token='tok3', subscribed=True,
+                              event=self.event, live_activity_token='ab12')
         with patch('events.push.send_apns', side_effect=apns), patch('events.push.send_fcm', side_effect=fcm):
             Notification.objects.filter(pk=self.notification.pk).update(sent=False)
             push.send_notification(self.notification)
+            push.send_notification(self.urgent)
             push.notify_content_updated(self.event)
 
         resolver = get_resolver().url_patterns
@@ -147,6 +193,15 @@ class ApiContractTests(TestCase):
             'responses': {k: shape(v) for k, v in responses.items()},
             'push': {k: shape(v) for k, v in sorted(payloads.items())},
         }
+
+    def test_parked_ticket_keys_stay_null(self):
+        # API-017 is parked: installed apps decode these keys, so they never go away, they're just always null.
+        bundle = self.call('get', f'/api/v2/events/{self.event.id}/bundle/')
+        self.assertIn('tickets', bundle)
+        self.assertIsNone(bundle['tickets'])
+        self.assertIsNone(bundle['event']['tickets_url'])
+        self.assertIsNone(self.call('get', '/api/v2/events/lookup/?q=CONTRACT')['event']['tickets_url'])
+        self.assertEqual(self.client.get('/api/v2/tickets/mine/', secure=True, **AUTH).status_code, 404)
 
     def test_contract_matches_snapshot(self):
         current = self.build()

@@ -2,13 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Attnd puts your event's map, schedule and live updates on every attendee's phone. Paste your event website and AI builds it for you in a minute.">
   <title>Attnd — your event, in everyone's pocket</title>
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'home/img/favicon.png' %}">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 </head>
 <body>
 
@@ -27,19 +25,20 @@
     <a class="brand" href="/">attnd<span>.</span></a>
     <div class="site-nav__links">
       <a href="#features">Features</a>
-      <a href="#try-it">Try it free</a>
+      {% if SIGNUPS_OPEN %}<a href="#try-it">Try it free</a>{% endif %}
       <a href="#download">Download</a>
-      <a href="{% url 'login' %}">Sign in</a>
-      <a class="button button--primary button--small" href="{% url 'console:signup' %}">Create an event</a>
+      <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
+      {% if SIGNUPS_OPEN %}<a class="button button--primary button--small" href="{% url 'console:signup' %}">Create an event</a>
+      {% else %}<a class="button button--primary button--small" href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Invite only</a>{% endif %}
     </div>
     <details class="site-nav__menu">
       <summary>Menu</summary>
       <div class="site-nav__links">
         <a href="#features">Features</a>
-        <a href="#try-it">Try it free</a>
+        {% if SIGNUPS_OPEN %}<a href="#try-it">Try it free</a>{% endif %}
         <a href="#download">Download</a>
-        <a href="{% url 'login' %}">Sign in</a>
-        <a href="{% url 'console:signup' %}">Create an event</a>
+        <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
+        {% if SIGNUPS_OPEN %}<a href="{% url 'console:signup' %}">Create an event</a>{% else %}<a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Invite only</a>{% endif %}
       </div>
     </details>
   </div>
@@ -51,11 +50,16 @@
       <h1>Your event's map, schedule and live updates — in everyone's pocket.</h1>
       <p class="lead">Perfect for festivals, trade shows, outdoor events, concerts and conferences. Paste your event website and AI builds the whole thing in about a minute.</p>
       <div class="cluster">
+        {% if SIGNUPS_OPEN %}
         <a href="#try-it" class="button button--light">Try it free</a>
         <a href="{% url 'console:signup' %}" class="button button--ghost">$299 per event, flat</a>
+        {% else %}
+        <a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}" class="button button--light">Invite only for now</a>
+        <a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}" class="button button--ghost">$299 per event, flat</a>
+        {% endif %}
       </div>
     </div>
-    <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-map.png' %}" alt="The Attnd app showing an event map"></div></div>
+    <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-map.webp' %}" alt="The Attnd app showing an event map" width="768" height="1670" fetchpriority="high"></div></div>
   </div>
 </header>
 
@@ -66,7 +70,7 @@
       <p class="muted">Everything attendees need in one place, and nothing for them to sign up for.</p>
     </div>
     <div class="features-layout">
-      <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-locations.png' %}" alt="The Attnd app showing a list of locations"></div></div>
+      <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-locations.webp' %}" alt="The Attnd app showing a list of locations" width="768" height="1670" loading="lazy" decoding="async"></div></div>
       <div class="grid grid--2">
         <div class="feature"><svg class="icon"><use href="#i-stars"/></svg><h3>Built by AI, checked by you</h3>
           <p class="muted">Point us at your website, flyer or program. We pull in every stage, booth and set time, and you review it before anyone sees it.</p></div>
@@ -110,6 +114,7 @@
   </div>
 </section>
 
+{% if TRIAL_IMPORT_OPEN %}
 <section class="section" id="try-it">
   <div class="wrap">
     <div class="section-head">
@@ -152,33 +157,58 @@
     </div>
   </div>
 </section>
+{% else %}
+<section class="section" id="invite-only">
+  <div class="wrap">
+    <div class="panel center">
+      <h2>Attnd is invite-only right now</h2>
+      <p class="muted">We aren't taking new organizers yet. If you were invited, create your account with the email
+        address the invite was sent to.</p>
+      <div class="cluster cluster--center">
+        <a href="{% url 'console:signup' %}" class="button button--primary">I have an invite</a>
+        <a href="{% url 'login' %}" class="button button--ghost">Sign in</a>
+      </div>
+      <p class="muted small">Going to an event? You don't need an invite: get the free app below and scan the event's QR code.</p>
+    </div>
+  </div>
+</section>
+{% endif %}
 
 <section class="section section--dark center" id="download">
   <div class="wrap">
     <h2>Get the app</h2>
     <p class="muted-on-dark">Free for attendees on iPhone and Android.</p>
     <div class="store-badges">
-      <a href="https://apple.co/2yF6mNa"><img src="{% static 'home/img/app-store-badge.svg' %}" alt="Download on the App Store"></a>
-      <a href="http://bit.ly/2YEZ4HL"><img src="{% static 'home/img/google-play-badge.svg' %}" alt="Get it on Google Play"></a>
+      <a href="{{ IOS_APP_STORE_URL }}"><img src="{% static 'home/img/app-store-badge.svg' %}" alt="Download on the App Store"></a>
+      <a href="{{ ANDROID_PLAY_STORE_URL }}"><img src="{% static 'home/img/google-play-badge.svg' %}" alt="Get it on Google Play"></a>
     </div>
   </div>
 </section>
 
 <section class="section center">
   <div class="wrap">
+    {% if SIGNUPS_OPEN %}
     <h2>Create your event for free.</h2>
     <p class="muted">Pay only when your event goes live.</p>
     <a href="{% url 'console:signup' %}" class="button button--primary">Get started</a>
+    {% else %}
+    <h2>Organizing an event?</h2>
+    <p class="muted">Attnd is invite-only right now and isn't taking new organizers yet.</p>
+    <p><a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Have an invite?</a></p>
+    {% endif %}
   </div>
 </section>
 
 <footer>
   <div class="wrap">
     <span>&copy; Attnd {% now "Y" %}. All rights reserved.</span>
-    <span><a href="{% url 'home:privacy' %}">Privacy</a> · <span class="small">build {{ build }}</span></span>
+    <span><a href="{% url 'home:privacy' %}">Privacy</a>{% if release %} · <span class="small">release {{ release }}</span>{% endif %}</span>
   </div>
 </footer>
 
-<script src="{% static 'home/home.js' %}"></script>
+{# CSRF token for the passkey sign-in from the "Sign in" links (console/static/console/passkeys.js). #}
+<div hidden>{% csrf_token %}</div>
+{% if TRIAL_IMPORT_OPEN %}<script src="{% static 'home/home.js' %}"></script>{% endif %}
+<script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>

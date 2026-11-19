@@ -301,7 +301,7 @@ class PasskeyFlowTests(TestCase):
         self.assertContains(account, 'data-passkey-register')
         auth, response = self.add_passkey(name='  Work   laptop ')
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()['redirect'].startswith(reverse('two_factor_recovery_codes')))
+        self.assertEqual(response.json()['redirect'], '/console/account/')  # no recovery codes pushed here
         passkey = Passkey.objects.get(user=self.organizer)
         self.assertEqual(passkey.name, 'Work laptop')
         self.assertEqual(passkey.credential_id, b64url_encode(auth.credential_id))
@@ -309,15 +309,13 @@ class PasskeyFlowTests(TestCase):
         self.assertEqual(passkey.transports, ['internal', 'hybrid'])
         # The user handle given to the authenticator is the account's random handle.
         self.assertEqual(auth.user_handle, self.organizer.sign_in_security.user_handle)
-        # Recovery codes are shown once, then gone from the session.
-        codes_page = self.client.get(response.json()['redirect'])
-        self.assertEqual(len(codes_page.context['recovery_codes']), 10)
-        self.assertRedirects(self.client.get(reverse('two_factor_recovery_codes') + '?next=/console/account/'),
-                             '/console/account/', fetch_redirect_response=False)
-        # This session stays signed in; the Account page lists the passkey.
+        self.assertEqual(twofactor.recovery_codes_left(self.organizer), 0)
+        # This session stays signed in; the Account page lists the passkey and offers recovery codes calmly.
         page = self.client.get(reverse('console:account'))
         self.assertContains(page, 'Work laptop')
         self.assertContains(page, 'Synced')
+        self.assertContains(page, 'Set up recovery codes')
+        self.assertNotContains(page, 'Save these recovery codes now')
 
     def test_options_exclude_existing_passkeys_and_ask_for_user_verification(self):
         auth = self.enroll_passkey(self.organizer)
@@ -452,6 +450,50 @@ class PasskeyFlowTests(TestCase):
         self.assertEqual(options['userVerification'], 'required')
         self.assertEqual(options['rpId'], RP)
 
+    def test_on_load_autofill_and_button_requests_all_verify(self):
+        """The sign-in page may ask for up to three challenges at once (sheet opened on load, autofill,
+        the button); whichever answer comes back verifies, the others stay valid once and expire."""
+        auth = self.enroll_passkey(self.organizer)
+        on_load, autofill, button = (self.post_json('passkey_auth_options').json() for _ in range(3))
+        self.assertEqual(self.post_json('passkey_auth', {'credential': auth.get(autofill)}).status_code, 200)
+        self.assertEqual(self.post_json('passkey_auth', {'credential': auth.get(on_load)}, client=self.client).status_code, 200)
+        self.assertEqual(self.post_json('passkey_auth', {'credential': auth.get(button)}).status_code, 200)
+        self.assertGreaterEqual(webauthn.MAX_OUTSTANDING, 5)
+
+    def test_sign_in_page_markup_for_the_passkey_first_layout(self):
+        page = self.client.get(reverse('login'))
+        self.assertContains(page, 'data-autoprompt')  # passkeys.js opens the sheet on load if this browser used one
+        self.assertContains(page, 'data-password-details')
+        self.assertContains(page, 'Use a password instead')
+        self.assertContains(page, 'data-passkey-button-label')
+        # After a wrong password the page doesn't pop the passkey sheet up again.
+        failed = self.client.post(reverse('login'), {'username': 'org@example.com', 'password': 'wrong'})
+        self.assertContains(failed, 'didn’t match')
+        self.assertNotContains(failed, 'data-autoprompt')
+
+    def test_home_sign_in_links_try_immediate_mode(self):
+        page = self.client.get('/')
+        self.assertContains(page, 'data-passkey-immediate', count=2)
+        self.assertContains(page, f'data-options-url="{reverse("passkey_auth_options")}"')
+        self.assertContains(page, 'name="csrfmiddlewaretoken"')  # passkeys.js posts with it
+        self.assertContains(page, 'console/passkeys.js')
+        # What passkeys.js sends from the home page with the token.
+        client = Client(enforce_csrf_checks=True)
+        page = client.get('/')
+        token = page.context['csrf_token']
+        response = client.post(reverse('passkey_auth_options'), json.dumps({'mode': 'signin'}),
+                               content_type='application/json', HTTP_X_CSRFTOKEN=str(token))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['allowCredentials'], [])  # immediate mode needs an empty list
+
+    def test_passkeys_js_hooks(self):
+        js = (settings.BASE_DIR / 'console/static/console/passkeys.js').read_text()
+        for hook in ("uiMode: 'immediate'", 'getClientCapabilities', 'immediateGet', "mediation: 'conditional'",
+                     'attnd.passkey.used', 'data-autoprompt', 'data-password-details', 'data-passkey-collapse',
+                     '.abort()'):
+            self.assertIn(hook, js)
+        self.assertNotIn("mediation: 'immediate'", js)  # the origin-trial spelling; Chrome 149 uses uiMode
+
     # --- second step with a passkey ------------------------------------------------------------
     def test_passkey_as_second_step_after_the_password(self):
         auth = self.enroll_passkey(self.staff)
@@ -490,11 +532,15 @@ class PasskeyFlowTests(TestCase):
         setup = self.client.get(response['Location'])
         self.assertContains(setup, 'Add a passkey')
         self.assertContains(setup, 'authenticator app')  # the alternative
-        self.assertLess(setup.content.decode().index('Add a passkey'), setup.content.decode().index('Code from the app'))
+        html = setup.content.decode()
+        self.assertLess(html.index('Add a passkey'), html.index('code from the app'))
+        # The authenticator app is folded under "Other options" when passkeys work (passkeys.js closes it).
+        self.assertIn('data-passkey-collapse', html)
+        self.assertIn('Other options', html)
         _, response = self.add_passkey(next_url=self.admin_url)
         self.assertEqual(response.status_code, 200, response.content)
-        codes = self.client.get(response.json()['redirect'])
-        self.assertEqual(len(codes.context['recovery_codes']), 10)
+        self.assertEqual(response.json()['redirect'], self.admin_url)  # straight on, no recovery codes page
+        self.assertEqual(twofactor.recovery_codes_left(self.staff), 0)
         self.assertEqual(self.client.get(self.admin_url).status_code, 200)
         self.assertEqual(twofactor.strong_methods(self.staff), ['passkey'])
         # Next password sign-in: the passkey (or a recovery code) is the second step, no enrollment.
@@ -542,6 +588,7 @@ class PasskeyFlowTests(TestCase):
         self.client.post(reverse('console:account'), {'action': 'passkey_remove', 'passkey': theirs.pk})
         self.assertTrue(Passkey.objects.filter(pk=theirs.pk).exists())
         self.assertIsNotNone(other)
+        twofactor.new_recovery_codes(self.organizer)
         self.client.post(reverse('console:account'), {'action': 'passkey_remove', 'passkey': passkey.pk})
         self.assertFalse(Passkey.objects.filter(user=self.organizer).exists())
         self.assertEqual(twofactor.recovery_codes_left(self.organizer), 0)  # nothing left to recover
@@ -559,8 +606,16 @@ class PasskeyFlowTests(TestCase):
     def test_recovery_code_works_for_a_passkey_only_account(self):
         client = Client()
         client.force_login(self.organizer)
-        _, response = self.add_passkey(client=client)
-        codes = client.get(response.json()['redirect']).context['recovery_codes']
+        self.add_passkey(client=client)
+        # Made later from the Account page, confirmed with the password (no authenticator app here).
+        page = client.get(reverse('console:account'))
+        self.assertContains(page, 'Set up recovery codes')
+        self.assertContains(page, 'id_codes_password')
+        wrong = client.post(reverse('console:account'), {'action': '2fa_codes', 'password': 'nope'})
+        self.assertEqual(wrong.status_code, 302)
+        self.assertEqual(twofactor.recovery_codes_left(self.organizer), 0)
+        codes = client.post(reverse('console:account'), {'action': '2fa_codes', 'password': 'pw'}).context['recovery_codes']
+        self.assertEqual(len(codes), 10)
         self.sign_in('org@example.com')
         page = self.client.get(reverse('two_factor_verify'))
         self.assertContains(page, 'one of your recovery codes')
@@ -608,8 +663,8 @@ class EmailCodeTests(TestCase):
     def turn_on(self):
         self.client.force_login(self.organizer)
         response = self.client.post(reverse('console:account'), {'action': 'email_codes_on'})
-        self.assertEqual(response.status_code, 200)  # shows the first recovery codes
-        self.assertEqual(len(response.context['recovery_codes']), 10)
+        self.assertRedirects(response, reverse('console:account'), fetch_redirect_response=False)
+        self.assertEqual(twofactor.recovery_codes_left(self.organizer), 0)  # optional, not made automatically
         self.assertTrue(twofactor.email_codes_on(self.organizer))
 
     def sign_in(self):
@@ -696,6 +751,7 @@ class EmailCodeTests(TestCase):
 
     def test_turn_off(self):
         self.turn_on()
+        twofactor.new_recovery_codes(self.organizer)
         self.client.post(reverse('console:account'), {'action': 'email_codes_off'})
         self.assertFalse(twofactor.email_codes_on(self.organizer))
         self.assertEqual(twofactor.recovery_codes_left(self.organizer), 0)

@@ -6,15 +6,19 @@
 #   every push           → "Integration · prod": live tests against attnd.app with the DEMO-only CI key
 #                          (API-008), in parallel with the tests; informational, never gates anything
 #
+# LEAN MODE (early build-out, Nov 2026): the two integration jobs run only when the repository variable
+# CI_FULL is 'true' (they are skipped, costing no minutes, otherwise). Full pipeline + how to restore it:
+# docs/CI_PIPELINES.md.
+#
 # Setup: see SETUP.md. Uses only GitHub's own actions.
 name: Web
 
 on:
   push:
     branches: [main, develop]
-    paths-ignore: ['**/*.md']   # docs-only commits don't test or deploy
+    paths-ignore: ['**/*.md', 'docs/**']   # docs-only commits don't test or deploy
   pull_request:
-    paths-ignore: ['**/*.md']
+    paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
 
 concurrency:
@@ -90,6 +94,8 @@ jobs:
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
           HEROKU_APP: ${{ vars.HEROKU_APP }}
+          # Not the herokuapp.com hostname: that host serves only Studio sites (SITES_HOST).
+          HEALTH_URL: https://dev.attnd.app/health/
         run: bash scripts/ci/heroku_deploy.sh
 
   deploy-prod:
@@ -114,7 +120,7 @@ jobs:
   integration-dev:
     name: Integration · dev
     # Tests the dev server this run just deployed. Gates nothing (it runs after the deploy).
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
+    if: vars.CI_FULL == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop'
     needs: deploy-dev
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -135,7 +141,7 @@ jobs:
     name: Integration · prod
     # Production as it is now, with the DEMO-only CI key. Runs alongside the tests and never gates a deploy:
     # a failure shows as a warning on the run.
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: vars.CI_FULL == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     continue-on-error: true

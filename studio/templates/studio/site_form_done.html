@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head>{% include 'studio/_site_page_head.html' %}<title>{% if error %}Not sent{% else %}Thanks!{% endif %} — {{ site.event.name }}</title></head>
+<body>
+<main>
+  {% if error %}<h1>Not sent</h1><p class="error" role="alert">{{ error }}</p>
+  {% else %}<h1>Thanks!</h1><p>We got it.</p>{% endif %}
+  <a class="button" href="./">Back to {{ site.event.name }}</a>
+</main>
+</body>
+</html>

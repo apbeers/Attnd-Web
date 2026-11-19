@@ -2,15 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ event.name }} on Attnd</title>
+  <title>{% if shared_plan %}A shared plan for {{ event.name }}{% else %}{{ event.name }} on Attnd{% endif %}</title>
+  {% if shared_plan %}<meta name="robots" content="noindex">{% endif %}
   <meta name="description" content="Follow {{ event.name }} in the Attnd app: map, schedule and live updates. Event code {{ event.event_code }}.">
   <meta property="og:title" content="{{ event.name }}">
   <meta property="og:description" content="Map, schedule and live updates in the Attnd app. Event code {{ event.event_code }}.">
   {% if app_store_id %}<meta name="apple-itunes-app" content="app-id={{ app_store_id }}, app-clip-bundle-id={{ clip_bundle_id }}, app-clip-display=card">{% endif %}
   <meta name="theme-color" content="#431f86">
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
-  <link rel="icon" type="image/png" href="{% static 'home/img/favicon.png' %}">
 </head>
 <body>
 <main class="join-page">
@@ -26,7 +27,26 @@
       <p class="join-meta">{{ event.start_time|date:"l, F j" }}{% if event.end_time and event.end_time|date:"Ymd" != event.start_time|date:"Ymd" %} – {{ event.end_time|date:"l, F j" }}{% endif %}
         {% if event.address %}<br>{{ event.address }}{% endif %}</p>
       {% endtimezone %}
-      {% if event.description %}<p>{{ event.description|truncatechars:240 }}</p>{% endif %}
+      {% if shared_plan %}
+        <section class="join-plan" aria-labelledby="shared-plan-title">
+          <p class="eyebrow" id="shared-plan-title">Shared plan{% if plan_day %} · {{ plan_day|date:"l, F j" }}{% endif %}</p>
+          {% if plan_items %}
+            <ol class="join-plan__list">
+              {% timezone event.timezone|default:"UTC" %}
+              {% for item in plan_items %}
+                <li class="join-plan__item">
+                  <span class="join-plan__time">{{ item.start_time|date:"D g:i A" }}{% if item.end_time and item.end_time > item.start_time %} – {{ item.end_time|date:"g:i A" }}{% endif %}</span>
+                  <strong>{{ item.name }}</strong>
+                  {% if item.location %}<span class="muted small">{{ item.location.name }}</span>{% endif %}
+                </li>
+              {% endfor %}
+              {% endtimezone %}
+            </ol>
+          {% else %}
+            <p class="muted">The items in this plan are no longer on the schedule.</p>
+          {% endif %}
+        </section>
+      {% elif event.description %}<p>{{ event.description|truncatechars:240 }}</p>{% endif %}
       <p class="eyebrow">Event code</p>
       <span class="join-code">{{ event.event_code }}</span>
 
@@ -42,7 +62,7 @@
         <ol class="join-steps">
           <li>Scan the code with your phone's camera.</li>
           <li>iPhone opens Attnd right away (or an instant App Clip, with nothing to install). Android opens the app or Google Play.</li>
-          <li>Follow the map, the schedule and live updates from the organizers.</li>
+          {% if shared_plan %}<li>Use this plan, or merge it with your own, in Attnd.</li>{% else %}<li>Follow the map, the schedule and live updates from the organizers.</li>{% endif %}
         </ol>
         <div class="join-buttons">
           {% if ios_url %}<a href="{{ ios_url }}" class="button button--dark button--block">Download on the App Store</a>{% endif %}
@@ -52,9 +72,9 @@
     </section>
     {% if kind != 'ios' %}
     <section class="join-qr">
-      <img src="{% url 'join:join_qr' event.event_code %}" alt="QR code for {{ join_url }}" width="280" height="280">
-      <strong>Scan with your phone</strong>
-      <span class="muted small break">{{ join_url }}</span>
+      <img src="{{ qr_url }}" alt="QR code for {% if shared_plan %}this shared plan{% else %}{{ join_url }}{% endif %}" width="280" height="280">
+      <strong>{% if shared_plan %}Scan to open this plan{% else %}Scan with your phone{% endif %}</strong>
+      <span class="muted small break">{% if shared_plan %}Event code {{ event.event_code }}{% else %}{{ join_url }}{% endif %}</span>
     </section>
     {% endif %}
   </div>

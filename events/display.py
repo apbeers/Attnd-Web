@@ -118,8 +118,12 @@ def spread_km(points):
     return round(best, 2)
 
 
-def event_stats(event):
-    locations = list(event.location_set.filter(hidden=False).values_list('latitude', 'longitude', 'category'))
+def event_stats(event, locations=None):
+    """`locations`: the event's visible locations when the caller has them already (saves a query)."""
+    if locations is not None:
+        locations = [(loc.latitude, loc.longitude, loc.category) for loc in locations]
+    else:
+        locations = list(event.location_set.filter(hidden=False).values_list('latitude', 'longitude', 'category'))
     item_count = event.scheduleditem_set.filter(hidden=False).count()
     categories = sorted({c for _, _, c in locations if c})
     return {

@@ -128,8 +128,10 @@ def run_job(job_id, already_claimed=False):
     try:
         if job.kind == IngestJob.KIND_CREATE:
             _run_create(job)
-        else:
+        elif job.kind == IngestJob.KIND_REFRESH:
             _run_refresh(job)
+        else:  # e.g. an old 'tickets' draft job (ticketing is parked on git branch parked/tickets)
+            raise ValueError('This kind of job is no longer supported.')
     except ValueError as exc:
         logger.warning('Ingest job %s failed: %s', job.pk, exc)
         _fail(job, str(exc))
@@ -179,6 +181,26 @@ def _run_create(job):
         'notes': ' '.join(filter(None, [data.get('notes', '')] + notes)),
     }
     job.save()
+    if job.studio_import and job.urls and job.created_by_id:
+        _bring_into_studio(job, event)
+
+
+def _bring_into_studio(job, event):
+    """Attnd Studio (admins only): an import that creates an event brings its website into Studio automatically (the
+    organizer can untick it on the import form): the whole site is crawled, its files copied and the AI rebuilds it.
+    Only for staff and superusers (checked again here, when the job runs)."""
+    from studio.access import is_staff
+    if not is_staff(job.created_by):
+        return
+    try:
+        from studio import importer, publishing
+        publishing.switch_plan(event, Event.PLAN_STUDIO)
+        site = publishing.ensure_site(event, job.created_by)
+        importer.start_import(site, job.urls[0], job.created_by)
+        job.result = {**job.result, 'studio_import': True}
+        job.save(update_fields=['result'])
+    except Exception:
+        logger.exception('Could not bring %s into Studio', job.urls[0])
 
 
 def _run_refresh(job):

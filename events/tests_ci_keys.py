@@ -113,8 +113,8 @@ class CiKeyTests(TestCase):
         Device.objects.filter(id='ci-ios-a').update(event=self.demo, push_token='ci-token')
         self.assertFalse(Device.objects.real().filter(id='ci-ios-a').exists())
         from events.push import _recipients
-        ios, android = _recipients(self.demo, silent=True)
-        self.assertNotIn('ci-token', ios + android)
+        (ios_app, ios_clip), android = _recipients(self.demo, silent=True)
+        self.assertNotIn('ci-token', ios_app + ios_clip + android)
 
     # -- refused ---------------------------------------------------------------------------------
 
@@ -128,11 +128,19 @@ class CiKeyTests(TestCase):
         self.assertEqual(self.get('/api/v2/events/999999/bundle/').status_code, 404)
 
     def test_everything_else_is_401(self):
-        for path in ('/api/v1/events/lookup/?q=DEMO', f'/api/v1/events/{self.demo.id}/',
-                     f'/api/v1/events/{self.demo.id}/locations/', '/api/v1/events/nearby_events/32.75/-97.33/'):
-            self.assertEqual(self.get(path).status_code, 401, path)
-        resp = self.post(f'/api/v1/events/{self.demo.id}/join/ci-ios-1/', {'platform': 'ios'})
-        self.assertEqual(resp.status_code, 401)
+        # A view without a ci_scope never accepts a CI key (API v1's events API, which had none, is retired).
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+        from django.views import View
+        from events.apis import ApiKeyRequired
+
+        class Unscoped(ApiKeyRequired, View):
+            def get(self, request):
+                return HttpResponse('ok')
+
+        request = RequestFactory().get('/x/', HTTP_AUTHORIZATION=f'Bearer {CI_KEY}')
+        self.assertEqual(Unscoped.as_view()(request).status_code, 401)
+        self.assertEqual(self.get('/api/v1/events/lookup/?q=DEMO').status_code, 410)
 
     def test_wrong_short_or_missing_key_is_401(self):
         self.assertEqual(self.get('/api/v2/events/lookup/', key='wrong', data={'q': 'DEMO'}).status_code, 401)

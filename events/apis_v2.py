@@ -14,7 +14,11 @@ event (API-008, see ApiKeyRequired).
 
 import decimal
 import json
+from datetime import timedelta
 
+from django.core.cache import cache
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -39,7 +43,11 @@ def _body(request):
 
 
 def _etag(event):
-    return f'"e{event.id}-v{event.content_version}"'
+    return _etag_for(event.id, event.content_version)
+
+
+def _etag_for(event_id, content_version):
+    return f'"e{event_id}-v{content_version}"'
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -81,24 +89,61 @@ class LookupV2(ApiKeyRequired, View):
         return JsonResponse({'event': content.event_v2(event, request)})
 
 
+# The serialized bundle per (event, content_version, origin) for a few minutes: every device of an event
+# fetches the same bytes after a change (the content_updated push), so only the first one builds them. The
+# version is in the key, so an edit is never served stale; the TTL only bounds what could change without a
+# version bump.
+BUNDLE_CACHE_SECONDS = 300
+# A device's last_seen is written at most this often by bundle polls (the apps poll every 60 s – 5 min;
+# last_seen only feeds "active today" counts and the one-year clean-up).
+LAST_SEEN_RESOLUTION = timedelta(minutes=10)
+
+
+def _bundle_bytes(event, request):
+    key = f'bundle:v2:{event.id}:{event.content_version}:{request.scheme}://{request.get_host()}'
+    body = cache.get(key)
+    if body is None:
+        body = json.dumps(content.bundle(event, request), cls=DjangoJSONEncoder).encode()
+        cache.set(key, body, BUNDLE_CACHE_SECONDS)
+    return body
+
+
+def _touch_device(request):
+    device_id = request.headers.get('X-Device-Id')
+    if not device_id or (is_ci_request(request) and not is_ci_device(device_id)):
+        return
+    now = timezone.now()
+    # Only rows that need it: a poll every minute would otherwise rewrite the device row every minute.
+    (Device.objects.filter(id=device_id[:128])
+     .filter(Q(last_seen__isnull=True) | Q(last_seen__lt=now - LAST_SEEN_RESOLUTION) | ~Q(api_version=API_VERSION))
+     .update(last_seen=now, api_version=API_VERSION))
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class BundleV2(ApiKeyRequired, View):
     ci_scope = 'event'
 
     def get(self, request, event_id):
-        event = live_events().filter(id=event_id).first()
-        if event is None:
-            return JsonResponse({'error': 'Not found'}, status=404)
-        etag = _etag(event)
-        if request.headers.get('If-None-Match') == etag:
+        events = live_events().filter(id=event_id)
+        etag = None
+        if_none_match = request.headers.get('If-None-Match')
+        if if_none_match:
+            # The usual poll: answer 304 from the version alone, without loading the event or its content.
+            version = events.values_list('content_version', flat=True).first()
+            if version is None:
+                return JsonResponse({'error': 'Not found'}, status=404)
+            etag = _etag_for(event_id, version)
+        if etag is not None and if_none_match == etag:
             resp = HttpResponse(status=304)
         else:
-            resp = JsonResponse(content.bundle(event, request))
+            event = events.first()
+            if event is None:
+                return JsonResponse({'error': 'Not found'}, status=404)
+            etag = _etag(event)
+            resp = HttpResponse(_bundle_bytes(event, request), content_type='application/json')
         resp['ETag'] = etag
         resp['Cache-Control'] = 'no-cache'
-        device_id = request.headers.get('X-Device-Id')
-        if device_id and (is_ci_device(device_id) or not is_ci_request(request)):
-            Device.objects.filter(id=device_id[:128]).update(last_seen=timezone.now(), api_version=API_VERSION)
+        _touch_device(request)
         return resp
 
 

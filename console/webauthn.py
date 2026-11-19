@@ -147,7 +147,7 @@ def credential_descriptor(credential_id: str, transports=None) -> dict:
 # button each get one, and so does a second tab. A response is matched to its own challenge, which is then
 # removed whether or not the response verifies.
 
-MAX_OUTSTANDING = 5
+MAX_OUTSTANDING = 8
 
 
 def store_challenge(session, purpose: str, challenge: bytes, **extra) -> None:

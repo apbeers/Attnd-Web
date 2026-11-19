@@ -252,21 +252,33 @@ class BundleTests(LiveBase):
         self.assertEqual((main['category'], main['snippet']), ('Stage', 'Headliners every night'))
         self.assertTrue(main['description'].startswith('The big one: headliners each night'))
 
+        # API-010: tags. Lower case, 2-6 on everything; one vocabulary across the event.
+        self.assertEqual(main['tags'], ['live music', 'headliners', 'free'])
+        for thing in locs + b['schedule']:
+            self.assertTrue(2 <= len(thing['tags']) <= 6, thing['name'])
+            self.assertTrue(all(t == t.lower() for t in thing['tags']), thing['name'])
+        self.assertEqual({l['name'] for l in locs if 'live music' in l['tags']},
+                         {'Main Stage', 'Trinity Stage', 'Panther Island Pavilion', 'Roaming Mariachi'})
+        self.assertEqual({l['name'] for l in locs if 'food' in l['tags']},
+                         {'Chef Demo Kitchen', 'Taco Row', 'BBQ Pit Lane', 'Sweet Spot'})
+
         items = b['schedule']
         self.assertEqual(len(items), 51)
         general = [i for i in items if i['location_id'] is None]
         self.assertEqual(sorted(i['name'] for i in general), ['Gates open', 'Gates open', 'Opening ceremony'])
-        self.assertTrue(all(i['tags'] == ['General'] for i in general))
+        self.assertTrue(all(i['tags'] == ['general', 'free'] for i in general))
         stages = {'Main Stage', 'Trinity Stage', 'Panther Island Pavilion'}
-        music = [i for i in items if 'Music' in i['tags']]
+        music = [i for i in items if 'live music' in i['tags']]
         self.assertEqual(len(music), 36)
         self.assertTrue(all(i['location_name'] in stages for i in music))
-        demos = [i for i in items if {'Food', 'Demo'} & set(i['tags'])]
+        demos = [i for i in items if {'food', 'demo'} & set(i['tags'])]
         self.assertEqual(len(demos), 9)
-        self.assertTrue(all(i['location_name'] == 'Chef Demo Kitchen' for i in demos))
+        self.assertTrue(all(i['location_name'] == 'Chef Demo Kitchen' and {'food', 'demo'} <= set(i['tags'])
+                            for i in demos))
         kids = [i for i in items if i['name'] == 'Face painting & games']
         self.assertEqual(len(kids), 3)
-        self.assertTrue(all(i['location_name'] == 'Kids Zone' and i['tags'] == ['Family'] for i in kids))
+        self.assertTrue(all(i['location_name'] == 'Kids Zone' and {'family', 'kid-friendly'} <= set(i['tags'])
+                            for i in kids))
         for i in items:
             self.assertLess(ts(i['start_time']), ts(i['end_time']), i['name'])
         self.assertEqual([i['start_time'] for i in items], sorted((i['start_time'] for i in items), key=ts))
@@ -280,6 +292,9 @@ class BundleTests(LiveBase):
         self.assertLessEqual(set(titles), DEMO_NOTIFICATIONS | DEMO_SCHEDULED_NOTIFICATIONS)
         self.assertEqual(len(titles), len(set(titles)))
         self.assertTrue(all(ts(n['send_time']) <= now for n in notes), 'a future notification is in the bundle')
+        # API-011: "Set time change" is the urgent one; the rest (including the 2 sent later) are normal.
+        self.assertEqual({n['title'] for n in notes if n.get('priority') == 'urgent'}, {'Set time change'})
+        self.assertTrue(all(n.get('priority') in ('normal', 'urgent') for n in notes))
         self.assertEqual([n['send_time'] for n in notes], sorted((n['send_time'] for n in notes), key=ts, reverse=True))
 
 

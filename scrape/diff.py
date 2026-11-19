@@ -13,6 +13,8 @@ Rules:
   proposed with ``conflict_fields`` and left unticked by default.
 - Empty values from the AI never blank out existing data ("not found" ≠ "removed").
 - Removals are only proposed when the AI cites evidence, and are never auto-applied.
+- ``context`` (API-018, the assistant's details) is one field per event / location / item: the AI's view is merged
+  onto the current one key by key (keys the AI left empty keep their value), and the review shows what changed.
 """
 
 from datetime import datetime, timedelta
@@ -24,18 +26,20 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from events import context as ctx
 from events.content import batch_changes, save_revision
-from events.models import Event, Location, ScheduledItem
+from events.models import Event, Location, ScheduledItem, normalize_tags
 from scrape.models import Change, ChangeSet
 
 EVENT_FIELDS = ['name', 'description', 'address', 'latitude', 'longitude', 'timezone', 'start_time', 'end_time']
 LOCATION_FIELDS = ['name', 'snippet', 'description', 'category', 'website', 'image_url', 'address',
-                   'latitude', 'longitude']
+                   'latitude', 'longitude', 'tags']
 ITEM_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags']
 MAX_LEN = {'name': 256, 'description': 1024, 'snippet': 200, 'address': 512, 'category': 64,
            'website': 1024, 'image_url': 1024, 'timezone': 64}
 EVENT_MAX_LEN = {**MAX_LEN, 'description': 2048}
-MINOR_FIELDS = {'description', 'snippet', 'image_url', 'website', 'category', 'tags', 'latitude', 'longitude'}
+MINOR_FIELDS = {'description', 'snippet', 'image_url', 'website', 'category', 'tags', 'latitude', 'longitude',
+                'context'}
 
 
 # ---------------------------------------------------------------------------
@@ -101,35 +105,64 @@ def _same(field, old, new):
     if isinstance(old, datetime) or isinstance(new, datetime):
         return old == new
     if field == 'tags':
-        return sorted(old or []) == sorted(new or [])
+        return sorted(normalize_tags(old)) == sorted(normalize_tags(new))
     if field == 'location':
         return old == new
     return norm(old) == norm(new) if isinstance(old, str) or isinstance(new, str) else old == new
 
 
 def _empty(value):
-    return value is None or value == '' or value == []
+    return value is None or value == '' or value == [] or value == {}
+
+
+def _brief_context(kind, value):
+    """A location's / item's context for CURRENT DATA without its long texts (keeps the prompt small)."""
+    brief = ctx.normalize(kind, value)
+    brief.pop('about', None)
+    if 'performers' in brief:
+        brief['performers'] = [{k: v for k, v in p.items() if k != 'bio'} for p in brief['performers']]
+    return brief
+
+
+def find_location(event):
+    """name → id of one of the event's locations (exact, else ≥ 0.9 similar), for amenities named by the AI."""
+    locations = list(event.location_set.values_list('id', 'name'))
+
+    def find(name):
+        key = norm(name)
+        for loc_id, loc_name in locations:
+            if norm(loc_name) == key:
+                return loc_id
+        best = max(locations, key=lambda row: similar(row[1], name), default=None)
+        return best[0] if best and similar(best[1], name) >= 0.9 else None
+    return find
 
 
 def current_state(event):
     """Compact JSON of the event as it is now, given to the AI on refresh."""
+    from scrape.tags import VOCABULARY_HINT, event_vocabulary
+    names = dict(event.location_set.values_list('id', 'name'))
     return {
+        'tag_vocabulary': event_vocabulary(event)[:VOCABULARY_HINT],
         'event': {
             'name': event.name, 'description': event.description, 'address': event.address,
             'timezone': event.timezone,
             'start_time': event.start_time.astimezone(tz_or_utc(event.timezone)).replace(tzinfo=None).isoformat(),
             'end_time': (event.end_time.astimezone(tz_or_utc(event.timezone)).replace(tzinfo=None).isoformat()
                          if event.end_time else None),
+            'context': ctx.normalize_named(ctx.EVENT, event.context, names),
         },
         'locations': [
             {'id': loc.id, 'name': loc.name, 'snippet': loc.snippet, 'category': loc.category,
-             'address': loc.address}
+             'address': loc.address, 'tags': normalize_tags(loc.tags),
+             **({'context': c} if (c := _brief_context(ctx.LOCATION, loc.context)) else {})}
             for loc in event.location_set.all()
         ],
         'schedule': [
             {'id': it.id, 'name': it.name,
              'start_time': it.start_time.astimezone(tz_or_utc(event.timezone)).replace(tzinfo=None).isoformat(),
-             'location': it.location.name if it.location_id else None}
+             'location': it.location.name if it.location_id else None, 'tags': normalize_tags(it.tags),
+             **({'context': c} if (c := _brief_context(ctx.ITEM, it.context)) else {})}
             for it in event.scheduleditem_set.select_related('location')
         ],
     }
@@ -154,6 +187,17 @@ def _field_changes(obj, proposed, fields):
         if f in locked:
             conflicts.append(f)
     return out, conflicts
+
+
+def _context_change(kind, obj, proposed, fields, conflicts, names=None):
+    """Add a ``context`` field change when the AI's context (merged onto the current one) differs."""
+    current = ctx.normalize_named(kind, obj.context, names)
+    merged = ctx.merge(kind, current, proposed)
+    if merged == current:
+        return
+    fields['context'] = {'old': current, 'new': merged}
+    if 'context' in (obj.locked_fields or []):
+        conflicts.append('context')
 
 
 def _is_minor(fields_changed):
@@ -184,6 +228,8 @@ def compute_changes(event, data):
         'end_time': parse_local(data.get('end_time'), tz),
     }
     fields, conflicts = _field_changes(event, ev_proposed, EVENT_FIELDS)
+    _context_change(ctx.EVENT, event, data.get('context'), fields, conflicts,
+                    names=dict(event.location_set.values_list('id', 'name')))
     if fields:
         changes.append({'entity': Change.ENTITY_EVENT, 'op': Change.OP_UPDATE, 'target_id': event.id,
                         'label': event.name, 'data': fields, 'conflict_fields': conflicts,
@@ -212,11 +258,13 @@ def compute_changes(event, data):
         if not loc.get('name'):
             continue
         proposed = {f: _clip(f, loc.get(f)) for f in LOCATION_FIELDS}
+        proposed['tags'] = normalize_tags(loc.get('tags'))
         target = match_location(loc)
         if target is not None:
             claimed.add(target.id)
             name_to_target[norm(loc['name'])] = {'id': target.id, 'name': target.name}
             fields, conflicts = _field_changes(target, proposed, LOCATION_FIELDS)
+            _context_change(ctx.LOCATION, target, loc.get('context'), fields, conflicts)
             if fields:
                 changes.append({'entity': Change.ENTITY_LOCATION, 'op': Change.OP_UPDATE,
                                 'target_id': target.id, 'label': target.name, 'data': fields,
@@ -225,6 +273,7 @@ def compute_changes(event, data):
             new_count += 1
             ref = f'loc:{new_count}'
             name_to_target[norm(loc['name'])] = {'ref': ref, 'name': proposed['name']}
+            proposed['context'] = ctx.normalize(ctx.LOCATION, loc.get('context'))
             changes.append({'entity': Change.ENTITY_LOCATION, 'op': Change.OP_CREATE, 'ref': ref,
                             'label': proposed['name'],
                             'data': {k: v for k, v in proposed.items() if not _empty(v)},
@@ -274,13 +323,14 @@ def compute_changes(event, data):
             'description': _clip('description', item.get('description')),
             'start_time': start,
             'end_time': parse_local(item.get('end_time'), tz),
-            'tags': [t[:32] for t in (item.get('tags') or []) if isinstance(t, str)][:5],
+            'tags': normalize_tags(item.get('tags')),
         }
         if target is not None:
             claimed_items.add(target.id)
             if loc_target and 'id' in loc_target:
                 proposed['location'] = loc_target['id']
             fields, conflicts = _field_changes(target, proposed, ITEM_FIELDS)
+            _context_change(ctx.ITEM, target, item.get('context'), fields, conflicts)
             if loc_target and 'ref' in loc_target:
                 fields['location'] = {'old': target.location_id, 'new': loc_target['ref']}
             if 'location' in fields:
@@ -297,6 +347,8 @@ def compute_changes(event, data):
             if start is None:
                 continue  # an item without a time can't go on the schedule
             data_out = {k: _jsonable(v) for k, v in proposed.items() if not _empty(v)}
+            if item_context := ctx.normalize(ctx.ITEM, item.get('context')):
+                data_out['context'] = item_context
             if loc_target:
                 data_out['location'] = loc_target.get('id') or loc_target.get('ref')
                 data_out['location_name'] = loc_target['name']
@@ -339,6 +391,7 @@ def save_changeset(event, job, changes, notes=''):
         Change(changeset=cs, sort=order[c['entity']] * 10000 + i, entity=c['entity'], op=c['op'],
                target_id=c.get('target_id'), ref=c.get('ref', ''), label=(c.get('label') or '')[:256],
                data=c['data'], conflict_fields=c.get('conflict_fields', []), reason=c.get('reason', ''),
+               human_fields=c.get('human_fields', []),
                minor=c.get('minor', False))
         for i, c in enumerate(changes)
     ])
@@ -361,7 +414,10 @@ def default_decisions(changeset, minor_only=False):
     for ch in changeset.changes.all():
         if minor_only and not (ch.minor and not ch.conflict_fields and ch.op == Change.OP_UPDATE):
             continue
-        fields = [f for f in ch.data if f not in ch.conflict_fields] if ch.op == Change.OP_UPDATE else None
+        if ch.human_fields and ch.op != Change.OP_UPDATE:
+            continue  # money: a person ticks it
+        fields = ([f for f in ch.data if f not in ch.conflict_fields and f not in ch.human_fields]
+                  if ch.op == Change.OP_UPDATE else None)
         if ch.op == Change.OP_UPDATE and not fields:
             continue
         decisions[ch.id] = {'accept': True, 'fields': fields}
@@ -381,8 +437,9 @@ def apply_changeset(changeset, decisions, user=None, partial_ok=False):
         save_revision(event, f'Before applying AI changes: {changeset.summary}'[:256], user)
         ref_ids = {}
         changes = list(changeset.changes.filter(status=Change.PENDING))
-        # Order: event, location creates/updates, item creates/updates, then deletions
-        changes.sort(key=lambda c: (c.op == Change.OP_DELETE, c.sort))
+        # Order: location creates/updates, item creates/updates, the event (its amenities may name a new
+        # location), then deletions
+        changes.sort(key=lambda c: (c.op == Change.OP_DELETE, c.entity == Change.ENTITY_EVENT, c.sort))
         with batch_changes(event):
             for ch in changes:
                 decision = decisions.get(ch.id) or decisions.get(str(ch.id))
@@ -413,6 +470,8 @@ def _apply_one(event, owner, ch, fields, ref_ids):
         for f in (fields if fields is not None else ch.data.keys()):
             if f in ch.data and f in EVENT_FIELDS:
                 setattr(event, f, _value(f, ch.data[f]['new']))
+            elif f == 'context' and f in ch.data:
+                event.context = ctx.resolve_named(ctx.EVENT, ch.data[f]['new'], find_location(event))
         event.save()
         return True
 
@@ -422,7 +481,7 @@ def _apply_one(event, owner, ch, fields, ref_ids):
                            sort_order=(event.location_set.order_by('-sort_order')
                                        .values_list('sort_order', flat=True).first() or 0) + 1)
             for f, v in ch.data.items():
-                if f in LOCATION_FIELDS:
+                if f in LOCATION_FIELDS or f == 'context':
                     setattr(loc, f, v)
             loc.save()
             ref_ids[ch.ref] = loc.id
@@ -434,7 +493,7 @@ def _apply_one(event, owner, ch, fields, ref_ids):
             loc.delete()
             return True
         for f in (fields if fields is not None else ch.data.keys()):
-            if f in ch.data and f in LOCATION_FIELDS:
+            if f in ch.data and (f in LOCATION_FIELDS or f == 'context'):
                 setattr(loc, f, ch.data[f]['new'])
         loc.save()
         return True
@@ -452,7 +511,7 @@ def _apply_one(event, owner, ch, fields, ref_ids):
             for f, v in ch.data.items():
                 if f == 'location':
                     item.location_id = loc_id(v)
-                elif f in ITEM_FIELDS:
+                elif f in ITEM_FIELDS or f == 'context':
                     setattr(item, f, _value(f, v))
             if item.start_time is None:
                 return False
@@ -465,7 +524,7 @@ def _apply_one(event, owner, ch, fields, ref_ids):
             item.delete()
             return True
         for f in (fields if fields is not None else ch.data.keys()):
-            if f not in ch.data or f not in ITEM_FIELDS:
+            if f not in ch.data or (f not in ITEM_FIELDS and f != 'context'):
                 continue
             if f == 'location':
                 item.location_id = loc_id(ch.data[f]['new'])
@@ -522,7 +581,9 @@ def create_event_from_extraction(data, owner, *, status, public, fallback_tz='UT
                 event=event, user=owner, sort_order=i,
                 **{f: _clip(f, loc.get(f)) if loc.get(f) is not None else
                    ('' if f in ('snippet', 'description', 'address', 'category') else None)
-                   for f in LOCATION_FIELDS},
+                   for f in LOCATION_FIELDS if f != 'tags'},
+                tags=normalize_tags(loc.get('tags')),
+                context=ctx.normalize(ctx.LOCATION, loc.get('context')),
             )
             name_to_loc[norm(obj.name)] = obj
         for item in data.get('schedule', []):
@@ -538,8 +599,14 @@ def create_event_from_extraction(data, owner, *, status, public, fallback_tz='UT
                 description=_clip('description', item.get('description') or ''),
                 start_time=start_i,
                 end_time=parse_local(item.get('end_time'), tz),
-                tags=[t[:32] for t in (item.get('tags') or []) if isinstance(t, str)][:5],
+                tags=normalize_tags(item.get('tags')),
+                context=ctx.normalize(ctx.ITEM, item.get('context')),
             )
+        # API-018: the event's context last, so its amenities can point at the new locations (no version bump).
+        event_context = ctx.resolve_named(ctx.EVENT, ctx.normalize_named(ctx.EVENT, data.get('context')),
+                                          find_location(event))
+        if event_context:
+            Event.objects.filter(pk=event.pk).update(context=event_context)
         event.refresh_from_db()
         save_revision(event, 'Created by AI import')
     return event, notes

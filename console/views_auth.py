@@ -3,8 +3,6 @@ Passkey (WebAuthn) endpoints are in views_passkeys.py."""
 
 from urllib.parse import urlencode
 
-import qrcode
-import qrcode.image.svg
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import views as auth_views
@@ -14,6 +12,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 
+from attnd.links import qr_svg
 from attnd.ratelimit import RateLimit, client_ip
 from console import totp, twofactor, webauthn
 from console.mail import email_enabled
@@ -27,7 +26,6 @@ SIGNUP_IP = RateLimit('signup_ip')
 OTP_USER = RateLimit('otp_user')
 EMAIL_CODE_USER = RateLimit('email_code_user')
 
-NEW_RECOVERY_CODES = '_new_recovery_codes'  # session: codes to show once on the recovery codes page
 PASSKEY_PROMPT = '_passkey_prompt'  # session: offer "Sign in faster with a passkey" after a password sign-in
 
 # Same wording whether or not the email has an account.
@@ -160,15 +158,14 @@ def two_factor_verify(request):
 
 
 def _qr_svg(text: str) -> str:
-    image = qrcode.make(text, image_factory=qrcode.image.svg.SvgPathImage, box_size=8, border=2)
-    return image.to_string(encoding='unicode')
+    return qr_svg(text, box_size=8)
 
 
 @login_required
 def two_factor_setup(request):
     """Add a strong sign-in method. Staff without one are sent here until they've done it: a passkey first
-    (JavaScript, views_passkeys), or an authenticator app (scan the QR code or type the key, confirm with a
-    code). Recovery codes are shown once when the account's first second factor is turned on."""
+    (JavaScript, views_passkeys), or an authenticator app (open the setup link, scan the QR code or type
+    the key, confirm with a code). No recovery codes here: they are optional, from the Account page."""
     next_url = _next_url(request)
     if twofactor.pending_step(request) == 'verify':
         return redirect(_with_next('two_factor_verify', next_url))
@@ -181,13 +178,12 @@ def two_factor_setup(request):
     if request.method == 'POST':
         if OTP_USER.exceeded(request.user.pk):
             error, status = OTP_LIMITED, 429
+        elif twofactor.confirm_setup(device, request.POST.get('code', '')):
+            OTP_USER.reset(request.user.pk)
+            twofactor.mark_verified(request)
+            messages.success(request, 'Your authenticator app is on: after your password, enter the code it shows.')
+            return redirect(next_url)
         else:
-            codes = twofactor.confirm_setup(device, request.POST.get('code', ''))
-            if codes is not None:
-                OTP_USER.reset(request.user.pk)
-                twofactor.mark_verified(request)
-                return render(request, 'console/two_factor_setup.html',
-                              {'done': True, 'recovery_codes': codes, 'next': next_url})
             OTP_USER.hit(request.user.pk)
             error = 'That code didn’t match. Enter the 6-digit code your app shows now.'
     account = request.user.email or request.user.username
@@ -201,20 +197,11 @@ def two_factor_setup(request):
     }, status=status)
 
 
-@login_required
-def recovery_codes(request):
-    """Shows recovery codes made in this session once (after adding a first passkey or turning on emailed
-    codes), then they are gone from the session."""
-    next_url = _next_url(request)
-    codes = request.session.pop(NEW_RECOVERY_CODES, None)
-    if not codes:
-        return redirect(next_url)
-    return render(request, 'console/two_factor_setup.html', {'done': True, 'recovery_codes': codes, 'next': next_url})
-
-
 def account_two_factor_action(request):
     """Account page actions for the authenticator app, emailed codes and recovery codes.
-    Returns (recovery codes to show or None, response or None)."""
+    Returns (recovery codes to show or None, response or None). Recovery codes ("Set up recovery codes" /
+    "New recovery codes", action 2fa_codes) need a second factor and a fresh check: a code from the
+    authenticator app or the account's password."""
     user = request.user
     action = request.POST.get('action')
     device = twofactor.confirmed_device(user)
@@ -231,8 +218,6 @@ def account_two_factor_action(request):
             row.save(update_fields=['email_codes_enabled'])
             twofactor.mark_verified(request)  # this session was fully signed in; keep it that way
             messages.success(request, 'Emailed codes are on: after your password, we’ll email you a code.')
-            codes = twofactor.first_recovery_codes(user)
-            return (codes or None), None
         return None, back
     if action == 'email_codes_off':
         SignInSecurity.objects.filter(user=user).update(

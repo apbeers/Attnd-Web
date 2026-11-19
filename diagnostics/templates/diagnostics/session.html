@@ -1,0 +1,84 @@
+{% extends 'console/base.html' %}
+{% load static console_tags %}
+{% block title %}{{ session.code }} · Diagnostics{% endblock %}
+{% block content %}
+{% include 'diagnostics/_nav.html' with tab='sessions' %}
+<div class="stack stack--loose" id="diag-session" data-entries-url="{% url 'diagnostics:session_entries' session.code %}">
+<div class="panel">
+  <div class="cluster cluster--loose">
+    <div class="grow">
+      <h2 class="title-3 mono">{{ session.code }}
+        {% if session.reason == 'dev' %}<span class="badge badge--info">Dev build</span>{% else %}<span class="badge badge--primary">Debug mode</span>{% endif %}
+        {% if session.error_count %}<span class="badge badge--danger">{{ session.error_count }} errors</span>{% endif %}</h2>
+      <p class="small muted">{{ session.platform|default:"?" }} · app {{ session.app_version|default:"?" }}{% if session.build %} ({{ session.build }}){% endif %}
+        · {{ session.model|default:"?" }} · {{ session.os|default:"?" }}
+        {% if event_obj %} · event <a href="{% url 'console:event' event_obj.id %}">{{ event_obj.name }}</a> ({{ event_obj.event_code }}){% elif session.event_id %} · event #{{ session.event_id }}{% endif %}</p>
+      <p class="small muted">{{ session.entry_count }} entries · {{ session.first_ts|date:"M j, g:i:s A" }} – {{ session.last_ts|date:"M j, g:i:s A" }} (device clock) · last upload {{ session.last_entry_at|date:"M j, g:i A" }}</p>
+    </div>
+    <a class="button button--outline button--small" href="{% url 'diagnostics:session_export' session.code %}">{% icon "download" %} Export .jsonl</a>
+    <form method="post" action="{% url 'diagnostics:session_delete' session.code %}">{% csrf_token %}
+      <button class="button button--ghost button--small tone-danger" data-confirm="Delete session {{ session.code }} and all its entries?">Delete</button></form>
+  </div>
+</div>
+
+<div class="grid grid--4 grid--stats panel">
+  <div><div class="stat__value">{{ summary.requests }}</div><div class="eyebrow">Requests{% if summary.failed_requests %} · {{ summary.failed_requests }} failed{% endif %}</div>
+    <div class="small muted">{% for k, v in summary.statuses.items %}{{ k }} {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}</div></div>
+  <div><div class="stat__value">{% if summary.launch_median is not None %}{{ summary.launch_median }} ms{% else %}–{% endif %}</div><div class="eyebrow">Median launch ({{ summary.launches|length }})</div>
+    <div class="small muted">{% for l in summary.launches|slice:":6" %}{{ l.kind|default:"?" }} {{ l.ms|default:"?" }} ms{% if not forloop.last %} · {% endif %}{% endfor %}</div></div>
+  <div><div class="stat__value">{{ summary.push_handled }} / {{ summary.push_received }}</div><div class="eyebrow">Pushes handled / received</div>
+    <div class="small muted">{% for k, v in summary.push_types.items %}{{ k }} {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}{% if summary.push_dropped %} · {{ summary.push_dropped }} dropped{% endif %}</div></div>
+  <div><div class="stat__value">{{ summary.background_wakes }}</div><div class="eyebrow">Background wakes</div>
+    <div class="small muted">{{ summary.background_finished }} finished{% if summary.background_failed %} · {{ summary.background_failed }} failed{% endif %} · {{ summary.foregrounds }} foregrounds</div></div>
+</div>
+
+<div class="split">
+  <div class="split__main panel">
+    <h2 class="title-4">Errors, grouped</h2>
+    <div class="scroll-x"><table class="data-table data-table--compact"><thead><tr><th>Event</th><th>Domain / code / type</th><th class="num">Count</th><th>First – last</th><th>Example</th></tr></thead><tbody>
+    {% for e in summary.errors %}<tr><td class="mono"><button type="button" class="link-button" data-diag-filter-event="{{ e.name }}">{{ e.name }}</button></td>
+      <td class="small">{{ e.domain|default:"–" }} {{ e.code }} {{ e.type }}</td><td class="num">{{ e.count }}</td>
+      <td class="small nowrap">{{ e.first|date:"g:i:s A" }} – {{ e.last|date:"g:i:s A" }}</td><td class="small">{{ e.msg|truncatechars:80 }}</td></tr>
+    {% empty %}<tr><td colspan="5" class="muted">No errors.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+  <div class="split__aside panel">
+    <h2 class="title-4">Slowest requests</h2>
+    <ol class="list list--inset small">{% for r in summary.slowest %}
+      <li><button type="button" class="link-button mono" data-diag-select-req="{{ r.req_id }}">{{ r.ms }} ms</button> {{ r.method }} <span class="mono">{{ r.path }}</span> {{ r.status|default:"" }}</li>
+    {% empty %}<li class="muted">No timed requests.</li>{% endfor %}</ol>
+    {% if reports %}<h2 class="title-4">Reports in this session</h2>
+    <ul class="list list--inset small">{% for r in reports %}<li><a href="{% url 'diagnostics:report' r.id %}">{{ r.kind }}: {{ r.summary|default:r.reason|truncatechars:60 }}</a></li>{% endfor %}</ul>{% endif %}
+  </div>
+</div>
+
+<div class="panel diag-filters" data-diag-filters>
+  <h2 class="title-4">Timeline</h2>
+  <div class="cluster">
+    <label class="field field--small"><span class="field__label">Level at least</span><select data-filter="level">
+      {% for l in levels %}<option value="{{ forloop.counter0 }}"{% if l == 'trace' %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+    <label class="field field--small"><span class="field__label">Event</span><input data-filter="event" placeholder="net.request" autocomplete="off"></label>
+    <label class="field field--small grow"><span class="field__label">Text</span><input data-filter="text" placeholder="message or field" autocomplete="off"></label>
+    <label class="field field--small"><span class="field__label">Slower than (ms)</span><input data-filter="duration" type="number" min="0" step="50"></label>
+    <label class="field field--small"><span class="field__label">App state</span><select data-filter="state"><option value="">Any</option><option value="fg">Foreground</option><option value="bg">Background</option></select></label>
+    <label class="field field--check"><input type="checkbox" data-filter="status"> Status ≥ 400</label>
+    <label class="field field--check"><input type="checkbox" data-filter="around" disabled> ±30 s around the selected line</label>
+  </div>
+  <fieldset class="diag-cats"><legend class="field__label">Categories</legend><div class="cluster cluster--tight" data-diag-cats></div></fieldset>
+  <div class="diag-timeline" data-diag-timeline><canvas aria-label="Entries per category over time; click a dot to select it" role="img"></canvas></div>
+  <p class="small muted" data-diag-status aria-live="polite">Loading entries…</p>
+</div>
+
+<div class="panel">
+  <div class="tabs" data-tabs>
+    <button type="button" class="tabs__tab" data-tab-target="#diag-list" aria-selected="true">Entries</button>
+    <button type="button" class="tabs__tab" data-tab-target="#diag-waterfall" aria-selected="false">Network waterfall</button>
+  </div>
+  <div id="diag-list"><div class="scroll-x"><table class="data-table data-table--compact diag-table">
+    <thead><tr><th>Time</th><th>Level</th><th>Category</th><th>Event</th><th>Message</th></tr></thead><tbody data-diag-rows></tbody></table></div>
+    <button type="button" class="button button--outline button--small" data-diag-more hidden>Show more</button></div>
+  <div id="diag-waterfall" hidden><div class="waterfall" data-diag-waterfall></div>
+    <p class="small muted">Bars: app request time (start = finish − ms); the darker inner bar is the server's own time for the same X-Request-Id.</p></div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{% static 'diagnostics/diagnostics.js' %}"></script>{% endblock %}

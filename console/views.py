@@ -16,6 +16,7 @@ from console.forms.signup import EmailChangeForm, SignUpForm
 from console import passkeys, twofactor, webauthn
 from console.mail import email_enabled
 from console.models import Passkey
+from console.signups import INVITE_ONLY_MESSAGE, INVITE_ONLY_TITLE, may_sign_up, signups_open
 from console.views_auth import SIGNUP_LIMITED, account_two_factor_action, signup_limited
 from events.models import Event, Location, Notification, ScheduledItem, generate_event_code
 
@@ -50,45 +51,45 @@ def _claim_trial_event(user: User, event_code: str) -> bool:
 
 
 class SignUpView(View):
+    """Create an organizer account. While SIGNUPS_OPEN is off only invited emails may (console.signups); everyone
+    else gets the invite-only page, worded the same whether or not the email has an account or an invite."""
+
+    def _render(self, request, form, claim, status=200, **extra):
+        return render(request, 'registration/signup.html', {
+            'form': form, 'claim_code': claim, 'signups_open': signups_open(),
+            'invite_only_title': INVITE_ONLY_TITLE, 'invite_only_message': INVITE_ONLY_MESSAGE, **extra,
+        }, status=status)
 
     def get(self, request):
-        claim = request.GET.get('claim', '')
-        return render(request, 'registration/signup.html', {
-            'form': SignUpForm(),
-            'claim_code': claim,
-        })
+        return self._render(request, SignUpForm(), request.GET.get('claim', ''))
 
     def post(self, request):
         form = SignUpForm(request.POST)
         claim = request.POST.get('claim', '').strip()
         if signup_limited(request):
-            return render(request, 'registration/signup.html', {
-                'form': form, 'claim_code': claim, 'rate_limited': SIGNUP_LIMITED}, status=429)
+            return self._render(request, form, claim, status=429, rate_limited=SIGNUP_LIMITED, form_open=True)
 
         if not form.is_valid():
-            return render(request, 'registration/signup.html', {
-                'form': form,
-                'claim_code': claim,
-            })
+            return self._render(request, form, claim, form_open=True)
 
         email = form.cleaned_data['email'].strip().lower()
         password = form.cleaned_data['password']
 
+        if not may_sign_up(email):
+            # Checked before "already exists", so this answer never tells who has an account or an invite.
+            logger.info("Sign-up refused (invite only)")
+            return self._render(request, SignUpForm(initial={'email': email}), claim, status=403,
+                                refused=INVITE_ONLY_MESSAGE, form_open=True)
+
         if email_in_use(email):
             form.add_error('email', 'An account with this email already exists.')
-            return render(request, 'registration/signup.html', {
-                'form': form,
-                'claim_code': claim,
-            })
+            return self._render(request, form, claim, form_open=True)
 
         try:
             user = create_account(email, password)
         except IntegrityError:
             form.add_error('email', 'An account with this email already exists.')
-            return render(request, 'registration/signup.html', {
-                'form': form,
-                'claim_code': claim,
-            })
+            return self._render(request, form, claim, form_open=True)
 
         login(request, user)  # pending team invites for this email are claimed on login (console.signals)
 

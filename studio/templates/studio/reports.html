@@ -1,0 +1,32 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Studio site reports{% endblock %}
+{% block content %}
+<div class="column stack stack--loose">
+  <h1>{% icon "warning" %} Studio site reports</h1>
+  <p class="muted">Visitors report hosted sites with the "Report this site" link in every site's footer. Take a site down to stop serving it (the organizer keeps their versions).</p>
+  {% if suspended %}<div class="panel stack stack--tight"><h2 class="title-4">Taken down</h2>
+    {% for s in suspended %}<div class="cluster"><span class="grow mono">{{ s.slug }}</span><span class="small muted">{{ s.event.name }} · {{ s.suspended_reason }}</span>
+      <form method="post">{% csrf_token %}<input type="hidden" name="site" value="{{ s.pk }}"><input type="hidden" name="action" value="reinstate">
+        <button class="button button--secondary button--small">Restore</button></form></div>{% endfor %}</div>{% endif %}
+  <div class="panel panel--flush">
+    <table class="data-table">
+      <thead><tr><th>When</th><th>Site</th><th>Reason</th><th>Details</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for r in reports %}
+        <tr><td class="nowrap small">{{ r.created_at|date:"M j, g:i A" }}</td>
+          <td><span class="mono">{{ r.site.slug }}</span><div class="small muted">{{ r.site.event.name }}</div></td>
+          <td>{{ r.get_reason_display }}</td>
+          <td class="small break">{{ r.details|truncatechars:300 }}{% if r.page %}<div class="muted">Page: {{ r.page }}</div>{% endif %}{% if r.email %}<div class="muted">{{ r.email }}</div>{% endif %}</td>
+          <td>{% if r.status == 'open' %}<span class="badge badge--warning">Open</span>{% else %}<span class="badge badge--neutral">Resolved</span>{% endif %}</td>
+          <td><div class="cluster cluster--tight">
+            {% if not r.site.suspended %}<form method="post">{% csrf_token %}<input type="hidden" name="site" value="{{ r.site.pk }}"><input type="hidden" name="action" value="suspend">
+              <input type="hidden" name="reason" value="{{ r.get_reason_display }}"><button class="button button--danger button--small" data-confirm="Take {{ r.site.slug }} down?">Take down</button></form>{% endif %}
+            {% if r.status == 'open' %}<form method="post">{% csrf_token %}<input type="hidden" name="site" value="{{ r.site.pk }}"><input type="hidden" name="action" value="resolve">
+              <button class="button button--ghost button--small">Resolve</button></form>{% endif %}</div></td></tr>
+      {% empty %}<tr><td colspan="6" class="muted">No reports.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

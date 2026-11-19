@@ -3,6 +3,7 @@
   const $ = id => document.getElementById(id);
   const form = $('scrape-form'), loading = $('scrape-loading'), success = $('scrape-success'), error = $('scrape-error');
   const input = $('event-url'), button = $('scrape-button');
+  if (!form || !button) return;  // invite-only: the homepage shows a notice instead of the form
   const show = (...els) => els.forEach(el => { el.hidden = false; });
   const hide = (...els) => els.forEach(el => { el.hidden = true; });
 

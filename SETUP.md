@@ -8,7 +8,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 |---|---|
 | 0. GitHub | ✅ Done. Default branch is `main` in all three repos (verified). The environments and secrets get verified by the first deploy run; a missing one fails with a message naming it. |
 | 1. Rotate API key | ✅ Done. Run the check under step 1 to confirm. |
-| 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, `CONTACT_EMAIL`, Scheduler jobs and GitHub deploy settings. ✅ Stack heroku-26 and Python 3.15. **Still to do:** check Postgres and upgrade to 18 (commands under "Keeping Heroku current"), and add Cloudinary on both apps so uploads survive restarts. |
+| 2. Heroku | ⏳ ✅ Both apps are configured: secrets, OpenAI and Places keys, APNs key and Google key, `CONTACT_EMAIL`, Scheduler jobs and GitHub deploy settings. ✅ Stack heroku-26 and Python 3.15. **Still to do:** check Postgres and upgrade to 18 (commands under "Keeping Heroku current"). ✅ Cloudinary on both apps (step 5). |
 | 3. Apple | ⏳ ✅ App ID capabilities and App Attest fixed. ✅ 3a: APNs key `7Q3H2446BU` (Sandbox & Production) is set on both Heroku apps. ✅ 3c: TestFlight group. ✅ 3b: `ASC_ISSUER_ID` re-set; CI signs, uploads and reaches TestFlight (iOS run 100). ✅ **3e: CI signing certificate** stored as `IOS_DEV_CERT_P12_BASE64` / `IOS_DEV_CERT_PASSWORD` (re-set Nov 15, 2026 after the first copy was saved empty; CI signs as "Apple Development: Andrew Beers"; renew before Nov 14, 2027). |
 | 4. Google / Android | ⬜ 4e: exclude tablets in Play Console. ✅ 4a Firebase and server key, 4b Play publisher, 4c fingerprints (both Heroku apps serve them in `assetlinks.json`), Maps and Places keys restricted, keystore backed up. ✅ The first Play internal-testing upload succeeded (Android run 14). 4d (production lock-down) waits for the first release. |
 | 5. Local dev keys | ⬜ |
@@ -16,13 +16,50 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 11. Email | ⏳ ✅ Mailgun Starter (free) add-ons on attnd-web (`mailgun-spherical-62131`) and attnd-dev (`mailgun-silhouetted-37822`; separate account, Mailgun can't be shared between apps; dev stays on its sandbox, which only mails authorized recipients). ✅ `mg.attnd.app` added (tracking off), Namecheap SPF/DKIM/DMARC added, **verified** by Mailgun. ✅ SMTP credentials (`postmaster@…`) set on both apps as `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD` + `DEFAULT_FROM_EMAIL`; dev `SITE_URL` set. ✅ Code: TLS, from address, per-site links, allow-list, password reset. ✅ `ADMIN_EMAILS` (both apps) and dev `EMAIL_ALLOWED_RECIPIENTS` = the owner's address; owner authorized on dev's sandbox; Nov 14 dev test emails (plain + `--admins`) **delivered** to iCloud. ✅ MX records for `mg` added; production-domain test from `noreply@mg.attnd.app` **delivered** to iCloud (Nov 14). ⬜ The production app itself sends once develop is released to main. |
 | 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then add a passkey (or an authenticator app) at the first admin sign-in, on dev and again on production (passkeys are per domain), and save the recovery codes. |
 | 13. CI keys (live tests) | ✅ Nov 15, 2026: `CI_API_KEYS` set on production (release v109; takes effect once API-008 is released to `main`), `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web. |
-| 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
+| 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
+| 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15); optional `ANTHROPIC_API_KEY`. |
+| 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026): moved to git branch `parked/tickets` (API-017), organizers use Eventbrite for now. The setup steps live on that branch. Optional: drop dev's orphan `tickets_*` tables (step 16). |
+| 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
 - [x] Protect `main` in all three repos: ruleset "Protect main" blocks force-push and deletion (Nov 14, 2026). Add "require status checks" once releases go through pull requests.
-- [ ] Step 13: CI keys for the live integration tests (`CI_API_KEYS` on attnd-web, `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web).
+- [x] Step 13: CI keys for the live integration tests (`CI_API_KEYS` on attnd-web, `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web).
+- [ ] API-010/011 data (after the server reaches each app): reload DEMO so it has the new tags and the urgent
+      "Set time change" (`heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com`, then the
+      same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
+      the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
+- [x] iOS manual CI signing (Nov 19, 2026; first manually signed build 145 uploaded): an Apple Distribution
+      certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). No App Group: the "Now & Next"
+      widget, its only user, was removed (Nov 19, 2026; Live Activities only); `group.com.arcu.Attnd` can stay
+      registered unused. WeatherKit is no longer used (removed from iOS Nov 19, 2026: not offered for App Clip App
+      IDs); the capability can be unticked on `com.arcu.Attnd` whenever its profile is regenerated.
+- [x] Google Weather API **disabled** (Nov 19, 2026, owner): it was enabled in `attnd-df28e` and on the Android Maps key
+      `af7cec96-…` the same day for planner weather, which neither app builds now. Nothing is billed.
+- [x] iOS app icon (Nov 19, 2026): iOS went back from the Icon Composer icon (`AppIcon.icon`) to a PNG app icon set,
+      because the Icon Composer build made `Assets.car` about 5 MB (App Clip size). The website's
+      `brand/app-icon-1024.png` and the site icons (`scripts/make_icons.py`) stay as they are.
+- [x] App Review sample events: FWFM2026, ATIS2026 and DACN2026 on production are **kept on purpose**: App Review uses
+      them (owner, Nov 19, 2026). The release phase's `seed_test_data` keeps them current; don't delete them or the
+      command.
+- [ ] Attnd Studio (step 15): buy a separate domain for hosted event sites (not a subdomain of attnd.app), then
+      `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
+      with a go-ahead; until then sites are served on the Heroku hostnames. Optional: `ANTHROPIC_API_KEY`.
+- [x] Tickets prep (Wallet passes, not payments; nothing built yet; done Nov 15, 2026): Apple Pass Type ID `pass.com.arcu.attnd.tickets`
+      + Pass Type ID certificate (✅ Pass Type ID registered Nov 15, 2026; key, CSR, `.cer` and PEM in
+      `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass` on the owner's Mac, plus the password manager), and a Google Pay & Wallet Console business
+      profile with its Issuer ID, the Google Wallet API enabled in `attnd-df28e` and a service account
+      `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` added as a Developer user. Plan: `docs/specs/tickets_spec.md` on branch `parked/tickets`.
+- [ ] ⏸ Tickets: parked on git branch `parked/tickets` (Nov 19, 2026; Eventbrite for now), not a task now. Optional: drop
+      dev's orphan `tickets_*` tables (step 16).
+- [ ] Later (before outside organizers or payments): move everything to a Texas LLC — `docs/LLC_MIGRATION.md`.
+- [x] Repos made public (Nov 19, 2026); history scan found old secrets: the OpenAI key in `_set_heroku_env.command`
+      (revoked Apr 29, 2026) and the 2021 service-account keys `attnd-prod` (`bf9dce7d…`) and `attnd-742` (`73dbb440…`),
+      deleted Nov 19, 2026. Heroku uses neither. To check: the two old Maps keys in history (`AIzaSyC_f5…` web 2021,
+      `AIzaSyD5d9fk…` Android) are deleted or restricted; turn on GitHub secret scanning + push protection on all three
+      repos (`gh api -X PATCH repos/apbeers/<repo> -F security_and_analysis[secret_scanning][status]=enabled
+      -F security_and_analysis[secret_scanning_push_protection][status]=enabled`).
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
@@ -68,9 +105,9 @@ The old key is public in iOS git history. The server already rejects it, but thi
 
 **Check the new key works:**
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(heroku config:get API_KEY -a attnd-web)" "https://attnd.app/api/v1/events/lookup/?q=FWFM2026"
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(heroku config:get API_KEY -a attnd-web)" "https://attnd.app/api/v2/events/lookup/?q=FWFM2026"
 ```
-- `200` or `404` means the key works. A 404 just means that test event doesn't exist in production.
+- `200` or `404` means the key works (FWFM2026 is one of the App Review sample events).
 - `401` means the key didn't take.
 
 Requests with the old key now get `401`. Once this release is on `main`, the server also blocks the old key permanently by its hash.
@@ -87,12 +124,12 @@ Requests with the old key now get `401`. Once this release is on `main`, the ser
 3. ✅ The OpenAI and Places keys are already set on production.
 4. **Play Integrity isn't configured on production** (there's no `GOOGLE_SERVICE_ACCOUNT_JSON`), so Android builds from the Play Store can't attest. Old Android builds fell back to the static key, which is now rotated, so the current Play Store version can't reach the API until this is set (step 4) and a new build ships. iOS builds use App Attest, which is configured.
 
-5. **File uploads need permanent storage.** Production has no `CLOUDINARY_URL`, so flyers and location photos uploaded in the console are saved on Heroku's temporary disk and **lost on every restart or deploy**. Add Cloudinary's free plan to both apps:
-   ```bash
-   heroku addons:create cloudinary:starter -a attnd-web
-   heroku addons:create cloudinary:starter -a attnd-dev
-   ```
-   That sets `CLOUDINARY_URL`, and the server switches to it automatically.
+5. ✅ **File uploads: Cloudinary** (Nov 15, 2026). The free `cloudinary:starter` add-on is on both apps (`cloudinary-fluffy-65757` on attnd-dev, `cloudinary-metric-01769` on attnd-web; separate Cloudinary accounts, like Mailgun). It sets `CLOUDINARY_URL` and the server stores uploads there automatically. Checked on dev: images upload and are served (200).
+   - ✅ **PDF delivery allowed on both accounts** (Nov 15, 2026; dev re-checked: a test PDF is served with 200). Free Cloudinary accounts refuse to serve PDFs (401) until it's allowed. Open each dashboard, then Settings → Security → tick **"Allow delivery of PDF and ZIP files"** → Save:
+     ```
+     heroku addons:open cloudinary -a attnd-dev
+     heroku addons:open cloudinary -a attnd-web
+     ```
 
 ### Dev (`attnd-dev`) — created by Claude
 - ✅ App `attnd-dev` at **`https://dev.attnd.app/`** (custom domain, Nov 14, 2026: Namecheap CNAME `dev` → the app's herokudns target, Heroku ACM certificate; `SITE_URL=https://dev.attnd.app`). Use `dev.attnd.app` wherever this guide says `ATTND_SERVER`. The Heroku hostname `attnd-dev-7ab893f37020.herokuapp.com` still works, but nothing should depend on it: the custom domain survives replacing the Heroku app, so dev passkeys keep working. ✅ The `dev` environment variable `ATTND_SERVER` = `dev.attnd.app` in Attnd-iOS and Attnd-Android (Nov 15, 2026).
@@ -169,6 +206,11 @@ gh variable set HEROKU_APP -e production -b attnd-web -R apbeers/Attnd-Web
    ```
    - The team ID and bundle ID default to `APPLE_TEAM_ID` and `APPLE_APP_BUNDLE_ID`.
    - TestFlight and App Store builds use the production push servers. Only builds run directly from Xcode need `APNS_USE_SANDBOX=1`.
+   - The same key sends Live Activity updates for urgent announcements (API-011): topic `<bundle id>.push-type.liveactivity`,
+     which a **Team Scoped (All Topics)** key already covers. Nothing to configure on the server.
+4. For urgent announcements (API-011) the iOS app needs the **Time Sensitive Notifications** capability (Xcode → Signing &
+   Capabilities; automatic signing adds it to the App ID). Without it urgent alerts still arrive, as normal alerts.
+   Don't request **Critical Alerts**: that entitlement needs Apple's approval and Attnd doesn't use it.
 
 ### 3b. App Store Connect API key (signing and uploads from CI)
 1. Go to [App Store Connect](https://appstoreconnect.apple.com) → Users and Access → **Integrations** → App Store Connect API → **Team Keys → +**.
@@ -240,6 +282,41 @@ Each CI run on a fresh Mac used to create a new "Created via API" Apple Developm
 5. Delete `attnd-dev.p12` from the Mac, then re-run the iOS workflow (`gh workflow run ios.yml -R apbeers/Attnd-iOS --ref develop`).
 
 The certificate expires after a year: repeat steps 2–5 then.
+
+### 3f. Manual App Store signing for CI (done Nov 19, 2026; renew yearly)
+Automatic signing with the App Store Connect API key couldn't sign the App Group ("Authentication failed"; the group
+has since been dropped with the widget), so CI signs
+with a stored **Apple Distribution** certificate and three **App Store** provisioning profiles
+(`Attnd/scripts/ci/signing_profiles.py` + `archive_upload.sh`). Files on the owner's Mac:
+`/Users/andrewbeers/Documents/Attnd/ios-signing` (`dist.key`, `dist.csr`, `distribution.cer`, `dist.p12`, the three
+`.mobileprovision` files); keep the `.p12` password in the password manager.
+
+| Secret (Attnd-iOS) | What |
+|---|---|
+| `IOS_DIST_CERT_P12_BASE64` / `IOS_DIST_CERT_PASSWORD` | Apple Distribution certificate + key (`openssl pkcs12 -export -legacy`) |
+| `IOS_PROFILE_APP_B64` | App Store profile "Attnd AppStore" for `com.arcu.Attnd` |
+| `IOS_PROFILE_WIDGETS_B64` | "Attnd Widgets AppStore" for `com.arcu.Attnd.widgets` |
+| `IOS_PROFILE_CLIP_B64` | "Attnd Clip AppStore" for `com.arcu.Attnd.clip` |
+
+Set them from the folder:
+```
+cd ~/Documents/Attnd/ios-signing
+base64 -i dist.p12 | gh secret set IOS_DIST_CERT_P12_BASE64 --repo apbeers/Attnd-iOS
+gh secret set IOS_DIST_CERT_PASSWORD --repo apbeers/Attnd-iOS
+base64 -i Attnd_AppStore.mobileprovision | gh secret set IOS_PROFILE_APP_B64 --repo apbeers/Attnd-iOS
+base64 -i Attnd_Widgets_AppStore.mobileprovision | gh secret set IOS_PROFILE_WIDGETS_B64 --repo apbeers/Attnd-iOS
+base64 -i Attnd_Clip_AppStore.mobileprovision | gh secret set IOS_PROFILE_CLIP_B64 --repo apbeers/Attnd-iOS
+```
+
+**Adding a capability later** (e.g. Sign in with Apple): enable it on the App ID in Identifiers, then each affected
+profile shows "Invalid": Profiles → open it → **Edit** → **Save** → **Download**, and re-run the matching
+`base64 … | gh secret set IOS_PROFILE_…` line. CI fails with the capability's name if a profile lacks one.
+
+**Renewal (yearly, the certificate expires Nov 2027; CI warns 30 days ahead):** new CSR + certificate
+(`openssl req -new -newkey rsa:2048 -nodes -keyout dist.key -out dist.csr -subj "/CN=Attnd Distribution"`, upload at
+Certificates → **+** → Apple Distribution, then `openssl x509 -inform der -in distribution.cer -out dist.pem` and
+`openssl pkcs12 -export -legacy -inkey dist.key -in dist.pem -out dist.p12`), edit the three profiles to use the new
+certificate and download them, then set all five secrets again.
 
 ## 4. Google / Android (40 min)
 
@@ -323,9 +400,14 @@ Check it afterwards: `curl -s https://attnd.app/.well-known/assetlinks.json` sho
      A shortcut for the last two: in the Attnd-Android folder, run `./gradlew signingReport`. It prints the SHA-1 for the debug build, and for the release build when `signing.properties` is present.
 
      The debug SHA-1 is specific to each Mac. If you build on another computer, add that computer's debug SHA-1 as another `com.arcu.attnd.debug` row.
-   - **API restrictions → Restrict key → Maps SDK for Android**.
+   - **API restrictions → Restrict key**: Maps SDK for Android (`maps-android-backend`, `mapsandroid`), **Routes API** (`routes`: the map's walking routes) and the two services the key was already being used for, `firebaseinstallations` and `geocoding-backend` (Google refuses to drop a service with recent usage).
    - **Save**. It can take a few minutes to apply.
-4. Test: open the map in the next internal-testing build. A grey map with no streets means a fingerprint or package is wrong.
+   - ✅ Done Nov 15, 2026 (key "Android Map API Key" `af7cec96-…`, project `attnd-df28e`; Routes API enabled). The same change from the command line:
+     ```bash
+     gcloud services api-keys update af7cec96-8ebf-4b57-be9b-176e0efe7896 --project=attnd-df28e --api-target=service=maps-android-backend.googleapis.com --api-target=service=mapsandroid.googleapis.com --api-target=service=routes.googleapis.com --api-target=service=firebaseinstallations.googleapis.com --api-target=service=geocoding-backend.googleapis.com
+     ```
+     (`--api-target` replaces the whole list; the Android app restrictions stay as they are.)
+4. Test: open the map in the next internal-testing build. A grey map with no streets means a fingerprint or package is wrong. Tap a pin within 8 km: a solid route line means the Routes API works; a dashed straight line ("about 8 min walk") means the request was refused (check the key's API list).
 
 **4. ✅ Keystore backup (required).** The upload keystore secrets are already in GitHub and work: CI built a signed bundle. GitHub won't give them back, though, so keep your own copy. This command finds your `signing.properties` with Spotlight and copies one bundle to the clipboard: the passwords and alias, plus the keystore file as text. Paste it into a new secure note in your password manager:
 ```bash
@@ -421,7 +503,7 @@ cd Attnd-Web && scripts/dev_db.sh
 ---
 
 ## 7. App Store link and update prompt
-**App Store link** (required). `/join/<code>/` links and the iPhone update screen use it. Until it's set, iPhones opening a join link get the landing page instead of the App Store. ✅ dev is set. Production:
+**App Store link** (required). `/join/<code>/` links and the iPhone update screen use it. Until it's set, iPhones opening a join link get the landing page instead of the App Store. ✅ Set on attnd-dev and attnd-web (Nov 15, 2026).
 ```bash
 heroku config:set IOS_APP_STORE_URL=https://apps.apple.com/app/id1470627406 -a attnd-web
 ```
@@ -443,12 +525,12 @@ heroku config:set SUPPORTED_API_VERSIONS=2 -a attnd-web
 Builds that still use the retired version are then shown the update screen.
 
 ## 8. Google Maps on the website (address autocomplete, pin map)
-✅ Dev: browser key "Attnd web (browser)" created in `attnd-df28e` (referrer-restricted to attnd.app and the dev app; Maps JavaScript API + Places API (New)) and set as `GOOGLE_MAPS_BROWSER_KEY` on attnd-dev. ⬜ Production: set the same key on attnd-web at the first web release: `heroku config:set -a attnd-web GOOGLE_MAPS_BROWSER_KEY="$(heroku config:get GOOGLE_MAPS_BROWSER_KEY -a attnd-dev)"`.
+✅ Browser key "Attnd web (browser)" in `attnd-df28e` (Maps JavaScript API + Places API (New)) is set as `GOOGLE_MAPS_BROWSER_KEY` on attnd-dev and, since the first web release (Nov 15, 2026), on attnd-web. ✅ Referrers updated Nov 15, 2026: attnd.app, www.attnd.app, dev.attnd.app and the dev app's Heroku host.
 
 The console uses Google Maps for address suggestions and a draggable pin when `GOOGLE_MAPS_BROWSER_KEY` is set; without it, it keeps the plain address field and the OpenStreetMap pin map. This must be a **new browser key**, restricted to our sites: browser keys are visible to anyone, so never reuse the server or Android keys. Create it (Maps JavaScript API + Places API (New), referrer-restricted) and set it on dev:
 ```bash
 gcloud services enable maps-backend.googleapis.com places.googleapis.com --project attnd-df28e
-gcloud services api-keys create --project attnd-df28e --display-name "Attnd web (browser)" --allowed-referrers "https://attnd.app/*,https://dev.attnd.app/*" --api-target service=maps-backend.googleapis.com --api-target service=places.googleapis.com
+gcloud services api-keys create --project attnd-df28e --display-name "Attnd web (browser)" --allowed-referrers "https://attnd.app/*,https://www.attnd.app/*,https://dev.attnd.app/*" --api-target service=maps-backend.googleapis.com --api-target service=places.googleapis.com
 gcloud services api-keys list --project attnd-df28e --filter "displayName='Attnd web (browser)'" --format "value(name)"
 heroku config:set -a attnd-dev GOOGLE_MAPS_BROWSER_KEY="$(gcloud services api-keys get-key-string NAME_FROM_PREVIOUS_LINE --project attnd-df28e --format 'value(keyString)')"
 ```
@@ -458,6 +540,12 @@ Optional: a Map ID (Google Cloud console → Map Management) in `GOOGLE_MAPS_MAP
 A fully populated event that is happening now, with usage history, AI updates and a team. Load or refresh it (same code, same id, so phones stay joined):
 ```bash
 heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com
+```
+Its tags (API-010) are hand-written; other events get theirs from the AI import. To tag events made before API-010
+(safe to re-run; skips anything with 2+ tags and anything whose tags were edited by hand):
+```bash
+heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run
+heroku run -a attnd-dev python manage.py backfill_tags --all
 ```
 
 ## 10. Join links and the App Clip card
@@ -570,6 +658,79 @@ key is set, **Integration · prod** fails, as a warning only: it never blocks a 
 To rotate: run step 1 again (the old key stops working the moment `CI_API_KEYS` changes). Several keys can be set at once,
 comma-separated, to rotate without a gap. Keys shorter than 32 characters are ignored.
 
+## 14. Diagnostics: iOS symbolication token (5 min)
+
+The staff **Diagnostics** panel (`/console/diagnostics/`, API-013) symbolicates iOS crash reports by dispatching the
+`symbolicate.yml` workflow in **Attnd-iOS** (it downloads the build's dSYM artifact, runs `atos` on a Mac runner and
+posts the symbols back). The server needs a GitHub token that may only start that workflow.
+
+1. GitHub → **Settings → Developer settings → Fine-grained personal access tokens → Generate new token**:
+   name "Attnd symbolicate", expiry 1 year, **Repository access: Only select repositories → Attnd-iOS**.
+   Under **Permissions** (Repositories tab) press **+ Add permissions**, search **Actions**, tick it, close the menu,
+   then set its access to **Read and write**. Nothing else (Metadata: read appears by itself). **Generate token** and
+   copy it into the password manager.
+2. Set it on both apps (the second line is a production config change):
+   ```bash
+   heroku config:set -a attnd-dev GITHUB_SYMBOLICATE_TOKEN=github_pat_PASTE_HERE
+   heroku config:set -a attnd-web GITHUB_SYMBOLICATE_TOKEN=github_pat_PASTE_HERE
+   ```
+3. Check: open an iOS crash report in the panel and press **Symbolicate**; the Attnd-iOS **Actions** tab shows a
+   "Symbolicate" run, and the report shows symbols a few minutes later. The workflow file must be on Attnd-iOS's
+   `main` branch (GitHub only dispatches workflows from the default branch's file list).
+
+Optional settings (defaults are fine): `GITHUB_SYMBOLICATE_REPO` (`apbeers/Attnd-iOS`), `GITHUB_SYMBOLICATE_REF`
+(`main`), `DIAGNOSTICS_MAX_MB` (250), `DIAGNOSTICS_DEV_DAYS` (7), `DIAGNOSTICS_DEBUG_DAYS` (14). Android needs no
+token: its CI uploads R8 mappings with the CI key / dev static key (`POST /api/diagnostics/symbols/`).
+
+To rotate or if leaked: revoke it on the same GitHub page, make a new one and run step 2 again.
+
+## 15. Attnd Studio: the sites domain (15 min, optional until real customers)
+
+Attnd Studio (admins only, `docs/specs/studio_spec.md`) hosts event websites at `https://<SITES_HOST>/<slug>/`.
+They must live on a **different registrable domain** from attnd.app (never `sites.attnd.app`): the sites run the
+organizers' own JavaScript, and a separate site keeps it away from the console's cookies.
+
+**Today, nothing to do:** without `SITES_HOST`, production serves sites at `attnd-web-7a02b020850d.herokuapp.com` and
+dev at `attnd-dev-7ab893f37020.herokuapp.com` (herokuapp.com is on the Public Suffix List, so each is its own site).
+On those hostnames the app serves only the sites (console, admin and API are 404 there).
+
+**When you buy a domain** (e.g. at Namecheap; something short like `attnd.site` or `attndsites.com`):
+1. Add it to the production app and point DNS at Heroku (the command prints the DNS target; use a CNAME/ALIAS at
+   Namecheap), then turn on the certificate:
+   ```bash
+   heroku domains:add attndsites.com -a attnd-web
+   heroku certs:auto:enable -a attnd-web
+   ```
+2. Once `heroku domains -a attnd-web` shows the certificate, switch Studio to it (a production config change):
+   ```bash
+   heroku config:set -a attnd-web SITES_HOST=attndsites.com
+   ```
+   Published sites move to the new address (the apps get the new `website_url` with the next refresh). Optionally do the
+   same for dev with a second domain or a subdomain of it (`dev.attndsites.com`, `-a attnd-dev`).
+
+**Optional settings:** `ANTHROPIC_API_KEY` (Studio then uses Claude, `claude-opus-5-5`; otherwise OpenAI `gpt-5.5`
+with `gpt-5` as fallback), `STUDIO_DAILY_SPEND_CAP_USD` (default 5). Studio is for admins only (staff and
+superusers; Nov 19, 2026): `STUDIO_BETA_EMAILS` (default empty) is only an explicit override, and the old **Studio
+beta** invite page is gone.
+```bash
+heroku config:set -a attnd-dev ANTHROPIC_API_KEY=sk-ant-PASTE_HERE
+```
+
+## 16. Tickets: Stripe, Apple Wallet, Google Wallet (⏸ parked on git branch `parked/tickets`)
+
+Ticketing was moved off `develop` on Nov 19, 2026 (owner: organizers use Eventbrite for now). The code, its spec and
+the full setup steps (Stripe account + Connect in the LLC's name, webhooks, Apple Wallet PEMs, Google Wallet issuer and
+service account, policies before selling) are on the git branch `parked/tickets` (this file's step 16 there). Nothing
+here is needed until it comes back. The Pass Type ID `pass.com.arcu.attnd.tickets` and its certificate (Nov 15, 2026)
+and the Google Wallet issuer profile still exist; renew or delete them as you like (docs/LLC_MIGRATION.md).
+
+**Optional clean-up on dev:** attnd-dev's database still has the orphan `tickets_*` tables (and `django_migrations`
+rows for `tickets`) from when the app was installed. They do no harm. To drop them (dev only, never production):
+```bash
+heroku pg:psql -a attnd-dev -c "DO \$\$ DECLARE t text; BEGIN FOR t IN SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'tickets\_%' LOOP EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(t) || ' CASCADE'; END LOOP; END \$\$; DELETE FROM django_migrations WHERE app='tickets';"
+```
+The TIXDEMO event on dev, if it is still there, can be deleted in the console like any event.
+
 ## Key reference
 
 For every key: where to create it, where it goes, and what to do if it's lost. Save each one to your password manager first, then put it where it's used, then delete any downloaded file.
@@ -681,6 +842,11 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
    ```
    The server uses this one account for push too, so you don't need a separate `FCM_SERVICE_ACCOUNT_JSON`.
 - **If leaked:** delete the key under the service account's **Keys** tab and add a new one.
+
+**`GITHUB_SYMBOLICATE_TOKEN`**: lets the Diagnostics panel start attnd-ios's `symbolicate.yml` (API-013).
+- **Create:** fine-grained token, Attnd-iOS only, Actions: Read and write. See step 14.
+- **Put:** both Heroku apps.
+- **If leaked:** revoke it on GitHub; it can only run workflows in Attnd-iOS.
 
 **`ANDROID_SHA256_FINGERPRINT`**: makes `attnd.app/join/…` links open the Android app.
 - **Where:** Play Console → Attnd → **Test and release → App integrity → App signing** → *App signing key certificate* → **SHA-256 certificate fingerprint**.

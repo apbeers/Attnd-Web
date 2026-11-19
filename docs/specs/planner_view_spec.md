@@ -1,0 +1,69 @@
+# Planner as a trip-style page + offline AI context (Nov 19, 2026)
+
+> **Update, Nov 19, 2026 (owner, after the iOS build):** iOS shipped the plan page **without weather** (§4: WeatherKit
+> isn't offered for App Clip App IDs, and the App Clip is the app) and **without Add to calendar** ("nobody will do
+> that"). The Google Weather API is **disabled** too, so Android won't get weather either. The text below is kept as
+> written, with those parts marked.
+
+iOS first; Android later where Google has a native equivalent. Reuses the existing planner, plan edits, previews/undo,
+swap alternatives, walk legs, live hints, shared links and calendar export (calendar: Android only; removed on iOS Nov 19, 2026).
+
+## 1. Who sees the AI planner
+Only devices with an on-device model: Apple Intelligence (Foundation Models) on iOS, Gemini Nano (ML Kit GenAI) on
+Android. **No model → no AI assistant and no planner UI at all** (the plain search button and search stay). This
+replaces the earlier "router-only planner without the model" decision. Everything the assistant does must work
+**fully offline** from data already on the phone.
+
+## 2. Layout
+- **Phones (one screen)**: the plan is a full page (from the floating My plan button); the only control is the text
+  box docked above the keyboard. Typing updates the page; results/proposals show in a small pane above the box and as
+  marks in the plan. No chat transcript. The snapping bottom panel is retired; the closed state stays the button with a
+  "Next: X · 7:00 PM" peek.
+- **iPhone Duo unfolded / wide windows**: side by side: chat column (conversation, chips, input) on the left, the plan
+  page on the right; one controller drives both.
+
+## 3. The plan page (from the Layla reference)
+- Sticky chips at the top: days ("1 Sat", "2 Sun") for multi-day events, else Morning / Afternoon / Evening; tap
+  scrolls, the current one highlights.
+- Timeline rail with icon per row:
+  - **Day header**: date, ~~weather chip (§4)~~ (removed Nov 19, 2026), count, a one-line on-device AI summary + "Read more".
+  - **Item card**: location photo, time, name, place, tags, reason, like heart, Now/Next/"in 20 min"; **Change** and
+    **Remove**.
+  - **Walk leg** between items ("Main Stage → Taco Row · 6 min walk", route bar); Change → closer option / leave earlier.
+  - **Meal break** ("Lunch · 12:15 · Taco Row") with Change; **gap row** ("45 min free · 3 ideas nearby").
+- **Change** opens a sheet of alternatives for that slot (reason, time/walk difference, Compare); picking one previews
+  in place (crossed-out / dashed rows), Apply commits with Undo. Remove offers "Also fill this gap?".
+- **Bottom bar**: "8 items · 10 AM – 11 PM · 2.1 mi walking", Share, ~~Add to calendar~~ (removed on iOS Nov 19, 2026), Undo.
+- Tapping a card opens the item's normal detail.
+
+## 4. Weather (WeatherKit, on the device): removed Nov 19, 2026
+
+**Not built / removed.** iOS dropped WeatherKit (not offered for App Clip App IDs) and the owner disabled the Google
+Weather API, so neither app shows weather. Kept for reference:
+- iOS: WeatherKit (`WeatherService`) daily + hourly forecast for the event's coordinate, fetched when online and
+  **cached on disk** so the last forecast shows offline ("as of 2:14 PM"). Requires Apple's attribution (Apple Weather
+  mark + legal link) wherever weather shows.
+- Capability: WeatherKit is enabled on `com.arcu.Attnd` and in the entitlements (Nov 19, 2026); CI signs manually
+  with App Store profiles that include it (attnd-web SETUP.md step 3f).
+- Android: Google Maps Platform **Weather API** (`weather.googleapis.com`, paid per call; owner approved Nov 19,
+  2026), enabled in `attnd-df28e` and allowed on the Android Maps key; same on-disk cache + "as of" text and Google's
+  attribution. Fetched once per refresh window, not per screen, so the cost stays small.
+
+
+## 5. Rich event context for on-device AI (scraper → bundle)
+- The AI import/refresh extracts, per event and per item, everything an assistant needs offline: long descriptions,
+  performer/vendor bios, genres/styles, menus and prices, age limits, accessibility (step-free, seating, sensory),
+  amenities (restrooms, water, ATMs, first aid, charging), event FAQ (parking, shuttles, bag policy, re-entry, rules,
+  weather plan), venue notes, links. Same review/lock rules as today (organizers can edit; locked fields win).
+- Sent to the apps as additive context in the bundle (new tracker entry, e.g. API-018: `event.context`,
+  `location.context`, `schedule_item.context`, `faq[]`), compact text with a size budget; ETag/304 as today, cached on
+  disk with the bundle.
+- On the device: retrieval over that context (+ schedule, likes, plan) feeds Foundation Models / Gemini Nano; answers
+  cite items. Nothing leaves the phone.
+
+## 6. Order
+1. Server: context extraction + bundle fields (API-018), console review/edit.
+2. iOS: plan page, Change sheet, bottom bar, keyboard bar; hide AI without a model; ~~WeatherKit + cache + attribution~~ (removed).
+3. iOS wide layout with the chat column (iPhone Duo).
+4. Retire the snapping panel.
+5. Android later (no weather: the Weather API is disabled).

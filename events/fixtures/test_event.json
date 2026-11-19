@@ -1,0 +1,69 @@
+[
+  {
+    "model": "auth.user",
+    "pk": 1,
+    "fields": {
+      "password": "!",
+      "username": "u0000000001",
+      "email": "demo@example.com",
+      "is_staff": false,
+      "is_superuser": false,
+      "is_active": true,
+      "date_joined": "2021-09-22T01:03:13.340Z"
+    }
+  },
+  {
+    "model": "events.event",
+    "pk": 1,
+    "fields": {
+      "name": "event 1",
+      "event_code": "event1code",
+      "description": "event 1 description",
+      "latitude": "32.7533607",
+      "longitude": "-97.3528999",
+      "start_time": "2021-09-22T01:07:46Z",
+      "paid": false,
+      "public": true,
+      "address": "Montgomery Plaza, West 7th Street, Fort Worth, TX, USA",
+      "user": 1
+    }
+  },
+  {
+    "model": "events.location",
+    "pk": 1,
+    "fields": {
+      "name": "Pizza Place",
+      "snippet": "pizza place snippet",
+      "description": "pizza place description",
+      "latitude": "32.8963162",
+      "longitude": "-96.9609817",
+      "address": "Irving, TX, USA",
+      "user": 1,
+      "event": 1
+    }
+  },
+  {
+    "model": "events.scheduleditem",
+    "pk": 1,
+    "fields": {
+      "name": "Opening Act",
+      "description": "Kick things off with live music.",
+      "start_time": "2021-09-22T18:00:00Z",
+      "location": 1,
+      "event": 1,
+      "user": 1
+    }
+  },
+  {
+    "model": "events.scheduleditem",
+    "pk": 2,
+    "fields": {
+      "name": "Headliner",
+      "description": "Main performance of the evening.",
+      "start_time": "2021-09-22T20:30:00Z",
+      "location": 1,
+      "event": 1,
+      "user": 1
+    }
+  }
+]

@@ -36,6 +36,8 @@ class IngestJob(models.Model):
     upload_type = models.CharField(max_length=128, blank=True)
     upload_data = models.BinaryField(null=True, blank=True)
     timezone = models.CharField(max_length=64, blank=True)
+    # Attnd Studio: when the import finishes, also bring the first source website into Studio (studio.importer).
+    studio_import = models.BooleanField(default=False)
 
     # Progress / output
     progress = models.CharField(max_length=256, blank=True)
@@ -98,6 +100,9 @@ class Change(models.Model):
     # create: {field: value}; update: {field: {"old": x, "new": y}}; delete: {}
     data = models.JSONField(default=dict)
     conflict_fields = models.JSONField(default=list, blank=True)
+    # Fields a person must tick (e.g. money): always unticked in the review, never applied automatically. Only the
+    # parked ticket drafts used it (git branch parked/tickets); kept so the review supports it.
+    human_fields = models.JSONField(default=list, blank=True)
     reason = models.TextField(blank=True)
     minor = models.BooleanField(default=False)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING)

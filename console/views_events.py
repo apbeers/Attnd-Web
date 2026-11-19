@@ -5,26 +5,25 @@ Every event page runs with the event's time zone active, so datetime fields disp
 the organizer's local time.
 """
 
-import io
 import json
 import logging
 import re
 from datetime import timedelta
 from functools import wraps
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import qrcode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from attnd.links import join_url, qr_png
 
 from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, LocationForm,
                                        NotificationForm, RefreshForm, ScheduledItemForm, SourcesForm,
@@ -32,9 +31,10 @@ from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm
 from events import push
 from events.content import mark_locked, restore, save_revision
 from events.display import LABELS, clean_overrides, event_stats, resolve_display
-from events.models import (CI_DEVICE_PREFIX, Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
+from events.models import (Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
                            ScheduledItem, events_for_user, generate_event_code, next_send_slot)
 from scrape import diff, jobs
+from scrape.diff import tz_or_utc
 from scrape.models import Change, ChangeSet, IngestJob
 
 logger = logging.getLogger(__name__)
@@ -45,10 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _tz(event):
-    try:
-        return ZoneInfo(event.timezone or 'UTC')
-    except (ZoneInfoNotFoundError, ValueError):
-        return ZoneInfo('UTC')
+    return tz_or_utc(event.timezone)
 
 
 def event_view(view):
@@ -86,13 +83,21 @@ def _job_from_form(form, **kwargs):
 # Dashboard & creation
 # ---------------------------------------------------------------------------
 
+def _count(queryset, field='event'):
+    """COUNT(*) of `queryset` rows pointing at the outer event, as a subquery annotation."""
+    rows = queryset.filter(**{field: OuterRef('pk')}).order_by().values(field).annotate(n=Count('pk')).values('n')
+    return Coalesce(Subquery(rows, output_field=IntegerField()), 0)
+
+
 @login_required
 def dashboard(request):
+    # One correlated COUNT subquery per number: joining all four relations and counting DISTINCT multiplied
+    # the rows (locations × items × devices × change sets: ~300,000 for the DEMO event, ~1.7 s).
     events = (events_for_user(request.user)
-              .annotate(n_locations=Count('location', distinct=True),
-                        n_items=Count('scheduleditem', distinct=True),
-                        n_devices=Count('device', filter=~Q(device__id__startswith=CI_DEVICE_PREFIX), distinct=True),
-                        n_pending=Count('changesets', filter=Q(changesets__status=ChangeSet.PENDING), distinct=True))
+              .annotate(n_locations=_count(Location.objects.all()),
+                        n_items=_count(ScheduledItem.objects.all()),
+                        n_devices=_count(Device.objects.real()),
+                        n_pending=_count(ChangeSet.objects.filter(status=ChangeSet.PENDING)))
               .order_by('-start_time'))
     now = timezone.now()
     upcoming = [e for e in events if (e.end_time or e.start_time) >= now - timedelta(days=1)]
@@ -110,9 +115,15 @@ def event_new(request):
     if request.method == 'POST' and mode == 'ai':
         ai_form = AIImportForm(request.POST, request.FILES, prefix='ai')
         if ai_form.is_valid():
+            from studio.access import is_staff
             job = _job_from_form(ai_form, kind=IngestJob.KIND_CREATE, trigger=IngestJob.TRIGGER_CONSOLE,
                                  created_by=request.user,
-                                 timezone=request.POST.get('browser_tz', '')[:64])
+                                 timezone=request.POST.get('browser_tz', '')[:64],
+                                 # Attnd Studio (admins only): the website comes into Studio automatically when
+                                 # the import is done; the form's checkbox (on by default) is only an opt-out.
+                                 studio_import=bool(ai_form.cleaned_data.get('urls') and is_staff(request.user)
+                                                    and not (request.POST.get('studio_import_shown')
+                                                             and not request.POST.get('studio_import'))))
             jobs.enqueue(job)
             if _wants_json(request):
                 return JsonResponse({'task': task_json(job), 'redirect': reverse('console:dashboard')}, status=202)
@@ -120,12 +131,7 @@ def event_new(request):
         if _wants_json(request):
             return JsonResponse({'error': ' '.join(e for errs in ai_form.errors.values() for e in errs)}, status=400)
     elif request.method == 'POST' and mode == 'blank':
-        tz_name = request.POST.get('blank-timezone') or 'UTC'
-        try:
-            tz = ZoneInfo(tz_name)
-        except (ZoneInfoNotFoundError, ValueError):
-            tz = ZoneInfo('UTC')
-        with timezone.override(tz):
+        with timezone.override(tz_or_utc(request.POST.get('blank-timezone'))):
             blank_form = BlankEventForm(request.POST, prefix='blank')
             if blank_form.is_valid():
                 event = blank_form.save(commit=False)
@@ -237,24 +243,37 @@ def manifest(request):
 @event_view
 def event_overview(request, event):
     stats = event_stats(event)
-    devices = Device.objects.real().filter(event=event)
-    audience = {
-        'joined': devices.count(),
-        'subscribed': devices.filter(subscribed=True).exclude(push_token='').count(),
-        'active_today': devices.filter(last_seen__gte=timezone.now() - timedelta(hours=24)).count(),
-        'ios': devices.filter(platform='ios').count(),
-        'android': devices.filter(platform='android').count(),
-    }
+    audience = Device.objects.real().filter(event=event).aggregate(  # one query instead of five
+        joined=Count('pk'),
+        subscribed=Count('pk', filter=Q(subscribed=True) & ~Q(push_token='')),
+        active_today=Count('pk', filter=Q(last_seen__gte=timezone.now() - timedelta(hours=24))),
+        ios=Count('pk', filter=Q(platform='ios')),
+        android=Count('pk', filter=Q(platform='android')),
+    )
     sources_form = SourcesForm(instance=event)
+    from console.usage import most_hearted
     return render(request, 'console/event_overview.html', _ctx(
-        event, 'overview', stats=stats, audience=audience, sources_form=sources_form,
+        event, 'overview', most_hearted=most_hearted(event), stats=stats, audience=audience, sources_form=sources_form,
+        studio_import=_studio_import_run(event, request.user),
         source_pages=list(event.source_pages.all()), can_manage=event.can_manage_team(request.user),
         refresh_form=RefreshForm(),
         recent_jobs=event.ingest_jobs.all()[:5],
         changesets=event.changesets.exclude(status=ChangeSet.EMPTY)[:5],
         display=resolve_display(event, stats),
-        join_url=f'https://attnd.app/join/{event.event_code}/',
+        join_url=join_url(event),
     ))
+
+
+def _studio_import_run(event, user):
+    """The newest "Bring into Studio" run, for the overview's notice (Studio beta users only)."""
+    if event.plan != Event.PLAN_STUDIO:
+        return None
+    from studio.access import has_studio_access
+    from studio.models import StudioRun
+    if not has_studio_access(user):
+        return None
+    return (StudioRun.objects.filter(site__event=event, kind=StudioRun.KIND_IMPORT).select_related('site')
+            .order_by('-created_at').first())
 
 
 @event_view
@@ -353,10 +372,8 @@ def event_delete(request, event):
 
 @event_view
 def event_qr(request, event):
-    img = qrcode.make(f'https://attnd.app/join/{event.event_code}/', box_size=16, border=2)
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    resp = HttpResponse(buf.getvalue(), content_type='image/png')
+    resp = HttpResponse(qr_png(join_url(event), box_size=16), content_type='image/png')
+    resp['Cache-Control'] = 'private, max-age=86400'  # the event code never changes; shown on several pages
     if request.GET.get('download'):
         safe = re.sub(r'[^a-zA-Z0-9]+', '_', event.name).strip('_') or 'event'
         resp['Content-Disposition'] = f'attachment; filename="{safe}_QR.png"'
@@ -366,7 +383,7 @@ def event_qr(request, event):
 @event_view
 def event_poster(request, event):
     return render(request, 'console/poster.html', {'event': event,
-                                                   'join_url': f'https://attnd.app/join/{event.event_code}/'})
+                                                   'join_url': join_url(event)})
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +392,11 @@ def event_poster(request, event):
 
 @event_view
 def locations(request, event):
-    locs = event.location_set.annotate(n_items=Count('scheduleditem')).order_by('sort_order', 'name')
+    from console.usage import net_hearts
+    hearts = net_hearts(event)['location']
+    locs = list(event.location_set.annotate(n_items=Count('scheduleditem')).order_by('sort_order', 'name'))
+    for loc in locs:
+        loc.hearts = hearts.get(loc.pk, 0)
     return render(request, 'console/locations.html', _ctx(event, 'locations', locations=locs))
 
 
@@ -399,7 +420,8 @@ def location_edit(request, event, location_id=None):
         return redirect('console:locations', event_id=event.pk)
     items = loc.scheduleditem_set.order_by('start_time') if loc.pk else []
     return render(request, 'console/location_edit.html', _ctx(event, 'locations', form=form, location=loc,
-                                                               items=items, categories=categories))
+                                                               items=items, categories=categories,
+                                                               event_tags=_event_tags(event)))
 
 
 @event_view
@@ -442,8 +464,11 @@ def schedule(request, event):
     location_filter = request.GET.get('location')
     if location_filter:
         items = items.filter(location_id=location_filter)
+    from console.usage import net_hearts
+    hearts = net_hearts(event)['item']
     days = []
     for item in items:
+        item.hearts = hearts.get(item.pk, 0)
         day = timezone.localtime(item.start_time).date()
         if not days or days[-1][0] != day:
             days.append((day, []))
@@ -477,7 +502,13 @@ def item_edit(request, event, item_id=None):
                 url += f'?location={item.location_id}'
             return redirect(url)
         return redirect('console:schedule', event_id=event.pk)
-    return render(request, 'console/item_edit.html', _ctx(event, 'schedule', form=form, item=item))
+    return render(request, 'console/item_edit.html', _ctx(event, 'schedule', form=form, item=item,
+                                                           event_tags=_event_tags(event)))
+
+
+def _event_tags(event, limit=30):
+    from scrape.tags import event_vocabulary
+    return event_vocabulary(event)[:limit]
 
 
 @event_view
@@ -503,7 +534,7 @@ def item_action(request, event, item_id):
 
 @event_view
 def notifications(request, event):
-    form = NotificationForm(request.POST or None,
+    form = NotificationForm(request.POST or None, event=event,
                             initial={'send_time': next_send_slot(timezone.now() + timedelta(hours=1))})
     if request.method == 'POST' and form.is_valid():
         n = form.save(commit=False)
@@ -516,16 +547,20 @@ def notifications(request, event):
                 messages.warning(request, 'Saved, but the event is a draft — it will send once you publish.')
             else:
                 n = push.send_notification(n)
-                messages.success(request, f'Sent to {n.delivered_count} device(s). '
-                                          'It also appears in the app’s Updates tab.')
+                messages.success(request, f'Sent{" as urgent" if n.is_urgent else ""} to {n.delivered_count} '
+                                          'device(s). It also appears in the app’s Updates tab.')
         else:
             n.save()
             messages.success(request, 'Scheduled.')
         return redirect('console:notifications', event_id=event.pk)
     items = event.notification_set.order_by('-send_time')
-    reach = Device.objects.real().filter(event=event, subscribed=True).exclude(push_token='').count()
-    return render(request, 'console/notifications.html', _ctx(event, 'notifications', form=form,
-                                                               notifications=items, reach=reach))
+    devices = Device.objects.real().filter(event=event)
+    reach = devices.filter(subscribed=True).exclude(push_token='').count()
+    urgent_reach = devices.exclude(push_token='').count()
+    live_activities = devices.filter(platform='ios').exclude(live_activity_token='').count()
+    return render(request, 'console/notifications.html', _ctx(
+        event, 'notifications', form=form, notifications=items, reach=reach, urgent_reach=urgent_reach,
+        live_activities=live_activities, urgent_left=push.urgent_sends_left(event)))
 
 
 @event_view
@@ -568,25 +603,7 @@ def display_settings(request, event):
         event, 'display', form=form, resolved=resolved, stats=stats, labels=LABELS))
 
 
-@event_view
-@require_POST
-def display_preview(request, event):
-    form = DisplayForm(request.POST)
-    if not form.is_valid():
-        return JsonResponse({'error': form.errors}, status=400)
-    original = event.display_config, event.accent_color
-    event.display_config = form.to_overrides()
-    accent = request.POST.get('accent_color', '')
-    event.accent_color = '' if request.POST.get('accent_default') else (
-        accent if re.fullmatch(r'#[0-9a-fA-F]{6}', accent or '') else '')
-    resolved = resolve_display(event)
-    event.display_config, event.accent_color = original
-    return JsonResponse({'html': _preview_html(event, resolved), 'resolved': {
-        k: v for k, v in resolved.items() if k != 'stats'}})
-
-
 def _preview_html(event, resolved):
-    from scrape.diff import tz_or_utc
     tz = tz_or_utc(event.timezone)
     locations = list(event.location_set.filter(hidden=False).order_by('sort_order', 'name')[:8])
     items = list(event.scheduleditem_set.filter(hidden=False).select_related('location').order_by('start_time')[:8])
@@ -647,7 +664,8 @@ def changeset_detail(request, changeset_id):
 
 
 FIELD_LABELS = {'start_time': 'Starts', 'end_time': 'Ends', 'image_url': 'Image', 'latitude': 'Latitude',
-                'longitude': 'Longitude', 'snippet': 'Summary', 'timezone': 'Time zone'}
+                'longitude': 'Longitude', 'snippet': 'Summary', 'timezone': 'Time zone',
+                'context': 'Details for the assistant'}
 
 
 def _fmt(field, value):
@@ -665,21 +683,32 @@ def _fmt(field, value):
 
 def _changes_for_review(cs):
     rows = []
-    for ch in cs.changes.all():
+    # Only the content entities: older ticket drafts (ticketing is parked on git branch parked/tickets) stay hidden.
+    changes = cs.changes.filter(entity__in=[Change.ENTITY_EVENT, Change.ENTITY_LOCATION, Change.ENTITY_ITEM])
+    for ch in changes:
         fields = []
+        kind = {Change.ENTITY_EVENT: 'event', Change.ENTITY_LOCATION: 'location', Change.ENTITY_ITEM: 'item'}.get(ch.entity)
         if ch.op == Change.OP_UPDATE:
             for f, v in ch.data.items():
                 old, new = v.get('old'), v.get('new')
                 if f == 'location':
                     old, new = v.get('old_name'), v.get('new_name')
+                if f == 'context' and kind:  # API-018: a readable summary, not the JSON
+                    from events import context as ctx
+                    old, new = (ctx.summary(kind, old),
+                                ' — '.join(filter(None, [ctx.describe_changes(kind, old, new), ctx.summary(kind, new)])))
                 fields.append({'name': f, 'label': FIELD_LABELS.get(f, f.replace('_', ' ').capitalize()),
                                'old': _fmt(f, old), 'new': _fmt(f, new),
-                               'conflict': f in ch.conflict_fields, 'is_image': f == 'image_url'})
+                               'conflict': f in ch.conflict_fields, 'is_image': f == 'image_url',
+                               'human': f in ch.human_fields})
         elif ch.op == Change.OP_CREATE:
             for f, v in ch.data.items():
                 if f in ('location',):
                     continue
                 label = 'Location' if f == 'location_name' else FIELD_LABELS.get(f, f.replace('_', ' ').capitalize())
+                if f == 'context' and kind:
+                    from events import context as ctx
+                    v = ctx.summary(kind, v)
                 fields.append({'name': f, 'label': label, 'new': _fmt(f, v), 'is_image': f == 'image_url'})
         rows.append({'change': ch, 'fields': fields})
     return rows

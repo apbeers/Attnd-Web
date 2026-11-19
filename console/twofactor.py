@@ -14,10 +14,9 @@ How it works:
 - Emailed codes are a weaker factor (whoever reads the inbox can also reset the password), so they are
   for organizers only: staff can't turn them on and they are never accepted for a staff account.
 - Wrong codes are rate limited per account (RATE_LIMITS['otp_user']); a TOTP step is accepted once;
-  emailed and recovery codes are single use.
+  emailed and recovery codes are single use. Recovery codes are optional (made from the Account page).
 """
 
-import base64
 import hashlib
 import hmac
 import secrets
@@ -30,7 +29,7 @@ from django.db import IntegrityError, transaction
 from django.dispatch import receiver
 from django.utils import timezone
 
-from console import totp
+from console import totp, webauthn
 from console.models import Passkey, SignInSecurity, TwoFactorDevice
 
 SESSION_KEY = '_two_factor_user'
@@ -49,7 +48,7 @@ def security(user) -> SignInSecurity:
         return user.sign_in_security
     except SignInSecurity.DoesNotExist:
         pass
-    handle = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b'=').decode()
+    handle = webauthn.b64url_encode(webauthn.new_user_handle())
     try:
         with transaction.atomic():
             row, _ = SignInSecurity.objects.get_or_create(user=user, defaults={'user_handle': handle})
@@ -119,6 +118,9 @@ def _clear_on_login(sender, request, user, **kwargs):
 # ---------------------------------------------------------------------------
 # Recovery codes (one set per account, for any second factor)
 # ---------------------------------------------------------------------------
+# Optional: never made automatically. The Account page offers "Set up recovery codes" (none yet) or
+# "New recovery codes" once the account has a second factor, after re-checking an authenticator code or
+# the password. They are accepted at the second step while the account has any.
 
 def _normalize_recovery(code: str) -> str:
     return ''.join(ch for ch in str(code).lower() if ch.isalnum())
@@ -140,12 +142,6 @@ def new_recovery_codes(user) -> list[str]:
 def recovery_codes_left(user) -> int:
     row = SignInSecurity.objects.filter(user=user).first()
     return len(row.recovery_codes) if row else 0
-
-
-def first_recovery_codes(user) -> list[str]:
-    """New recovery codes if the account has none yet (its first second factor was just turned on);
-    otherwise [] (the existing ones keep working)."""
-    return [] if recovery_codes_left(user) else new_recovery_codes(user)
 
 
 def after_factor_removed(user) -> None:
@@ -196,15 +192,15 @@ def start_setup(user) -> TwoFactorDevice:
     return device
 
 
-def confirm_setup(device: TwoFactorDevice, code: str) -> list[str] | None:
-    """Turn the device on if `code` matches its secret. Returns None if it didn't match, else the new
-    recovery codes ([] when the account already had some from another second factor)."""
+def confirm_setup(device: TwoFactorDevice, code: str) -> bool:
+    """Turn the device on if `code` matches its secret (True). No recovery codes are made here: the
+    account makes them later from its Account page, if it wants them."""
     if not check_totp(device, code):
-        return None
+        return False
     device.confirmed = True
     device.confirmed_at = timezone.now()
     device.save(update_fields=['confirmed', 'confirmed_at'])
-    return first_recovery_codes(device.user)
+    return True
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import models
-from django.urls import reverse
+from django.db.models.functions import Upper
 from django.utils import timezone as dj_tz
 
 
@@ -28,6 +28,30 @@ class CoordinatesMixin:
         self.latitude = normalize_coord(self.latitude)
         self.longitude = normalize_coord(self.longitude)
         super().save(*args, **kwargs)
+
+
+# Tags (API-010): short lowercase labels on locations and schedule items ("live music", "bbq", "kid-friendly").
+MAX_TAGS = 8
+MAX_TAG_LENGTH = 32
+
+
+def normalize_tags(values):
+    """Lower-case, trimmed, single-spaced, de-duplicated tags (order kept), at most MAX_TAGS of MAX_TAG_LENGTH.
+
+    Accepts a list or a comma-separated string. Anything that isn't text is dropped, so a bad value never
+    breaks a save or the bundle."""
+    if isinstance(values, str):
+        values = values.split(',')
+    if not isinstance(values, (list, tuple)):
+        return []
+    out = []
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        tag = ' '.join(value.replace('#', ' ').split()).lower().strip(' .,;:')[:MAX_TAG_LENGTH].strip()
+        if tag and tag not in out:
+            out.append(tag)
+    return out[:MAX_TAGS]
 
 
 def generate_event_code(length: int = 8) -> str:
@@ -77,6 +101,12 @@ class Event(CoordinatesMixin, models.Model):
                                 help_text='IANA time zone, e.g. America/Chicago')
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PUBLISHED)
     paid = models.BooleanField(default=False)
+    # Tier (no checkout yet): standard = import/manage the event; studio = Attnd Studio (AI designs the site, flyer
+    # and app look; Attnd hosts the site). See studio/ and docs/specs/studio_spec.md.
+    PLAN_STANDARD = 'standard'
+    PLAN_STUDIO = 'studio'
+    PLAN_CHOICES = [(PLAN_STANDARD, 'Standard'), (PLAN_STUDIO, 'Studio')]
+    plan = models.CharField(max_length=16, choices=PLAN_CHOICES, default=PLAN_STANDARD)
     public = models.BooleanField(default=False, help_text='Listed in nearby search')
     flyer = models.FileField(upload_to=get_file_path, blank=True)
     address = models.CharField(max_length=512, blank=True)
@@ -104,10 +134,17 @@ class Event(CoordinatesMixin, models.Model):
     sources_checked_at = models.DateTimeField(null=True, blank=True)  # last cheap website check
     locked_fields = models.JSONField(default=list, blank=True,
                                      help_text='Fields edited by a person; AI refreshes will not overwrite them')
+    # API-018: details for the apps' on-device assistant (about, FAQ, amenities, policies…), events.context
+    context = models.JSONField(default=dict, blank=True)
 
     # Fields the AI / diff engine manages
     CONTENT_FIELDS = ['name', 'description', 'address', 'latitude', 'longitude',
-                      'start_time', 'end_time', 'timezone']
+                      'start_time', 'end_time', 'timezone', 'context']
+
+    def save(self, *args, **kwargs):
+        from events.context import EVENT, normalize
+        self.context = normalize(EVENT, self.context)
+        super().save(*args, **kwargs)
 
     @property
     def is_live(self):
@@ -157,11 +194,11 @@ class Event(CoordinatesMixin, models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['user', 'name', 'event_code', 'latitude', 'longitude'])
+            models.Index(fields=['user', 'name', 'event_code', 'latitude', 'longitude']),
+            # `event_code__iexact` / `name__iexact` (lookup, /join/, /p/, the DEMO checks) compare UPPER(…).
+            models.Index(Upper('event_code'), name='event_code_upper_idx'),
+            models.Index(Upper('name'), name='event_name_upper_idx'),
         ]
-
-    def get_absolute_url(self):
-        return reverse('events:get_single_event', args=[self.id])
 
     def __str__(self):
         return self.name
@@ -179,6 +216,8 @@ class Location(CoordinatesMixin, models.Model):
     address = models.CharField(max_length=512, blank=True)
     category = models.CharField(max_length=64, blank=True,
                                 help_text='e.g. Stage, Food, Vendor, Restroom')
+    tags = models.JSONField(default=list, blank=True)  # API-010, normalize_tags
+    context = models.JSONField(default=dict, blank=True)  # API-018, events.context
     sort_order = models.IntegerField(default=0)
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
@@ -186,13 +225,19 @@ class Location(CoordinatesMixin, models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
     CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url',
-                      'address', 'latitude', 'longitude', 'category']
+                      'address', 'latitude', 'longitude', 'category', 'tags', 'context']
 
     class Meta:
         indexes = [
             models.Index(fields=['event', 'user'])
         ]
         ordering = ['sort_order', 'name']
+
+    def save(self, *args, **kwargs):
+        from events.context import LOCATION, normalize
+        self.tags = normalize_tags(self.tags)
+        self.context = normalize(LOCATION, self.context)
+        super().save(*args, **kwargs)
 
     @property
     def has_coordinates(self):
@@ -203,9 +248,6 @@ class Location(CoordinatesMixin, models.Model):
         if self.image:
             return self.image.url
         return self.image_url or None
-
-    def get_absolute_url(self):
-        return reverse('events:get_single_location', args=[self.event.id, self.id])
 
     def __str__(self):
         return self.name
@@ -218,12 +260,19 @@ class ScheduledItem(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True)
     tags = models.JSONField(default=list, blank=True)
+    context = models.JSONField(default=dict, blank=True)  # API-018, events.context
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
 
-    CONTENT_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags']
+    CONTENT_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags', 'context']
+
+    def save(self, *args, **kwargs):
+        from events.context import ITEM, normalize
+        self.tags = normalize_tags(self.tags)
+        self.context = normalize(ITEM, self.context)
+        super().save(*args, **kwargs)
 
     class Meta:
         indexes = [
@@ -256,6 +305,10 @@ def is_send_slot(value):
 
 
 class Notification(models.Model):
+    PRIORITY_NORMAL = 'normal'
+    PRIORITY_URGENT = 'urgent'  # API-011: to every device in the event, right away, and on Live Activities
+    PRIORITY_CHOICES = [(PRIORITY_NORMAL, 'Normal'), (PRIORITY_URGENT, 'Urgent')]
+
     title = models.CharField(max_length=60)
     body = models.CharField(max_length=256)
     send_time = models.DateTimeField()
@@ -263,6 +316,7 @@ class Notification(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True)
     delivered_count = models.PositiveIntegerField(default=0)
     failed_count = models.PositiveIntegerField(default=0)
+    priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default=PRIORITY_NORMAL)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
@@ -271,15 +325,16 @@ class Notification(models.Model):
             models.Index(fields=['event', 'user'])
         ]
 
+    @property
+    def is_urgent(self):
+        return self.priority == self.PRIORITY_URGENT
+
     def clean(self):
         # "Send now" sends immediately and skips this; only scheduled sends are restricted.
         if not self.sent and self.send_time and not is_send_slot(self.send_time):
             from django.core.exceptions import ValidationError
             raise ValidationError({'send_time': f'Pick a time on a {SEND_SLOT_MINUTES}-minute mark '
                                                 f'(e.g. 6:00, 6:10, 6:20) — that is when scheduled updates go out.'})
-
-    def get_absolute_url(self):
-        return reverse('events:get_single_notification', args=[self.event.id, self.id])
 
     def __str__(self):
         return self.title
@@ -306,6 +361,12 @@ class Device(models.Model):
     subscribed = models.BooleanField(default=True)
     platform = models.CharField(max_length=12)
     push_token = models.CharField(max_length=512, blank=True)
+    # API-011: ActivityKit push token (hex) of the iOS Live Activity for the joined event. Cleared on leave, on
+    # joining another event and when APNs reports it invalid.
+    live_activity_token = models.CharField(max_length=512, blank=True)
+    # API-019: the iOS App Clip (its own bundle id, so its pushes need the clip's APNs topic). Set from the
+    # `app_clip` boolean in join/ and devices/ bodies; a body without it keeps the stored value.
+    app_clip = models.BooleanField(default=False)
     app_version = models.CharField(max_length=32, blank=True)
     last_seen = models.DateTimeField(null=True, blank=True)
     # Newest API version this device has called (1 = legacy app builds). Used to decide when an old
@@ -386,7 +447,9 @@ def events_for_user(user):
         return Event.objects.none()
     if user.is_superuser:
         return Event.objects.all()
-    return Event.objects.filter(models.Q(user=user) | models.Q(members__user=user)).distinct()
+    # A subquery instead of a join + DISTINCT: no duplicate rows, so annotations (counts) stay cheap and exact.
+    member_of = EventMember.objects.filter(user=user).values('event_id')
+    return Event.objects.filter(models.Q(user=user) | models.Q(id__in=member_of))
 
 
 class UsageCount(models.Model):

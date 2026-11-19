@@ -1,19 +1,15 @@
 import os
-from django.conf import settings
+
 from django.shortcuts import render
 
 
-def _build_number() -> str:
-    path = os.path.join(settings.BASE_DIR, "version.txt")
-    try:
-        with open(path, encoding='utf-8') as fh:
-            return fh.read().strip()
-    except OSError:
-        return "?"
+def _release() -> str:
+    """The deployed Heroku release ("v123"), set only with the runtime-dyno-metadata feature; else empty."""
+    return os.getenv('HEROKU_RELEASE_VERSION', '')
 
 
 def home(request):
-    return render(request, template_name='home/home.html', context={"build": _build_number()})
+    return render(request, template_name='home/home.html', context={"release": _release()})
 
 
 def privacy(request):

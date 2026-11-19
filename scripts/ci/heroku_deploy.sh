@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the checked-out commit to a Heroku app over git, then wait for /health/.
-#   HEROKU_API_KEY  (secret)  HEROKU_APP  (app name)  HEALTH_URL (optional)
+#   HEROKU_API_KEY  (secret)  HEROKU_APP  (app name)  HEALTH_URL (optional; set it: the app's herokuapp.com
+#   hostname serves only Studio sites)
 set -euo pipefail
 : "${HEROKU_API_KEY:?HEROKU_API_KEY secret is not set}"
 : "${HEROKU_APP:?HEROKU_APP variable is not set for this environment}"
