@@ -187,15 +187,12 @@ class ConsoleTests(TestCase):
         self.assertEqual(self.event.status, Event.STATUS_PUBLISHED)
         self.assertTrue(self.event.public)
 
-    def test_display_settings_saved_and_previewed(self):
+    def test_display_settings_saved(self):
         data = {'preset': 'festival', 'customize_tabs': 'on', 'tabs': ['schedule', 'map'],
                 'tab_order': 'schedule,map,locations,flyer,notifications', 'default_tab': '',
                 'locations_style': 'cards', 'schedule_style': '', 'secondary_pane': '',
                 'map_clustering': '0', 'map_fit_all': '', 'show_location_images': '', 'enable_search': '',
                 'group_by_category': '', 'accent_color': '#123456'}
-        preview = self.client.post(self.url('display_preview'), data, secure=True)
-        self.assertEqual(preview.status_code, 200)
-        self.assertEqual(preview.json()['resolved']['tabs'], ['schedule', 'map'])
         self.client.post(self.url('display'), data, secure=True)
         self.event.refresh_from_db()
         self.assertEqual(self.event.display_config, {

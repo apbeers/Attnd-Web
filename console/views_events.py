@@ -619,23 +619,6 @@ def display_settings(request, event):
         event, 'display', form=form, resolved=resolved, stats=stats, labels=LABELS))
 
 
-@event_view
-@require_POST
-def display_preview(request, event):
-    form = DisplayForm(request.POST)
-    if not form.is_valid():
-        return JsonResponse({'error': form.errors}, status=400)
-    original = event.display_config, event.accent_color
-    event.display_config = form.to_overrides()
-    accent = request.POST.get('accent_color', '')
-    event.accent_color = '' if request.POST.get('accent_default') else (
-        accent if re.fullmatch(r'#[0-9a-fA-F]{6}', accent or '') else '')
-    resolved = resolve_display(event)
-    event.display_config, event.accent_color = original
-    return JsonResponse({'html': _preview_html(event, resolved), 'resolved': {
-        k: v for k, v in resolved.items() if k != 'stats'}})
-
-
 def _preview_html(event, resolved):
     from scrape.diff import tz_or_utc
     tz = tz_or_utc(event.timezone)
