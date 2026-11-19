@@ -35,12 +35,12 @@ replaces the earlier "router-only planner without the model" decision. Everythin
 - iOS: WeatherKit (`WeatherService`) daily + hourly forecast for the event's coordinate, fetched when online and
   **cached on disk** so the last forecast shows offline ("as of 2:14 PM"). Requires Apple's attribution (Apple Weather
   mark + legal link) wherever weather shows.
-- Capability: WeatherKit must be enabled on the App ID and in entitlements. CI signs with an App Store Connect API key
-  and failed on the App Group capability; if WeatherKit breaks the archive the same way, CI moves to manually managed
-  profiles (which also fixes the App Group / widget). Owner task: enable WeatherKit for `com.arcu.Attnd` in the
-  developer portal (Capabilities + App Services).
-- Android: no weather unless Google has a native equivalent (Google Maps Platform's Weather API exists, paid, keyed;
-  decide later).
+- Capability: WeatherKit is enabled on `com.arcu.Attnd` and in the entitlements (Nov 19, 2026); CI signs manually
+  with App Store profiles that include it (attnd-web SETUP.md step 3f).
+- Android: Google Maps Platform **Weather API** (`weather.googleapis.com`, paid per call; owner approved Nov 19,
+  2026), enabled in `attnd-df28e` and allowed on the Android Maps key; same on-disk cache + "as of" text and Google's
+  attribution. Fetched once per refresh window, not per screen, so the cost stays small.
+
 
 ## 5. Rich event context for on-device AI (scraper → bundle)
 - The AI import/refresh extracts, per event and per item, everything an assistant needs offline: long descriptions,
@@ -58,4 +58,4 @@ replaces the earlier "router-only planner without the model" decision. Everythin
 2. iOS: plan page, Change sheet, bottom bar, keyboard bar; hide AI without a model; WeatherKit + cache + attribution.
 3. iOS wide layout with the chat column (iPhone Duo).
 4. Retire the snapping panel.
-5. Android (no weather) later.
+5. Android later (weather through the Weather API).

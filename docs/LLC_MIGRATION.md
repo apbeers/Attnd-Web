@@ -71,12 +71,15 @@ Accounts and services:
 - Heroku: `attnd-web` (prod), `attnd-dev` (dev); Postgres essential-0 ×2, Scheduler ×2, Mailgun ×2, Cloudinary
   starter ×2 (`cloudinary-metric-01769`, `cloudinary-fluffy-65757`); ACM certificates.
 - Google Cloud `attnd-df28e`: Firebase (FCM), Maps SDK key (Android, `af7cec96-…`), browser Maps key, Places key,
-  Routes API, Play Integrity service account, Google Wallet API + service account `attnd-wallet`.
+  Routes API, Weather API (`weather.googleapis.com`, paid per call, on the Android Maps key; Nov 19, 2026), Play Integrity service account, Google Wallet API + service account `attnd-wallet`.
 - Google Pay & Wallet Console: business profile "Attnd" (MCC 7922), Issuer ID.
 - Apple Developer team GQQX4L6TE2 (Individual): App IDs `com.arcu.Attnd`, `.clip`, `.widgets`; App Group
   `group.com.arcu.Attnd`; Pass Type ID `pass.com.arcu.attnd.tickets` + certificate (files in
   `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass`); APNs auth key; App Store Connect API key (CI, Admin);
-  Apple Development certificate for CI (expires Nov 14, 2027); App Attest.
+  Apple Development certificate for CI (expires Nov 14, 2027); Apple Distribution certificate + three App Store
+  profiles for CI signing (Nov 19, 2026, expire Nov 2027; files in `/Users/andrewbeers/Documents/Attnd/ios-signing`,
+  GitHub secrets `IOS_DIST_*` / `IOS_PROFILE_*`); WeatherKit on `com.arcu.Attnd` (attribution required wherever
+  weather shows); App Attest.
 - App Store Connect: Attnd (id1470627406), App Clip, TestFlight.
 - Google Play Console: `com.arcu.attnd` (upload key, Play App Signing), publishing service account.
 - OpenAI (server key: AI import, website watching, Studio, image generation; ticket drafts).

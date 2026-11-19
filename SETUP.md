@@ -30,11 +30,12 @@ Do these steps once, in order. Each step says which values go where. For any sin
       "Set time change" (`heroku run -a attnd-dev python manage.py load_demo_event --owner apbeers@icloud.com`, then the
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
-- [ ] iOS App Group (widget, Nov 15, 2026): CI's App Store Connect key can't create App Groups, so archives fail with
-      "Authentication failed" until it exists. developer.apple.com → Certificates, IDs & Profiles → Identifiers → **+** →
-      **App Groups** → description "Attnd", identifier `group.com.arcu.Attnd` → Register. Then open the App IDs
-      `com.arcu.Attnd` and `com.arcu.Attnd.widgets`: tick **App Groups** → **Configure** → select `group.com.arcu.Attnd`
-      → Save (confirm the profile warning). CI regenerates the profiles on the next archive.
+- [x] iOS App Group + WeatherKit + manual CI signing (Nov 19, 2026): App Group `group.com.arcu.Attnd` on
+      `com.arcu.Attnd` and `.widgets`, WeatherKit on `com.arcu.Attnd`, an Apple Distribution certificate and three App
+      Store profiles stored as GitHub secrets (step 3f). Renew before Nov 19, 2027.
+- [x] Google Weather API (Nov 19, 2026): `weather.googleapis.com` enabled in `attnd-df28e` and added to the Android
+      Maps key `af7cec96-…` (Android weather on the planner page, not built yet). Optional: a daily quota cap in
+      Cloud Console → APIs & Services → Weather API → Quotas.
 - [ ] Attnd Studio (step 15): buy a separate domain for hosted event sites (not a subdomain of attnd.app), then
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
       with a go-ahead; until then sites are served on the Heroku hostnames. Optional: `ANTHROPIC_API_KEY`.
@@ -277,6 +278,40 @@ Each CI run on a fresh Mac used to create a new "Created via API" Apple Developm
 5. Delete `attnd-dev.p12` from the Mac, then re-run the iOS workflow (`gh workflow run ios.yml -R apbeers/Attnd-iOS --ref develop`).
 
 The certificate expires after a year: repeat steps 2–5 then.
+
+### 3f. Manual App Store signing for CI (done Nov 19, 2026; renew yearly)
+Automatic signing with the App Store Connect API key can't sign the App Group ("Authentication failed"), so CI signs
+with a stored **Apple Distribution** certificate and three **App Store** provisioning profiles
+(`Attnd/scripts/ci/signing_profiles.py` + `archive_upload.sh`). Files on the owner's Mac:
+`/Users/andrewbeers/Documents/Attnd/ios-signing` (`dist.key`, `dist.csr`, `distribution.cer`, `dist.p12`, the three
+`.mobileprovision` files); keep the `.p12` password in the password manager.
+
+| Secret (Attnd-iOS) | What |
+|---|---|
+| `IOS_DIST_CERT_P12_BASE64` / `IOS_DIST_CERT_PASSWORD` | Apple Distribution certificate + key (`openssl pkcs12 -export -legacy`) |
+| `IOS_PROFILE_APP_B64` | App Store profile "Attnd AppStore" for `com.arcu.Attnd` |
+| `IOS_PROFILE_WIDGETS_B64` | "Attnd Widgets AppStore" for `com.arcu.Attnd.widgets` |
+| `IOS_PROFILE_CLIP_B64` | "Attnd Clip AppStore" for `com.arcu.Attnd.clip` |
+
+Set them from the folder:
+```
+cd ~/Documents/Attnd/ios-signing
+base64 -i dist.p12 | gh secret set IOS_DIST_CERT_P12_BASE64 --repo apbeers/Attnd-iOS
+gh secret set IOS_DIST_CERT_PASSWORD --repo apbeers/Attnd-iOS
+base64 -i Attnd_AppStore.mobileprovision | gh secret set IOS_PROFILE_APP_B64 --repo apbeers/Attnd-iOS
+base64 -i Attnd_Widgets_AppStore.mobileprovision | gh secret set IOS_PROFILE_WIDGETS_B64 --repo apbeers/Attnd-iOS
+base64 -i Attnd_Clip_AppStore.mobileprovision | gh secret set IOS_PROFILE_CLIP_B64 --repo apbeers/Attnd-iOS
+```
+
+**Adding a capability later** (e.g. Sign in with Apple): enable it on the App ID in Identifiers, then each affected
+profile shows "Invalid": Profiles → open it → **Edit** → **Save** → **Download**, and re-run the matching
+`base64 … | gh secret set IOS_PROFILE_…` line. CI fails with the capability's name if a profile lacks one.
+
+**Renewal (yearly, the certificate expires Nov 2027; CI warns 30 days ahead):** new CSR + certificate
+(`openssl req -new -newkey rsa:2048 -nodes -keyout dist.key -out dist.csr -subj "/CN=Attnd Distribution"`, upload at
+Certificates → **+** → Apple Distribution, then `openssl x509 -inform der -in distribution.cer -out dist.pem` and
+`openssl pkcs12 -export -legacy -inkey dist.key -in dist.pem -out dist.p12`), edit the three profiles to use the new
+certificate and download them, then set all five secrets again.
 
 ## 4. Google / Android (40 min)
 
