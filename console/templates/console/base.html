@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  {% include 'home/_icons.html' with app_manifest=True %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Console{% endblock %} — Attnd</title>
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
   <link rel="manifest" href="{% url 'console:manifest' %}">
   <meta name="theme-color" content="#431f86">
-  <link rel="apple-touch-icon" href="{% static 'console/icons/icon-192.png' %}">
   {% block head %}{% endblock %}
 </head>
 <body>

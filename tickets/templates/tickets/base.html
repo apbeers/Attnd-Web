@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Tickets{% endblock %} · Attnd</title>
   <meta name="robots" content="{% block robots %}noindex{% endblock %}">
   <meta name="theme-color" content="#431f86">
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
   <link rel="stylesheet" href="{% static 'tickets/tickets.css' %}">
-  <link rel="icon" type="image/png" href="{% static 'home/img/favicon.png' %}">
   {% block head %}{% endblock %}
 </head>
 <body>

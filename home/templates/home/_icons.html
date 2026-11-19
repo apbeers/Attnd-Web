@@ -1,0 +1,8 @@
+{# Site icons for every page (scripts/make_icons.py makes the files in public/, served at the site root). #}
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/icon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+{% if not app_manifest %}  <link rel="manifest" href="/site.webmanifest">
+{% endif %}

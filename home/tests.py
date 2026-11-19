@@ -29,3 +29,26 @@ class StoreLinksTests(TestCase):
         self.assertIn('https://play.google.com/store/apps/details?id=com.arcu.attnd', html)
         self.assertNotIn('bit.ly', html)
         self.assertNotIn('apple.co/', html)
+
+
+class SiteIconTests(TestCase):
+    """The icon set from scripts/make_icons.py: full resolution, linked from the pages."""
+
+    def test_icon_files_have_every_size(self):
+        from pathlib import Path
+        from PIL import Image
+        public = Path(__file__).resolve().parent.parent / 'public'
+        ico = Image.open(public / 'favicon.ico')
+        self.assertEqual({16, 32, 48, 64, 128, 256}, {w for w, _ in ico.info['sizes']})
+        for name, size in [('icon-32.png', 32), ('icon-96.png', 96), ('icon-192.png', 192), ('icon-512.png', 512),
+                           ('icon-maskable-512.png', 512), ('apple-touch-icon.png', 180)]:
+            self.assertEqual((size, size), Image.open(public / name).size, name)
+        # Apple touch icons must be opaque (iOS fills transparency with black).
+        self.assertEqual('RGB', Image.open(public / 'apple-touch-icon.png').mode)
+
+    def test_pages_link_the_icons(self):
+        for url in (reverse('home:homepage'), reverse('home:privacy'), '/accounts/login/'):
+            response = self.client.get(url, follow=True)
+            self.assertContains(response, '<link rel="icon" href="/favicon.ico" sizes="any">')
+            self.assertContains(response, '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">')
+            self.assertContains(response, '<link rel="manifest" href="/site.webmanifest">')

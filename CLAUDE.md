@@ -85,7 +85,8 @@ diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, req
 studio/         # Attnd Studio (admins only): AI-designed event websites hosted on SITES_HOST, flyer art, app look
 tickets/        # Attnd Tickets, PARKED (only with TICKETS_ENABLED): Stripe Checkout + Connect, QR tokens, Wallet passes, door check-in, console tools (API-017)
 static/         # Project-level static assets
-public/         # Files served at root by Whitenoise (robots.txt, etc.)
+public/         # Files served at root by Whitenoise (robots.txt, favicon.ico + icons + site.webmanifest from scripts/make_icons.py)
+brand/          # app-icon-1024.png: the source of every website icon (scripts/make_icons.py)
 ```
 
 ## Console UX
@@ -97,6 +98,7 @@ public/         # Files served at root by Whitenoise (robots.txt, etc.)
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
 - **Google Maps** (`console/static/console/maps.js`) when `GOOGLE_MAPS_BROWSER_KEY` is set: Places autocomplete on addresses, draggable pin map; otherwise the OpenStreetMap picker.
 - **Brand colour** purple `#431f86` (from the app icon) across console, site and apps.
+- **Site icons** (every page includes `home/_icons.html`): `uv run python scripts/make_icons.py` regenerates them from `brand/app-icon-1024.png` (copy of the iOS 1024 app icon) into `public/` — `favicon.ico` (16–256), `icon-32/96/192/512.png` (rounded corners, transparent, so Safari and other tabs show the tile without a plate), `apple-touch-icon.png` 180 (full bleed, opaque; iOS/macOS round it), `icon-maskable-512.png`, `site.webmanifest` — and the console manifest's icons. `home/tests.py` checks the sizes and links.
 - **Demo data:** `python manage.py load_demo_event [--owner email]` builds the DEMO event (happening now, every feature populated).
 
 ## Diagnostics (API-013, API-014)

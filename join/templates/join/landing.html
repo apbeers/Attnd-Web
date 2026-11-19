@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if shared_plan %}A shared plan for {{ event.name }}{% else %}{{ event.name }} on Attnd{% endif %}</title>
   {% if shared_plan %}<meta name="robots" content="noindex">{% endif %}
@@ -11,7 +12,6 @@
   {% if app_store_id %}<meta name="apple-itunes-app" content="app-id={{ app_store_id }}, app-clip-bundle-id={{ clip_bundle_id }}, app-clip-display=card">{% endif %}
   <meta name="theme-color" content="#431f86">
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
-  <link rel="icon" type="image/png" href="{% static 'home/img/favicon.png' %}">
 </head>
 <body>
 <main class="join-page">
