@@ -17,7 +17,6 @@ How it works:
   emailed and recovery codes are single use. Recovery codes are optional (made from the Account page).
 """
 
-import base64
 import hashlib
 import hmac
 import secrets
@@ -30,7 +29,7 @@ from django.db import IntegrityError, transaction
 from django.dispatch import receiver
 from django.utils import timezone
 
-from console import totp
+from console import totp, webauthn
 from console.models import Passkey, SignInSecurity, TwoFactorDevice
 
 SESSION_KEY = '_two_factor_user'
@@ -49,7 +48,7 @@ def security(user) -> SignInSecurity:
         return user.sign_in_security
     except SignInSecurity.DoesNotExist:
         pass
-    handle = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b'=').decode()
+    handle = webauthn.b64url_encode(webauthn.new_user_handle())
     try:
         with transaction.atomic():
             row, _ = SignInSecurity.objects.get_or_create(user=user, defaults={'user_handle': handle})
