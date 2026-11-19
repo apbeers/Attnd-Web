@@ -202,7 +202,7 @@
 <footer>
   <div class="wrap">
     <span>&copy; Attnd {% now "Y" %}. All rights reserved.</span>
-    <span><a href="{% url 'home:privacy' %}">Privacy</a> · <span class="small">build {{ build }}</span></span>
+    <span><a href="{% url 'home:privacy' %}">Privacy</a>{% if release %} · <span class="small">release {{ release }}</span>{% endif %}</span>
   </div>
 </footer>
 

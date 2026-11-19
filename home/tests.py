@@ -10,6 +10,14 @@ class HomePageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'home/home.html')
 
+    def test_footer_shows_the_heroku_release_only_when_known(self):
+        import os
+        with patch.dict(os.environ, {'HEROKU_RELEASE_VERSION': 'v321'}):
+            self.assertContains(self.client.get('/', secure=True), 'release v321')
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('HEROKU_RELEASE_VERSION', None)
+            self.assertNotContains(self.client.get('/', secure=True), 'release v')
+
 
 class PrivacyPageTests(TestCase):
     @patch('django.contrib.staticfiles.storage.staticfiles_storage.url', return_value='/static/home/img/favicon.png')
