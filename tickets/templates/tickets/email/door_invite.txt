@@ -1,6 +1,0 @@
-{% autoescape off %}You're on the door team for {{ event.name }} ({{ when }}).
-
-1. Install the Attnd app.
-2. Open Options > Door mode and sign in with {{ staff.email }} (we email you a code).
-3. Before doors open, tap Download tickets while you have a connection. Scanning then works offline.
-{% endautoescape %}

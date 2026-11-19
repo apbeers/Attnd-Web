@@ -123,11 +123,12 @@ shared-origin limitation. Check Heroku's domain limits per app first.
 - Server-side flyer rendering (an HTML flyer layout → PNG/PDF) if image-model flyers aren't enough.
 
 ## Tickets: parked, Eventbrite for now (Nov 19, 2026)
-Built (web + server, Nov 16, 2026: API-017; spec `docs/specs/tickets_spec.md`) but **parked**: `TICKETS_ENABLED` is
-off, so the `tickets` app is in nothing (not installed, no URLs, links, tasks or AI drafts; the bundle's ticket keys are
-null). Organizers who want to sell tickets use Eventbrite for now. When it comes back (`TICKETS_ENABLED=1`):
+Built (web + server, Nov 16, 2026: API-017) but **parked**: since Nov 19, 2026 the code and spec
+(`docs/specs/tickets_spec.md`) live only on the git branch `parked/tickets`; `develop` has no ticketing (the bundle's
+ticket keys are always null). Organizers who want to sell tickets use Eventbrite for now. When it comes back (merge from
+the branch, `TICKETS_ENABLED=1`):
 - **Owner setup** (SETUP step 16): Stripe + Connect in the LLC's name, test keys/webhooks on dev, Wallet certificates
-  and Google Wallet key. Then re-record the Stripe fixtures (`tickets/fixtures/stripe/`) from real test-mode payloads.
+  and Google Wallet key (the steps are in SETUP step 16 on the branch). Then re-record the Stripe fixtures (`tickets/fixtures/stripe/`) from real test-mode payloads.
 - **Apps**: iOS My tickets + door mode next (API-017 iOS section), Android later.
 - Before real sales: Terms of Sale, Organizer Agreement, privacy policy update, store privacy labels; confirm Stripe's
   maximum payout hold for US Express accounts (events months ahead); Stripe Tax / sales tax on tickets if needed;

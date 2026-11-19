@@ -65,7 +65,7 @@ class PerfBase(TestCase):
 
 class BundlePerfTests(PerfBase):
     def test_first_fetch_query_count(self):
-        # event, locations, schedule, notifications, item count, ticketing, device touch
+        # event, locations, schedule, notifications, item count, device touch
         with self.assertMaxQueries(7):
             resp = self.get(self.url, HTTP_X_DEVICE_ID='device-1')
         data = resp.json()
@@ -132,7 +132,7 @@ class BundlePerfTests(PerfBase):
         json.loads(resp.content)
 
     def test_other_api_calls(self):
-        with self.assertMaxQueries(2):  # lookup (+ ticketing)
+        with self.assertMaxQueries(2):  # lookup
             self.assertEqual(self.get('/api/v2/events/lookup/?q=fair2026').status_code, 200)
         with self.assertMaxQueries(2):
             self.assertEqual(self.get('/api/v2/events/nearby/?lat=32.75&lng=-97.33').status_code, 200)

@@ -1,7 +1,7 @@
 # Event ops plan: Work mode, roles, accounts, staff tools, modular features (planned, not built)
 
 Agreed with the owner Nov 16, 2026. **iOS first** (Android later), one app, one download with every feature. Pricing
-is out of scope (decided later). Builds on tickets (`tickets_spec.md`: door staff, offline scanning) and the
+is out of scope (decided later). Builds on tickets (`tickets_spec.md` on git branch `parked/tickets`: door staff, offline scanning) and the
 invite-only organizer site.
 
 ## 1. One app, two modes

@@ -91,8 +91,8 @@ class LookupV2(ApiKeyRequired, View):
 
 # The serialized bundle per (event, content_version, origin) for a few minutes: every device of an event
 # fetches the same bytes after a change (the content_updated push), so only the first one builds them. The
-# version is in the key, so an edit is never served stale; the TTL only bounds what can change without a
-# version bump (the ticket sales window opening or closing on its own, which the ETag ignores too).
+# version is in the key, so an edit is never served stale; the TTL only bounds what could change without a
+# version bump.
 BUNDLE_CACHE_SECONDS = 300
 # A device's last_seen is written at most this often by bundle polls (the apps poll every 60 s – 5 min;
 # last_seen only feeds "active today" counts and the one-year clean-up).

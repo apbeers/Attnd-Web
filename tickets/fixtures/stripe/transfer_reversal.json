@@ -1,8 +1,0 @@
-{
-  "id": "trr_1QTestReversal",
-  "object": "transfer_reversal",
-  "amount": 2500,
-  "currency": "usd",
-  "transfer": "tr_3QTestTransfer",
-  "metadata": {}
-}

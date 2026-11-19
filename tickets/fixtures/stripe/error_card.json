@@ -1,7 +1,0 @@
-{
-  "error": {
-    "code": "charge_already_refunded",
-    "type": "invalid_request_error",
-    "message": "Charge ch_3QTestCharge has already been refunded."
-  }
-}

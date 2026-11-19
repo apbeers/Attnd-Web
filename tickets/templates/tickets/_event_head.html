@@ -1,8 +1,0 @@
-{% load tz %}<section class="tix-event">
-  {% if event.logo_url %}<img src="{{ event.logo_url }}" alt="" width="64" height="64" style="border-radius:12px;margin-bottom:.6rem">{% endif %}
-  <h1>{{ event.name }}</h1>
-  {% timezone event.timezone|default:"UTC" %}
-  <p class="tix-meta">{{ event.start_time|date:"l, F j, Y · g:i A" }}{% if event.end_time %} – {% if event.end_time|date:"Ymd" != event.start_time|date:"Ymd" %}{{ event.end_time|date:"l, F j · g:i A" }}{% else %}{{ event.end_time|date:"g:i A" }}{% endif %}{% endif %}
-    {% if event.address %}<br>{{ event.address }}{% endif %}</p>
-  {% endtimezone %}
-</section>

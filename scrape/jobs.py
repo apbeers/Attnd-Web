@@ -128,13 +128,10 @@ def run_job(job_id, already_claimed=False):
     try:
         if job.kind == IngestJob.KIND_CREATE:
             _run_create(job)
-        elif job.kind == IngestJob.KIND_TICKETS:
-            if not settings.TICKETS_ENABLED:
-                raise ValueError('Ticketing is turned off.')  # parked: no ticket drafts
-            from tickets.ai import run_job as run_tickets_draft
-            run_tickets_draft(job)
-        else:
+        elif job.kind == IngestJob.KIND_REFRESH:
             _run_refresh(job)
+        else:  # e.g. an old 'tickets' draft job (ticketing is parked on git branch parked/tickets)
+            raise ValueError('This kind of job is no longer supported.')
     except ValueError as exc:
         logger.warning('Ingest job %s failed: %s', job.pk, exc)
         _fail(job, str(exc))

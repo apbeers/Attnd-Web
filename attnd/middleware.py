@@ -17,7 +17,7 @@ class CompressionMiddleware(GZipMiddleware):
     memory, and keeping the response's ETag as it is.
 
     Django turns a strong ETag weak (`W/"…"`) when it compresses. Our ETags name a content version (the
-    bundle's `"e<id>-v<version>"`, the tickets and Studio data versions), and the views compare
+    bundle's `"e<id>-v<version>"`, the Studio data version), and the views compare
     `If-None-Match` to them exactly, so a weakened tag would turn every conditional poll into a full
     download. The tag still identifies the same content in either encoding.
     """

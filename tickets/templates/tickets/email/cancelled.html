@@ -1,4 +1,0 @@
-{% extends "tickets/email/base.html" %}{% block content %}
-<h1 style="font-size:22px;margin:0 0 8px">{{ event.name }} is cancelled</h1>
-{% if reason %}<p>{{ reason|linebreaksbr }}</p>{% endif %}
-<p>Every ticket is refunded in full, processing fee included. Refunds reach your card in 5–10 business days.</p>{% endblock %}

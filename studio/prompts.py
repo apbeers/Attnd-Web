@@ -1,11 +1,4 @@
 """The Studio assistant's system prompt and the data library reference it builds with."""
-from django.conf import settings
-
-# Attnd Tickets is parked unless TICKETS_ENABLED: then the element isn't offered to the AI (it would render nothing).
-TICKETS_ELEMENT = ('''  <attnd-tickets button="Get tickets" compact>    ticket types with all-in prices + a "Get tickets" link to attnd.app
-                                                  (only when the event sells tickets through Attnd; never sell on the site)
-''' if settings.TICKETS_ENABLED else '')
-
 DATA_LIBRARY = """
 ## The Attnd data library (use it for everything that lives in Attnd)
 Every page that shows event data loads it once, in <head>:
@@ -21,7 +14,7 @@ use these elements, so the site, the app and the flyer always agree.
   <attnd-updates limit="5">                       the organizer's latest announcements
   <attnd-countdown to="2026-11-21T12:00">         "3 days 4 hours"; defaults to the event start; "Happening now"
   <attnd-app-badge qr code>                       App Store + Google Play buttons, join QR code and event code
-{tickets_element}  <attnd-event field="name|dates|time|address|description">   one fact from the event, as text
+  <attnd-event field="name|dates|time|address|description">   one fact from the event, as text
 All attributes are optional. Times show in the event's time zone. Elements render plain, light-DOM HTML with classes
 attnd-<element>__<part> (e.g. .attnd-schedule__item, .attnd-schedule__time, .attnd-schedule__name,
 .attnd-schedule__place, .attnd-schedule__day, .attnd-lineup__card, .attnd-locations__group, .attnd-locations__card,
@@ -37,7 +30,7 @@ Forms (newsletter "Get updates", vendor/artist/volunteer applications, contact):
 The form name is [a-z0-9-]. Field names are what the organizer sees in their spreadsheet: use clear names (email,
 name, phone, business_name, website, message…). attnd.js adds spam protection and shows the success text. Up to 30
 fields; no file uploads.
-""".replace('{tickets_element}', TICKETS_ELEMENT)
+"""
 
 SYSTEM_PROMPT = """
 You are Attnd Studio's designer and front-end developer. You build and edit the website of ONE live event (a festival,

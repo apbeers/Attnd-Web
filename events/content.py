@@ -8,7 +8,6 @@ import contextlib
 import re
 import threading
 
-from django.conf import settings
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
@@ -108,16 +107,9 @@ def event_v2(event, request=None):
         'join_url': f'https://attnd.app/join/{event.event_code}/',
         # API-016: the event's Attnd Studio website while it is published, else null.
         'website_url': _website_url(event),
-        # API-017: the event's ticket page on attnd.app while it sells tickets through Attnd, else null.
-        'tickets_url': _tickets_url(event),
+        # API-017: ticketing is parked (git branch parked/tickets): always null, kept for installed apps.
+        'tickets_url': None,
     }
-
-
-def _tickets_url(event):
-    if not settings.TICKETS_ENABLED:  # ticketing parked: always null (the key stays for installed apps)
-        return None
-    from tickets.content import tickets_url
-    return tickets_url(event)
 
 
 def _website_url(event):
@@ -195,15 +187,8 @@ def bundle(event, request=None):
         'locations': location_rows,
         'schedule': item_rows,
         'notifications': [notification_v2(n) for n in notifications],
-        'tickets': _tickets_summary(event),  # API-017, null without Attnd ticketing
+        'tickets': None,  # API-017: ticketing parked (git branch parked/tickets), always null
     }
-
-
-def _tickets_summary(event):
-    if not settings.TICKETS_ENABLED:  # ticketing parked: always null
-        return None
-    from tickets.content import summary
-    return summary(event)
 
 
 def models_q_visible_location():
@@ -256,15 +241,7 @@ def snapshot(event):
         },
         'locations': locations,
         'schedule': items,
-        'tickets': _tickets_snapshot(event),
     }
-
-
-def _tickets_snapshot(event):
-    if not settings.TICKETS_ENABLED:  # ticketing parked: revisions carry no ticket types
-        return None
-    from tickets.content import snapshot as tickets_snapshot
-    return tickets_snapshot(event)
 
 
 def save_revision(event, summary, user=None):
@@ -326,9 +303,6 @@ def restore(revision, user=None):
                 obj.hidden = it['hidden']
                 obj.locked_fields = it['locked_fields']
                 obj.save()
-            if data.get('tickets') and settings.TICKETS_ENABLED:  # parked: older snapshots' ticket types stay put
-                from tickets.content import restore as restore_tickets
-                restore_tickets(event, data['tickets'])
     return event
 
 

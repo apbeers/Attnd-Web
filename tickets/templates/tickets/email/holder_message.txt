@@ -1,4 +1,0 @@
-{% autoescape off %}A message from the organizer of {{ event.name }}:
-
-{{ body }}
-{% endautoescape %}

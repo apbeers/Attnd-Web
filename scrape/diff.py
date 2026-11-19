@@ -22,7 +22,6 @@ from decimal import Decimal
 from difflib import SequenceMatcher
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -371,19 +370,17 @@ def summarize(changes):
         key = (c['op'], c['entity'])
         counts[key] = counts.get(key, 0) + 1
     words = {'event': ('event detail', 'event details'), 'location': ('location', 'locations'),
-             'item': ('schedule item', 'schedule items'), 'ticket_type': ('ticket type', 'ticket types'),
-             'ticket_settings': ('ticket page text', 'ticket page texts')}
+             'item': ('schedule item', 'schedule items')}
     verbs = {'create': 'new', 'update': 'updated', 'delete': 'removed'}
     parts = []
     for (op, entity), n in sorted(counts.items(), key=lambda kv: ('create', 'update', 'delete').index(kv[0][0])):
         noun = words[entity][0 if n == 1 else 1]
-        parts.append(f'{n} {verbs[op]} {noun}' if entity not in ('event', 'ticket_settings')
-                     else f'{noun if entity == "ticket_settings" else "event details"} updated')
+        parts.append(f'{n} {verbs[op]} {noun}' if entity != 'event' else 'event details updated')
     return ', '.join(parts) or 'No changes'
 
 
 def save_changeset(event, job, changes, notes=''):
-    order = {'event': 0, 'location': 1, 'item': 2, 'ticket_settings': 3, 'ticket_type': 4}
+    order = {'event': 0, 'location': 1, 'item': 2}
     cs = ChangeSet.objects.create(
         event=event, job=job, notes=notes or '',
         base_version=Event.objects.filter(pk=event.pk).values_list('content_version', flat=True).first() or 0,
@@ -469,11 +466,6 @@ def apply_changeset(changeset, decisions, user=None, partial_ok=False):
 
 
 def _apply_one(event, owner, ch, fields, ref_ids):
-    if ch.entity in (Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS):
-        if not settings.TICKETS_ENABLED:
-            return False  # ticketing parked: ticket changes are ignored (rejected)
-        from tickets.ai import apply_change
-        return apply_change(event, owner, ch, fields)
     if ch.entity == Change.ENTITY_EVENT and ch.op == Change.OP_UPDATE:
         for f in (fields if fields is not None else ch.data.keys()):
             if f in ch.data and f in EVENT_FIELDS:

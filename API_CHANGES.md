@@ -64,7 +64,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-014 | Anonymous performance metrics: `perf_*` usage names with bucket details | additive (new usage names) | 🚧 built, not pushed · ⬜ prod | ⬜ | ⬜ |
 | API-015 | Shared plan links `/p/<EVENT_CODE>/<payload>` (web page + store routing like `/join/`), claimed in apple-app-site-association (app + App Clip) and opened by the apps | additive (new web route, new app link paths; no API endpoint) | ✅ dev · ⬜ prod | ✅ | ✅ |
 | API-016 | Attnd Studio: `event.website_url` (the event's Studio-hosted website, or null) in every v2 event object | additive (new key) | ✅ dev · ⬜ prod | ✅ | ✅ |
-| API-017 | **Parked (Nov 19, 2026): `TICKETS_ENABLED` off, keys always `null`, endpoints 404.** Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | ⏸ parked (built; off) | ✅ | ⬜ (later) |
+| API-017 | **Parked (Nov 19, 2026): moved to git branch `parked/tickets`; keys always `null`, the 15 `tickets/` / `door/` endpoints removed from v2.** Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | ⏸ parked (on branch `parked/tickets`) | ✅ | ⬜ (later) |
 | API-018 | Rich context for the apps' on-device assistant: `event.context`, `locations[].context`, `schedule[].context` in `bundle/` (about, FAQ, amenities, policies, getting there, weather plan, menus, hours, age limits, performers with bios and genres, links); AI import/refresh extracts it, console "Details for the assistant" edits it (locks), DEMO has it | additive (new keys, `bundle/` only) | ✅ dev (5beae38) · ⬜ prod | ✅ (173575f; tools, search, detail screens) | ⬜ (later) |
 | API-019 | App Clip push topic: optional `app_clip` boolean in `POST events/<id>/join/` and `POST devices/` bodies; iOS sends `true` from the App Clip; the server sends clip devices' pushes (alerts, urgent, silent `content_updated`, Live Activity updates) on the clip's APNs topic | additive (new optional request field) | ✅ dev (4ff0467) · ⬜ prod | ✅ (c07ec37, local, not pushed yet) | n/a (no App Clip) |
 | API-020 | Retire the v1 events API: `SUPPORTED_API_VERSIONS` default `2`, `/api/v1/events/…` → `410` `update_required`; `/api/v1/attest/` unchanged | breaking for v1 only (no current app uses v1) | ✅ dev · ⬜ prod (needs a release + owner go-ahead) | — (uses v2) | — (uses v2) |
@@ -141,7 +141,15 @@ new nullable keys in `bundle/`; nothing else changes.
 in `AssistantModel.retrieve` / `AssistantPrompt.context` and the event facts for AppFunctions, show on details.
 
 ### API-017: tickets (Get tickets, My tickets, door mode with offline scanning)
-**Parked (Nov 19, 2026, owner):** ticketing is kept in the code but included in nothing: the server runs with
+**Moved to a branch (Nov 19, 2026, owner: "move ticketing to the git branch"):** the `tickets/` app, its settings,
+URLs, console tools, Studio `<attnd-tickets>` element, AI drafts, tests, live/e2e suites, CI steps and
+`docs/specs/tickets_spec.md` were removed from `develop`; everything is on the git branch `parked/tickets` (cut from
+`develop` before the removal). `event.tickets_url` and `bundle.tickets` stay in v2, always `null`
+(`events/tests_contract.py` checks it). The 15 `tickets/…` / `door/…` endpoints were removed from `contract/v2.json` and
+`API_V2.md` (owner decision: no app calls them). Restoring = merge or cherry-pick from `parked/tickets` (its
+`TICKETS_ENABLED` switch, migrations of the `tickets` app, contract entries). Dev's database keeps its orphan
+`tickets_*` tables (SETUP.md §16).
+**Earlier (Nov 19, 2026, owner):** ticketing is kept in the code but included in nothing: the server runs with
 `TICKETS_ENABLED` off (default), so `event.tickets_url` and `bundle.tickets` are always `null` (keys kept; the
 contract test compares the ticket endpoints only with `TICKETS_ENABLED=1`) and the `tickets/…` / `door/…` endpoints
 return a JSON 404. **Apps:** Get tickets already hides itself while both keys are `null`. iOS's My tickets and Scan

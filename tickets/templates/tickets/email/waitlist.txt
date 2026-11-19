@@ -1,2 +1,0 @@
-{% autoescape off %}Good news: {{ entry.ticket_type.name }} tickets for {{ event.name }} are available again (first come, first served): {{ url }}
-{% endautoescape %}

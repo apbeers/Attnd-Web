@@ -18,7 +18,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 13. CI keys (live tests) | ✅ Nov 15, 2026: `CI_API_KEYS` set on production (release v109; takes effect once API-008 is released to `main`), `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web. |
 | 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
 | 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15); optional `ANTHROPIC_API_KEY`. |
-| 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026: `TICKETS_ENABLED` off, organizers use Eventbrite for now). Code built (API-017). When it comes back: Stripe account + Connect in the LLC's name, test keys + webhooks on dev (16a); Apple Wallet certificate PEMs on Heroku (16b); Google Wallet issuer id + service account key (16c). |
+| 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026): moved to git branch `parked/tickets` (API-017), organizers use Eventbrite for now. The setup steps live on that branch. Optional: drop dev's orphan `tickets_*` tables (step 16). |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
@@ -44,12 +44,9 @@ Do these steps once, in order. Each step says which values go where. For any sin
       + Pass Type ID certificate (✅ Pass Type ID registered Nov 15, 2026; key, CSR, `.cer` and PEM in
       `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass` on the owner's Mac, plus the password manager), and a Google Pay & Wallet Console business
       profile with its Issuer ID, the Google Wallet API enabled in `attnd-df28e` and a service account
-      `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` added as a Developer user. Plan: `docs/specs/tickets_spec.md`.
-- [ ] ⏸ Parked, not a task now (Nov 19, 2026: ticketing off, `TICKETS_ENABLED` unset; Eventbrite for now). When it
-      comes back — Tickets (step 16, code built Nov 16, 2026): Stripe account + Connect **in the LLC's name** (test keys and the two
-      webhook endpoints on dev first, 16a); Apple Wallet certificate + key + WWDR G4 as PEM config vars (16b, files in
-      `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass`); Google Wallet issuer id + `attnd-wallet` JSON key and
-      Event Ticket publishing access (16c). Then on dev: `heroku run -a attnd-dev python manage.py load_ticket_demo --owner apbeers@icloud.com`.
+      `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` added as a Developer user. Plan: `docs/specs/tickets_spec.md` on branch `parked/tickets`.
+- [ ] ⏸ Tickets: parked on git branch `parked/tickets` (Nov 19, 2026; Eventbrite for now), not a task now. Optional: drop
+      dev's orphan `tickets_*` tables (step 16).
 - [ ] Later (before outside organizers or payments): move everything to a Texas LLC — `docs/LLC_MIGRATION.md`.
 - [x] Repos made public (Nov 19, 2026); history scan found old secrets: the OpenAI key in `_set_heroku_env.command`
       (revoked Apr 29, 2026) and the 2021 service-account keys `attnd-prod` (`bf9dce7d…`) and `attnd-742` (`73dbb440…`),
@@ -713,82 +710,20 @@ beta** invite page is gone.
 heroku config:set -a attnd-dev ANTHROPIC_API_KEY=sk-ant-PASTE_HERE
 ```
 
-## 16. Tickets: Stripe, Apple Wallet, Google Wallet (⏸ parked; the code is built)
+## 16. Tickets: Stripe, Apple Wallet, Google Wallet (⏸ parked on git branch `parked/tickets`)
 
-> **Parked (Nov 19, 2026, owner):** ticketing is switched off (`TICKETS_ENABLED` unset on both Heroku apps): the
-> `tickets` app isn't installed and nothing links to it; organizers use Eventbrite for now. Nothing below is needed
-> until it comes back. Its tables stay in the dev database (harmless); the TIXDEMO demo event on dev is deleted
-> separately. To bring it back: `heroku config:set -a attnd-dev TICKETS_ENABLED=1` (the release phase migrates the
-> `tickets` app), then this step, then `load_ticket_demo`.
+Ticketing was moved off `develop` on Nov 19, 2026 (owner: organizers use Eventbrite for now). The code, its spec and
+the full setup steps (Stripe account + Connect in the LLC's name, webhooks, Apple Wallet PEMs, Google Wallet issuer and
+service account, policies before selling) are on the git branch `parked/tickets` (this file's step 16 there). Nothing
+here is needed until it comes back. The Pass Type ID `pass.com.arcu.attnd.tickets` and its certificate (Nov 15, 2026)
+and the Google Wallet issuer profile still exist; renew or delete them as you like (docs/LLC_MIGRATION.md).
 
-Attnd Tickets (`docs/specs/tickets_spec.md`, CLAUDE.md → Attnd Tickets) works without any of this for **free
-tickets**; paid tickets need Stripe, and the Wallet buttons appear only once their keys are set. Dev first (test mode),
-production only with a go-ahead and after the LLC exists (`docs/LLC_MIGRATION.md`: Stripe is created in the LLC's name
-from day one, never on a personal account).
-
-### 16a. Stripe account + Connect (in the LLC's name)
-1. Create the Stripe account at https://dashboard.stripe.com/register **as the LLC** (legal name, EIN, LLC bank
-   account, business address, website `https://attnd.app`, MCC 7922 "Theatrical producers / ticket agencies").
-   Turn on two-step authentication. Save the login in the password manager.
-2. **Connect** → Get started → platform type **Platform** ("organizers sell, you route payments"), account type
-   **Express**, charge type **destination charges**. Fill the platform profile (Attnd sells event tickets on behalf of
-   organizers; organizers are paid out after their event). Branding: name Attnd, icon, colour `#431F86`.
-   Connect → Settings → Payouts: let the platform control payout schedules (we set each account to **manual** and
-   release after the event). **Confirm the maximum hold period for US Express accounts** (Stripe's docs said up to
-   90 days in balance; events far in the future may need a different schedule) and note it here.
-3. Test mode first: toggle **Test mode** in the dashboard, Developers → API keys: copy the **test** secret key
-   (`sk_test_…`) and publishable key (`pk_test_…`).
-4. Webhooks (test mode): Developers → Webhooks → **Add endpoint** `https://dev.attnd.app/tickets/stripe/webhook/`,
-   events: `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_succeeded`,
-   `checkout.session.async_payment_failed`, `payment_intent.succeeded`, `payment_intent.payment_failed`,
-   `charge.refunded`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`. Copy its signing
-   secret (`whsec_…`). Add a **second** endpoint, same URL, "Listen to events on **Connected accounts**", events
-   `account.updated`, `payout.paid`, `payout.failed`; copy that signing secret too.
-5. Set them on dev:
-   ```bash
-   heroku config:set -a attnd-dev STRIPE_SECRET_KEY=sk_test_PASTE STRIPE_PUBLISHABLE_KEY=pk_test_PASTE STRIPE_WEBHOOK_SECRET=whsec_PASTE STRIPE_CONNECT_WEBHOOK_SECRET=whsec_PASTE
-   ```
-6. Walkthrough on dev: Console → **Tickets demo** (staff) → Create the demo; then on the TIXDEMO event → Tickets →
-   Payouts → **Set up payouts with Stripe** and finish the test onboarding (Stripe's test data: SSN `000-00-0000`,
-   routing `110000000`, account `000123456789`). Or load the demo with that account:
-   `heroku run -a attnd-dev python manage.py load_ticket_demo --owner apbeers@icloud.com --stripe-account acct_…`.
-   Buy with card `4242 4242 4242 4242`; the demo page lists the other test cards and fast-forwards past the event.
-7. **Production (later, with a go-ahead):** repeat 3–5 in live mode with `https://attnd.app/tickets/stripe/webhook/`
-   and `-a attnd-web`. Production refuses test-mode webhooks and dev refuses live ones.
-
-### 16b. Apple Wallet pass certificate (files in `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass`)
-The Pass Type ID `pass.com.arcu.attnd.tickets` (team `GQQX4L6TE2`) and its certificate are done (Nov 15). Heroku needs
-the certificate and its private key as PEM text plus Apple's WWDR G4 intermediate. On your Mac:
+**Optional clean-up on dev:** attnd-dev's database still has the orphan `tickets_*` tables (and `django_migrations`
+rows for `tickets`) from when the app was installed. They do no harm. To drop them (dev only, never production):
 ```bash
-cd /Users/andrewbeers/Documents/Attnd/apple-wallet-pass && ls
+heroku pg:psql -a attnd-dev -c "DO \$\$ DECLARE t text; BEGIN FOR t IN SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'tickets\_%' LOOP EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(t) || ' CASCADE'; END LOOP; END \$\$; DELETE FROM django_migrations WHERE app='tickets';"
 ```
-Use the `.cer` Apple gave you and the private key made with the CSR (names below are examples: use yours). If the
-certificate is only a `.cer` (DER), convert it; if the key is encrypted, also set `APPLE_WALLET_KEY_PASSWORD`:
-```bash
-openssl x509 -inform der -in pass.cer -out pass_cert.pem
-curl -s https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer | openssl x509 -inform der -out wwdr_g4.pem
-openssl x509 -in pass_cert.pem -noout -subject -enddate
-heroku config:set -a attnd-dev APPLE_WALLET_CERT_PEM="$(cat pass_cert.pem)" APPLE_WALLET_KEY_PEM="$(cat pass.key)" APPLE_WALLET_WWDR_PEM="$(cat wwdr_g4.pem)"
-```
-The subject must say `pass.com.arcu.attnd.tickets`. Then the same three on `attnd-web` with a go-ahead. Renew the
-certificate before it expires (a year; the passes stop updating, not working). Dev passes show a "DEV" label.
-
-### 16c. Google Wallet (issuer + service account key)
-The issuer account and the `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` service account exist (Nov 15).
-1. Google Cloud console → IAM & Admin → Service accounts → `attnd-wallet` → Keys → **Add key → JSON**. Save it in the
-   password manager, then delete the download after the next step.
-2. Pay & Wallet Console → Google Wallet API: copy the **Issuer ID**. Request **publishing access** for the Event Ticket
-   class (Google reviews it; until then only test users added in the console can save passes).
-   ```bash
-   heroku config:set -a attnd-dev GOOGLE_WALLET_ISSUER_ID=3388000000PASTE GOOGLE_WALLET_SERVICE_ACCOUNT_JSON="$(cat ~/Downloads/attnd-df28e-*.json)"
-   ```
-   Dev uses the class prefix `attnd-dev`, production `attnd`. Then `-a attnd-web` with a go-ahead.
-
-### 16d. Before selling for real
-- Terms of Sale (buyers), the Organizer Agreement and the privacy policy update (buyers' name, email, purchases) —
-  spec "Policies & stores"; App Store privacy labels / Play data safety for My tickets (email) and door mode.
-- Optional CI: `E2E_ORGANIZER_EMAIL` / `E2E_ORGANIZER_PASSWORD` secrets (a non-staff organizer on dev who owns TIXDEMO)
-  for the browser test; it runs only with `CI_FULL=true`.
+The TIXDEMO event on dev, if it is still there, can be deleted in the console like any event.
 
 ## Key reference
 

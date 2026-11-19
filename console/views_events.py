@@ -14,7 +14,6 @@ from functools import wraps
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import qrcode
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -163,8 +162,7 @@ def job_detail(request, job_id):
         data = {'status': job.status, 'progress': job.progress, 'error': job.error}
         if job.status == IngestJob.DONE:
             data['redirect'] = (reverse('console:changeset', args=[job.result['changeset_id']])
-                                if job.kind in (IngestJob.KIND_REFRESH, IngestJob.KIND_TICKETS)
-                                and job.result.get('pending')
+                                if job.kind == IngestJob.KIND_REFRESH and job.result.get('pending')
                                 else reverse('console:event', args=[job.event_id]))
         return JsonResponse(data)
     if job.status == IngestJob.DONE and job.event_id and job.kind == IngestJob.KIND_CREATE:
@@ -187,8 +185,6 @@ def task_json(job):
     event_name = job.event.name if job.event_id else (job.result or {}).get('event_name') or 'your event'
     if job.kind == IngestJob.KIND_CREATE:
         title = f'Importing {event_name}' if job.status != IngestJob.DONE else f'Imported {event_name}'
-    elif job.kind == IngestJob.KIND_TICKETS:
-        title = f'Drafting tickets for {event_name}'
     elif job.trigger == IngestJob.TRIGGER_WATCH:
         title = f'Website changed: updating {event_name}'
     else:
@@ -196,7 +192,7 @@ def task_json(job):
     result, url = (job.result or {}), None
     summary = ''
     if job.status == IngestJob.DONE:
-        if job.kind in (IngestJob.KIND_REFRESH, IngestJob.KIND_TICKETS):
+        if job.kind == IngestJob.KIND_REFRESH:
             pending, applied = result.get('pending', 0), result.get('auto_applied', 0)
             summary = ', '.join(filter(None, [
                 f'{applied} change{"s" if applied != 1 else ""} applied' if applied else '',
@@ -658,11 +654,6 @@ def changeset_detail(request, changeset_id):
                 cs.save()
                 messages.info(request, 'Discarded all suggestions.')
                 return redirect('console:changesets', event_id=event.pk)
-            if (settings.TICKETS_ENABLED
-                    and cs.changes.filter(entity__in=[Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS]).exists()
-                    and not event.can_manage_team(request.user)):
-                messages.error(request, 'Only the owner and event admins can apply ticket changes.')
-                return redirect('console:changeset', changeset_id=cs.pk)
             decisions = {}
             for ch in cs.changes.filter(status=Change.PENDING):
                 if not request.POST.get(f'accept_{ch.id}'):
@@ -686,17 +677,12 @@ def changeset_detail(request, changeset_id):
 
 
 FIELD_LABELS = {'start_time': 'Starts', 'end_time': 'Ends', 'image_url': 'Image', 'latitude': 'Latitude',
-                'longitude': 'Longitude', 'snippet': 'Summary', 'timezone': 'Time zone', 'price_cents': 'Price',
-                'quantity': 'Tickets available', 'page_text': 'Ticket page intro',
-                'refund_policy_text': 'Refund policy', 'faq': 'FAQ', 'context': 'Details for the assistant'}
+                'longitude': 'Longitude', 'snippet': 'Summary', 'timezone': 'Time zone',
+                'context': 'Details for the assistant'}
 
 
 def _fmt(field, value):
     from django.utils.dateparse import parse_datetime
-    if settings.TICKETS_ENABLED:
-        from tickets.ai import format_value
-        if (money := format_value(field, value)) is not None:
-            return money
     if value is None or value == '' or value == []:
         return '—'
     if field in ('start_time', 'end_time') and isinstance(value, str):
@@ -710,9 +696,8 @@ def _fmt(field, value):
 
 def _changes_for_review(cs):
     rows = []
-    changes = cs.changes.all()
-    if not settings.TICKETS_ENABLED:  # ticketing parked: ticket drafts are ignored
-        changes = changes.exclude(entity__in=[Change.ENTITY_TICKET_TYPE, Change.ENTITY_TICKET_SETTINGS])
+    # Only the content entities: older ticket drafts (ticketing is parked on git branch parked/tickets) stay hidden.
+    changes = cs.changes.filter(entity__in=[Change.ENTITY_EVENT, Change.ENTITY_LOCATION, Change.ENTITY_ITEM])
     for ch in changes:
         fields = []
         kind = {Change.ENTITY_EVENT: 'event', Change.ENTITY_LOCATION: 'location', Change.ENTITY_ITEM: 'item'}.get(ch.entity)

@@ -44,10 +44,9 @@ What the full pipelines do (as built through Nov 15, 2026):
   production on main with listing + mapping). Gradle caches per job. ~4–5 min.
 
 ## Planned for later (with real customers)
-- Tickets' end-to-end tests (`docs/specs/tickets_spec.md`, Testing): **written, waiting for CI_FULL** —
-  `live_tests/live_tickets.py` (runs with the other live suites: read-only on production, the Stripe test-mode flow on
-  dev) and the web job "E2E · dev (tickets)" (`e2e/tickets_e2e.py`, Playwright, needs CI_FULL and the
-  `E2E_ORGANIZER_*` secrets). App suites for My tickets / offline scanning come with the apps.
+- Tickets' end-to-end tests (`live_tests/live_tickets.py`, the web job "E2E · dev (tickets)" with `e2e/tickets_e2e.py`
+  and its `E2E_ORGANIZER_*` secrets) moved with ticketing to the git branch `parked/tickets` (Nov 19, 2026); the
+  `E2E_ORGANIZER_*` secrets are unused until it comes back.
 - One end-to-end test per user-facing flow on every develop push (join, bundle, push, planner/assistant, Studio
   publish, forms, diagnostics, passkey sign-in), so the three repos are always checked together.
 - Pull-request based flow with required status checks on `main` (branch rulesets) once there are users.

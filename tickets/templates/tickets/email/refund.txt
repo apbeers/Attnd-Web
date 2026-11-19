@@ -1,3 +1,0 @@
-{% autoescape off %}We refunded {{ amount }} for order {{ order.ref }} ({{ event.name }}). It goes back to your card in 5-10 business days.
-{% if not refund.fee_cents and order.fee_cents %}The processing fee is only refunded if the event is cancelled.{% endif %}
-{% endautoescape %}

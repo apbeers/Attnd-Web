@@ -1,5 +1,0 @@
-{% extends "tickets/email/base.html" %}{% block content %}
-<h1 style="font-size:22px;margin:0 0 8px">A ticket for {{ event.name }}</h1>
-<p style="color:#5f6672">{{ when }}{% if event.address %}<br>{{ event.address }}{% endif %}</p>
-<p>{{ from_name|default:"Someone" }} sent you a <strong>{{ ticket.ticket_type.name }}</strong> ticket ({{ ticket.display_code }}).</p>
-{% include "tickets/email/_wallet.html" %}{% endblock %}

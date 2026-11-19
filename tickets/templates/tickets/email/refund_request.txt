@@ -1,5 +1,0 @@
-{% autoescape off %}{{ order.email }} asked for a refund of order {{ order.ref }} ({{ event.name }}).
-{{ req.reason }}
-
-Review it: {{ url }}
-{% endautoescape %}

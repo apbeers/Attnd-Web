@@ -1,2 +1,0 @@
-{% extends "tickets/email/base.html" %}{% block content %}
-<p>The buyer of order <strong>{{ order.ref }}</strong> ({{ event.name }}, {{ order.email }}) disputed the payment with their bank. Stripe will email instructions for responding. If the dispute is lost, the tickets stop working automatically.</p>{% endblock %}

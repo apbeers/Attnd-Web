@@ -1,7 +1,0 @@
-{% load tickets_tags %}<table class="tix-totals">
-  {% for item in items %}<tr><td>{{ item.quantity }} × {{ item.ticket_type.name }}</td><td>{{ item.line_cents|cents:order.currency }}</td></tr>{% endfor %}
-  {% if order.discount_cents %}<tr><td>Promo {{ order.promo.code }}</td><td>included</td></tr>{% endif %}
-  {% if order.fee_cents %}<tr><td>Processing fee</td><td>{{ fee }}</td></tr>{% endif %}
-  <tr class="tix-total"><td>Total</td><td>{{ total }}</td></tr>
-  {% if order.refunded_cents or order.fee_refunded_cents %}<tr><td>Refunded</td><td>{{ order.refunded_cents|add:order.fee_refunded_cents|cents:order.currency }}</td></tr>{% endif %}
-</table>

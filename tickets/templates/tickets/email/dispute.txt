@@ -1,2 +1,0 @@
-{% autoescape off %}The buyer of order {{ order.ref }} ({{ event.name }}, {{ order.email }}) disputed the payment. If the dispute is lost, the tickets stop working automatically.
-{% endautoescape %}

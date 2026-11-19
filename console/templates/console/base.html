@@ -17,8 +17,7 @@
   <div class="topbar__actions">
     <a class="button button--primary button--small" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>
     {% if user.is_staff or user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'diagnostics:overview' %}">{% icon "gauge" %} Diagnostics</a>
-    <a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>{% if TICKETS_ENABLED %}
-    <a class="button button--secondary button--small" href="{% url 'tickets_console:demo' %}">{% icon "ticket" %} Tickets demo</a>{% endif %}{% endif %}
+    <a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>{% endif %}
     {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
     <a class="button button--secondary button--small" href="{% url 'admin:index' %}">Admin</a>{% endif %}
     <a class="button button--ghost button--small muted topbar__account" href="{% url 'console:account' %}" title="Account">{{ user.email }}</a>
@@ -62,8 +61,7 @@
         <a class="sidenav__link" {% if section == 'schedule' %}aria-current="page"{% endif %} href="{% url 'console:schedule' event.id %}">{% icon "calendar" %}Schedule</a>
         <a class="sidenav__link" {% if section == 'notifications' %}aria-current="page"{% endif %} href="{% url 'console:notifications' event.id %}">{% icon "bell" %}Notifications</a>
         <a class="sidenav__link" {% if section == 'display' %}aria-current="page"{% endif %} href="{% url 'console:display' event.id %}">{% icon "phone" %}App layout</a>
-        {% if studio_access %}<a class="sidenav__link" {% if section == 'studio' %}aria-current="page"{% endif %} href="{% url 'studio:editor' event.id %}">{% icon "brush" %}Studio <span class="badge badge--neutral badge--pill">Beta</span></a>
-        {% if TICKETS_ENABLED %}<a class="sidenav__link" {% if section == 'tickets' %}aria-current="page"{% endif %} href="{% url 'tickets_console:home' event.id %}">{% icon "ticket" %}Tickets <span class="badge badge--neutral badge--pill">Beta</span></a>{% endif %}{% endif %}
+        {% if studio_access %}<a class="sidenav__link" {% if section == 'studio' %}aria-current="page"{% endif %} href="{% url 'studio:editor' event.id %}">{% icon "brush" %}Studio <span class="badge badge--neutral badge--pill">Beta</span></a>{% endif %}
         <a class="sidenav__link" {% if section == 'changes' %}aria-current="page"{% endif %} href="{% url 'console:changesets' event.id %}">{% icon "stars" %}AI updates
           {% if pending_changes %}<span class="badge badge--primary badge--pill">{{ pending_changes }}</span>{% endif %}</a>
         <a class="sidenav__link" {% if section == 'usage' %}aria-current="page"{% endif %} href="{% url 'console:usage' event.id %}">{% icon "chart" %}Usage</a>

@@ -1,5 +1,0 @@
-{% autoescape off %}{{ event.name }} is cancelled.
-{% if reason %}{{ reason }}
-{% endif %}
-Every ticket is refunded in full, processing fee included. Refunds reach your card in 5-10 business days.
-{% endautoescape %}

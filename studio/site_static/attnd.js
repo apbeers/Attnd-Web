@@ -60,7 +60,7 @@
   function empty(node, cls, text) { node.replaceChildren(el('p', cls + '__empty', text)); }
 
   // ---- default styles (zero specificity via :where, so the site's CSS always wins) ----
-  var css = ':where(attnd-schedule,attnd-lineup,attnd-locations,attnd-map,attnd-updates,attnd-countdown,attnd-app-badge,attnd-tickets){display:block;font-family:var(--attnd-font,inherit);color:var(--attnd-text,inherit)}' +
+  var css = ':where(attnd-schedule,attnd-lineup,attnd-locations,attnd-map,attnd-updates,attnd-countdown,attnd-app-badge){display:block;font-family:var(--attnd-font,inherit);color:var(--attnd-text,inherit)}' +
     ':where(attnd-event){display:inline}' +
     ':where(.attnd-schedule__day){margin:1.5em 0 .5em;font-size:1.25em}' +
     ':where(.attnd-schedule__list,.attnd-updates__list,.attnd-locations__list){list-style:none;margin:0;padding:0}' +
@@ -86,15 +86,6 @@
     ':where(.attnd-app-badge){display:flex;flex-wrap:wrap;gap:1em;align-items:center}' +
     ':where(.attnd-app-badge__store){display:inline-flex;align-items:center;gap:.5em;padding:.7em 1.2em;border-radius:999px;background:var(--attnd-text,#111);color:var(--attnd-surface,#fff);font-weight:700;text-decoration:none;min-height:44px}' +
     ':where(.attnd-app-badge__qr){width:120px;height:120px;background:#fff;padding:6px;border-radius:8px}' +
-    ':where(attnd-tickets){display:block}' +
-    ':where(.attnd-tickets__list){list-style:none;margin:0 0 1em;padding:0}' +
-    ':where(.attnd-tickets__type){display:grid;grid-template-columns:1fr auto;gap:.2em 1em;padding:.75em 0;border-bottom:1px solid var(--attnd-border,rgba(127,127,127,.3))}' +
-    ':where(.attnd-tickets__name,.attnd-tickets__price){font-weight:700}' +
-    ':where(.attnd-tickets__desc,.attnd-tickets__note){grid-column:1/-1;color:var(--attnd-muted,inherit);opacity:.85}' +
-    ':where(.attnd-tickets__type--sold_out){opacity:.55}' +
-    ':where(.attnd-tickets__button){display:inline-flex;align-items:center;min-height:44px;padding:.7em 1.4em;border-radius:999px;background:var(--attnd-accent,#431f86);color:#fff;font-weight:700;text-decoration:none}' +
-    ':where(.attnd-tickets__button--off){opacity:.6;pointer-events:none}' +
-    ':where(.attnd-tickets__fine){display:block;margin-top:.5em;font-size:.85em;opacity:.8}' +
     ':where(.attnd-app-badge__code){font-family:ui-monospace,monospace;font-weight:700;letter-spacing:.08em}';
   var style = document.createElement('style');
   style.id = 'attnd-elements';
@@ -258,35 +249,6 @@
     tick();
     clearInterval(node._timer);
     node._timer = setInterval(tick, 30000);
-  });
-
-  // <attnd-tickets [button="Get tickets"] [compact]>: ticket types with all-in prices (fees included, as the
-  // FTC rule asks) and a link to the event's ticket page on attnd.app. Buying happens there, never on the site.
-  define('attnd-tickets', function (node, d) {
-    var t = d.tickets;
-    if (!t) { node.replaceChildren(); return; }
-    var out = [];
-    if (!node.hasAttribute('compact')) {
-      var ul = el('ul', 'attnd-tickets__list');
-      (t.types || []).forEach(function (type) {
-        if (type.add_on && node.hasAttribute('hide-add-ons')) return;
-        var li = el('li', 'attnd-tickets__type' + (type.state !== 'open' ? ' attnd-tickets__type--' + type.state : ''));
-        li.append(el('span', 'attnd-tickets__name', type.name), el('span', 'attnd-tickets__price', type.price_text));
-        if (type.description) li.append(el('span', 'attnd-tickets__desc', type.description));
-        var note = type.state === 'sold_out' ? 'Sold out' : type.state === 'before' ? 'Not on sale yet' :
-          type.state === 'after' ? 'Sales ended' : (type.remaining ? 'Only ' + type.remaining + ' left' : '');
-        if (note) li.append(el('span', 'attnd-tickets__note', note));
-        ul.append(li);
-      });
-      out.push(ul);
-    }
-    var label = t.on_sale ? attr(node, 'button', 'Get tickets') : (t.state === 'sold_out' ? 'Sold out' :
-      t.state === 'cancelled' ? 'Event cancelled' : t.state === 'ended' ? 'Event ended' : 'Tickets');
-    var a = el('a', 'attnd-tickets__button' + (t.on_sale ? '' : ' attnd-tickets__button--off'), label);
-    a.href = t.url; a.rel = 'noopener';
-    out.push(a);
-    if (t.on_sale && t.price_text) out.push(el('span', 'attnd-tickets__fine', t.price_text + ' · prices include fees'));
-    node.replaceChildren.apply(node, out);
   });
 
   define('attnd-app-badge', function (node, d) {
