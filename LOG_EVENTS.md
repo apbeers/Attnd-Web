@@ -91,6 +91,7 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `lifecycle.deep_link` | `lifecycle` | info | **`kind`** (`join`/`open`/`live`/`referrer`/`shortcut`), `target` (template, no code) | the app was opened by a link |
 | `lifecycle.event.joined` | `lifecycle` | notice | **`event_id`**, `via` (`qr`/`link`/`search`/`nearby`/`referrer`/`rejoin`) | an event was joined |
 | `lifecycle.event.left` | `lifecycle` | notice | **`event_id`**, `reason` (`user`/`switch`/`404`) | the event was left or forgotten |
+| `lifecycle.server_switch` | `lifecycle` | notice | `to` (`production`/`dev`) | iOS TestFlight/Xcode installs: Options → Test server chose another server for the next launch |
 
 ### net
 
