@@ -32,7 +32,7 @@ deviceIntegrity.deviceRecognitionVerdict  contains MEETS_DEVICE_INTEGRITY (not r
 import base64
 import logging
 
-import requests as http_requests
+import httpx
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ def verify_integrity_token(
     url = _DECODE_URL.format(package_name=pkg)
 
     try:
-        resp = http_requests.post(
+        resp = httpx.post(
             url,
             json={'integrity_token': token},
             headers={
@@ -101,7 +101,7 @@ def verify_integrity_token(
         )
         resp.raise_for_status()
         data = resp.json()
-    except http_requests.HTTPError as exc:
+    except httpx.HTTPStatusError as exc:
         raise AndroidAttestationError(
             f"Google Play Integrity API request failed: {exc.response.status_code} {exc.response.text}"
         ) from exc
