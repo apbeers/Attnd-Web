@@ -77,7 +77,8 @@ Hidden locations and items are already filtered out. `locations` are already in 
 ```json
 { "device_id": "uuid", "platform": "ios" | "android", "push_token": "…", "app_version": "2.0.0" }
 ```
-→ `{ "status": "ok", "content_version": 15 }`. Only `device_id` is required.
+→ `{ "status": "ok", "content_version": 15 }`. Only `device_id` is required. iOS also sends `app_clip` (API-019, see
+`POST devices/`).
 
 ### `POST events/<id>/leave/`
 ```json
@@ -107,6 +108,11 @@ the Live Activity the app is running for the joined event.
 - The server clears it by itself when the device leaves the event or joins another one (`join/` may carry the new
   token in the same body), and when APNs reports it invalid (`410`, `BadDeviceToken`).
 - It is only used for urgent announcements (see Push notifications). Android never sends it.
+
+**`app_clip` (API-019, iOS, optional boolean):** `true` when the request comes from the App Clip (bundle id
+`com.arcu.Attnd.clip`), `false` from the app. Accepted in `join/` and `devices/` bodies. Leaving the key out (or sending
+anything but a boolean) keeps the stored value; new devices default to `false`. The server uses it to push to the
+device on the right APNs topic (see Push notifications). Android never sends it.
 
 ---
 
@@ -615,6 +621,9 @@ The server sends pushes through APNs (iOS) and FCM HTTP v1 (Android) to devices 
 - **Urgent organizer notifications** (API-011) to **every** such device, `subscribed` or not, at high priority, plus
   every iOS Live Activity registered with `live_activity_token`.
 - **Content updated** (silent) to **every** such device, `subscribed` or not (API-007).
+- **APNs topic (API-019):** iOS devices registered with `app_clip: true` get every push on the App Clip's topic
+  (`com.arcu.Attnd.clip`; Live Activity updates `com.arcu.Attnd.clip.push-type.liveactivity`), the app's on the app's
+  bundle id. The payloads are the same.
 
 ### Payloads
 - **Organizer notification:**

@@ -374,6 +374,9 @@ class Device(models.Model):
     # API-011: ActivityKit push token (hex) of the iOS Live Activity for the joined event. Cleared on leave, on
     # joining another event and when APNs reports it invalid.
     live_activity_token = models.CharField(max_length=512, blank=True)
+    # API-019: the iOS App Clip (its own bundle id, so its pushes need the clip's APNs topic). Set from the
+    # `app_clip` boolean in join/ and devices/ bodies; a body without it keeps the stored value.
+    app_clip = models.BooleanField(default=False)
     app_version = models.CharField(max_length=32, blank=True)
     last_seen = models.DateTimeField(null=True, blank=True)
     # Newest API version this device has called (1 = legacy app builds). Used to decide when an old

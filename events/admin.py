@@ -216,8 +216,8 @@ class NotificationAdmin(UserScopedAdminMixin, admin.ModelAdmin):
 
 
 class DeviceAdmin(admin.ModelAdmin):
-    list_display = ['id', 'event', 'platform', 'subscribed']
-    list_filter = ['platform', 'subscribed', 'event']
+    list_display = ['id', 'event', 'platform', 'app_clip', 'subscribed']
+    list_filter = ['platform', 'app_clip', 'subscribed', 'event']
     search_fields = ['id']
 
     def has_module_permission(self, request):

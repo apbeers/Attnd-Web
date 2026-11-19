@@ -66,6 +66,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-016 | Attnd Studio: `event.website_url` (the event's Studio-hosted website, or null) in every v2 event object | additive (new key) | ✅ dev · ⬜ prod | ✅ | ✅ |
 | API-017 | **Parked (Nov 19, 2026): `TICKETS_ENABLED` off, keys always `null`, endpoints 404.** Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | ⏸ parked (built; off) | ✅ | ⬜ (later) |
 | API-018 | Rich context for the apps' on-device assistant: `event.context`, `locations[].context`, `schedule[].context` in `bundle/` (about, FAQ, amenities, policies, getting there, weather plan, menus, hours, age limits, performers with bios and genres, links); AI import/refresh extracts it, console "Details for the assistant" edits it (locks), DEMO has it | additive (new keys, `bundle/` only) | ✅ dev (5beae38) · ⬜ prod | ✅ (173575f; tools, search, detail screens) | ⬜ (later) |
+| API-019 | App Clip push topic: optional `app_clip` boolean in `POST events/<id>/join/` and `POST devices/` bodies; iOS sends `true` from the App Clip; the server sends clip devices' pushes (alerts, urgent, silent `content_updated`, Live Activity updates) on the clip's APNs topic | additive (new optional request field) | ✅ dev (WEBHASH) · ⬜ prod | ✅ (c07ec37, local, not pushed yet) | n/a (no App Clip) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -73,6 +74,23 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-019: App Clip devices get pushes on the clip's APNs topic
+**Why:** the iOS App Clip (`com.arcu.Attnd.clip`) is now the same as the app: it registers for APNs and starts Live
+Activities. APNs needs the token's own bundle id as `apns-topic`, so the server must know which devices are the clip.
+The team-wide APNs auth key works for both topics. Additive: one new optional request field.
+**Server (attnd-web):**
+- `Device.app_clip` (migration 0038, default `false`), set from `app_clip` in `join/` and `devices/` bodies only when it
+  is a boolean (missing or anything else keeps the stored value).
+- `events/push.py`: iOS tokens are split into the app's and the clip's (`ios_token_groups`) and sent per topic
+  (`send_apns_groups`, `apns_topic`): app → `APNS_TOPIC`, clip → `APNS_CLIP_TOPIC` (default `<APNS_TOPIC>.clip`), Live
+  Activity tokens + `.push-type.liveactivity`. Every APNs path: organizer alerts, urgent alerts, silent
+  `content_updated`, Live Activity urgent updates. Invalid tokens are forgotten per group as before.
+
+**iOS:** send `"app_clip": true` in `join/` and `devices/` bodies from the App Clip and `false` from the app (runtime
+check: the bundle id ends in `.clip`).
+
+**Android:** nothing (no App Clip); never send the key.
 
 ### API-018: rich event context for the on-device assistant
 **Why:** the apps' assistants (Apple's Foundation Models, Gemini Nano) answer questions fully offline, so the bundle

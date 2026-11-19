@@ -113,8 +113,8 @@ class CiKeyTests(TestCase):
         Device.objects.filter(id='ci-ios-a').update(event=self.demo, push_token='ci-token')
         self.assertFalse(Device.objects.real().filter(id='ci-ios-a').exists())
         from events.push import _recipients
-        ios, android = _recipients(self.demo, silent=True)
-        self.assertNotIn('ci-token', ios + android)
+        (ios_app, ios_clip), android = _recipients(self.demo, silent=True)
+        self.assertNotIn('ci-token', ios_app + ios_clip + android)
 
     # -- refused ---------------------------------------------------------------------------------
 

@@ -567,6 +567,7 @@ APNS_AUTH_KEY = os.getenv('APNS_AUTH_KEY', '')
 APNS_KEY_ID = os.getenv('APNS_KEY_ID', '')
 APNS_TEAM_ID = os.getenv('APNS_TEAM_ID', '')
 APNS_TOPIC = os.getenv('APNS_TOPIC', '')
+APNS_CLIP_TOPIC = os.getenv('APNS_CLIP_TOPIC', '')  # API-019: default '<APNS_TOPIC>.clip'
 APNS_USE_SANDBOX = bool(os.getenv('APNS_USE_SANDBOX'))
 FCM_PROJECT_ID = os.getenv('FCM_PROJECT_ID', '')
 FCM_SERVICE_ACCOUNT_JSON = os.getenv('FCM_SERVICE_ACCOUNT_JSON', '')

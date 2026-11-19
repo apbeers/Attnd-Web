@@ -7,6 +7,7 @@ Configuration (all optional; a platform with no credentials is skipped and logge
     APNS_KEY_ID        key ID of that .p8 key
     APNS_TEAM_ID       defaults to APPLE_TEAM_ID
     APNS_TOPIC         app bundle ID, defaults to APPLE_APP_BUNDLE_ID
+    APNS_CLIP_TOPIC    the App Clip's bundle ID (API-019), defaults to "<APNS_TOPIC>.clip"
     APNS_USE_SANDBOX   truthy → api.sandbox.push.apple.com (Xcode / TestFlight dev builds)
 
     FCM_PROJECT_ID              Firebase project ID
@@ -115,6 +116,41 @@ def send_apns(tokens, payload, push_type='alert', priority='10', collapse_id=Non
     return result
 
 
+def apns_topic(cfg, app_clip=False, live_activity=False):
+    """API-019: the ``apns-topic`` for a token: the app's bundle id, or the App Clip's (``APNS_CLIP_TOPIC``, default
+    ``<app topic>.clip``); Live Activity tokens add ``.push-type.liveactivity``. None without an APNs config."""
+    if cfg is None:
+        return None
+    topic = cfg['topic']
+    if app_clip:
+        topic = getattr(settings, 'APNS_CLIP_TOPIC', '') or f'{topic}.clip'
+    return f'{topic}.push-type.liveactivity' if live_activity else topic
+
+
+def ios_token_groups(devices, field='push_token'):
+    """API-019: the iOS devices' tokens (``field``) split by bundle: ``(app tokens, App Clip tokens)``."""
+    app, clip = [], []
+    for d in devices:
+        token = getattr(d, field)
+        if d.platform == 'ios' and token:
+            (clip if d.app_clip else app).append(token)
+    return app, clip
+
+
+def send_apns_groups(groups, payload, live_activity=False, **kwargs):
+    """Send one payload to ``(app tokens, App Clip tokens)``, each on its own topic. The app's group is always
+    sent (so an unconfigured APNs still counts it as skipped); the clip's only when it has tokens."""
+    cfg = _apns_config()
+    app, clip = groups
+    result = send_apns(app, payload, topic=apns_topic(cfg, live_activity=live_activity), **kwargs)
+    if clip:
+        r = send_apns(clip, payload, topic=apns_topic(cfg, app_clip=True, live_activity=live_activity), **kwargs)
+        result = SendResult(delivered=result.delivered + r.delivered, failed=result.failed + r.failed,
+                            skipped=result.skipped + r.skipped,
+                            invalid_tokens=result.invalid_tokens + r.invalid_tokens)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # FCM
 # ---------------------------------------------------------------------------
@@ -195,14 +231,12 @@ CONTENT_PUSH_TTL = 3600
 
 
 def _recipients(event, silent=False):
-    """Push tokens per platform. Visible alerts go only to devices that opted in (``subscribed``);
-    silent ``content_updated`` pushes go to every device in the event with a token (API-007)."""
-    devices = Device.objects.real().filter(event=event).exclude(push_token='')
-    if not silent:
-        devices = devices.filter(subscribed=True)
-    ios = [d.push_token for d in devices if d.platform == 'ios']
+    """Push tokens: ``((iOS app, iOS App Clip), Android)`` (API-019). Visible alerts go only to devices that opted
+    in (``subscribed``); silent ``content_updated`` pushes go to every device in the event with a token (API-007)."""
+    devices = list(Device.objects.real().filter(event=event).exclude(push_token='')
+                   .filter(**({} if silent else {'subscribed': True})))
     android = [d.push_token for d in devices if d.platform == 'android']
-    return ios, android
+    return ios_token_groups(devices), android
 
 
 def _forget(tokens):
@@ -223,7 +257,7 @@ def deliver(event, alert=None, data=None, silent=False, urgent=False):
     if urgent:
         apns_payload = {'aps': {'alert': alert, 'sound': 'default', 'interruption-level': 'time-sensitive',
                                 'relevance-score': 1.0}, **data}
-        r1 = send_apns(ios, apns_payload, collapse_id=f"notification-{data.get('notification_id', '')}",
+        r1 = send_apns_groups(ios, apns_payload, collapse_id=f"notification-{data.get('notification_id', '')}",
                        expiration=time.time() + URGENT_TTL)
         # Data only, so the app picks its urgent channel even in the background. Builds before API-011 show
         # data messages too: they read title/body from the data when there is no notification block.
@@ -231,13 +265,13 @@ def deliver(event, alert=None, data=None, silent=False, urgent=False):
                       priority='high', ttl=URGENT_TTL)
     elif silent:
         apns_payload = {'aps': {'content-available': 1}, **data}
-        r1 = send_apns(ios, apns_payload, push_type='background', priority='5',
+        r1 = send_apns_groups(ios, apns_payload, push_type='background', priority='5',
                        collapse_id=f'content-{event.id}', expiration=time.time() + CONTENT_PUSH_TTL)
         r2 = send_fcm(android, data, priority='normal', collapse_key=f'content_{event.id}',
                       ttl=CONTENT_PUSH_TTL)
     else:
         apns_payload = {'aps': {'alert': alert, 'sound': 'default'}, **data}
-        r1 = send_apns(ios, apns_payload)
+        r1 = send_apns_groups(ios, apns_payload)
         r2 = send_fcm(android, data, notification=alert)
 
     _forget(r1.invalid_tokens + r2.invalid_tokens)
@@ -318,14 +352,12 @@ def live_activity_payload(notification, now):
 def send_live_activity_urgent(event, notification, now=None):
     """Send the urgent announcement to every Live Activity token registered in the event (iOS)."""
     now = now or timezone.now()
-    tokens = list(Device.objects.real().filter(event=event, platform='ios').exclude(live_activity_token='')
-                  .values_list('live_activity_token', flat=True))
-    if not tokens:
+    groups = ios_token_groups(Device.objects.real().filter(event=event, platform='ios').exclude(live_activity_token=''),
+                              field='live_activity_token')
+    if not any(groups):
         return SendResult()
-    cfg = _apns_config()
-    topic = f"{cfg['topic']}.push-type.liveactivity" if cfg else None
-    result = send_apns(tokens, live_activity_payload(notification, now), push_type='liveactivity', priority='10',
-                       expiration=now.timestamp() + URGENT_TTL, topic=topic)
+    result = send_apns_groups(groups, live_activity_payload(notification, now), live_activity=True,
+                              push_type='liveactivity', priority='10', expiration=now.timestamp() + URGENT_TTL)
     if result.invalid_tokens:
         Device.objects.filter(live_activity_token__in=result.invalid_tokens).update(live_activity_token='')
     return result

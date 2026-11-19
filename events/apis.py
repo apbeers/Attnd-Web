@@ -418,9 +418,10 @@ def clean_live_activity_token(value):
 
 
 def register_device(device_id, event=..., platform='', push_token=None, app_version=None,
-                    subscribed=None, api_version=None, live_activity_token=..., **_ignored):
+                    subscribed=None, api_version=None, live_activity_token=..., app_clip=None, **_ignored):
     """Create or update a device. ``event=...`` leaves the joined event unchanged; so does a missing
-    ``live_activity_token`` (``None``/``""`` clear it)."""
+    ``live_activity_token`` (``None``/``""`` clear it). ``app_clip`` (API-019) is stored only when it is a
+    boolean (missing or anything else keeps the stored value)."""
     device_id = str(device_id)[:128]
     device, created = Device.objects.get_or_create(id=device_id, defaults={'platform': platform or ''})
     now = timezone.now()
@@ -440,6 +441,8 @@ def register_device(device_id, event=..., platform='', push_token=None, app_vers
         device.app_version = app_version[:32]
     if isinstance(subscribed, bool):
         device.subscribed = subscribed
+    if isinstance(app_clip, bool):
+        device.app_clip = app_clip
     if api_version:
         device.api_version = api_version
     if live_activity_token is not ...:
