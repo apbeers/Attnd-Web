@@ -7,7 +7,6 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.functions import Upper
-from django.urls import reverse
 from django.utils import timezone as dj_tz
 
 
@@ -201,9 +200,6 @@ class Event(CoordinatesMixin, models.Model):
             models.Index(Upper('name'), name='event_name_upper_idx'),
         ]
 
-    def get_absolute_url(self):
-        return reverse('events:get_single_event', args=[self.id])
-
     def __str__(self):
         return self.name
 
@@ -252,9 +248,6 @@ class Location(CoordinatesMixin, models.Model):
         if self.image:
             return self.image.url
         return self.image_url or None
-
-    def get_absolute_url(self):
-        return reverse('events:get_single_location', args=[self.event.id, self.id])
 
     def __str__(self):
         return self.name
@@ -342,9 +335,6 @@ class Notification(models.Model):
             from django.core.exceptions import ValidationError
             raise ValidationError({'send_time': f'Pick a time on a {SEND_SLOT_MINUTES}-minute mark '
                                                 f'(e.g. 6:00, 6:10, 6:20) — that is when scheduled updates go out.'})
-
-    def get_absolute_url(self):
-        return reverse('events:get_single_notification', args=[self.event.id, self.id])
 
     def __str__(self):
         return self.title

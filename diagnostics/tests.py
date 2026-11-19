@@ -436,7 +436,7 @@ class RequestLogTests(TestCase):
         from django.urls import resolve
         cases = {
             f'/api/v2/events/{self.event.id}/join/': '/api/v2/events/{id}/join/',
-            '/api/v1/events/nearby_events/32.7/-97.3/': '/api/v1/events/nearby_events/{latitude}/{longitude}/',
+            '/api/v1/attest/nonce/': '/api/v1/attest/nonce/',
             '/api/v7/events/': '/api/v{version}/*',
             '/api/diagnostics/symbolicate/5/': '/api/diagnostics/symbolicate/{id}/',
         }

@@ -19,7 +19,7 @@ Attnd is an event attendance app. This repo is the single backend for both mobil
 - **[attnd-ios](https://github.com/apbeers/Attnd-iOS)** — SwiftUI app
 - **[attnd-android](https://github.com/apbeers/Attnd-Android)** — Kotlin/Compose app
 
-Current mobile apps use **API v2** (`/api/v2/`, see `API_V2.md`): one `bundle/` request returns the event, locations, schedule, notifications and the server-resolved **display config**. `/api/v1/events/` stays for older app builds (shapes unchanged; drafts, hidden rows and location-less items are filtered out for them). There is no Django REST Framework — all API views are plain Django views returning `JsonResponse`.
+Current mobile apps use **API v2** (`/api/v2/`, see `API_V2.md`): one `bundle/` request returns the event, locations, schedule, notifications and the server-resolved **display config**. The v1 events API (`/api/v1/events/`) is retired (410, see API v1 below); `/api/v1/attest/` stays. There is no Django REST Framework — all API views are plain Django views returning `JsonResponse`.
 
 ## iPhone Duo
 
@@ -325,26 +325,12 @@ All API views mix in `ApiKeyRequired` (`events/apis.py`). Three accepted token f
 
 On 401 the mobile clients invalidate their stored JWT and re-attest before retrying once.
 
-## Key API Endpoints (v1 — legacy; see `API_V2.md` for v2)
+## API v1 (retired)
 
-Base: `https://attnd.app/api/v1/events/`
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `nearby_events/<lat>/<lng>/` | Events near coordinates (±3–7 day window, relevance sorted) |
-| GET | `lookup/?q=<query>` | Exact match by name or code (ignores public flag) |
-| GET | `event_by_code_or_name/?data=<query>` | Fuzzy match, public events only |
-| GET | `<id>/` | Single event |
-| GET | `<id>/locations/` | All locations with nested scheduled_items |
-| GET | `<id>/locations/<loc_id>/` | Single location |
-| GET | `<id>/schedule/` | All scheduled items sorted by start_time |
-| GET | `<id>/notifications/` | Sent notifications, newest first |
-| POST | `<id>/join/<device_id>/` | Register device; body: `{"platform": "ios"\|"android"}` |
-| POST | `<id>/leave/<device_id>/` | Unregister device |
-| POST | `pushnotifications/subscribe/<device_id>/` | Opt into push |
-| POST | `pushnotifications/unsubscribe/<device_id>/` | Opt out of push |
-
-Full reference: `API.md`
+The v1 events API (`/api/v1/events/…`) was retired on Nov 19, 2026 (API-020): `SUPPORTED_API_VERSIONS` defaults to
+`2`, so every `/api/v1/events/…` path answers `410` `update_required` (`events.app_status.retired_api_view`). Only
+`/api/v1/attest/` (nonce, iOS, Android) stays, because both current apps attest there. `Device.api_version = 1` rows
+remain from older builds.
 
 ## Attestation (`attestation/`)
 
@@ -432,7 +418,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `APP_MIN_VERSION_IOS` / `_ANDROID` | No | Older builds get the blocking update screen (API-003) |
 | `APP_LATEST_VERSION_IOS` / `_ANDROID` | No | Older builds get a dismissible "update available" banner |
 | `APP_UPDATE_MESSAGE` | No | Custom text for the update screen and banner |
-| `SUPPORTED_API_VERSIONS` | No | Default `1,2`; apps on other versions are told to update and `/api/vN/` returns 410 |
+| `SUPPORTED_API_VERSIONS` | No | Default `2` (v1 retired, API-020); apps on other versions are told to update and `/api/vN/` returns 410 (`/api/v1/attest/` is unaffected) |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Prod | Google service account for Play Integrity |
 | `ATTESTATION_JWT_SECRET` | Prod | Secret for signing attestation JWTs |
 | `ATTESTATION_JWT_TTL_HOURS` | No | JWT lifetime in hours, default 24 |

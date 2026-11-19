@@ -228,7 +228,7 @@ class ApiKeyAuthTests(TestCase):
 
     def test_static_api_key_accepted(self):
         resp = self.client.get(
-            '/api/v1/events/lookup/?q=test',
+            '/api/v2/events/lookup/?q=test',
             **self._auth_header('test-static-api-key'),
         )
         # 404 is fine — we just want to confirm it passed auth
@@ -237,18 +237,18 @@ class ApiKeyAuthTests(TestCase):
     def test_attestation_jwt_accepted(self):
         token = tokens.issue(device_key='device-abc', platform='ios')
         resp = self.client.get(
-            '/api/v1/events/lookup/?q=test',
+            '/api/v2/events/lookup/?q=test',
             **self._auth_header(token),
         )
         self.assertNotEqual(resp.status_code, 401)
 
     def test_no_auth_rejected(self):
-        resp = self.client.get('/api/v1/events/lookup/?q=test')
+        resp = self.client.get('/api/v2/events/lookup/?q=test')
         self.assertEqual(resp.status_code, 401)
 
     def test_wrong_key_rejected(self):
         resp = self.client.get(
-            '/api/v1/events/lookup/?q=test',
+            '/api/v2/events/lookup/?q=test',
             **self._auth_header('wrong-key'),
         )
         self.assertEqual(resp.status_code, 401)

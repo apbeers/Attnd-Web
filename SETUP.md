@@ -102,9 +102,9 @@ The old key is public in iOS git history. The server already rejects it, but thi
 
 **Check the new key works:**
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(heroku config:get API_KEY -a attnd-web)" "https://attnd.app/api/v1/events/lookup/?q=FWFM2026"
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(heroku config:get API_KEY -a attnd-web)" "https://attnd.app/api/v2/events/lookup/?q=FWFM2026"
 ```
-- `200` or `404` means the key works. A 404 just means that test event doesn't exist in production.
+- `200` or `404` means the key works (FWFM2026 is one of the App Review sample events).
 - `401` means the key didn't take.
 
 Requests with the old key now get `401`. Once this release is on `main`, the server also blocks the old key permanently by its hash.

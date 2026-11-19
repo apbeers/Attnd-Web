@@ -42,7 +42,7 @@ Avoid them. There is almost always an additive alternative: add the new key next
    When v2 devices drop to near zero, or after a notice period you're happy with, remove v2 in its own logged entry. Until then v2 stays fully working.
 4. If some devices never update, a minimum-version prompt (proposed in API-003) lets the server tell old builds to update instead of breaking silently.
 
-**v1** (`API.md`) is the legacy API for app builds released before v2. It is frozen, and its devices are recorded as `api_version = 1`. Retire it the same way, once `api_usage` shows no v1 devices.
+**v1** was the legacy API for app builds released before v2. Its events API was retired on Nov 19, 2026 (API-020: `410` `update_required`); `/api/v1/attest/` stays because both current apps use it.
 
 ## Tracker
 
@@ -67,6 +67,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-017 | **Parked (Nov 19, 2026): `TICKETS_ENABLED` off, keys always `null`, endpoints 404.** Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | ⏸ parked (built; off) | ✅ | ⬜ (later) |
 | API-018 | Rich context for the apps' on-device assistant: `event.context`, `locations[].context`, `schedule[].context` in `bundle/` (about, FAQ, amenities, policies, getting there, weather plan, menus, hours, age limits, performers with bios and genres, links); AI import/refresh extracts it, console "Details for the assistant" edits it (locks), DEMO has it | additive (new keys, `bundle/` only) | ✅ dev (5beae38) · ⬜ prod | ✅ (173575f; tools, search, detail screens) | ⬜ (later) |
 | API-019 | App Clip push topic: optional `app_clip` boolean in `POST events/<id>/join/` and `POST devices/` bodies; iOS sends `true` from the App Clip; the server sends clip devices' pushes (alerts, urgent, silent `content_updated`, Live Activity updates) on the clip's APNs topic | additive (new optional request field) | ✅ dev (4ff0467) · ⬜ prod | ✅ (c07ec37, local, not pushed yet) | n/a (no App Clip) |
+| API-020 | Retire the v1 events API: `SUPPORTED_API_VERSIONS` default `2`, `/api/v1/events/…` → `410` `update_required`; `/api/v1/attest/` unchanged | breaking for v1 only (no current app uses v1) | ✅ dev · ⬜ prod (needs a release + owner go-ahead) | — (uses v2) | — (uses v2) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -74,6 +75,18 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-020: API v1 events API retired
+**Why:** no shipped app calls `/api/v1/events/` any more (owner, Nov 19, 2026: "nobody uses it"); both apps use v2 and
+attest at `/api/v1/attest/`.
+**Server (attnd-web):** the v1 routes (`events/urls.py`), views and serializers are gone, with `API.md` and the v1 tests;
+`SUPPORTED_API_VERSIONS` defaults to `2`, so every `/api/v1/events/…` path answers `410` `{"error": "update_required",
+"update_url": …}` through `retired_api_view` (tests in `events/tests_v2.py`), and `/api/app-status/?api=1` says
+`update: required`. `/api/v1/attest/nonce|ios|android/` are unchanged. The unused iOS App Attest assertion endpoint
+(`/api/v1/attest/ios/assert/`) was removed at the same time.
+**Production:** on dev now. Production gets it with the next release (`develop` → `main`), with the owner's go-ahead;
+if production's config sets `SUPPORTED_API_VERSIONS`, change it to `2` then.
+**iOS / Android:** nothing (they use v2).
 
 ### API-019: App Clip devices get pushes on the clip's APNs topic
 **Why:** the iOS App Clip (`com.arcu.Attnd.clip`) is now the same as the app: it registers for APNs and starts Live

@@ -140,11 +140,6 @@ class BundleTests(TestCase):
         ev = self.get('/api/v2/events/lookup/', QUERY_STRING='q=CTXFAIR').json()['event']
         self.assertNotIn('context', ev)
 
-    def test_v1_is_unchanged(self):
-        resp = self.get(f'/api/v1/events/{self.event.id}/locations/')
-        if resp.status_code == 200:
-            self.assertNotIn('context', json.dumps(resp.json()))
-
     def test_context_edit_bumps_the_version_and_the_etag(self):
         first = self.get(f'/api/v2/events/{self.event.id}/bundle/')
         etag = first['ETag']

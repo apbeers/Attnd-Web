@@ -255,7 +255,7 @@ APP_LATEST_VERSION_IOS = os.getenv('APP_LATEST_VERSION_IOS', '')
 APP_LATEST_VERSION_ANDROID = os.getenv('APP_LATEST_VERSION_ANDROID', '')
 APP_UPDATE_MESSAGE = os.getenv('APP_UPDATE_MESSAGE', '')
 # API versions the server still serves. An app on any other version is told to update.
-SUPPORTED_API_VERSIONS = [int(v) for v in os.getenv('SUPPORTED_API_VERSIONS', '1,2').split(',') if v.strip()]
+SUPPORTED_API_VERSIONS = [int(v) for v in os.getenv('SUPPORTED_API_VERSIONS', '2').split(',') if v.strip()]
 # Production should set STATIC_API_KEY_ENABLED=0 so only attested official apps can call the API.
 STATIC_API_KEY_ENABLED = os.getenv('STATIC_API_KEY_ENABLED', '1') not in ('0', 'false', 'False')
 # CI keys (API-008): comma-separated bearer tokens for the apps' live integration tests against production.

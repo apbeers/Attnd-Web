@@ -29,12 +29,12 @@ urlpatterns = [
     *([path('console/', include('tickets.urls_console'))] if settings.TICKETS_ENABLED else []),
     path('console/', include('studio.urls')),  # Attnd Studio editor + staff pages (beta users only, else 404)
     path('console/', include('console.urls'), name='console'),
-    path('api/v1/events/', include('events.urls'), name='events'),
     path('api/v2/', include('events.urls_v2')),
     path('api/app-status/', app_status_view, name='app_status'),
     path('api/diagnostics/', include('diagnostics.urls_api')),  # CI symbol uploads, iOS symbolication (API-013)
     path('api/v1/attest/', include('attestation.urls'), name='attestation'),
-    # Any other /api/vN/ path: 410 + update_required for retired versions, JSON 404 otherwise.
+    # Any other /api/vN/ path (v1's events API since Nov 19, 2026): 410 + update_required for retired
+    # versions, JSON 404 otherwise.
     re_path(r'^api/v(?P<version>\d+)/', retired_api_view),
     path('join/', include('join.urls')),
     # Shared plan links (API-015), with or without the trailing slash (the apps write them without).

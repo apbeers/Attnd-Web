@@ -1,9 +1,9 @@
 # Attnd API v2
 
-v2 is what the current iOS and Android apps use. The v1 endpoints in `API.md` stay available, unchanged in shape, for older app builds.
+v2 is what the current iOS and Android apps use. The v1 events API was retired on Nov 19, 2026 (API-020): `/api/v1/events/…` answers `410` `update_required`; the attestation endpoints stay at `/api/v1/attest/`.
 
 - **Base URL:** `https://attnd.app/api/v2/`
-- **Authentication:** the same as v1. Send `Authorization: Bearer <attestation JWT>`. In dev and CI builds you can send the static key instead. When you get a `401`, invalidate the JWT, re-attest, and retry once.
+- **Authentication:** send `Authorization: Bearer <attestation JWT>`. In dev and CI builds you can send the static key instead. When you get a `401`, invalidate the JWT, re-attest, and retry once.
 - **CI keys (API-008):** live integration tests may send a CI key (server setting `CI_API_KEYS`) instead. It works even when the
   static key is turned off (production), but only for the DEMO event (`DEMO_EVENT_CODE`):
   - `events/lookup/` answers `404` for any other event (exactly like an unknown code); `events/nearby/` lists only DEMO;
