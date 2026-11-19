@@ -65,6 +65,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-015 | Shared plan links `/p/<EVENT_CODE>/<payload>` (web page + store routing like `/join/`), claimed in apple-app-site-association (app + App Clip) and opened by the apps | additive (new web route, new app link paths; no API endpoint) | ✅ dev · ⬜ prod | ✅ | ✅ |
 | API-016 | Attnd Studio: `event.website_url` (the event's Studio-hosted website, or null) in every v2 event object | additive (new key) | ✅ dev · ⬜ prod | ✅ | ✅ |
 | API-017 | **Parked (Nov 19, 2026): `TICKETS_ENABLED` off, keys always `null`, endpoints 404.** Tickets: `event.tickets_url` + `bundle.tickets` (all-in prices, Get tickets opens the web); My tickets (`tickets/code|verify|mine|signout/`, buyer token); door mode (`door/…`: Ed25519 keys + ticket list + revocations for offline scanning, idempotent check-in upload, counts) | additive (new keys, new endpoints) | ⏸ parked (built; off) | ✅ | ⬜ (later) |
+| API-018 | Rich context for the apps' on-device assistant: `event.context`, `locations[].context`, `schedule[].context` in `bundle/` (about, FAQ, amenities, policies, getting there, weather plan, menus, hours, age limits, performers with bios and genres, links); AI import/refresh extracts it, console "Details for the assistant" edits it (locks), DEMO has it | additive (new keys, `bundle/` only) | ✅ dev (5beae38) · ⬜ prod | ⬜ | ⬜ (later) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -72,6 +73,41 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-018: rich event context for the on-device assistant
+**Why:** the apps' assistants (Apple's Foundation Models, Gemini Nano) answer questions fully offline, so the bundle
+must carry what the event's pages say beyond the description (`docs/specs/planner_view_spec.md` §5). Additive: three
+new nullable keys in `bundle/`; nothing else changes.
+**Server (attnd-web):**
+- `context` JSON on `Event`, `Location`, `ScheduledItem` (migration 0037), normalised by `events/context.py` on save
+  and on output (trim, cut at a word boundary, drop empties and unknown keys, https links only, limits per
+  `API_V2.md` → Context). Snapshots/History restore it; any edit bumps `content_version`.
+- Bundle: `event.context`, `locations[].context`, `schedule[].context` (`null` when empty), amenity `location_id`s
+  only for visible locations (else `null`), all context together ≤ ~150 KB (item, then location `about` texts dropped
+  last first, logged). Not in `lookup/` / `nearby/`, not in v1.
+- AI import/refresh (`scrape/service.py` strict schema + `CONTEXT_RULES`, `scrape/diff.py`): extracts the context per
+  event / location / item; one field `context` per entity in changesets (minor), merged key by key onto the current
+  one (empty AI values never blank data; performers / menu entries keep bios / prices the AI left out), locked
+  `context` → conflict (unticked); amenities name their location and get its id when applied. Review shows a summary
+  ("FAQ +2 · Hours added").
+- Console: "Details for the assistant" (collapsible) on Details, location edit and schedule item edit; text fields
+  plus validated line formats for FAQ / amenities / menu / performers / links. Editing locks `context`.
+- DEMO: event about / FAQ (11) / amenities (11, with location ids) / accessibility / policies / getting there /
+  weather plan / links; menus and hours on the food and drink places; performers (bio + genre) on all 36 music
+  items; chef demo and kids items with about / price / age limit. Counts unchanged; `events/tests_context.py`.
+
+**iOS:**
+- Decode `context` on `Event` (bundle only), `Location` and `ScheduleItem` leniently: every key optional, `null` /
+  missing = none, unknown keys and amenity kinds (→ `other`) ignored, entries' optional parts (`note`, `price`, `bio`,
+  `genres`) may be missing. Save it with the offline bundle like everything else.
+- Feed it to the on-device assistant's retrieval (Foundation Models tools / `AssistantModel.retrieve`): event FAQ,
+  amenities (with their location), policies, getting there, weather plan; location menus / hours / age limits;
+  performers' bios and genres. Cite the items as today.
+- Show it on detail pages where useful (e.g. a location's menu and hours, an item's performers and price, an "Event
+  info" FAQ in Options / `EventInfoView`). Links open in the browser.
+
+**Android (later):** the same: decode leniently (`@Serializable`, every field defaulted), store with the bundle, use
+in `AssistantModel.retrieve` / `AssistantPrompt.context` and the event facts for AppFunctions, show on details.
 
 ### API-017: tickets (Get tickets, My tickets, door mode with offline scanning)
 **Parked (Nov 19, 2026, owner):** ticketing is kept in the code but included in nothing: the server runs with

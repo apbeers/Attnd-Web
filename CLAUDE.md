@@ -290,9 +290,9 @@ People only ever see and sign in with their **email** (`console.auth_backends.Em
 
 | Model | Key fields |
 |-------|------------|
-| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, content_version, source_urls, refresh_schedule (off/watch), update_mode, sources_checked_at, locked_fields; `user` = owner, null = unassigned (owner deleted; admins reassign from Team) |
-| `Location` | name, snippet, description, category, tags, sort_order, hidden, image/image_url, lat/lng (nullable), address, locked_fields — FK to Event |
-| `ScheduledItem` | name, description, start/end_time, tags, hidden, locked_fields — FK to Event, optional FK to Location |
+| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, content_version, source_urls, refresh_schedule (off/watch), update_mode, sources_checked_at, context (API-018), locked_fields; `user` = owner, null = unassigned (owner deleted; admins reassign from Team) |
+| `Location` | name, snippet, description, category, tags, context (API-018), sort_order, hidden, image/image_url, lat/lng (nullable), address, locked_fields — FK to Event |
+| `ScheduledItem` | name, description, start/end_time, tags, context (API-018), hidden, locked_fields — FK to Event, optional FK to Location |
 | `Notification` | title, body, send_time, priority (normal/urgent, API-011), sent, sent_at, delivered/failed counts — FK to Event |
 | `Device` | id (UUID string PK), platform (ios/android), subscribed, push_token, live_activity_token (iOS, API-011; cleared on leave/switch), app_version, last_seen, event FK |
 | `EventMember` / `EventInvite` | team: admin or contributor; pending invites by email |
@@ -305,6 +305,12 @@ People only ever see and sign in with their **email** (`console.auth_backends.Em
 - `public` = listed in nearby search. Unclaimed homepage trial events are published but unlisted, reachable by code/QR.
 - Coordinates are nullable; `null` means unknown (never `0,0`).
 - Times are stored in UTC; `Event.timezone` is the IANA zone used for entry and display.
+- **Context** (API-018): `context` JSON on events, locations and items holds what the on-device assistants answer from
+  offline (about, FAQ, amenities, policies, getting there, weather plan; menus, hours, age limits; performers with bios
+  and genres; links). One normaliser, `events/context.py` (limits, word-boundary cuts, https links, empties dropped,
+  the ~150 KB bundle budget), used on save, in the bundle (`bundle/` only, `null` when empty), by the AI diff (one
+  `context` field per entity, merged key by key, lockable) and the console's "Details for the assistant" section
+  (`console/forms/assistant_context.py`: text fields + validated line formats). Contract: `API_V2.md` → Context.
 - **Tags** (API-010) on locations and schedule items are always normalised by `events.models.normalize_tags` (lower case, ≤ 8 × 32 chars; `save()` and the bundle apply it). The AI keeps one small vocabulary per event (`scrape/tags.py` folds spelling variants); `manage.py backfill_tags` tags old events (only things with < 2 tags, never locked ones).
 
 ## API Authentication

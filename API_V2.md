@@ -69,7 +69,8 @@ Returns everything the app shows, in one response.
   "tickets": <Tickets> | null
 }
 ```
-`tickets` (API-017): see Tickets.
+`tickets` (API-017): see Tickets. `event.context`, `locations[].context` and `schedule[].context` (API-018): see
+Context. In `bundle/` only; `lookup/` and `nearby/` event objects have no `context` key.
 Hidden locations and items are already filtered out. `locations` are already in the organizer's order, and `schedule` is sorted by `start_time`. `notifications` are newest first.
 
 ### `POST events/<id>/join/`
@@ -492,6 +493,7 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
   older responses = `null`). Apps show a **Website** link (opens in the browser). It is on a separate domain from
   attnd.app (`SITES_HOST`), so never send credentials or the device id to it.
 - `status == "archived"`: show an "This event has ended" banner. The content is still viewable.
+- `context` (API-018, `bundle/` only): see Context.
 
 ### Location
 ```json
@@ -501,13 +503,60 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
   "tags": ["food", "bbq", "kid-friendly"] }
 ```
 - `tags` (API-010): see Tags below. Missing in responses from servers before API-010: default `[]`.
+- `context` (API-018): see Context. Missing = `null`.
 
 ### ScheduleItem
 ```json
 { "id": 1, "name": "…", "description": "…", "start_time": "…", "end_time": "…" | null,
   "location_id": 5 | null, "location_name": "…" | null, "tags": ["Music"] }
 ```
-An item may have no location. Show it under "General" or "No location".
+An item may have no location. Show it under "General" or "No location". `context` (API-018): see Context; missing =
+`null`.
+
+### Context (API-018)
+Details the apps' **on-device assistant** answers questions from, fully offline: what the event's own pages say beyond
+the description (FAQ, amenities, policies, menus, performers…). The AI import/refresh extracts them and organizers
+edit them in the console ("Details for the assistant"; an edit locks the field against AI updates). Nothing in it is
+organizer-private. Each of `event.context`, `location.context` and `schedule_item.context` is `null` or an object:
+```
+event.context = null | {
+  "about": str,                 // long description, ≤ 4000 chars
+  "faq": [{"q": str, "a": str}],        // ≤ 40; parking, shuttles, bag policy, re-entry, rules, weather plan, tickets at door, pets, smoking…
+  "amenities": [{"kind": str, "name": str, "location_id": int|null, "note": str}],  // ≤ 60; kind ∈ restrooms|water|atm|first_aid|charging|lockers|info|accessible_entrance|food|merch|parking|shuttle|other
+  "accessibility": str,         // ≤ 1500
+  "policies": str,              // ≤ 1500 (bags, re-entry, age, prohibited items)
+  "getting_there": str,         // ≤ 1500 (parking, transit, rideshare, shuttles)
+  "weather_plan": str,          // ≤ 600 (rain/heat plan)
+  "links": [{"title": str, "url": str}]  // ≤ 10, absolute https only
+}
+location.context = null | {
+  "about": str,                 // ≤ 2000 (vendor/venue story)
+  "menu": [{"name": str, "price": str, "note": str}],  // ≤ 40; price as written ("$8")
+  "hours": str, "accessibility": str, "age_limit": str,  // short text, ≤ 300 each
+  "links": [{"title": str, "url": str}]  // ≤ 5
+}
+schedule_item.context = null | {
+  "about": str,                 // ≤ 2000
+  "performers": [{"name": str, "bio": str (≤ 600), "genres": [str] (≤ 5, lower case)}],  // ≤ 10
+  "age_limit": str, "price": str, "accessibility": str,  // ≤ 300 each
+  "links": [{"title": str, "url": str}]  // ≤ 5
+}
+```
+- **Every key is optional.** Empty strings and empty lists are omitted, so a key is either missing or non-empty; an
+  object with nothing left is `null`. Decode leniently: ignore unknown keys and unknown amenity `kind`s (treat as
+  `other`), default missing ones.
+- Strings are trimmed; text over its limit is cut at a word boundary and ends in `…`. `about`, `accessibility`,
+  `policies`, `getting_there`, `weather_plan` and FAQ answers may contain line breaks (`\n`, at most one empty line in
+  a row); everything else is one line. Entry parts: FAQ `q` ≤ 300 / `a` ≤ 1000, names ≤ 120, notes ≤ 300, `price` in
+  a menu ≤ 40, genres ≤ 32 each, link titles ≤ 120 (a link without a title gets its host).
+- Entries are complete: a FAQ entry has `q` and `a`; amenities, menu items and performers have `name`; links have
+  `url`. Optional parts inside an entry (`note`, `price`, `bio`, `genres`) are omitted when empty, like the keys above.
+  An amenity always has `location_id`: a location in this bundle's `locations`, else `null`.
+- `links[].url` is always an absolute `https` URL with a host. Open links in the browser; send nothing to them.
+- The keys keep the order shown. The server caps all context in one bundle at about 150 KB of JSON: over it, item
+  `about` texts are dropped first (last item first), then location `about` texts, then (only if still over) whole
+  item / location contexts, last first.
+- A change to any context bumps `content_version` (a `content_updated` push and a new ETag) like other content.
 
 ### Tags (API-010)
 `Location.tags` and `ScheduleItem.tags` are lists of short labels for filtering and search: genre, category, audience,
