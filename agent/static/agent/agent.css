@@ -71,11 +71,18 @@
 .agent__stop { color: #fff; background: var(--color-danger); }
 .agent__stop:hover { color: #fff; background: var(--color-danger); }
 
-/* Phones: a bottom sheet. */
+/* Phones: a bottom sheet that follows the visual viewport (agent.js sets --agent-sheet-top/-height, so with the
+   keyboard open the composer sits right above it and the log fills the rest). Always background: no Watch switch.
+   Inputs are 16px so iOS doesn't zoom the page when one is focused. */
 @media (max-width: 600px) {
   .agent { right: var(--space-3); bottom: var(--space-3); }
-  .agent.is-open { left: 0; right: 0; bottom: 0; }
-  .agent__panel { width: 100vw; height: 85vh; height: 85dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0; }
+  .agent.is-open { left: 0; right: 0; bottom: auto; top: var(--agent-sheet-top, 15dvh); }
+  .agent__panel { width: 100vw; height: 85vh; height: var(--agent-sheet-height, 85dvh); max-height: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0; }
+  .agent__switch { display: none; }
+  .agent__log { overscroll-behavior: contain; }
+  .agent textarea, .agent input, .agent select, .agent__form textarea { font-size: 16px; }
   .agent ~ .task-tray { bottom: 4rem; }
+  html.agent-sheet-open, html.agent-sheet-open body { overflow: hidden; }
 }
 @media print { .agent { display: none; } }

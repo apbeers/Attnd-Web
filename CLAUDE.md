@@ -235,7 +235,7 @@ on Save does; there is no second copy of any business logic.
   `ask_user` replies, Stop, file attach (`/console/agent/attach/`, PDF/images/text ≤ `AGENT_MAX_ATTACHMENT_MB`;
   file fields take the attachment id), recent requests, Undo all. **Background** (default): when a run that changed
   the current event or page ends, the page reloads (or shows "Updated · Refresh" with unsaved input). **Watch**
-  (`localStorage` `attnd.agent.watch`): each changed step opens its page. On phones it is a bottom sheet; the task
+  (`localStorage` `attnd.agent.watch`, wider screens only): each changed step opens its page. On phones (≤ 600px) it is a bottom sheet that always works in the background (no Watch switch; header = title, status, history, close), follows `window.visualViewport` (with the keyboard open the composer sits right above it, the page behind doesn't scroll; the console's viewport meta has `interactive-widget=resizes-content`) and its inputs are 16px (no iOS focus zoom); the task
   tray stacks above the launcher. Stale runs fail / unanswered ones close in `run_scheduled_tasks`.
 - Tests: `agent/tests.py` (registry and coverage, pages, writes through the real views, the loop with a scripted
   provider: gates, cancel, injection, caps, stop, ask_user, undo all, sign-out; endpoints and the panel).

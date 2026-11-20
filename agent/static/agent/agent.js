@@ -45,6 +45,7 @@
     root.classList.add('is-open');
     launcher.setAttribute('aria-expanded', 'true');
     store.set('sessionStorage', 'attnd.agent.open', '1');
+    fitSheet();
     if (focus !== false) input.focus();
   }
   function close() {
@@ -52,6 +53,7 @@
     root.classList.remove('is-open');
     launcher.setAttribute('aria-expanded', 'false');
     store.remove('sessionStorage', 'attnd.agent.open');
+    fitSheet();
     launcher.focus();
   }
   launcher.addEventListener('click', () => (panel.hidden ? open() : close()));
@@ -59,8 +61,34 @@
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
 
   // ---- Background / Watch ------------------------------------------------------
+  // Phones (the bottom sheet) always work in the background: the Watch switch is not shown there.
+  const phone = window.matchMedia('(max-width: 600px)');
   watchBox.checked = store.get('localStorage', 'attnd.agent.watch') === '1';
   watchBox.addEventListener('change', () => { store.set('localStorage', 'attnd.agent.watch', watchBox.checked ? '1' : '0'); });
+  const watching = () => watchBox.checked && !phone.matches;
+
+  // ---- Phones: the sheet follows the visual viewport (keyboard open = composer right above it) ----------
+  const vv = window.visualViewport;
+  function fitSheet() {
+    const html = document.documentElement;
+    if (!phone.matches || panel.hidden) {
+      html.classList.remove('agent-sheet-open');
+      root.style.removeProperty('--agent-sheet-top');
+      root.style.removeProperty('--agent-sheet-height');
+      return;
+    }
+    html.classList.add('agent-sheet-open');
+    const visible = vv ? vv.height : window.innerHeight;
+    const top = vv ? vv.offsetTop : 0;
+    // Keyboard closed: 85% of the screen. Open: everything above the keyboard (the log takes the rest).
+    const keyboard = vv && vv.height < window.innerHeight * 0.8;
+    const height = Math.round(keyboard ? visible : Math.min(visible, window.innerHeight * 0.85));
+    root.style.setProperty('--agent-sheet-height', `${height}px`);
+    root.style.setProperty('--agent-sheet-top', `${Math.round(top + visible - height)}px`);
+  }
+  if (vv) { vv.addEventListener('resize', fitSheet); vv.addEventListener('scroll', fitSheet); }
+  window.addEventListener('resize', fitSheet);
+  phone.addEventListener?.('change', fitSheet);
 
   // One-line composer that grows to three lines as you type.
   function fitInput() {
@@ -125,7 +153,7 @@
       if (step.seq <= lastSeq) return;
       lastSeq = step.seq;
       renderStep(step);
-      if (live && watchBox.checked && step.changed && step.url) watchNavigate(step.url);
+      if (live && watching() && step.changed && step.url) watchNavigate(step.url);
     });
     const pending = run.pending;
     confirmBox.hidden = !pending;
@@ -166,7 +194,7 @@
     if (run.error && run.status !== 'done') bubble('error', run.error);
     const here = location.pathname;
     const touched = (eventId && run.changed_events.includes(eventId)) || run.changed_urls.includes(here);
-    if (!touched || watchBox.checked) return;
+    if (!touched || watching()) return;
     if (dirty) { refreshButton.hidden = false; syncLinks(); return; }
     store.set('sessionStorage', 'attnd.agent.open', panel.hidden ? '' : '1');
     location.reload();

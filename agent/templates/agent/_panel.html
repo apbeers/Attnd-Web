@@ -10,7 +10,7 @@
         <h2 class="agent__title" id="agent-title">{% icon "stars" %} Ask Attnd</h2>
         <div class="agent__status" data-agent-status aria-live="polite"></div>
       </div>
-      <label class="agent__switch" title="Background: works out of sight and refreshes this page when something on it changed. Watch: opens each page as it changes.">
+      <label class="agent__switch" data-agent-watch-switch title="Background: works out of sight and refreshes this page when something on it changed. Watch: opens each page as it changes.">
         <input type="checkbox" data-agent-watch> Watch</label>
       <button type="button" class="button button--ghost button--small" data-agent-history aria-expanded="false"
               aria-controls="agent-recent">{% icon "history" %}<span class="visually-hidden">Recent requests</span></button>
@@ -32,7 +32,7 @@
       </div>
     </div>
     <div class="agent__footer">
-      <div class="agent__links" data-agent-links>
+      <div class="agent__links" data-agent-links hidden>
         <button type="button" class="link-button small" data-agent-undo hidden>{% icon "undo" %} Undo all changes from this run</button>
         <button type="button" class="link-button small" data-agent-refresh hidden>Updated · Refresh</button>
       </div>

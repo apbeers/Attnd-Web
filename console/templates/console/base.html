@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   {% include 'home/_icons.html' with app_manifest=True %}
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>{% block title %}Console{% endblock %} — Attnd</title>
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
   {% agent_panel as show_agent %}{% if show_agent %}<link rel="stylesheet" href="{% static 'agent/agent.css' %}">{% endif %}
