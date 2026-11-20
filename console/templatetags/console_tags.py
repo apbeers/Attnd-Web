@@ -71,3 +71,86 @@ def passkey_prompt(context):
         return False
     from console.views_passkeys import take_prompt
     return take_prompt(request)
+
+
+# ---------------------------------------------------------------------------
+# Components (console/components): {% component "event_tile" event=e %}
+# ---------------------------------------------------------------------------
+
+@register.simple_tag(takes_context=True)
+def component(context, name, part=None, data=None, **objects):
+    """Render a console component from its data function's JSON.
+
+    Pages pass objects their view already loaded for this person (event=…, location=…, form=…) or ids; a composite
+    passes each part's `data`. `part` renders one template partial (where a page's layout splits a component).
+    Inside the Ask Attnd chat (surface 'chat') nested components inherit the surface and the id prefix.
+    A request with the header X-Attnd-Component naming this component (the chat submitting one of its forms) also
+    gets the chat rendering stored on the request; console.middleware returns it instead of the page.
+    """
+    from console import components as C
+    request = context.get('request')
+    surface = context.get('surface') or 'page'
+    uid = context.get('uid') or ''
+    if data is None:
+        user = getattr(request, 'user', None)
+        cacheable = 'form' not in objects
+        key = (name, tuple(sorted((k, getattr(v, 'pk', v)) for k, v in objects.items())))
+        cache = getattr(request, '_components', None) if request is not None else None
+        if cacheable and cache is not None and key in cache:
+            data = cache[key]
+        else:
+            comp = C.get(name)
+            data = C.finish(comp, _ids_of(comp, objects), comp.data(user, **objects))
+            if cacheable and request is not None:
+                if cache is None:
+                    cache = request._components = {}
+                cache[key] = data
+    if (request is not None and surface == 'page' and part in (None, 'form')
+            and request.headers.get('X-Attnd-Component') == name and request.method == 'POST'):
+        fragment_uid = C.new_uid()
+        request._component_fragment = {'component': name, 'ids': data.get('ids', {}), 'uid': fragment_uid,
+                                       'html': C.render(name, data, request, surface='chat', uid=fragment_uid)}
+    return mark_safe(C.render(name, data, request, surface=surface, part=part, uid=uid))
+
+
+def _ids_of(comp, objects):
+    """The component's ids from the objects or ids a page passed."""
+    ids = {}
+    for key in comp.all_ids:
+        if objects.get(key):
+            ids[key] = int(objects[key])
+            continue
+        obj = objects.get(key[:-3])
+        if obj is not None and getattr(obj, 'pk', None):
+            ids[key] = obj.pk
+    if 'event_id' in comp.all_ids and 'event_id' not in ids:
+        for obj in objects.values():
+            event_id = getattr(obj, 'event_id', None) or getattr(getattr(obj, 'instance', None), 'event_id', None)
+            if event_id:
+                ids['event_id'] = event_id
+                break
+    form = objects.get('form')
+    if form is not None and getattr(form, 'instance', None) is not None and form.instance.pk:
+        for key in comp.optional_ids:
+            ids.setdefault(key, form.instance.pk)
+    return ids
+
+
+@register.filter
+def html_attrs(attrs, uid=''):
+    """A widget's attributes as HTML (Django's attrs.html); `uid` prefixes ids that other attributes point to."""
+    parts = []
+    for key, value in (attrs or {}).items():
+        if value is False or value is None:
+            continue
+        if uid and key in ('aria-describedby', 'list'):
+            value = ' '.join(uid + part for part in str(value).split())
+        parts.append(format_html(' {}', key) if value is True else format_html(' {}="{}"', key, value))
+    return mark_safe(''.join(parts))
+
+
+@register.simple_tag
+def status_badges(event):
+    """An event's status badges (console.components.catalog.status_badges), for templates outside components."""
+    from console.components.catalog import status_badges as badges
+    return badges(event)

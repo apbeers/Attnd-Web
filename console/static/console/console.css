@@ -479,3 +479,28 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 /* API-018: "Details for the assistant" on the event, location and schedule item forms */
 .assistant-context { margin: var(--space-4) 0; }
 .assistant-context > summary { padding: var(--space-1) 0; }
+
+/* Components (console/components; templates in console/templates/components/): each piece is drawn once and
+   adapts to its own width with container queries, so the same template works full-width on a page and in the
+   ~26rem Ask Attnd chat or the phone sheet. The base styles (wrapping clusters, auto-fit grids, flex splits) are
+   intrinsic already; these rules only add what a container width decides. */
+.component { container: component / inline-size; }
+.component__grid { display: grid; gap: var(--space-4); }
+.component__grid > * { min-width: 0; }
+.component__actions { margin-top: var(--space-2); }
+.component__list { margin: var(--space-1) 0 0; padding-left: 1.1rem; }
+.component__day { display: block; }
+/* The overview in a wide container: numbers and review on the left, the QR on the right. */
+@container component (min-width: 44rem) {
+  .component__grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+  .component__grid > :is(.component--event_header, .component--needs_review) { grid-column: 1 / -1; }
+  .component__grid > .component--live_on_phone { grid-column: 2; grid-row: 3; }
+}
+/* Very narrow containers (a 320px phone, a split screen): rows stack their side figures under the text. */
+@container component (max-width: 18rem) {
+  .component .thumb { width: 36px; height: 36px; }
+  .component .grid--stats { --min: 4.5rem; }
+  .component .stat__value { font-size: var(--text-xl); }
+  .component .live-panel img { width: 8rem; height: auto; }
+  .component .component__actions .button { padding-inline: var(--space-2); }
+}

@@ -15,8 +15,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
-from django.db.models.functions import Coalesce
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -85,26 +84,12 @@ def _job_from_form(form, **kwargs):
 # Dashboard & creation
 # ---------------------------------------------------------------------------
 
-def _count(queryset, field='event'):
-    """COUNT(*) of `queryset` rows pointing at the outer event, as a subquery annotation."""
-    rows = queryset.filter(**{field: OuterRef('pk')}).order_by().values(field).annotate(n=Count('pk')).values('n')
-    return Coalesce(Subquery(rows, output_field=IntegerField()), 0)
-
-
 @agent_action('events_list', 'Your events (upcoming and past) with their codes and counts.', kind='read')
 @login_required
 def dashboard(request):
-    # One correlated COUNT subquery per number: joining all four relations and counting DISTINCT multiplied
-    # the rows (locations × items × devices × change sets: ~300,000 for the DEMO event, ~1.7 s).
-    events = (events_for_user(request.user)
-              .annotate(n_locations=_count(Location.objects.all()),
-                        n_items=_count(ScheduledItem.objects.all()),
-                        n_devices=_count(Device.objects.real()),
-                        n_pending=_count(ChangeSet.objects.filter(status=ChangeSet.PENDING)))
-              .order_by('-start_time'))
-    now = timezone.now()
-    upcoming = [e for e in events if (e.end_time or e.start_time) >= now - timedelta(days=1)]
-    past = [e for e in events if e not in upcoming]
+    # Each event is the event_tile component (console/components); the counts are correlated subqueries.
+    from console.components.catalog import annotated_events, upcoming_and_past
+    upcoming, past = upcoming_and_past(list(annotated_events(request.user)))
     running = IngestJob.objects.filter(created_by=request.user, kind=IngestJob.KIND_CREATE,
                                        status__in=[IngestJob.QUEUED, IngestJob.RUNNING])
     return render(request, 'console/dashboard.html', {'upcoming': upcoming, 'past': past, 'running_jobs': running})
@@ -255,25 +240,18 @@ def manifest(request):
               kind='read')
 @event_view
 def event_overview(request, event):
+    # The header, timing, numbers, most liked, AI updates to review and "Live on your phone" are components
+    # (console/components: event_header, event_stats, needs_review, live_on_phone); the rest is this page's own.
     stats = event_stats(event)
-    audience = Device.objects.real().filter(event=event).aggregate(  # one query instead of five
-        joined=Count('pk'),
-        subscribed=Count('pk', filter=Q(subscribed=True) & ~Q(push_token='')),
-        active_today=Count('pk', filter=Q(last_seen__gte=timezone.now() - timedelta(hours=24))),
-        ios=Count('pk', filter=Q(platform='ios')),
-        android=Count('pk', filter=Q(platform='android')),
-    )
     sources_form = SourcesForm(instance=event)
-    from console.usage import most_hearted
     return render(request, 'console/event_overview.html', _ctx(
-        event, 'overview', most_hearted=most_hearted(event), stats=stats, audience=audience, sources_form=sources_form,
+        event, 'overview', sources_form=sources_form,
         studio_import=_studio_import_run(event, request.user),
         source_pages=list(event.source_pages.all()), can_manage=event.can_manage_team(request.user),
         refresh_form=RefreshForm(),
         recent_jobs=event.ingest_jobs.all()[:5],
         changesets=event.changesets.exclude(status=ChangeSet.EMPTY)[:5],
         display=resolve_display(event, stats),
-        join_url=join_url(event),
     ))
 
 

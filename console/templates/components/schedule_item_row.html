@@ -1,0 +1,12 @@
+{% load console_tags %}{# schedule_item_row: one schedule item (the page groups them by day; the chat shows the day). #}<li class="cluster cluster--loose cluster--nowrap component component--schedule_item_row" data-id="{{ d.id }}">
+      <div class="nowrap muted small schedule-time">{% if surface == 'chat' %}<span class="component__day">{{ d.day }}</span> {% endif %}{{ d.time }}</div>
+      <div class="grow">
+        <a class="title-link" href="{{ d.url }}">{{ d.name }}</a>
+        {% for t in d.tags %}<span class="badge badge--neutral">{{ t }}</span>{% endfor %}
+        {% if d.hidden %}<span class="badge badge--muted">Hidden</span>{% endif %}
+        {% if d.locked %}{% icon "lock" "lock small" %}{% endif %}
+        <div class="small muted">{{ d.location|default:"No specific location" }}</div>
+        {% if surface == 'chat' %}<div class="cluster cluster--tight component__actions">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+      </div>
+      {% if d.likes %}<span class="small nowrap hearts" title="Net likes from attendees">{% icon "heart" "tone-danger" %} {{ d.likes }}</span>{% endif %}
+    </li>

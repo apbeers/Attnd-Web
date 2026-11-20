@@ -1,0 +1,8 @@
+{% load console_tags %}{% comment %} event_header: name, status badges, listed nearby, code. Publish & co. are buttons only in the chat
+(pages have the Visibility panel). {% endcomment %}<div class="cluster event-header component component--event_header">
+  {% if surface == 'chat' %}<h2 class="title-3">{{ d.name }}</h2>{% else %}<h1>{{ d.name }}</h1>{% endif %}
+  {% include 'components/_badges.html' with badges=d.badges %}
+  {% if d.public %}<span class="badge badge--neutral">{% icon "pin" %} Listed nearby</span>{% endif %}
+  <span class="muted mono">{{ d.code }}</span>
+  {% if surface == 'chat' and d.actions %}<div class="cluster cluster--tight component__actions">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+</div>

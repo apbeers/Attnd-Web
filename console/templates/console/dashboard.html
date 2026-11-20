@@ -21,13 +21,13 @@
 {% if upcoming %}
 <section class="section">
   <h2 class="eyebrow">Upcoming &amp; live</h2>
-  <div class="grid grid--cards">{% for e in upcoming %}{% include 'console/_event_card.html' %}{% endfor %}</div>
+  <div class="grid grid--cards">{% for e in upcoming %}{% component "event_tile" event=e %}{% endfor %}</div>
 </section>
 {% endif %}
 {% if past %}
 <section class="section">
   <h2 class="eyebrow">Past</h2>
-  <div class="grid grid--cards">{% for e in past %}{% include 'console/_event_card.html' %}{% endfor %}</div>
+  <div class="grid grid--cards">{% for e in past %}{% component "event_tile" event=e %}{% endfor %}</div>
 </section>
 {% endif %}
 {% endblock %}

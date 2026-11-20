@@ -26,3 +26,24 @@ class TwoFactorMiddleware:
                     target += '?' + urlencode({'next': request.get_full_path()})
                 return redirect(target)
         return self.get_response(request)
+
+
+class ComponentFragmentMiddleware:
+    """The Ask Attnd chat submits a component's form to the real view with the header ``X-Attnd-Component``. When
+    the view answers with its page again (the form had errors), the ``{% component %}`` tag stored that
+    component's chat rendering on the request: answer with just that (JSON), so the chat redraws the form with its
+    errors in place. Redirects (saved) and everything else pass through untouched."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        fragment = getattr(request, '_component_fragment', None)
+        if (fragment and request.method == 'POST' and response.status_code == 200
+                and 'text/html' in response.get('Content-Type', '')
+                and request.headers.get('X-Attnd-Component') == fragment['component']):
+            from django.http import JsonResponse
+            return JsonResponse({'html': fragment['html'], 'component': fragment['component'],
+                                 'ids': fragment['ids'], 'invalid': True})
+        return response

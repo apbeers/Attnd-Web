@@ -76,6 +76,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'console.middleware.TwoFactorMiddleware',
+    # Ask Attnd's chat: a component form with errors comes back as just that component (console/components).
+    'console.middleware.ComponentFragmentMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.csp.ContentSecurityPolicyMiddleware',
 ]

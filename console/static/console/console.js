@@ -24,6 +24,23 @@
     navigator.clipboard.writeText(el.dataset.copy).then(() => { el.textContent = 'Copied'; }).catch(() => {});
   });
 
+  // <div data-show-if="when:later"> is shown only while its form's `when` is "later" (radio, select or text);
+  // data-show-if="urgent" only while the checkbox `urgent` is ticked. Also for forms added later (the Ask Attnd
+  // chat calls window.attndShowIf(element)).
+  function showIf(scope) {
+    (scope || document).querySelectorAll('[data-show-if]').forEach(el => {
+      const form = el.closest('form');
+      if (!form) return;
+      const [name, value] = el.dataset.showIf.split(':');
+      const inputs = [...form.elements].filter(i => i.name === name);
+      el.hidden = !inputs.some(i => (i.type === 'radio' || i.type === 'checkbox')
+        ? i.checked && (value === undefined || i.value === value) : i.value === value);
+    });
+  }
+  window.attndShowIf = showIf;
+  document.addEventListener('change', e => { if (e.target.form) showIf(e.target.form); });
+  showIf();
+
   // Tabs: <div data-tabs> holds <button data-tab-target="#panel"> buttons. Clicking one selects it
   // (aria-selected) and shows its panel; the other buttons' panels get [hidden].
   document.addEventListener('click', e => {

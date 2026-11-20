@@ -49,12 +49,7 @@
   {% endif %}
   {% if event and section %}
     <a class="back-link" href="{% url 'console:dashboard' %}">← Your events</a>
-    <div class="cluster event-header">
-      <h1>{{ event.name }}</h1>
-      {% include 'console/_status_badges.html' with e=event %}
-      {% if event.public %}<span class="badge badge--neutral">{% icon "pin" %} Listed nearby</span>{% endif %}
-      <span class="muted mono">{{ event.event_code }}</span>
-    </div>
+    {% component "event_header" event=event %}
     <div class="event-shell">
       <nav class="sidenav" aria-label="Event">
         <a class="sidenav__link" {% if section == 'overview' %}aria-current="page"{% endif %} href="{% url 'console:event' event.id %}">{% icon "gauge" %}Overview</a>

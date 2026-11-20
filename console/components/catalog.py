@@ -1,0 +1,500 @@
+"""The console's components (see console/components/__init__.py): data functions for the most-used pieces.
+
+Each data function takes either ids (the Ask Attnd chat; loaded and permission-checked here, Http404 like the views)
+or objects a console view already loaded for this person (the pages). Everything returned is plain JSON-able data;
+the templates in console/templates/components/ draw only from it.
+"""
+
+from datetime import timedelta
+
+from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
+from django.http import Http404
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
+from django.utils import dateformat, timezone
+from django.utils.text import Truncator
+from django.utils.timesince import timesince, timeuntil
+
+from console.components import component, form_json
+
+DRAFT_TITLE = "Only your team can see it; attendees can't join yet"
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def fmt(dt, pattern):
+    """Like the template filter `date`, in the active time zone."""
+    return dateformat.format(timezone.localtime(dt), pattern) if dt else ''
+
+
+def _tz(event):
+    from scrape.diff import tz_or_utc
+    return tz_or_utc(event.timezone)
+
+
+def editable_event(user, event_id=None, event=None):
+    """The event, when this person is on its team (like console.views_events.event_view); else Http404."""
+    if event is not None:
+        return event  # loaded and checked by the page's view
+    from events.models import Event
+    event = get_object_or_404(Event, pk=event_id)
+    if not event.can_edit(user):
+        raise Http404
+    return event
+
+
+def badge(label, tone, title='', icon='', live=False):
+    return {'label': label, 'tone': tone, 'title': title, 'icon': icon, 'live': live}
+
+
+def status_badges(e):
+    """The status badges of an event (lifecycle, payment, timing, watching, testing, owner), in order."""
+    out = []
+    if e.status == 'draft':
+        out.append(badge('Draft', 'warning', DRAFT_TITLE))
+    elif e.status == 'archived':
+        out.append(badge('Archived', 'muted', "Attendees see an 'event has ended' banner"))
+    else:
+        out.append(badge('Live', 'success', 'Published: attendees can join'))
+    if e.paid:
+        out.append(badge('Paid', 'neutral', 'Paid: no demo banner in the app'))
+    else:
+        out.append(badge('Demo', 'neutral', 'Not paid yet: attendees see a Demo event badge'))
+    timing = e.timing
+    if timing == 'now' and e.status != 'archived':
+        out.append(badge('Happening now', 'live', 'The event is on right now', live=True))
+    elif timing == 'ended' and e.status != 'archived':
+        out.append(badge('Ended', 'ended'))
+    if e.refresh_schedule == 'watch':
+        out.append(badge('Watching website', 'neutral', 'Attnd keeps the app in sync with the event website', 'refresh'))
+    if e.testing_only:
+        out.append(badge('Testing only', 'warning', "Staff test copy of a prospect's event: published but unlisted "
+                                                    '(code / QR only), never watched'))
+    if e.user_id is None:
+        out.append(badge('Unassigned', 'warning', "The owner's account was deleted"))
+    return out
+
+
+def _count(queryset, field='event'):
+    rows = queryset.filter(**{field: OuterRef('pk')}).order_by().values(field).annotate(n=Count('pk')).values('n')
+    return Coalesce(Subquery(rows, output_field=IntegerField()), 0)
+
+
+def annotated_events(user):
+    """The person's events with the dashboard's counts (one correlated subquery per number, no joins)."""
+    from events.models import Device, Location, ScheduledItem, events_for_user
+    from scrape.models import ChangeSet
+    return (events_for_user(user)
+            .annotate(n_locations=_count(Location.objects.all()),
+                      n_items=_count(ScheduledItem.objects.all()),
+                      n_devices=_count(Device.objects.real()),
+                      n_pending=_count(ChangeSet.objects.filter(status=ChangeSet.PENDING)))
+            .order_by('-start_time'))
+
+
+def upcoming_and_past(events):
+    now = timezone.now()
+    upcoming = [e for e in events if (e.end_time or e.start_time) >= now - timedelta(days=1)]
+    return upcoming, [e for e in events if e not in upcoming]
+
+
+def event_url(ids):
+    return reverse('console:event', args=[ids['event_id']])
+
+
+# ---------------------------------------------------------------------------
+# Your events
+# ---------------------------------------------------------------------------
+
+def _expand_events(user, **ids):
+    upcoming, past = upcoming_and_past(list(annotated_events(user)[:40]))
+    return [{'event_id': e.pk} for e in (upcoming + past)[:20]]
+
+
+@component('event_tile', 'Event', 'One of your events: dates, code, status, counts (the console home list). Without '
+           'an event_id: all your events.', detail='event_overview', expand=_expand_events, page=event_url)
+def event_tile(user, event_id=None, event=None):
+    if event is None or not hasattr(event, 'n_locations'):
+        event = annotated_events(user).filter(pk=event_id or event.pk).first()
+        if event is None:
+            raise Http404
+    return {
+        'id': event.pk, 'name': event.name, 'url': reverse('console:event', args=[event.pk]),
+        'start': fmt(event.start_time, 'D M j, Y'), 'code': event.event_code, 'badges': status_badges(event),
+        'counts': {'locations': event.n_locations, 'items': event.n_items, 'joined': event.n_devices,
+                   'to_review': event.n_pending},
+    }
+
+
+# ---------------------------------------------------------------------------
+# Event overview
+# ---------------------------------------------------------------------------
+
+@component('event_header', 'Event header', "An event's name, code and status badges, with Publish / Unpublish for "
+           'the owner and admins.', actions=(('publish_event', 'Publish'), ('unpublish_event', 'Move back to draft'),
+                                             ('list_event_nearby', 'Show in nearby events'),
+                                             ('unlist_event', 'Hide from nearby events')),
+           detail='event_overview', page=event_url)
+def event_header(user, event_id=None, event=None):
+    event = editable_event(user, event_id, event)
+    actions = []
+    if event.can_manage_team(user):
+        if event.status != 'published':
+            actions.append({'name': 'publish_event', 'label': 'Make live again' if event.status == 'archived'
+                            else 'Publish', 'style': 'success', 'icon': 'broadcast'})
+        else:
+            actions.append({'name': 'unlist_event' if event.public else 'list_event_nearby'})
+            actions.append({'name': 'unpublish_event', 'style': 'ghost'})
+    return {'id': event.pk, 'name': event.name, 'code': event.event_code, 'badges': status_badges(event),
+            'public': event.public, 'url': reverse('console:event', args=[event.pk]), 'actions': actions}
+
+
+def _audience(event):
+    from events.models import Device
+    return Device.objects.real().filter(event=event).aggregate(  # one query instead of five
+        joined=Count('pk'),
+        subscribed=Count('pk', filter=Q(subscribed=True) & ~Q(push_token='')),
+        active_today=Count('pk', filter=Q(last_seen__gte=timezone.now() - timedelta(hours=24))),
+        ios=Count('pk', filter=Q(platform='ios')),
+        android=Count('pk', filter=Q(platform='android')),
+    )
+
+
+@component('event_stats', 'Event numbers', "When the event is on, its locations, schedule items, attendees joined, "
+           'active today, with notifications, iPhone/Android, and the most liked places and items.', page=event_url)
+def event_stats(user, event_id=None, event=None):
+    from console.usage import most_hearted
+    from events.display import event_stats as content_stats
+    event = editable_event(user, event_id, event)
+    with timezone.override(_tz(event)):
+        stats, audience = content_stats(event), _audience(event)
+        timing = event.timing
+        if timing == 'now':
+            when = {'state': 'now', 'label': 'Happening now', 'detail': f'ends {fmt(event.effective_end, "D M j, g:i A")}'}
+        elif timing == 'upcoming':
+            when = {'state': 'upcoming', 'label': f'Starts in {timeuntil(event.start_time)}',
+                    'detail': fmt(event.start_time, 'D M j, g:i A')}
+        else:
+            when = {'state': 'ended', 'label': f'Ended {timesince(event.effective_end)} ago', 'detail': ''}
+        liked = []
+        for row in most_hearted(event):
+            obj = row['obj']
+            if row['kind'] == 'location':
+                meta = obj.category or 'Location'
+                url = reverse('console:location_edit', args=[event.pk, obj.pk])
+            else:
+                meta = fmt(obj.start_time, 'D g:i A') + (f' · {obj.location.name}' if obj.location else '')
+                url = reverse('console:item_edit', args=[event.pk, obj.pk])
+            liked.append({'kind': row['kind'], 'id': obj.pk, 'name': obj.name, 'meta': meta, 'likes': row['count'],
+                          'url': url})
+    return {
+        'timing': when,
+        'numbers': [
+            {'value': stats['location_count'], 'label': 'Locations'},
+            {'value': stats['item_count'], 'label': 'Schedule items'},
+            {'value': audience['joined'], 'label': 'Attendees joined'},
+            {'value': audience['active_today'], 'label': 'Active today'},
+            {'value': audience['subscribed'], 'label': 'Get notifications'},
+            {'value': f'{audience["ios"]}/{audience["android"]}', 'label': 'iPhone / Android'},
+        ],
+        'most_liked': liked, 'usage_url': reverse('console:usage', args=[event.pk]),
+    }
+
+
+@component('live_on_phone', 'Live on your phone', "The event's QR code, code and join link (open it in the Attnd "
+           'app), with the QR download and the poster.', page=event_url)
+def live_on_phone(user, event_id=None, event=None):
+    from attnd.links import join_url
+    event = editable_event(user, event_id, event)
+    qr = reverse('console:event_qr', args=[event.pk])
+    return {'name': event.name, 'code': event.event_code, 'qr_url': qr, 'qr_download_url': f'{qr}?download=1',
+            'poster_url': reverse('console:event_poster', args=[event.pk]), 'join_url': join_url(event),
+            'draft': event.status == 'draft'}
+
+
+@component('needs_review', 'AI updates to review', 'How many AI updates of an event wait for review, and the latest '
+           'ones.', page=lambda ids: reverse('console:changesets', args=[ids['event_id']]))
+def needs_review(user, event_id=None, event=None):
+    from scrape.models import ChangeSet
+    event = editable_event(user, event_id, event)
+    pending = list(event.changesets.filter(status=ChangeSet.PENDING).order_by('-created_at')[:5])
+    count = len(pending) if len(pending) < 5 else event.changesets.filter(status=ChangeSet.PENDING).count()
+    return {'pending': count, 'review_url': reverse('console:changesets', args=[event.pk]),
+            'latest': [{'id': cs.pk, 'summary': cs.summary or 'AI update',
+                        'url': reverse('console:changeset', args=[cs.pk])} for cs in pending]}
+
+
+@component('event_overview', 'Event overview', "An event at a glance: header, AI updates to review, numbers, the QR "
+           'to open it live on your phone.', parts=('event_header', 'needs_review', 'event_stats', 'live_on_phone'),
+           page=event_url)
+def event_overview(user, event_id=None, event=None):
+    event = editable_event(user, event_id, event)
+    from console.components import get
+    parts = []
+    for name in ('event_header', 'needs_review', 'event_stats', 'live_on_phone'):
+        data = get(name).data(user, event=event)
+        parts.append({**data, 'component': name, 'ids': {'event_id': event.pk}})  # (finish() resolves them)
+    return {'id': event.pk, 'name': event.name, 'parts': parts}
+
+
+# ---------------------------------------------------------------------------
+# Locations
+# ---------------------------------------------------------------------------
+
+def _location(user, event_id, location_id, event=None, location=None):
+    from events.models import Location
+    event = editable_event(user, event_id, event)
+    if location is None:
+        location = get_object_or_404(Location, pk=location_id, event=event)
+    return event, location
+
+
+def _expand_locations(user, event_id=None, **_):
+    event = editable_event(user, event_id)
+    return [{'event_id': event.pk, 'location_id': pk}
+            for pk in event.location_set.order_by('sort_order', 'name').values_list('pk', flat=True)[:40]]
+
+
+@component('location_row', 'Location', 'A location (stage, booth, vendor…) of an event: category, summary, tags, '
+           'map pin, likes, schedule items; Hide / Show and Delete. With only event_id: every location.',
+           ids=('event_id', 'location_id'), detail='location_form', expand=_expand_locations,
+           actions=(('toggle_location_hidden', 'Hide'), ('delete_location', 'Delete')),
+           page=lambda ids: reverse('console:location_edit', args=[ids['event_id'], ids['location_id']]))
+def location_row(user, event_id=None, location_id=None, event=None, location=None, hearts=None):
+    event, loc = _location(user, event_id, location_id, event, location)
+    if hearts is None:
+        from console.usage import net_hearts
+        hearts = getattr(loc, 'hearts', None)
+        hearts = net_hearts(event)['location'].get(loc.pk, 0) if hearts is None else hearts
+    items = loc.n_items if hasattr(loc, 'n_items') else loc.scheduleditem_set.count()
+    return {
+        'id': loc.pk, 'name': loc.name, 'url': reverse('console:location_edit', args=[event.pk, loc.pk]),
+        'image_url': loc.resolved_image_url or '', 'category': loc.category, 'hidden': loc.hidden,
+        'locked': bool(loc.locked_fields), 'summary': Truncator(loc.snippet or loc.address).chars(90),
+        'tags': list(loc.tags or []), 'has_pin': loc.has_coordinates, 'likes': hearts, 'items': items,
+        'actions': [{'name': 'toggle_location_hidden', 'label': 'Show' if loc.hidden else 'Hide'},
+                    {'name': 'delete_location', 'style': 'danger'}],
+    }
+
+
+LOCATION_CATEGORIES = ['Stage', 'Food', 'Vendor', 'Venue', 'Restroom', 'Parking', 'Info']
+
+
+def location_form_for(user, event, location=None, data=None, files=None):
+    from console.forms.event_forms import LocationForm
+    from events.models import Location
+    categories = sorted(set(event.location_set.exclude(category='').values_list('category', flat=True)))
+    return LocationForm(data, files, instance=location or Location(event=event), categories=categories)
+
+
+def _event_tags(event, limit=30):
+    from scrape.tags import event_vocabulary
+    return event_vocabulary(event)[:limit]
+
+
+def _tags_note(event):
+    tags = _event_tags(event)
+    return ('note', f'Tags in this event: {", ".join(tags)}', 'tag') if tags else None
+
+
+def _context_details(form, locked):
+    rows = [f.name for f in form.context_fields]
+    return ('details', 'Details for the assistant', rows, {
+        'open': bool(form.context_errors), 'locked': 'context' in locked, 'css': 'panel assistant-context',
+        'intro': 'Attendees’ phones answer questions from these details, even offline. Only add what attendees may '
+                 'see.' + (' You’ve edited them, so AI updates only suggest changes.' if 'context' in locked else '')})
+
+
+@component('location_form', 'Location form', 'Add or edit a location: name, category, summary, description, tags, '
+           'address and map pin, website, image, hidden, details for the assistant. Without location_id: a new one.',
+           ids=('event_id',), optional_ids=('location_id',),
+           actions=(('unlock_location', 'Let AI update it again'), ('delete_location', 'Delete')),
+           page=lambda ids: (reverse('console:location_edit', args=[ids['event_id'], ids['location_id']])
+                             if ids.get('location_id') else reverse('console:location_new', args=[ids['event_id']])))
+def location_form(user, event_id=None, location_id=None, event=None, location=None, form=None):
+    event = editable_event(user, event_id, event)
+    if location is None and location_id:
+        _, location = _location(user, event.pk, location_id, event)
+    with timezone.override(_tz(event)):
+        form = form or location_form_for(user, event, location)
+        loc = form.instance
+        locked = list(loc.locked_fields or [])
+        url = (reverse('console:location_edit', args=[event.pk, loc.pk]) if loc.pk
+               else reverse('console:location_new', args=[event.pk]))
+        layout = [
+            ('split', 'name', 'category'),
+            ('block', 'datalist', {'id': 'category-options',
+                                   'options': list(getattr(form, 'categories', [])) + LOCATION_CATEGORIES}),
+            'snippet', 'description', 'tags_text', _tags_note(event), 'address',
+            ('grid', 'latitude', 'longitude'),
+            ('block', 'pin_map'),
+            'website', ('grid', 'image', 'image_url'), 'hidden', _context_details(form, locked),
+        ]
+        data = form_json(form, [r for r in layout if r], action=url,
+                         submit=[{'label': 'Save', 'style': 'primary'},
+                                 {'label': 'Save & add another', 'style': 'outline', 'name': 'save_add', 'value': '1'}],
+                         locked=locked)
+    actions = []
+    if loc.pk:
+        if loc.locked_fields:
+            actions.append({'name': 'unlock_location', 'style': 'secondary', 'icon': 'unlock'})
+        actions.append({'name': 'delete_location', 'style': 'danger', 'confirm_text': 'Delete this location?'})
+        for a in actions:  # back to this page afterwards, like the page's own buttons
+            a['fields'] = {'next': url}
+    return {'id': loc.pk, 'event_id': event.pk, 'title': loc.name if loc.pk else 'New location',
+            'url': url, 'form': data, 'actions': actions}
+
+
+# ---------------------------------------------------------------------------
+# Schedule
+# ---------------------------------------------------------------------------
+
+def _item(user, event_id, item_id, event=None, item=None):
+    from events.models import ScheduledItem
+    event = editable_event(user, event_id, event)
+    if item is None:
+        item = get_object_or_404(ScheduledItem.objects.select_related('location'), pk=item_id, event=event)
+    return event, item
+
+
+def _expand_items(user, event_id=None, location_id=None, **_):
+    event = editable_event(user, event_id)
+    items = event.scheduleditem_set.order_by('start_time', 'name')
+    if location_id:
+        items = items.filter(location_id=location_id)
+    return [{'event_id': event.pk, 'item_id': pk} for pk in items.values_list('pk', flat=True)[:40]]
+
+
+@component('schedule_item_row', 'Schedule item', 'A schedule item (set, talk, session…): day, time, location, tags, '
+           'likes; Hide / Show and Delete. With only event_id: the whole schedule.',
+           ids=('event_id', 'item_id'), detail='schedule_item_form', expand=_expand_items,
+           actions=(('toggle_schedule_item_hidden', 'Hide'), ('delete_schedule_item', 'Delete')),
+           page=lambda ids: reverse('console:item_edit', args=[ids['event_id'], ids['item_id']]))
+def schedule_item_row(user, event_id=None, item_id=None, event=None, item=None, hearts=None):
+    event, it = _item(user, event_id, item_id, event, item)
+    if hearts is None:
+        from console.usage import net_hearts
+        hearts = net_hearts(event)['item'].get(it.pk, 0)
+    with timezone.override(_tz(event)):
+        time = fmt(it.start_time, 'g:i A') + (f'–{fmt(it.end_time, "g:i A")}' if it.end_time else '')
+        day = fmt(it.start_time, 'l, F j')
+    return {
+        'id': it.pk, 'name': it.name, 'url': reverse('console:item_edit', args=[event.pk, it.pk]),
+        'day': day, 'time': time, 'tags': list(it.tags or []), 'hidden': it.hidden, 'locked': bool(it.locked_fields),
+        'location': it.location.name if it.location_id else '', 'likes': hearts,
+        'actions': [{'name': 'toggle_schedule_item_hidden', 'label': 'Show' if it.hidden else 'Hide'},
+                    {'name': 'delete_schedule_item', 'style': 'danger'}],
+    }
+
+
+def item_form_for(user, event, item=None, data=None, initial=None):
+    from console.forms.event_forms import ScheduledItemForm
+    from events.models import ScheduledItem
+    if item is None and initial is None:
+        last = event.scheduleditem_set.order_by('-start_time').first()
+        initial = {'start_time': last.start_time if last else event.start_time}
+    return ScheduledItemForm(data, instance=item or ScheduledItem(event=event), event=event, initial=initial or {})
+
+
+@component('schedule_item_form', 'Schedule item form', 'Add or edit a schedule item: name, start, end, location, '
+           'description, tags, hidden, details for the assistant. Without item_id: a new one.',
+           ids=('event_id',), optional_ids=('item_id',),
+           actions=(('unlock_schedule_item', 'Let AI update it again'), ('delete_schedule_item', 'Delete')),
+           page=lambda ids: (reverse('console:item_edit', args=[ids['event_id'], ids['item_id']])
+                             if ids.get('item_id') else reverse('console:item_new', args=[ids['event_id']])))
+def schedule_item_form(user, event_id=None, item_id=None, event=None, item=None, form=None):
+    event = editable_event(user, event_id, event)
+    if item is None and item_id:
+        _, item = _item(user, event.pk, item_id, event)
+    with timezone.override(_tz(event)):
+        form = form or item_form_for(user, event, item)
+        it = form.instance
+        locked = list(it.locked_fields or [])
+        url = reverse('console:item_edit', args=[event.pk, it.pk]) if it.pk else reverse('console:item_new',
+                                                                                           args=[event.pk])
+        layout = ['name', ('grid', 'start_time', 'end_time'), 'location', 'description', 'tags_text',
+                  _tags_note(event), 'hidden', _context_details(form, locked)]
+        data = form_json(form, [r for r in layout if r], action=url,
+                         submit=[{'label': 'Save', 'style': 'primary'},
+                                 {'label': 'Save & add another', 'style': 'outline', 'name': 'save_add', 'value': '1'}],
+                         locked=locked)
+    actions = []
+    if it.pk:
+        if it.locked_fields:
+            actions.append({'name': 'unlock_schedule_item', 'style': 'secondary', 'icon': 'unlock'})
+        actions.append({'name': 'delete_schedule_item', 'style': 'danger', 'confirm_text': 'Delete this item?'})
+    return {'id': it.pk, 'event_id': event.pk, 'title': it.name if it.pk else 'New schedule item', 'url': url,
+            'form': data, 'actions': actions}
+
+
+# ---------------------------------------------------------------------------
+# Notifications (updates)
+# ---------------------------------------------------------------------------
+
+def _expand_notifications(user, event_id=None, **_):
+    event = editable_event(user, event_id)
+    return [{'event_id': event.pk, 'notification_id': pk}
+            for pk in event.notification_set.order_by('-send_time').values_list('pk', flat=True)[:30]]
+
+
+@component('notification_row', 'Update', 'An update (push notification) of an event: title, text, urgent, sent '
+           '(and how many devices got it) or scheduled; Send now / Delete for scheduled ones. With only event_id: '
+           'every update.', ids=('event_id', 'notification_id'), expand=_expand_notifications,
+           actions=(('send_scheduled_notification', 'Send now'), ('delete_scheduled_notification', 'Delete')),
+           page=lambda ids: reverse('console:notifications', args=[ids['event_id']]))
+def notification_row(user, event_id=None, notification_id=None, event=None, notification=None):
+    from events.models import Notification
+    event = editable_event(user, event_id, event)
+    n = notification or get_object_or_404(Notification, pk=notification_id, event=event)
+    with timezone.override(_tz(event)):
+        sent_at = fmt(n.sent_at or n.send_time, 'M j, g:i A') if n.sent else ''
+        scheduled = '' if n.sent else fmt(n.send_time, 'M j, g:i A')
+    return {
+        'id': n.pk, 'title': n.title, 'body': n.body, 'urgent': n.is_urgent, 'sent': n.sent, 'sent_at': sent_at,
+        'delivered': n.delivered_count, 'scheduled': scheduled,
+        'actions': [] if n.sent else [{'name': 'send_scheduled_notification', 'style': 'outline'},
+                                      {'name': 'delete_scheduled_notification', 'style': 'danger'}],
+    }
+
+
+def notification_form_for(event, data=None):
+    from console.forms.event_forms import NotificationForm
+    from events.models import next_send_slot
+    return NotificationForm(data, event=event, initial={'send_time': next_send_slot(timezone.now() + timedelta(hours=1))})
+
+
+def _notification_bind(user, ids, data):
+    event = editable_event(user, ids['event_id'])
+    with timezone.override(_tz(event)):
+        form = notification_form_for(event, data)
+        form.is_valid()
+    return form
+
+
+@component('notification_form', 'Send an update', 'Write an update for the attendees (push notification + the '
+           "app's Updates tab): title, text, now or scheduled, urgent; how many devices it reaches. Sending always "
+           'asks to confirm.', actions=(('send_notification', 'Send'),), form=_notification_bind,
+           page=lambda ids: reverse('console:notifications', args=[ids['event_id']]))
+def notification_form(user, event_id=None, event=None, form=None):
+    from events import push
+    from events.models import Device
+    event = editable_event(user, event_id, event)
+    with timezone.override(_tz(event)):
+        form = form or notification_form_for(event)
+        devices = Device.objects.real().filter(event=event)
+        url = reverse('console:notifications', args=[event.pk])
+        data = form_json(form, ['title', 'body', ('choices', 'when'),
+                                ('show_if', 'when:later', 'send-time', ['send_time']), 'urgent',
+                                ('block', 'urgent_warning')],
+                         action=url, submit=[{'label': 'Send', 'style': 'primary', 'icon': 'send'}],
+                         confirm_action='send_notification')
+    return {
+        'reach': devices.filter(subscribed=True).exclude(push_token='').count(),
+        'urgent_reach': devices.exclude(push_token='').count(),
+        'live_activities': devices.filter(platform='ios').exclude(live_activity_token='').count(),
+        'urgent_left': push.urgent_sends_left(event), 'form': data,
+        'actions': [{'name': 'send_notification'}],
+    }

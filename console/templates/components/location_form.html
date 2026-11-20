@@ -1,0 +1,5 @@
+{% load console_tags %}{% comment %} location_form: add / edit a location (the generic form component) and its actions. The page puts
+the actions in its side column; the map picker and address autocomplete are page-only (the page's script). {% endcomment %}
+{% partialdef form %}{% include 'components/_form.html' with form=d.form %}{% endpartialdef %}
+{% partialdef actions %}{% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}{% endpartialdef %}
+<div class="stack component component--location_form">{% if surface == 'chat' %}<h3 class="title-4">{{ d.title }}</h3>{% endif %}{% partial form %}{% partial actions %}</div>

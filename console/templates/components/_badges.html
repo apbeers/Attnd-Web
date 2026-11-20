@@ -1,0 +1,2 @@
+{% load console_tags %}{# Status badges from a component's JSON: [{label, tone, title, icon, live}]. #}{% for b in badges %}<span class="badge badge--{{ b.tone }}"{% if b.title %} title="{{ b.title }}"{% endif %}>{% if b.live %}<span class="live-dot"></span>{% endif %}{% if b.icon %}{% icon b.icon %} {% endif %}{{ b.label }}</span>
+{% endfor %}

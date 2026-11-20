@@ -1,0 +1,21 @@
+{% load console_tags %}{# Layout rows of a form component (console.components.form_json). #}{% for r in rows %}{% if r.kind == 'field' %}{% include 'components/_field.html' with f=r.field %}
+{% elif r.kind == 'split' %}<div class="split split--compact">
+  <div class="split__main">{% include 'components/_field.html' with f=r.main %}</div>
+  <div class="split__aside">{% include 'components/_field.html' with f=r.aside %}</div>
+</div>
+{% elif r.kind == 'grid' %}<div class="grid grid--2">
+  {% for f in r.fields %}{% include 'components/_field.html' %}{% endfor %}
+</div>
+{% elif r.kind == 'choices' %}<div class="choices choices--inline">{% for o in r.field.options %}<label class="check" for="{{ uid }}{{ o.id }}"><input type="radio" name="{{ r.field.name }}" value="{{ o.value }}"{% if r.field.required %} required{% endif %} id="{{ uid }}{{ o.id }}"{% if o.selected %} checked{% endif %}> {{ o.label }}</label>{% endfor %}</div>
+{% for error in r.field.errors %}<div class="field__error">{{ error }}</div>{% endfor %}
+{% elif r.kind == 'note' %}<p class="form-note">{% if r.icon %}{% icon r.icon %} {% endif %}{{ r.text }}</p>
+{% elif r.kind == 'show_if' %}<div id="{{ uid }}{{ r.id }}" data-show-if="{{ r.when }}">{% include 'components/_form_rows.html' with rows=r.rows %}</div>
+{% elif r.kind == 'details' %}<details class="{{ r.css }}"{% if r.open %} open{% endif %}>
+  <summary class="strong">{{ r.title }} {% if r.locked %}{% icon "lock" "lock small" %}{% endif %}</summary>
+  <div class="details-body stack stack--tight">
+    {% if r.intro %}<p class="small muted">{{ r.intro }}</p>{% endif %}
+    {% include 'components/_form_rows.html' with rows=r.rows %}
+  </div>
+</details>
+{% elif r.kind == 'block' %}{% include 'components/_form_blocks.html' %}
+{% endif %}{% endfor %}

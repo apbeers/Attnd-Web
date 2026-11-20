@@ -1,0 +1,211 @@
+"""Console components (console/components): every component renders from its JSON on pages and in the chat, data
+functions check permissions like the views, every action is a registered Ask Attnd action, the JSON holds no HTML,
+and the pages that are compositions of components keep working (forms post, errors come back in place)."""
+
+import json
+from datetime import timedelta
+
+from django.contrib.auth.models import User
+from django.http import Http404
+from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
+
+from agent import registry as agent_registry
+from console import components as C
+from events.models import Event, EventMember, Location, Notification, ScheduledItem
+from scrape.models import ChangeSet
+
+
+class ComponentTestCase(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user('owner', 'owner@example.com', 'pw')
+        self.other = User.objects.create_user('other', 'other@example.com', 'pw')
+        self.helper = User.objects.create_user('helper', 'helper@example.com', 'pw')
+        start = timezone.now().replace(minute=0, second=0, microsecond=0) + timedelta(days=3)
+        self.event = Event.objects.create(name='Prairie Fest', event_code='PRAIRIE', user=self.owner,
+                                          timezone='America/Chicago', start_time=start,
+                                          end_time=start + timedelta(hours=10), status=Event.STATUS_DRAFT)
+        EventMember.objects.create(event=self.event, user=self.helper, role=EventMember.ROLE_CONTRIBUTOR)
+        self.stage = Location.objects.create(event=self.event, name='Main Stage', category='Stage',
+                                             snippet='The big one', tags=['live music'], sort_order=1)
+        self.item = ScheduledItem.objects.create(event=self.event, name='Prairie Lights', start_time=start,
+                                                 end_time=start + timedelta(hours=1), location=self.stage,
+                                                 tags=['folk'])
+        self.update = Notification.objects.create(event=self.event, title='Gates open late', body='At 11 instead',
+                                                  send_time=start + timedelta(hours=-1))
+        ChangeSet.objects.create(event=self.event, summary='2 schedule changes', status=ChangeSet.PENDING)
+        self.ids = {
+            'event_tile': {'event_id': self.event.pk}, 'event_header': {'event_id': self.event.pk},
+            'event_stats': {'event_id': self.event.pk}, 'live_on_phone': {'event_id': self.event.pk},
+            'needs_review': {'event_id': self.event.pk}, 'event_overview': {'event_id': self.event.pk},
+            'location_row': {'event_id': self.event.pk, 'location_id': self.stage.pk},
+            'location_form': {'event_id': self.event.pk, 'location_id': self.stage.pk},
+            'schedule_item_row': {'event_id': self.event.pk, 'item_id': self.item.pk},
+            'schedule_item_form': {'event_id': self.event.pk, 'item_id': self.item.pk},
+            'notification_row': {'event_id': self.event.pk, 'notification_id': self.update.pk},
+            'notification_form': {'event_id': self.event.pk},
+        }
+        self.key_text = {
+            'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
+            'live_on_phone': 'Live on your phone', 'needs_review': '1 AI update waiting for review',
+            'event_overview': 'Live on your phone', 'location_row': 'Main Stage', 'location_form': 'One-line summary',
+            'schedule_item_row': 'Prairie Lights', 'schedule_item_form': 'Prairie Lights',
+            'notification_row': 'Gates open late', 'notification_form': 'Send an update',
+        }
+
+    def request(self, user=None):
+        request = RequestFactory().get('/console/')
+        request.user = user or self.owner
+        return request
+
+
+class RegistryTests(ComponentTestCase):
+    def test_the_set(self):
+        self.assertEqual(set(C.registry()), set(self.ids))
+
+    def test_every_action_is_a_registered_agent_action(self):
+        writes = agent_registry.registry()['writes']
+        for comp in C.registry().values():
+            for name, label in comp.actions:
+                self.assertIn(name, writes, f'{comp.name}: {name} is not an Ask Attnd action')
+                self.assertTrue(label)
+            if comp.detail:
+                self.assertIn(comp.detail, C.registry())
+            for part in comp.parts:
+                self.assertIn(part, C.registry())
+
+    def test_offered_actions_carry_the_registry_confirm_flag_and_url(self):
+        writes = agent_registry.registry()['writes']
+        data = C.load(self.owner, 'location_row', self.ids['location_row'])
+        delete = next(a for a in data['actions'] if a['name'] == 'delete_location')
+        self.assertTrue(delete['confirm'])
+        self.assertEqual(delete['confirm'], writes['delete_location'].confirm)
+        self.assertEqual(delete['url'], reverse('console:location_action', args=[self.event.pk, self.stage.pk]))
+        self.assertEqual(delete['fields'], {'action': 'delete'})
+        hide = next(a for a in data['actions'] if a['name'] == 'toggle_location_hidden')
+        self.assertFalse(hide['confirm'])
+
+    def test_buttons_the_pages_guard_with_data_confirm_are_always_ask_actions(self):
+        writes = agent_registry.registry()['writes']
+        guarded = set()
+        for name, ids in self.ids.items():
+            for action in C.load(self.owner, name, ids).get('actions', []):
+                if action.get('confirm_text'):
+                    guarded.add(action['name'])
+                    self.assertTrue(writes[action['name']].confirm, action['name'])
+        self.assertEqual(guarded, {'delete_location', 'delete_schedule_item'})
+
+    def test_every_component_renders_on_pages_and_in_the_narrow_chat(self):
+        for name, ids in self.ids.items():
+            data = C.load(self.owner, name, ids)
+            json.dumps(data)  # plain JSON
+            for surface in ('page', 'chat'):
+                html = C.render(name, data, self.request(), surface=surface, uid='c1-' if surface == 'chat' else '')
+                self.assertIn(self.key_text[name], html, f'{name} on {surface}')
+                self.assertIn('component--', html)
+                self.assertNotIn('{#', html)
+                self.assertNotIn('{%', html)
+
+    def test_list_components_expand_from_their_parent(self):
+        Location.objects.create(event=self.event, name='Taco Booth', sort_order=2)
+        rows = C.instances(self.owner, 'location_row', [{'event_id': self.event.pk}])
+        self.assertEqual([d['name'] for _, d in rows], ['Main Stage', 'Taco Booth'])
+        tiles = C.instances(self.owner, 'event_tile', [{}])
+        self.assertEqual([d['name'] for _, d in tiles], ['Prairie Fest'])
+        self.assertEqual(C.instances(self.other, 'event_tile', [{}]), [])
+
+    def test_ids_are_validated(self):
+        with self.assertRaises(C.IdError):
+            C.instances(self.owner, 'location_row', [{'event_id': self.event.pk, 'item_id': 3}])
+        with self.assertRaises(C.IdError):
+            C.instances(self.owner, 'location_form', [{'event_id': 'x'}])
+        with self.assertRaises(C.IdError):
+            C.clean_ids(C.get('location_row'), {'location_id': self.stage.pk})
+
+    def test_model_json_has_no_markup_or_urls(self):
+        for name, ids in self.ids.items():
+            text = C.model_json(C.load(self.owner, name, ids))
+            self.assertNotIn('<', text, name)
+            self.assertNotIn('/console/', text, name)
+        form = json.loads(C.model_json(C.load(self.owner, 'location_form', self.ids['location_form'])))
+        self.assertEqual(form['form']['name']['value'], 'Main Stage')
+
+
+class PermissionTests(ComponentTestCase):
+    def test_another_persons_event_is_not_found(self):
+        for name, ids in self.ids.items():
+            with self.assertRaises(Http404, msg=name):
+                C.load(self.other, name, ids)
+
+    def test_an_item_of_another_event_is_not_found(self):
+        mine = Event.objects.create(name='Mine', event_code='MINE', user=self.other, start_time=self.event.start_time)
+        with self.assertRaises(Http404):
+            C.load(self.other, 'location_row', {'event_id': mine.pk, 'location_id': self.stage.pk})
+
+    def test_contributors_see_content_but_not_the_owners_buttons(self):
+        header = C.load(self.helper, 'event_header', {'event_id': self.event.pk})
+        self.assertEqual(header['actions'], [])
+        owner = C.load(self.owner, 'event_header', {'event_id': self.event.pk})
+        self.assertEqual([a['name'] for a in owner['actions']], ['publish_event'])
+        row = C.load(self.helper, 'location_row', self.ids['location_row'])
+        self.assertEqual(row['name'], 'Main Stage')
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class PageTests(ComponentTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+
+    def test_pages_are_compositions_of_components(self):
+        pages = {
+            reverse('console:dashboard'): ['component--event_tile'],
+            reverse('console:event', args=[self.event.pk]): ['component--event_header', 'component--needs_review',
+                                                              'component--live_on_phone', 'Attendees joined',
+                                                              'Most liked'],
+            reverse('console:locations', args=[self.event.pk]): ['component--location_row', 'drag-handle'],
+            reverse('console:location_edit', args=[self.event.pk, self.stage.pk]): ['id="pin-map"',
+                                                                                    'category-options'],
+            reverse('console:schedule', args=[self.event.pk]): ['component--schedule_item_row'],
+            reverse('console:item_edit', args=[self.event.pk, self.item.pk]): ['name="start_time"'],
+            reverse('console:notifications', args=[self.event.pk]): ['component--notification_row',
+                                                                      'data-show-if="when:later"'],
+        }
+        for url, needles in pages.items():
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200, url)
+            for needle in needles:
+                self.assertContains(response, needle, msg_prefix=url)
+
+    def test_a_page_form_still_saves_through_its_view(self):
+        url = reverse('console:item_edit', args=[self.event.pk, self.item.pk])
+        response = self.client.post(url, {'name': 'Prairie Lights (late)', 'start_time': '2026-11-14T20:00',
+                                          'end_time': '', 'location': self.stage.pk, 'description': '',
+                                          'tags_text': 'folk'})
+        self.assertEqual(response.status_code, 302)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.name, 'Prairie Lights (late)')
+
+    def test_a_chat_form_with_errors_comes_back_as_the_component(self):
+        url = reverse('console:item_edit', args=[self.event.pk, self.item.pk])
+        response = self.client.post(url, {'name': '', 'start_time': 'not a time'},
+                                    HTTP_X_ATTND_COMPONENT='schedule_item_form')
+        self.assertEqual(response['Content-Type'], 'application/json')
+        data = response.json()
+        self.assertTrue(data['invalid'])
+        self.assertEqual(data['ids'], {'event_id': self.event.pk, 'item_id': self.item.pk})
+        self.assertIn('field__error', data['html'])
+        self.assertIn('data-component-form', data['html'])
+        self.assertNotIn('id="pin-map"', data['html'])
+        # Without the header the page comes back as before.
+        response = self.client.post(url, {'name': '', 'start_time': 'not a time'})
+        self.assertContains(response, 'field__error')
+        self.assertContains(response, '<html')
+
+    def test_confirm_actions_never_post_from_the_chat(self):
+        data = C.load(self.owner, 'location_row', self.ids['location_row'])
+        html = C.render('location_row', data, self.request(), surface='chat', uid='c1-')
+        self.assertIn('data-component-act="delete_location"', html)
+        self.assertNotIn('value="delete"', html)  # no form that posts the delete directly
+        self.assertIn('value="toggle_hidden"', html)  # not gated: posts to the view

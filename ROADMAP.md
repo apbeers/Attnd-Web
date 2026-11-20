@@ -188,4 +188,7 @@ Built Nov 20, 2026 (`agent/`, CLAUDE.md → Ask Attnd). Later:
 - Watch mode navigates the person's own window; a side-by-side "follow along" view on wide screens would be nicer.
 - Streaming the model's text into the panel (now: steps appear as each tool finishes, polled every 1.5 s).
 - A staff page of runs and spend across users (now: Django admin → Ask Attnd runs / usage).
+- Console components (built Nov 20, 2026: Your events, the overview's pieces, locations, schedule, updates): add the
+  event details form and the app layout as components when the chat needs them; the bespoke screens (Studio editor,
+  diagnostics, AI review, prospects, history, usage, team) stay pages.
 

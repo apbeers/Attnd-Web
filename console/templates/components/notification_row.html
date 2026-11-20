@@ -1,0 +1,11 @@
+{% load console_tags %}{# notification_row: one update, sent or scheduled (Send now / Delete for scheduled ones). #}<li class="stack stack--tight component component--notification_row{% if d.urgent %} is-urgent{% endif %}" data-id="{{ d.id }}">
+        <div>
+        <div class="cluster">
+          <strong class="grow">{% if d.urgent %}<span class="badge badge--danger">{% icon "warning" %} Urgent</span> {% endif %}{{ d.title }}</strong>
+          {% if d.sent %}<span class="small muted">Sent {{ d.sent_at }} · {{ d.delivered }} delivered</span>
+          {% else %}<span class="badge badge--info">Scheduled {{ d.scheduled }}</span>{% endif %}
+        </div>
+        <div class="muted">{{ d.body }}</div>
+        </div>
+        {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+      </li>

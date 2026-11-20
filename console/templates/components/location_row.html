@@ -1,0 +1,17 @@
+{% load console_tags %}{# location_row: one location in the list (drag handle on the page; Hide/Delete buttons in the chat). #}<li class="cluster cluster--loose cluster--nowrap component component--location_row" data-id="{{ d.id }}">
+      {% if surface != 'chat' %}{% icon "grip" "drag-handle icon--lg" %}{% endif %}
+      {% if d.image_url %}<img src="{{ d.image_url }}" alt="" width="48" height="48" class="thumb">
+      {% else %}<div class="thumb thumb--empty">{% icon "pin" %}</div>{% endif %}
+      <div class="grow">
+        <a href="{{ d.url }}" class="title-link">{{ d.name }}</a>
+        {% if d.category %}<span class="badge badge--neutral">{{ d.category }}</span>{% endif %}
+        {% if d.hidden %}<span class="badge badge--muted">Hidden</span>{% endif %}
+        {% if d.locked %}{% icon "lock" "lock small" %}{% endif %}
+        <div class="small muted">{{ d.summary }}</div>
+        {% if d.tags %}<div class="cluster cluster--tight">{% for t in d.tags %}<span class="badge badge--neutral">{{ t }}</span>{% endfor %}</div>{% endif %}
+        {% if surface == 'chat' %}<div class="cluster cluster--tight component__actions">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+      </div>
+      {% if not d.has_pin %}<span class="badge badge--warning" title="Not on the map yet">{% icon "pin" %} No pin</span>{% endif %}
+      {% if d.likes %}<span class="small nowrap hearts" title="Net likes from attendees">{% icon "heart" "tone-danger" %} {{ d.likes }}</span>{% endif %}
+      <span class="small muted nowrap">{{ d.items }} item{{ d.items|pluralize }}</span>
+    </li>

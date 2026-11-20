@@ -1,0 +1,5 @@
+{% load console_tags %}{# needs_review: AI updates waiting for review (nothing on pages when there are none). #}{% if d.pending %}<div class="panel panel--accent cluster component component--needs_review">
+  <div class="grow">{% icon "stars" "tone-brand" %} <strong>{{ d.pending }} AI update{{ d.pending|pluralize }} waiting for review.</strong>
+  {% if surface == 'chat' %}<ul class="small component__list">{% for cs in d.latest %}<li><a href="{{ cs.url }}">{{ cs.summary }}</a></li>{% endfor %}</ul>{% endif %}</div>
+  <a class="button button--primary" href="{{ d.review_url }}">Review</a>
+</div>{% elif surface == 'chat' %}<div class="panel small muted component component--needs_review">{% icon "check-circle" %} No AI updates waiting for review.</div>{% endif %}

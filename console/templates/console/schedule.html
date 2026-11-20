@@ -16,17 +16,7 @@
   <h3 class="eyebrow">{{ day|date:"l, F j" }}</h3>
   <div class="panel panel--flush"><ul class="list">
   {% for it in items %}
-    <li class="cluster cluster--loose cluster--nowrap">
-      <div class="nowrap muted small schedule-time">{{ it.start_time|date:"g:i A" }}{% if it.end_time %}–{{ it.end_time|date:"g:i A" }}{% endif %}</div>
-      <div class="grow">
-        <a class="title-link" href="{% url 'console:item_edit' event.id it.id %}">{{ it.name }}</a>
-        {% for t in it.tags %}<span class="badge badge--neutral">{{ t }}</span>{% endfor %}
-        {% if it.hidden %}<span class="badge badge--muted">Hidden</span>{% endif %}
-        {% if it.locked_fields %}{% icon "lock" "lock small" %}{% endif %}
-        <div class="small muted">{{ it.location.name|default:"No specific location" }}</div>
-      </div>
-      {% if it.hearts %}<span class="small nowrap hearts" title="Net likes from attendees">{% icon "heart" "tone-danger" %} {{ it.hearts }}</span>{% endif %}
-    </li>
+    {% component "schedule_item_row" event=event item=it hearts=it.hearts %}
   {% endfor %}
   </ul></div>
 </section>

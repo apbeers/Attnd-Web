@@ -1,0 +1,28 @@
+{% load console_tags %}{# event_stats: timing, the numbers, most liked. The overview page places the parts apart. #}
+{% partialdef timing %}<div class="timing timing--{{ d.timing.state }}">
+      {% if d.timing.state == 'now' %}<span class="live-dot"></span><strong>{{ d.timing.label }}</strong><span class="small">{{ d.timing.detail }}</span>
+      {% elif d.timing.state == 'upcoming' %}{% icon "calendar" %}<strong>{{ d.timing.label }}</strong><span class="small">{{ d.timing.detail }}</span>
+      {% else %}{% icon "history" %}<strong>{{ d.timing.label }}</strong>{% endif %}
+    </div>{% endpartialdef %}
+{% partialdef numbers %}<div class="panel">
+      <div class="grid grid--3 grid--stats">
+        {% for n in d.numbers %}<div><div class="stat__value">{{ n.value }}</div><div class="eyebrow">{{ n.label }}</div></div>
+        {% endfor %}
+      </div>
+    </div>{% endpartialdef %}
+{% partialdef most_liked %}<div class="panel">
+      <div class="cluster"><h2 class="eyebrow grow">{% icon "heart" "tone-danger" %} Most liked</h2>
+        <a class="small" href="{{ d.usage_url }}">Usage</a></div>
+      {% if d.most_liked %}
+      <ul class="list list--inset">
+      {% for row in d.most_liked %}
+        <li class="cluster">
+          <a class="grow" href="{{ row.url }}">{{ row.name }}</a>
+          <span class="small muted">{{ row.meta }}</span>
+          <span class="small nowrap hearts">{% icon "heart" "tone-danger" %} {{ row.likes }}</span>
+        </li>
+      {% endfor %}
+      </ul>
+      {% else %}<p class="small muted">Attendees can like locations and schedule items in the app (the heart button). The favourites show up here (anonymous counts only).</p>{% endif %}
+    </div>{% endpartialdef %}
+<div class="stack component component--event_stats">{% partial timing %}{% partial numbers %}{% partial most_liked %}</div>

@@ -1,0 +1,3 @@
+{% load console_tags %}{# event_overview: a composite (header, AI updates to review, numbers, live on your phone) for the chat. #}<div class="component component--event_overview"><div class="component__grid">
+{% for p in d.parts %}{% component p.component data=p %}
+{% endfor %}</div></div>

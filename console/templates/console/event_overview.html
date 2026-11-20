@@ -27,32 +27,12 @@
   <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Open Studio</a>
 </div>
 {% endif %}{% endwith %}{% endif %}
-{% if pending_changes %}
-<div class="panel panel--accent cluster">
-  <div class="grow">{% icon "stars" "tone-brand" %} <strong>{{ pending_changes }} AI update{{ pending_changes|pluralize }} waiting for review.</strong></div>
-  <a class="button button--primary" href="{% url 'console:changesets' event.id %}">Review</a>
-</div>
-{% endif %}
+{% component "needs_review" event=event %}
 
 <div class="split">
   <div class="split__main stack stack--loose">
-    {% with t=event.timing %}
-    <div class="timing timing--{{ t }}">
-      {% if t == 'now' %}<span class="live-dot"></span><strong>Happening now</strong><span class="small">ends {{ event.effective_end|date:"D M j, g:i A" }}</span>
-      {% elif t == 'upcoming' %}{% icon "calendar" %}<strong>Starts in {{ event.start_time|timeuntil }}</strong><span class="small">{{ event.start_time|date:"D M j, g:i A" }}</span>
-      {% else %}{% icon "history" %}<strong>Ended {{ event.effective_end|timesince }} ago</strong>{% endif %}
-    </div>
-    {% endwith %}
-    <div class="panel">
-      <div class="grid grid--3 grid--stats">
-        <div><div class="stat__value">{{ stats.location_count }}</div><div class="eyebrow">Locations</div></div>
-        <div><div class="stat__value">{{ stats.item_count }}</div><div class="eyebrow">Schedule items</div></div>
-        <div><div class="stat__value">{{ audience.joined }}</div><div class="eyebrow">Attendees joined</div></div>
-        <div><div class="stat__value">{{ audience.active_today }}</div><div class="eyebrow">Active today</div></div>
-        <div><div class="stat__value">{{ audience.subscribed }}</div><div class="eyebrow">Get notifications</div></div>
-        <div><div class="stat__value">{{ audience.ios }}/{{ audience.android }}</div><div class="eyebrow">iPhone / Android</div></div>
-      </div>
-    </div>
+    {% component "event_stats" event=event part="timing" %}
+    {% component "event_stats" event=event part="numbers" %}
 
     <div class="panel stack">
       <h2 id="sync-settings">{% icon "stars" "tone-brand" %} Keep it in sync with your website</h2>
@@ -86,21 +66,7 @@
       {% endif %}
     </div>
 
-    <div class="panel">
-      <div class="cluster"><h2 class="eyebrow grow">{% icon "heart" "tone-danger" %} Most liked</h2>
-        <a class="small" href="{% url 'console:usage' event.id %}">Usage</a></div>
-      {% if most_hearted %}
-      <ul class="list list--inset">
-      {% for row in most_hearted %}
-        <li class="cluster">
-          <a class="grow" href="{% if row.kind == 'location' %}{% url 'console:location_edit' event.id row.obj.id %}{% else %}{% url 'console:item_edit' event.id row.obj.id %}{% endif %}">{{ row.obj.name }}</a>
-          <span class="small muted">{% if row.kind == 'location' %}{{ row.obj.category|default:"Location" }}{% else %}{{ row.obj.start_time|date:"D g:i A" }}{% if row.obj.location %} · {{ row.obj.location.name }}{% endif %}{% endif %}</span>
-          <span class="small nowrap hearts">{% icon "heart" "tone-danger" %} {{ row.count }}</span>
-        </li>
-      {% endfor %}
-      </ul>
-      {% else %}<p class="small muted">Attendees can like locations and schedule items in the app (the heart button). The favourites show up here (anonymous counts only).</p>{% endif %}
-    </div>
+    {% component "event_stats" event=event part="most_liked" %}
 
     {% if changesets %}
     <div class="panel">
@@ -119,14 +85,7 @@
   </div>
 
   <div class="split__aside stack stack--loose">
-    <div class="stack stack--tight">{% include 'console/_live_phone.html' %}
-      <div class="cluster cluster--center">
-        <a class="button button--secondary button--small" href="{% url 'console:event_qr' event.id %}?download=1">{% icon "download" %} QR</a>
-        <a class="button button--secondary button--small" href="{% url 'console:event_poster' event.id %}" target="_blank">{% icon "printer" %} Poster</a>
-        <button class="button button--secondary button--small" data-copy="{{ join_url }}">{% icon "link" %} Copy link</button>
-      </div>
-      <div class="small muted break center">{{ join_url }}</div>
-    </div>
+    {% component "live_on_phone" event=event %}
 
     <div class="panel stack">
       <h2 class="eyebrow">Visibility</h2>

@@ -1,0 +1,20 @@
+{% load console_tags %}{# live_on_phone: QR to join + how live editing works, with QR download, poster and the join link. #}
+{% partialdef panel %}<div class="panel live-panel">
+  <div class="live-pill"><span class="live-dot"></span> Live on your phone</div>
+  <img src="{{ d.qr_url }}" alt="QR code to open {{ d.name }} in the Attnd app">
+  <div class="display-code">{{ d.code }}</div>
+  <ol class="small">
+    <li>Scan the code with your phone's camera. It opens the Attnd app, or an instant App Clip on iPhone with nothing to install.</li>
+    <li>Keep the app open and change something here: a location, the schedule, a tab or a color.</li>
+    <li>Watch your phone update within a few seconds. Attendees see the same thing.</li>
+  </ol>
+  {% if d.draft %}<p class="small tone-warning">Drafts can only be opened by your team. Publish to let attendees join.</p>{% endif %}
+</div>{% endpartialdef %}
+<div class="stack stack--tight component component--live_on_phone">{% partial panel %}
+      <div class="cluster cluster--center">
+        <a class="button button--secondary button--small" href="{{ d.qr_download_url }}">{% icon "download" %} QR</a>
+        <a class="button button--secondary button--small" href="{{ d.poster_url }}" target="_blank">{% icon "printer" %} Poster</a>
+        <button type="button" class="button button--secondary button--small" data-copy="{{ d.join_url }}">{% icon "link" %} Copy link</button>
+      </div>
+      <div class="small muted break center">{{ d.join_url }}</div>
+    </div>

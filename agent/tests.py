@@ -207,8 +207,6 @@ class RegistryTests(AgentTestCase):
             ('studio/reports.html', 'suspend'): 'take_down_studio_site',
             ('console/team.html', 'transfer'): 'transfer_event_ownership',
             ('console/team.html', 'leave'): 'leave_event',
-            ('console/item_edit.html', 'delete'): 'delete_schedule_item',
-            ('console/location_edit.html', 'delete'): 'delete_location',
             ('console/history.html', 'revision'): 'restore_version',
             ('console/changeset.html', 'discard'): 'discard_ai_changes',
         }
@@ -218,6 +216,8 @@ class RegistryTests(AgentTestCase):
             rel = '/'.join(path.parts[path.parts.index('templates') + 1:])
             if rel == 'console/account.html':
                 continue  # off-limits (account security)
+            if rel == 'components/_actions.html':
+                continue  # components' data-confirm buttons: console.tests_components checks each is confirm=True
             text = path.read_text()
             for match in re.finditer(r'data-confirm=', text):
                 form_start = text.rfind('<form', 0, match.start())

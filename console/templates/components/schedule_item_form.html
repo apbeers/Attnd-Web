@@ -1,0 +1,4 @@
+{% load console_tags %}{# schedule_item_form: add / edit a schedule item (the generic form component) and its actions. #}
+{% partialdef form %}{% include 'components/_form.html' with form=d.form %}{% endpartialdef %}
+{% partialdef actions %}{% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}{% endpartialdef %}
+<div class="stack component component--schedule_item_form">{% if surface == 'chat' %}<h3 class="title-4">{{ d.title }}</h3>{% endif %}{% partial form %}{% partial actions %}</div>
