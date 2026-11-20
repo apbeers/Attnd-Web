@@ -176,3 +176,16 @@ the branch, `TICKETS_ENABLED=1`):
 - **Platform**: organizations (multiple events, series, venues, shared branding/roles), integrations (webhooks,
   Sheets/CSV, Mailchimp import, calendar feeds), legal/compliance (ToS, privacy, data requests, WCAG for sites,
   moderation), help center + AI support for organizers.
+
+## Ask Attnd (console agent) follow-ups
+Built Nov 20, 2026 (`agent/`, CLAUDE.md → Ask Attnd). Later:
+- Check the panel in real browsers (desktop, iPhone/Android bottom sheet, screen readers: VoiceOver, TalkBack, NVDA)
+  and tune the copy; only the server side and the JSON endpoints are tested automatically.
+- Cost: the full tool list (~70 tools for staff, ~11k tokens) goes with every call; OpenAI's prompt cache makes repeats
+  cheap. If runs get expensive, send only the tools of the pages the run has touched (plus a `more_tools` tool).
+- Undo all covers what History snapshots (details, locations, schedule); extend snapshots to the app layout, so
+  Undo all can roll that back too. Updates already sent can't be unsent.
+- Watch mode navigates the person's own window; a side-by-side "follow along" view on wide screens would be nicer.
+- Streaming the model's text into the panel (now: steps appear as each tool finishes, polled every 1.5 s).
+- A staff page of runs and spend across users (now: Django admin → Ask Attnd runs / usage).
+

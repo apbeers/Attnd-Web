@@ -11,6 +11,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from agent import summaries as S
+from agent.registry import agent_action, param as P
+
 from events.display import resolve_display
 from events.models import Event
 from studio import agent, ai, hosting, importer, publishing
@@ -43,6 +46,10 @@ def _json_error(message, status=400):
 # Editor
 # ---------------------------------------------------------------------------
 
+@agent_action('enable_studio', 'Switch an event to Attnd Studio (owner/admins).', fixed={'action': 'switch'},
+              title='Switched to Studio')
+@agent_action('studio_editor', "An event's Studio page: the site, versions, chat, assets, forms, settings.",
+              kind='read')
 @studio_event_view
 def editor(request, event):
     if event.plan != Event.PLAN_STUDIO:
@@ -90,6 +97,7 @@ def _state(site):
     }
 
 
+@agent_action('studio_state', "Studio's state as JSON: draft/published versions, assets, forms.", kind='read')
 @studio_event_view
 def state(request, event):
     return JsonResponse(_state(_site_or_404(event)))
@@ -134,6 +142,9 @@ def _run_json(run):
             'cost': float(run.cost_usd)}
 
 
+@agent_action('studio_chat', "Ask Studio's website AI to change the event's website (it works in the background; "
+              'follow it with studio_run_status / read_page of the run).', json=True,
+              params={'text': P('string', 'what to change on the website')}, title='Asked Studio’s AI')
 @studio_event_view
 @require_POST
 def chat(request, event):
@@ -163,6 +174,7 @@ def chat(request, event):
     return JsonResponse({'run': _run_json(run)}, status=202)
 
 
+@agent_action('studio_run_status', 'One Studio AI run: status, steps and reply (JSON).', kind='read')
 @studio_event_view
 def run_status(request, event, run_id):
     site = _site_or_404(event)
@@ -170,6 +182,7 @@ def run_status(request, event, run_id):
     return JsonResponse({'run': _run_json(run)})
 
 
+@agent_action('retry_studio_run', 'Retry a failed Studio AI run.', title='Retried a Studio run')
 @studio_event_view
 @require_POST
 def run_retry(request, event, run_id):
@@ -199,6 +212,10 @@ def run_retry(request, event, run_id):
 # Code, versions, publishing
 # ---------------------------------------------------------------------------
 
+@agent_action('save_studio_code', "Save the website's files by hand as a new draft version (the whole site).",
+              json=True, params={'files': P('string', 'JSON object {"path": "complete file text", …} with every file'),
+                                 'summary': P('string', 'what changed', nullable=True)}, title='Saved the site code')
+@agent_action('studio_code', "The draft website's files as JSON (?version=N for another version).", kind='read')
 @studio_event_view
 def code(request, event):
     site = _site_or_404(event)
@@ -229,6 +246,8 @@ def _version(site, request, version_id):
     return get_object_or_404(SiteVersion, pk=version_id, site=site)
 
 
+@agent_action('restore_studio_version', 'Make a copy of an earlier website version the draft.',
+              title='Restored a website version')
 @studio_event_view
 @require_POST
 def restore(request, event, version_id):
@@ -238,6 +257,7 @@ def restore(request, event, version_id):
     return redirect('studio:editor', event_id=event.pk)
 
 
+@agent_action('undo_studio', "Undo the website draft's last change.", title='Undid a website change')
 @studio_event_view
 @require_POST
 def undo(request, event):
@@ -251,6 +271,10 @@ def undo(request, event):
     return redirect('studio:editor', event_id=event.pk)
 
 
+@agent_action('publish_studio_site', 'Publish the website draft (and its app look and flyer).', confirm=True,
+              summary=S.studio_publish, url_name='studio:publish', title='Published the website')
+@agent_action('publish_studio_version', 'Publish one website version.', confirm=True, summary=S.studio_publish,
+              url_name='studio:publish_version', title='Published a website version')
 @studio_event_view
 @require_POST
 def publish(request, event, version_id=None):
@@ -277,6 +301,8 @@ def publish(request, event, version_id=None):
     return redirect('studio:editor', event_id=event.pk)
 
 
+@agent_action('unpublish_studio_site', 'Take the website offline.', confirm=True, summary=S.studio_unpublish,
+              title='Took the website offline')
 @studio_event_view
 @require_POST
 def unpublish(request, event):
@@ -298,6 +324,8 @@ def version_preview(request, event, version_id):
     return redirect(url)
 
 
+@agent_action('create_studio_preview_link', 'Make a private preview link of the draft website.', json=True,
+              title='Made a preview link')
 @studio_event_view
 @require_POST
 def preview_link(request, event):
@@ -306,6 +334,13 @@ def preview_link(request, event):
     return JsonResponse({'url': url, 'days': settings.STUDIO_PREVIEW_LINK_DAYS})
 
 
+@agent_action('studio_site_settings', "The website's address (slug) and form email notifications.", confirm=True,
+              summary=S.studio_settings, params={'slug': P('string', 'the website address, 3-50 a-z 0-9 -'),
+                                                  'notify_on_forms': P('boolean', 'email the team on form entries')},
+              title='Saved the website settings')
+@agent_action('reset_studio_preview_links', 'Stop every private preview link shared for the website.',
+              confirm=True, summary=S.studio_settings, fixed={'action': 'reset_previews'},
+              title='Reset the preview links')
 @studio_event_view
 @require_POST
 def site_settings(request, event):
@@ -338,6 +373,9 @@ def site_settings(request, event):
     return redirect('studio:editor', event_id=event.pk)
 
 
+@agent_action('bring_site_into_studio', "Bring the organizer's existing website into Studio (AI, background).",
+              params={'url': P('string', 'the website address'), 'note': P('string', 'notes for the AI', nullable=True)},
+              title='Started bringing a website in')
 @studio_event_view
 @require_POST
 def bring_in(request, event):
@@ -359,6 +397,9 @@ def bring_in(request, event):
 # Assets and flyer
 # ---------------------------------------------------------------------------
 
+@agent_action('upload_studio_assets', "Add attached files to the website's asset library.", json=True,
+              params={'attachment_ids': P('array', 'ids of attached files', items={'type': 'integer'})},
+              file_params={'attachment_ids': 'files'}, title='Uploaded assets')
 @studio_event_view
 @require_POST
 def assets_upload(request, event):
@@ -378,6 +419,11 @@ def assets_upload(request, event):
                         status=200 if added or not errors else 400)
 
 
+@agent_action('delete_studio_asset', 'Delete a file from the asset library.', confirm=True, json=True,
+              fixed={'action': 'delete'}, title='Deleted an asset')
+@agent_action('describe_studio_asset', "Set an asset's description, alt text and tags.", json=True,
+              params={'description': P('string', 'description'), 'alt': P('string', 'alt text'),
+                      'tags': P('string', 'comma-separated tags')}, title='Described an asset')
 @studio_event_view
 @require_POST
 def asset_action(request, event, asset_id):
@@ -395,6 +441,8 @@ def asset_action(request, event, asset_id):
     return JsonResponse({'state': _state(site)})
 
 
+@agent_action('set_studio_flyer', "Choose an image or PDF asset as the event's flyer (new draft version).", json=True,
+              params={'asset_id': P('string', 'the asset id')}, title='Chose the flyer')
 @studio_event_view
 @require_POST
 def flyer(request, event):
@@ -421,6 +469,7 @@ def _forms_summary(site):
     return out
 
 
+@agent_action('studio_form_entries', "A website form's entries as CSV.", kind='read')
 @studio_event_view
 def form_csv(request, event, form_name):
     site = _site_or_404(event)
@@ -440,6 +489,8 @@ def form_csv(request, event, form_name):
     return response
 
 
+@agent_action('delete_studio_form_entry', 'Delete one website form entry.', confirm=True,
+              title='Deleted a form entry')
 @studio_event_view
 @require_POST
 def form_delete(request, event, submission_id):
@@ -453,6 +504,15 @@ def form_delete(request, event, submission_id):
 # Staff: abuse reports (Studio itself is admins only; the old beta-access page is gone)
 # ---------------------------------------------------------------------------
 
+@agent_action('take_down_studio_site', 'Take a reported Studio site down (staff).', confirm=True,
+              fixed={'action': 'suspend'}, params={'site': P('integer', 'the site id'),
+                                                    'reason': P('string', 'reason', nullable=True)},
+              title='Took a site down')
+@agent_action('reinstate_studio_site', 'Put a taken-down Studio site back (staff).', fixed={'action': 'reinstate'},
+              params={'site': P('integer', 'the site id')}, title='Reinstated a site')
+@agent_action('resolve_studio_reports', "Mark a site's open reports resolved (staff).", fixed={'action': 'resolve'},
+              params={'site': P('integer', 'the site id')}, title='Resolved reports')
+@agent_action('studio_reports', 'Abuse reports about Studio sites and the sites taken down (staff).', kind='read')
 @staff_required
 def reports(request):
     if request.method == 'POST':

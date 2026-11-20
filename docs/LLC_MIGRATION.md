@@ -82,8 +82,12 @@ Accounts and services:
   untick it with the next profile); App Attest.
 - App Store Connect: Attnd (id1470627406), App Clip, TestFlight.
 - Google Play Console: `com.arcu.attnd` (upload key, Play App Signing), publishing service account.
-- OpenAI (server key: AI import, website watching, Studio, image generation, and since Nov 19, 2026 the staff
-  Prospects dashboard's web search tool: billed per search call on the same key/project).
+- OpenAI (server key: AI import, website watching, Studio, image generation, since Nov 19, 2026 the staff
+  Prospects dashboard's web search tool: billed per search call on the same key/project, and since Nov 20, 2026
+  **Ask Attnd**, the console's AI agent for every organizer (`agent/`, `AGENT_MODEL` gpt-5.5, capped per person per
+  day by `AGENT_DAILY_SPEND_CAP_USD`): it sends console page text (event content, team member emails, organizer
+  notes) to OpenAI as the signed-in organizer, so the LLC's OpenAI org must have data sharing/training off and the
+  privacy policy / organizer terms should mention the AI assistant as a processor).
 - Prospects data (staff sales pipeline, `prospects/`): organizer contact details scraped from public event pages,
   with do-not-contact flags. Moves with the database; outreach from the LLC must identify the LLC and its physical
   mailing address (CAN-SPAM).

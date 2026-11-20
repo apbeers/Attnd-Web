@@ -40,6 +40,8 @@ class Command(BaseCommand):
         recovered = jobs.recover_stale()
         from studio.agent import recover_stale as recover_studio_runs
         recover_studio_runs()  # Studio AI runs interrupted by a restart
+        from agent.loop import recover_stale as recover_agent_runs
+        recover_agent_runs()  # Ask Attnd runs interrupted by a restart; unanswered confirmations after a day
         watched, queued = watch.check_watched_events()
         from attestation.views import purge_expired_nonces
         purge_expired_nonces()

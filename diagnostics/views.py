@@ -17,6 +17,8 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
+from agent.registry import agent_action, param as P
+
 from diagnostics import records, retrace, storage, summary, symbolicate, timing
 from diagnostics.models import (APP_CATEGORIES, LEVELS, REASONS, SERVER_CATEGORY, DiagnosticReport,
                                 DiagnosticSession, SymbolFile)
@@ -68,6 +70,7 @@ def _perf(days=7):
     return out
 
 
+@agent_action('diagnostics_overview', 'Debug log sessions and API-014 performance (staff).', kind='read')
 @staff_required
 def overview(request):
     sessions = DiagnosticSession.objects.all()
@@ -112,6 +115,7 @@ def overview(request):
     })
 
 
+@agent_action('diagnostics_session', 'One debug log session (staff).', kind='read')
 @staff_required
 def session_detail(request, code):
     session = get_object_or_404(DiagnosticSession, code=code.upper())
@@ -123,6 +127,7 @@ def session_detail(request, code):
     })
 
 
+@agent_action('diagnostics_session_entries', 'A debug session\'s entries as JSON (?level=, ?cat=, ?q=).', kind='read')
 @staff_required
 def session_entries(request, code):
     session = get_object_or_404(DiagnosticSession, code=code.upper())
@@ -143,6 +148,8 @@ def session_export(request, code):
     return response
 
 
+@agent_action('delete_diagnostics_session', 'Delete a debug log session and its entries (staff).', confirm=True,
+              title='Deleted a log session')
 @staff_required
 @require_POST
 def session_delete(request, code):
@@ -153,6 +160,7 @@ def session_delete(request, code):
     return redirect('diagnostics:overview')
 
 
+@agent_action('diagnostics_reports', 'Crash / hang / ANR reports (staff).', kind='read')
 @staff_required
 def reports(request):
     rows = DiagnosticReport.objects.all()
@@ -173,6 +181,13 @@ def mapping_for(report):
             if report.build else None)
 
 
+@agent_action('symbolicate_report', 'Start symbolicating an iOS report (GitHub workflow).',
+              fixed={'action': 'symbolicate'}, title='Started symbolication')
+@agent_action('retrace_report', 'Retrace an Android report with its R8 mapping.', fixed={'action': 'retrace'},
+              title='Retraced a report')
+@agent_action('delete_diagnostics_report', 'Delete a crash report.', confirm=True, fixed={'action': 'delete'},
+              title='Deleted a report')
+@agent_action('diagnostics_report', 'One crash report (staff).', kind='read')
 @staff_required
 def report_detail(request, pk):
     report = get_object_or_404(DiagnosticReport, pk=pk)
@@ -208,6 +223,7 @@ def report_detail(request, pk):
     })
 
 
+@agent_action('diagnostics_endpoints', 'API endpoint timings p50/p95 (staff).', kind='read')
 @staff_required
 def endpoints(request):
     window = request.GET.get('window', '24h')
@@ -219,6 +235,12 @@ def endpoints(request):
         'windows': ['1h', '24h', '7d', '30d']})
 
 
+@agent_action('retrace_stack', 'Retrace a pasted Android stack trace with a stored mapping.', returns_page=True,
+              params={'mapping': P('integer', 'mapping id'), 'stack': P('string', 'the stack trace')},
+              title='Retraced a stack')
+@agent_action('delete_symbol_mapping', 'Delete a stored R8 mapping.', confirm=True, fixed={'action': 'delete'},
+              params={'id': P('integer', 'mapping id')}, title='Deleted a mapping')
+@agent_action('diagnostics_symbols', 'Stored Android R8 mappings (staff).', kind='read')
 @staff_required
 def symbols(request):
     result = None

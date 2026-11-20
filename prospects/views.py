@@ -15,6 +15,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from agent import summaries as S
+from agent.registry import agent_action, param as P
+
 from diagnostics.views import staff_required
 from prospects import discover, testing
 from prospects.models import Prospect, ProspectActivity, ProspectContact, ProspectRun, ProspectSettings
@@ -76,6 +79,16 @@ def _filtered(request):
     return qs.order_by(*SORTS.get(f['sort'], SORTS['fit'])), f
 
 
+@agent_action('create_test_events', 'Import selected prospects as testing-only events (AI import).', confirm=True,
+              summary=S.create_test_events, fixed={'action': 'create_test_events'},
+              params={'ids': P('array', 'prospect ids', items={'type': 'integer'})}, title='Started test event imports')
+@agent_action('set_prospects_status', 'Set the pipeline status of selected prospects.', fixed={'action': 'status'},
+              params={'ids': P('array', 'prospect ids', items={'type': 'integer'}),
+                      'status': P('string', 'the new status', enum=['new', 'reviewing', 'test_event_created',
+                                                                    'contacted', 'interested', 'won', 'lost',
+                                                                    'dismissed'])},
+              title='Set prospect statuses')
+@agent_action('prospects_list', 'The prospects pipeline (filters as ?q=, ?status=, ?sort=).', kind='read')
 @staff_required
 def prospect_list(request):
     if request.method == 'POST':
@@ -135,6 +148,20 @@ def _bulk(request):
     return redirect(back)
 
 
+@agent_action('save_prospect', "Save a prospect's status and notes.", fixed={'action': 'save'},
+              params={'status': P('string', 'pipeline status', nullable=True,
+                                  enum=['new', 'reviewing', 'test_event_created', 'contacted', 'interested', 'won',
+                                        'lost', 'dismissed']),
+                      'notes': P('string', 'notes (replaces them)', nullable=True)},
+              title='Saved a prospect')
+@agent_action('create_test_event', 'Import one prospect as a testing-only event (AI import).', confirm=True,
+              summary=S.create_test_event, fixed={'action': 'create_test_event'}, title='Started a test event import')
+@agent_action('toggle_prospect_contact_dnc', 'Mark a prospect contact do-not-contact, or contactable again.',
+              fixed={'action': 'dnc'}, params={'contact': P('integer', 'the contact id')},
+              title='Changed do-not-contact')
+@agent_action('delete_prospect_contact', 'Remove a prospect contact.', confirm=True, fixed={'action': 'delete_contact'},
+              params={'contact': P('integer', 'the contact id')}, title='Removed a contact')
+@agent_action('prospect_page', 'One prospect: details, contacts, activity.', kind='read')
 @staff_required
 def prospect_detail(request, pk):
     prospect = get_object_or_404(Prospect.objects.select_related('event', 'ingest_job', 'first_seen_run'), pk=pk)
@@ -179,6 +206,9 @@ def prospect_detail(request, pk):
         'active_job': testing.active_job(prospect)})
 
 
+@agent_action('run_prospect_discovery', 'Start a prospect discovery run now (AI web search; costs up to the daily cap).',
+              title='Started prospect discovery')
+@agent_action('prospect_runs', 'Prospect discovery runs and today\'s spend.', kind='read')
 @staff_required
 def runs(request):
     if request.method == 'POST':
@@ -199,6 +229,7 @@ def runs(request):
         'cap': settings.PROSPECT_DAILY_SPEND_CAP_USD, 'conf': ProspectSettings.load()})
 
 
+@agent_action('prospect_run', 'One discovery run: log and events found.', kind='read')
 @staff_required
 def run_detail(request, pk):
     run = get_object_or_404(ProspectRun, pk=pk)
@@ -206,6 +237,9 @@ def run_detail(request, pk):
         'tab': 'runs', 'run': run, 'found': run.first_seen.order_by('-fit_score')[:200]})
 
 
+@agent_action('save_prospect_settings', 'Prospect discovery settings (region, themes, schedule).',
+              form=SettingsForm, prefill=True, title='Saved prospect settings')
+@agent_action('prospect_settings', 'Prospect discovery settings.', kind='read')
 @staff_required
 def settings_view(request):
     conf = ProspectSettings.load()

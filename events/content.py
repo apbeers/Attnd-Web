@@ -246,6 +246,9 @@ def snapshot(event):
 
 
 def save_revision(event, summary, user=None):
+    from agent.context import current as agent_step
+    if agent_step() and 'Ask Attnd' not in summary:
+        summary = f'{summary} (Ask Attnd)'  # made while Ask Attnd ran a console view for this person
     return EventRevision.objects.create(
         event=event,
         content_version=event.content_version,

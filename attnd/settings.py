@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'diagnostics.apps.DiagnosticsConfig',
     'studio.apps.StudioConfig',
     'prospects.apps.ProspectsConfig',
+    'agent.apps.AgentConfig',
 ]
 
 MIDDLEWARE = [
@@ -68,7 +69,8 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     # gzip for the API's JSON and the HTML pages (after WhiteNoise, which serves static files pre-compressed).
     'attnd.middleware.CompressionMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    # Django's session middleware + Ask Attnd's internal requests (they use the person's session, never saved).
+    'agent.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -379,6 +381,17 @@ PROSPECT_DAILY_SPEND_CAP_USD = float(os.getenv('PROSPECT_DAILY_SPEND_CAP_USD', '
 PROSPECT_RUN_MAX_MINUTES = int(os.getenv('PROSPECT_RUN_MAX_MINUTES', '20'))  # wall clock per run
 PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # OpenAI's web_search tool: $10 per 1,000 calls (+ its content as input tokens)
 
+# Ask Attnd (agent/): the console's AI agent. Every tool runs the real console view as the signed-in person.
+# Provider: the same as Studio's (STUDIO_AI_PROVIDER / ANTHROPIC_API_KEY); on OpenAI these models.
+AGENT_MODEL = os.getenv('AGENT_MODEL', 'gpt-5.5')
+AGENT_FALLBACK_MODEL = os.getenv('AGENT_FALLBACK_MODEL', 'gpt-5')  # only when AGENT_MODEL is unavailable
+AGENT_DAILY_SPEND_CAP_USD = float(os.getenv('AGENT_DAILY_SPEND_CAP_USD', '2'))  # per person per UTC day
+AGENT_MAX_STEPS = int(os.getenv('AGENT_MAX_STEPS', '40'))  # model calls per run
+AGENT_RUN_MAX_MINUTES = int(os.getenv('AGENT_RUN_MAX_MINUTES', '15'))  # wall clock per run (waiting doesn't count)
+AGENT_PLANNING_EFFORT = os.getenv('AGENT_PLANNING_EFFORT', 'medium')  # reasoning effort: first call / after a reply
+AGENT_STEP_EFFORT = os.getenv('AGENT_STEP_EFFORT', 'low')  # reasoning effort: routine steps
+AGENT_MAX_ATTACHMENT_MB = int(os.getenv('AGENT_MAX_ATTACHMENT_MB', '15'))
+
 # ---------------------------------------------------------------------------
 # Content Security Policy (Django's built-in CSP middleware)
 # ---------------------------------------------------------------------------
@@ -469,6 +482,12 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+        # Ask Attnd: one JSON line per internal request (run, step, method, path, status) and run failures.
+        "attnd.agent": {
+            "handlers": ["request"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
 if TESTING:
@@ -476,6 +495,7 @@ if TESTING:
     # Only its errors (5xx, unhandled exceptions) stay visible in test output.
     LOGGING["loggers"]["django.request"] = {"handlers": ["console"], "level": "ERROR", "propagate": False}
     LOGGING["loggers"]["attnd.request"]["level"] = "WARNING"  # one line per API call would flood the output
+    LOGGING["loggers"]["attnd.agent"]["level"] = "WARNING"
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 

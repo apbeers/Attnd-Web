@@ -120,16 +120,18 @@ def provider_name():
     return choice
 
 
-def get_provider():
+def get_provider(**options):
+    """The chat provider. `options` (all optional, used by Ask Attnd): model, fallback_model, effort,
+    parallel_tool_calls; Studio passes none and gets its own settings."""
     name = provider_name()
     if name == 'anthropic':
         if not settings.ANTHROPIC_API_KEY:
             raise AIError('STUDIO_AI_PROVIDER is anthropic but ANTHROPIC_API_KEY is not set.')
-        return AnthropicProvider()
+        return AnthropicProvider(effort=options.get('effort'))
     import os
     if not os.getenv('OPENAI_API_KEY'):
         raise AIError('No AI key is configured on the server (OPENAI_API_KEY or ANTHROPIC_API_KEY).')
-    return OpenAIProvider()
+    return OpenAIProvider(**options)
 
 
 _unavailable_models = set()  # OpenAI models this account can't use (fell back once; remembered per process)
@@ -169,17 +171,28 @@ class OpenAIProvider:
     """
     name = 'openai'
 
-    def __init__(self):
-        self.model = settings.STUDIO_OPENAI_MODEL
-        if self.model in _unavailable_models and settings.STUDIO_OPENAI_FALLBACK_MODEL:
-            self.model = settings.STUDIO_OPENAI_FALLBACK_MODEL
+    def __init__(self, model=None, fallback_model=None, effort='medium', parallel_tool_calls=True):
+        self.model = model or settings.STUDIO_OPENAI_MODEL
+        self.fallback_model = settings.STUDIO_OPENAI_FALLBACK_MODEL if fallback_model is None else fallback_model
+        if self.model in _unavailable_models and self.fallback_model:
+            self.model = self.fallback_model
+        self.effort = effort or 'medium'  # reasoning effort; callers may change it between calls
+        self.parallel_tool_calls = parallel_tool_calls
         self.previous_id = None
         self._sent = 0  # items of `messages` that OpenAI already has (through previous_response_id)
 
     @staticmethod
     def _tools(tools):
         return [{'type': 'function', 'name': t['name'], 'description': t['description'],
-                 'parameters': t['parameters'], 'strict': False} for t in tools]
+                 'parameters': t['parameters'], 'strict': bool(t.get('strict'))} for t in tools]
+
+    def state(self):
+        """What a paused conversation needs to continue later (in another thread): the chain position."""
+        return {'previous_id': self.previous_id, 'sent': self._sent, 'model': self.model}
+
+    def restore(self, state):
+        self.previous_id, self._sent = state.get('previous_id'), int(state.get('sent') or 0)
+        self.model = state.get('model') or self.model
 
     def start(self, user_text):
         self.previous_id, self._sent = None, 0
@@ -188,17 +201,17 @@ class OpenAIProvider:
     def chat(self, system, messages, tools):
         from openai import APIError, BadRequestError, NotFoundError, OpenAI
         client = OpenAI(timeout=900)
-        kwargs = {'reasoning': {'effort': 'medium'}} if self.model.startswith(REASONING_PREFIXES) else {}
+        kwargs = {'reasoning': {'effort': self.effort}} if self.model.startswith(REASONING_PREFIXES) else {}
         if self.previous_id:
             kwargs['previous_response_id'] = self.previous_id
         try:
             response = client.responses.create(
                 model=self.model, instructions=system, input=list(messages[self._sent:]),
-                tools=self._tools(tools), parallel_tool_calls=True, store=True, **kwargs)
+                tools=self._tools(tools), parallel_tool_calls=self.parallel_tool_calls, store=True, **kwargs)
         except (NotFoundError, BadRequestError) as exc:
-            fallback = settings.STUDIO_OPENAI_FALLBACK_MODEL
+            fallback = self.fallback_model
             if model_unavailable(exc) and fallback and self.model != fallback and not self.previous_id:
-                logger.warning('Studio model %s unavailable (%s); using %s', self.model, exc, fallback)
+                logger.warning('AI model %s unavailable (%s); using %s', self.model, exc, fallback)
                 _unavailable_models.add(self.model)
                 self.model = fallback
                 return self.chat(system, messages, tools)
@@ -247,11 +260,18 @@ class AnthropicProvider:
     models; effort high; refusals fall back server-side (`fallbacks: "default"`)."""
     name = 'anthropic'
 
-    def __init__(self):
+    def __init__(self, effort=None):
         self.model = settings.STUDIO_ANTHROPIC_MODEL
+        self.effort = effort or 'high'
 
     def start(self, user_text):
         return [{'role': 'user', 'content': user_text}]
+
+    def state(self):
+        return {}  # the messages list holds the whole conversation
+
+    def restore(self, state):
+        pass
 
     def _post(self, body):
         request = urllib.request.Request(ANTHROPIC_URL, data=json.dumps(body).encode(), method='POST', headers={
@@ -271,7 +291,7 @@ class AnthropicProvider:
             'model': self.model, 'max_tokens': 32000, 'system': system, 'messages': self._cached(messages),
             'tools': [{'name': t['name'], 'description': t['description'], 'input_schema': t['parameters']}
                       for t in tools],
-            'output_config': {'effort': 'high'}, 'fallbacks': 'default',
+            'output_config': {'effort': self.effort}, 'fallbacks': 'default',
         }
         data = self._post(body)
         if data.get('stop_reason') == 'refusal':

@@ -24,6 +24,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from attnd.links import join_url, qr_png
+from agent import summaries as S
+from agent.registry import agent_action, param as P
 
 from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, LocationForm,
                                        NotificationForm, RefreshForm, ScheduledItemForm, SourcesForm,
@@ -89,6 +91,7 @@ def _count(queryset, field='event'):
     return Coalesce(Subquery(rows, output_field=IntegerField()), 0)
 
 
+@agent_action('events_list', 'Your events (upcoming and past) with their codes and counts.', kind='read')
 @login_required
 def dashboard(request):
     # One correlated COUNT subquery per number: joining all four relations and counting DISTINCT multiplied
@@ -107,6 +110,12 @@ def dashboard(request):
     return render(request, 'console/dashboard.html', {'upcoming': upcoming, 'past': past, 'running_jobs': running})
 
 
+@agent_action('create_event_with_ai', 'Create a new event with the AI import from its website(s), an attached '
+              'flyer/PDF and/or pasted text. Runs in the background (see background tasks).',
+              form=AIImportForm, prefix='ai', fixed={'mode': 'ai'}, json=True, title='Started an AI import')
+@agent_action('create_blank_event', 'Create a new, empty draft event.', form=BlankEventForm, prefix='blank',
+              fixed={'mode': 'blank'}, title='Created an event')
+@agent_action('new_event_page', 'The page for creating an event.', kind='read')
 @login_required
 def event_new(request):
     ai_form = AIImportForm(prefix='ai')
@@ -144,6 +153,7 @@ def event_new(request):
     return render(request, 'console/event_new.html', {'ai_form': ai_form, 'blank_form': blank_form, 'mode': mode})
 
 
+@agent_action('import_job', 'An AI import or update job and its progress.', kind='read')
 @login_required
 def job_detail(request, job_id):
     job = get_object_or_404(IngestJob, pk=job_id)
@@ -202,6 +212,7 @@ def task_json(job):
     }
 
 
+@agent_action('background_tasks', 'Running and recent background tasks (AI imports and updates).', kind='read')
 @login_required
 def tasks_feed(request):
     """Running background tasks for this person, plus ones that finished in the last 10 minutes."""
@@ -240,6 +251,8 @@ def manifest(request):
 # Event overview / edit / lifecycle
 # ---------------------------------------------------------------------------
 
+@agent_action('event_overview', "An event's overview: status, join code, audience, sources, recent AI runs.",
+              kind='read')
 @event_view
 def event_overview(request, event):
     stats = event_stats(event)
@@ -276,6 +289,9 @@ def _studio_import_run(event, user):
             .order_by('-created_at').first())
 
 
+@agent_action('update_event_details', "Edit an event's details (name, description, times, address, flyer, assistant "
+              'details…). Only pass what should change.', form=EventForm, prefill=True, title='Edited event details')
+@agent_action('event_details_page', "An event's details form with the current values.", kind='read')
 @event_view
 def event_edit(request, event):
     form = EventForm(request.POST or None, request.FILES or None, instance=event)
@@ -287,6 +303,16 @@ def event_edit(request, event):
     return render(request, 'console/event_edit.html', _ctx(event, 'details', form=form))
 
 
+@agent_action('publish_event', 'Publish an event so attendees can join it.', confirm=True, summary=S.publish_event,
+              fixed={'action': 'publish'}, title='Published the event')
+@agent_action('unpublish_event', 'Move an event back to draft (attendees can no longer open it).', confirm=True,
+              summary=S.unpublish_event, fixed={'action': 'unpublish'}, title='Moved the event to draft')
+@agent_action('archive_event', 'Archive an event (attendees see it as ended).', confirm=True,
+              summary=S.archive_event, fixed={'action': 'archive'}, title='Archived the event')
+@agent_action('list_event_nearby', 'List an event publicly in "Find nearby events".', confirm=True,
+              summary=S.list_event, fixed={'action': 'list'}, title='Listed the event nearby')
+@agent_action('unlist_event', 'Stop listing an event nearby (people can still join with the code).',
+              fixed={'action': 'unlist'}, title='Unlisted the event')
 @event_view
 @require_POST
 def event_status(request, event):
@@ -315,6 +341,8 @@ def event_status(request, event):
     return redirect('console:event', event_id=event.pk)
 
 
+@agent_action('update_website_settings', "An event's source websites and whether Attnd watches them for changes.",
+              form=SourcesForm, prefill='console:event', title='Saved the website settings')
 @event_view
 @require_POST
 def event_sources(request, event):
@@ -333,6 +361,9 @@ def event_sources(request, event):
     return redirect('console:event', event_id=event.pk)
 
 
+@agent_action('check_for_updates', 'Check the event\'s websites (and optional pasted text or an attached file) for '
+              'updates with the AI. Runs in the background; suggestions then wait for review.', form=RefreshForm,
+              json=True, title='Started checking for updates')
 @event_view
 @require_POST
 def event_refresh(request, event):
@@ -355,6 +386,8 @@ def event_refresh(request, event):
     return redirect('console:job', job_id=job.pk)
 
 
+@agent_action('delete_event', 'Delete an event permanently (owner only).', confirm=True, summary=S.delete_event,
+              build=S.build_delete_event, title='Deleted the event')
 @event_view
 @require_POST
 def event_delete(request, event):
@@ -390,6 +423,7 @@ def event_poster(request, event):
 # Locations
 # ---------------------------------------------------------------------------
 
+@agent_action('locations_page', "An event's locations with their ids.", kind='read')
 @event_view
 def locations(request, event):
     from console.usage import net_hearts
@@ -400,6 +434,13 @@ def locations(request, event):
     return render(request, 'console/locations.html', _ctx(event, 'locations', locations=locs))
 
 
+@agent_action('add_location', 'Add a location (stage, booth, vendor…) to an event.', form=LocationForm,
+              url_name='console:location_new', prefill=True, title='Added a location')
+@agent_action('edit_location', 'Edit a location. Only pass what should change.', form=LocationForm,
+              url_name='console:location_edit', prefill=True, title='Edited a location')
+@agent_action('new_location_page', 'The form for a new location.', kind='read', url_name='console:location_new')
+@agent_action('location_page', "A location's form with its current values and schedule.", kind='read',
+              url_name='console:location_edit')
 @event_view
 def location_edit(request, event, location_id=None):
     loc = get_object_or_404(Location, pk=location_id, event=event) if location_id else Location(event=event)
@@ -424,6 +465,12 @@ def location_edit(request, event, location_id=None):
                                                                event_tags=_event_tags(event)))
 
 
+@agent_action('delete_location', 'Delete a location (its schedule items keep no location).', confirm=True,
+              summary=S.delete_location, fixed={'action': 'delete'}, title='Deleted a location')
+@agent_action('toggle_location_hidden', 'Hide a location from attendees, or show it again.',
+              fixed={'action': 'toggle_hidden'}, title='Hid / showed a location')
+@agent_action('unlock_location', 'Let AI refreshes update a location\'s hand-edited fields again.',
+              fixed={'action': 'unlock'}, title='Unlocked a location')
 @event_view
 @require_POST
 def location_action(request, event, location_id):
@@ -442,6 +489,10 @@ def location_action(request, event, location_id):
     return redirect(request.POST.get('next') or reverse('console:locations', args=[event.pk]))
 
 
+@agent_action('reorder_locations', 'Set the order of an event\'s locations in the app.', json=True,
+              params={'order': P('array', 'every location id, in the new order', items={'type': 'integer'})},
+              build=lambda args, ctx: {'order': ','.join(str(i) for i in args.get('order') or [])},
+              title='Reordered the locations')
 @event_view
 @require_POST
 def locations_reorder(request, event):
@@ -458,6 +509,7 @@ def locations_reorder(request, event):
 # Schedule
 # ---------------------------------------------------------------------------
 
+@agent_action('schedule_page', "An event's schedule by day, with item ids.", kind='read')
 @event_view
 def schedule(request, event):
     items = event.scheduleditem_set.select_related('location').order_by('start_time', 'name')
@@ -478,6 +530,13 @@ def schedule(request, event):
         locations=event.location_set.order_by('sort_order', 'name'), location_filter=location_filter))
 
 
+@agent_action('add_schedule_item', 'Add a schedule item (a set, talk, session…) to an event.',
+              form=ScheduledItemForm, url_name='console:item_new', prefill=True, title='Added a schedule item')
+@agent_action('edit_schedule_item', 'Edit a schedule item. Only pass what should change.', form=ScheduledItemForm,
+              url_name='console:item_edit', prefill=True, title='Edited a schedule item')
+@agent_action('new_schedule_item_page', 'The form for a new schedule item.', kind='read', url_name='console:item_new')
+@agent_action('schedule_item_page', "A schedule item's form with its current values.", kind='read',
+              url_name='console:item_edit')
 @event_view
 def item_edit(request, event, item_id=None):
     item = get_object_or_404(ScheduledItem, pk=item_id, event=event) if item_id else ScheduledItem(event=event)
@@ -511,6 +570,12 @@ def _event_tags(event, limit=30):
     return event_vocabulary(event)[:limit]
 
 
+@agent_action('delete_schedule_item', 'Delete a schedule item.', confirm=True, summary=S.delete_item,
+              fixed={'action': 'delete'}, title='Deleted a schedule item')
+@agent_action('toggle_schedule_item_hidden', 'Hide a schedule item from attendees, or show it again.',
+              fixed={'action': 'toggle_hidden'}, title='Hid / showed a schedule item')
+@agent_action('unlock_schedule_item', 'Let AI refreshes update a schedule item\'s hand-edited fields again.',
+              fixed={'action': 'unlock'}, title='Unlocked a schedule item')
 @event_view
 @require_POST
 def item_action(request, event, item_id):
@@ -532,6 +597,11 @@ def item_action(request, event, item_id):
 # Notifications
 # ---------------------------------------------------------------------------
 
+@agent_action('send_notification', 'Send an update (push notification + Updates tab) to the attendees now, or '
+              'schedule it. Urgent = for cancellations and safety only.', confirm=True, summary=S.send_notification,
+              form=NotificationForm, prefill=True, title='Sent / scheduled an update')
+@agent_action('notifications_page', "An event's updates (sent and scheduled) and how many devices they reach.",
+              kind='read')
 @event_view
 def notifications(request, event):
     form = NotificationForm(request.POST or None, event=event,
@@ -563,6 +633,10 @@ def notifications(request, event):
         live_activities=live_activities, urgent_left=push.urgent_sends_left(event)))
 
 
+@agent_action('send_scheduled_notification', 'Send a scheduled update now.', confirm=True,
+              summary=S.send_scheduled_notification, fixed={'action': 'send'}, title='Sent a scheduled update')
+@agent_action('delete_scheduled_notification', 'Delete a scheduled (not yet sent) update.', confirm=True,
+              summary=S.delete_notification, fixed={'action': 'delete'}, title='Deleted a scheduled update')
 @event_view
 @require_POST
 def notification_action(request, event, notification_id):
@@ -580,6 +654,12 @@ def notification_action(request, event, notification_id):
 # Display / app layout
 # ---------------------------------------------------------------------------
 
+@agent_action('update_app_layout', "The app's layout for an event: preset, tabs, styles, map options, accent colour. "
+              'Only pass what should change.', form=DisplayForm, prefill=True,
+              params={'accent_color': P('string', 'Accent colour #RRGGBB', nullable=True),
+                      'accent_default': P('boolean', 'true = use the default accent colour', nullable=True)},
+              title='Saved the app layout')
+@agent_action('app_layout_page', "An event's app layout settings and what the app resolves them to.", kind='read')
 @event_view
 def display_settings(request, event):
     overrides = clean_overrides(event.display_config)
@@ -618,6 +698,7 @@ def _preview_html(event, resolved):
 # AI changes review
 # ---------------------------------------------------------------------------
 
+@agent_action('ai_updates_page', "An event's AI updates (reviews and recent AI jobs).", kind='read')
 @event_view
 def changesets(request, event):
     sets = event.changesets.exclude(status=ChangeSet.EMPTY)
@@ -625,6 +706,15 @@ def changesets(request, event):
                                                             jobs=event.ingest_jobs.all()[:10]))
 
 
+@agent_action('apply_ai_changes', 'Apply some of the AI\'s suggested changes of a review (all fields of each '
+              'accepted change).', confirm=True, summary=S.apply_changes, build=S.build_apply_changes,
+              params={'accept_change_ids': P('array', 'ids of the changes to accept (from the review page)',
+                                             items={'type': 'integer'}),
+                      'notify_attendees': P('boolean', 'Also tell attendees their app was updated', nullable=True)},
+              title='Applied AI suggestions')
+@agent_action('discard_ai_changes', 'Discard every pending AI suggestion of a review.', confirm=True,
+              summary=S.discard_changes, fixed={'action': 'discard'}, title='Discarded AI suggestions')
+@agent_action('ai_changes_review', 'One AI review: the suggested changes with their ids.', kind='read')
 @login_required
 def changeset_detail(request, changeset_id):
     cs = get_object_or_404(ChangeSet.objects.select_related('event'), pk=changeset_id)
@@ -718,6 +808,12 @@ def _changes_for_review(cs):
 # History & team
 # ---------------------------------------------------------------------------
 
+@agent_action('save_snapshot', "Save a snapshot of an event's content in History.", fixed={'action': 'snapshot'},
+              params={'summary': P('string', 'what the snapshot is for', nullable=True)}, title='Saved a snapshot')
+@agent_action('restore_version', "Restore an event's content (details, locations, schedule) to a History version.",
+              confirm=True, summary=S.restore_version,
+              params={'revision': P('integer', 'the History revision id')}, title='Restored a version')
+@agent_action('history_page', "An event's History versions with their ids.", kind='read')
 @event_view
 def history(request, event):
     if request.method == 'POST':
@@ -733,6 +829,27 @@ def history(request, event):
     return render(request, 'console/history.html', _ctx(event, 'history', revisions=revisions))
 
 
+@agent_action('invite_team_member', 'Give someone access to an event by email (owner/admins).', confirm=True,
+              summary=S.invite, form=TeamInviteForm, fixed={'action': 'invite'}, title='Invited a team member')
+@agent_action('cancel_team_invite', 'Cancel a pending team invitation.', confirm=True, summary=S.cancel_invite,
+              fixed={'action': 'cancel_invite'}, params={'invite': P('integer', 'the invitation id')},
+              title='Cancelled an invitation')
+@agent_action('remove_team_member', 'Remove someone from an event\'s team.', confirm=True, summary=S.remove_member,
+              fixed={'action': 'remove'}, params={'member': P('integer', 'the team member id')},
+              title='Removed a team member')
+@agent_action('change_team_role', 'Change a team member\'s role (owner only).', confirm=True, summary=S.change_role,
+              fixed={'action': 'role'}, params={'member': P('integer', 'the team member id'),
+                                                'role': P('string', 'the new role', enum=['admin', 'contributor'])},
+              title='Changed a role')
+@agent_action('transfer_event_ownership', 'Make a team member the owner (owner only; you become an admin).',
+              confirm=True, summary=S.transfer, fixed={'action': 'transfer'},
+              params={'member': P('integer', 'the team member id')}, title='Transferred ownership')
+@agent_action('leave_event', 'Leave an event\'s team.', confirm=True, summary=S.leave, fixed={'action': 'leave'},
+              title='Left the event')
+@agent_action('assign_event_owner', 'Assign an owner to an event by email (site admins only).', confirm=True,
+              summary=S.assign_owner, fixed={'action': 'assign_owner'}, audience='superuser',
+              params={'email': P('string', 'the new owner\'s email')}, title='Assigned an owner')
+@agent_action('team_page', "An event's team, roles and pending invitations, with ids.", kind='read')
 @event_view
 def team(request, event):
     """Owner + admins + contributors. Invites by email work before the person has an account."""
@@ -839,6 +956,7 @@ def _email_invite(event, email, inviter):
 # Usage (API-005): anonymous counts only
 # ---------------------------------------------------------------------------
 
+@agent_action('usage_page', "An event's anonymous usage counts (opens, views, likes).", kind='read')
 @event_view
 def usage(request, event):
     from console.usage import event_usage
@@ -847,6 +965,7 @@ def usage(request, event):
     return render(request, 'console/usage.html', _ctx(event, 'usage', usage=data, in_event_now=audience.count()))
 
 
+@agent_action('app_usage_page', 'App-wide usage and the support-code lookup (site admins).', kind='read')
 @login_required
 def admin_usage(request):
     """App-wide usage and support lookup, for site admins only."""

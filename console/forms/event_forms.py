@@ -246,7 +246,8 @@ class ScheduledItemForm(AssistantContextMixin, TagsFieldMixin, StyledFormMixin, 
 
     def __init__(self, *args, event=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['location'].queryset = event.location_set.order_by('sort_order', 'name')
+        self.fields['location'].queryset = (event.location_set.order_by('sort_order', 'name') if event is not None
+                                            else Location.objects.none())  # none: Ask Attnd's schema only
         self.fields['location'].required = False
         self.fields['location'].empty_label = '— No specific location —'
         self._init_tags()

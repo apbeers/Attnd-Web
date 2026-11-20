@@ -1,0 +1,65 @@
+/* Ask Attnd panel (agent/templates/agent/_panel.html). Uses the console's design tokens (console.css). */
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.agent { position: fixed; right: var(--space-4); bottom: var(--space-4); z-index: 1055; display: flex; flex-direction: column;
+  align-items: flex-end; gap: var(--space-2); }
+/* The background task tray and its toasts stack above the launcher. */
+.agent ~ .task-tray { bottom: 4.5rem; }
+.agent ~ .task-toast { bottom: 8rem; }
+.agent.is-open ~ .task-tray { display: none; }
+
+.agent__launcher { display: inline-flex; align-items: center; gap: var(--space-2); padding: .6rem 1rem; font: inherit;
+  font-weight: 600; color: #fff; background: var(--color-brand); border: 0; border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-lg); cursor: pointer; }
+.agent__launcher:hover { background: var(--color-brand-dark); }
+.agent__launcher:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.agent__launcher.needs-you { background: var(--color-warning-text); }
+.agent__launcher .spinner { margin: 0; }
+.agent.is-open .agent__launcher { display: none; }
+
+.agent__panel { display: flex; flex-direction: column; width: min(26rem, calc(100vw - 2rem)); height: min(40rem, calc(100vh - 2rem));
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg); overflow: hidden; }
+.agent__panel[hidden] { display: none; }
+.agent__head { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border); }
+.agent__title { flex: 1; margin: 0; font-size: var(--text-md); color: var(--color-brand); }
+.agent__mode { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4);
+  background: var(--color-subtle); border-bottom: 1px solid var(--color-border); }
+.agent__switch { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); font-weight: 600; }
+.agent__recent { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border); max-height: 12rem; overflow: auto; }
+.agent__recent-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.agent__log { flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+.agent__msg { max-width: 90%; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.45;
+  border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent__msg--user { align-self: flex-end; color: #fff; background: var(--color-brand); }
+.agent__msg--assistant { align-self: flex-start; background: var(--color-brand-soft); }
+.agent__msg--error { align-self: flex-start; color: var(--color-danger); background: var(--color-danger-soft); }
+.agent__msg--step { align-self: stretch; max-width: none; padding: var(--space-1) var(--space-2); color: var(--color-muted);
+  background: none; border-left: 2px solid var(--color-border); border-radius: 0; }
+.agent__msg--step.is-changed { color: var(--color-text); border-left-color: var(--color-success); }
+.agent__msg--step.is-failed { color: var(--color-danger); border-left-color: var(--color-danger); }
+.agent__open { margin-left: var(--space-1); font-weight: 600; }
+.agent__confirm { margin: 0 var(--space-3) var(--space-2); padding: var(--space-3); background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning-line); border-radius: var(--radius); }
+.agent__confirm:focus { outline: 2px solid var(--color-focus); }
+.agent__confirm-title { font-weight: 600; color: var(--color-warning-text); }
+.agent__confirm-text { margin: var(--space-1) 0 var(--space-2); font-size: var(--text-sm); }
+.agent__footer { padding: var(--space-2) var(--space-3) var(--space-3); border-top: 1px solid var(--color-border); display: grid; gap: var(--space-2); }
+.agent__status { color: var(--color-muted); min-height: 1.2em; }
+.agent__files { list-style: none; margin: 0; padding: 0; font-size: var(--text-xs); color: var(--color-muted); }
+.agent__form { display: grid; gap: var(--space-2); }
+.agent__form textarea { resize: vertical; min-height: 2.6rem; }
+.agent__actions { justify-content: space-between; }
+.agent__attach { cursor: pointer; }
+.agent__attach:focus-within { outline: 2px solid var(--color-focus); }
+
+/* Phones: a bottom sheet. */
+@media (max-width: 600px) {
+  .agent { right: var(--space-3); bottom: var(--space-3); }
+  .agent.is-open { left: 0; right: 0; bottom: 0; }
+  .agent__panel { width: 100vw; height: 85vh; height: 85dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0; }
+  .agent ~ .task-tray { bottom: 4rem; }
+}
+@media print { .agent { display: none; } }

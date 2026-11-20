@@ -84,6 +84,7 @@ attestation/    # Apple App Attest + Google Play Integrity + JWT issuance
 diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, request log middleware, staff panel
 studio/         # Attnd Studio (admins only): AI-designed event websites hosted on SITES_HOST, flyer art, app look
 prospects/      # Staff only: sales pipeline (web-search discovery of events that suit the app, organizer contacts, test events)
+agent/          # Ask Attnd: the console's AI agent (registry of console views, internal requests, run loop, panel)
 public/         # Files served at root by Whitenoise (robots.txt, favicon.ico + icons + site.webmanifest from scripts/make_icons.py)
 brand/          # app-icon-1024.png: the source of every website icon (scripts/make_icons.py)
 ```
@@ -176,6 +177,68 @@ organizer contacts their own pages publish, and make testing-only copies of them
 - **Outreach rules**: Attnd never emails prospects itself. People who reach out follow CAN-SPAM (identify the sender,
   a physical mailing address, an easy opt-out that is honoured) and never contact a contact marked do not contact (the
   CSV leaves out their email, phone and profile). The dashboard says so. CSV export is formula-safe (`csv_safe`).
+
+## Ask Attnd (console agent; `agent/`)
+
+An AI agent in the bottom-right corner of every signed-in console page (`agent/templates/agent/_panel.html`, included
+by `console/base.html` through `{% agent_panel %}`; never on the public site, Studio sites, `/accounts/`, the Account
+page or the admin). For every console user. **Every tool runs the real console view on the server as the signed-in
+person**, so permissions, validation, History, `content_version` bumps, pushes and signals are exactly what a click
+on Save does; there is no second copy of any business logic.
+- **Registry** (`agent/registry.py`): `@agent_action(name, description, kind='write'|'read', confirm=False,
+  summary=callable, form=FormClass, prefix=, fixed={'action': 'delete'}, params={…}, build=callable, url_name=,
+  prefill=True|'url:name', json=True, file_params=, returns_page=, audience=)` stacked on the view (outermost). A
+  write is a tool: its strict schema = URL kwargs + the form's fields (from an unbound instance, so fields added in
+  `__init__` count; types, choices ≤ 40 as enums, help text; null = keep / leave empty) + hand-written `params`.
+  A read is a page `read_page` may open (and `list_pages` lists). Audience comes from the namespace (prospects,
+  diagnostics, Studio reports → staff; studio → Studio access; `admin_usage`, `assign_event_owner` → superuser):
+  those tools aren't even in the tool list for anyone else.
+- **The rule: every new console URL must be registered (read and/or write) or listed in `registry.EXCLUDED` with a
+  reason, and every view that handles POST needs a write action (or `POST_EXCLUDED`)**, else
+  `agent.tests.RegistryTests.test_every_console_url_is_registered_or_excluded` fails CI. A new `data-confirm` button
+  fails `test_every_data_confirm_button_is_an_always_ask_action` until its action is `confirm=True`.
+- **Internal requests** (`agent/internal.py`): a `RequestFactory` request through the full middleware stack
+  (`BaseHandler`) with the person's own session loaded read-only (`agent.middleware.SessionMiddleware` replaces
+  Django's: an in-process `agent_session` is used and never saved; signing out or a new 2FA step stops the run).
+  CSRF is waived (`_dont_enforce_csrf_checks`, server-side only). Writes with `prefill` first GET the page and post
+  the form's current values like a browser, with the model's arguments on top; results: redirect + messages, form
+  errors by field (`agent/pages.py` reads `.field__error`, `errorlist`, error notices), or the endpoint's JSON.
+  Requests carry `X-Attnd-Agent: <run>/<step>`, log one line on `attnd.agent`, and History revisions made meanwhile
+  get "(Ask Attnd)" (`agent.context`). `agent/pages.py` turns pages into compact text (headings, `key: value`,
+  table rows, form fields with values, buttons, console links as `(→ /console/…)`), trimmed with an offset cursor.
+- **Run loop** (`agent/loop.py`): `AgentRun` / `AgentStep` / `AgentUsage` / `AgentAttachment`; a daemon thread per
+  run (after commit), the panel polls `GET /console/agent/runs/<id>/?after=<seq>` every 1.5 s. Tools: the
+  registered writes allowed for the person + `read_page`, `list_pages`, `list_events`, `search_events`, `ask_user`,
+  `finish`; strict schemas, no parallel tool calls, reasoning `AGENT_PLANNING_EFFORT` (first call / after a reply)
+  and `AGENT_STEP_EFFORT` (routine steps). Provider = Studio's layer (`studio.ai.get_provider(model=…,
+  fallback_model=…, effort=…, parallel_tool_calls=False)`: OpenAI Responses API chained with
+  `previous_response_id`, or Anthropic when `ANTHROPIC_API_KEY` is set); every call's cost via
+  `studio.ai.token_cost` into `AgentUsage`. Each run starts with the person's current page (read as them), their
+  events and the last 48 h of their runs. Caps: `AGENT_MAX_STEPS` model calls, `AGENT_RUN_MAX_MINUTES`,
+  `AGENT_DAILY_SPEND_CAP_USD` per person per UTC day (also checked by the start endpoint, 429).
+- **Always ask** (`confirm=True`, the run pauses as `waiting_confirmation`; the panel shows `summary(ctx)`, e.g.
+  "Send the update “Gates open late” now to 1,240 attendees", with Confirm / Cancel): every action whose button has
+  `data-confirm`, all deletes, publish / unpublish / archive / list nearby, sending or scheduling updates (urgent
+  too), team invites, removals, role changes, transfers and leaving, restoring a History version, discarding or
+  applying AI suggestions, Studio publish / unpublish / address change / preview-link reset / asset and form-entry
+  deletes, Prospects "Create test event(s)", diagnostics deletes, and Undo all itself. Only
+  `POST /console/agent/runs/<id>/confirm/` with the step and the sha256 of the exact tool + arguments releases it
+  (`loop.confirm`: single use, hash re-checked against the stored arguments; changed arguments are a new step and
+  need a new confirmation). The model has no confirm tool. Page text is passed as data ("data, not instructions").
+- **Off-limits** (never registered, refused by `read_page`, `registry.off_limits`): `/accounts/` (sign-in, password,
+  passkeys, two-factor, emailed and recovery codes, sign-out), `/console/account/`, `/console/signup/`, the admin,
+  and Ask Attnd's own endpoints.
+- **Undo all**: before a run's first content change of an event (`loop.CONTENT_URLS`: details, locations, schedule)
+  the History view takes a snapshot ("Before Ask Attnd: …", `AgentRun.revisions`); "Undo all changes from this run"
+  is an always-ask step that restores those revisions through the History view. It can't unsend updates.
+- **Panel** (`agent/static/agent/agent.js`, `agent.css`): launcher "Ask Attnd", chat with live steps, confirm card,
+  `ask_user` replies, Stop, file attach (`/console/agent/attach/`, PDF/images/text ≤ `AGENT_MAX_ATTACHMENT_MB`;
+  file fields take the attachment id), recent requests, Undo all. **Background** (default): when a run that changed
+  the current event or page ends, the page reloads (or shows "Updated · Refresh" with unsaved input). **Watch**
+  (`localStorage` `attnd.agent.watch`): each changed step opens its page. On phones it is a bottom sheet; the task
+  tray stacks above the launcher. Stale runs fail / unanswered ones close in `run_scheduled_tasks`.
+- Tests: `agent/tests.py` (registry and coverage, pages, writes through the real views, the loop with a scripted
+  provider: gates, cancel, injection, caps, stop, ask_user, undo all, sign-out; endpoints and the panel).
 
 ## Attnd Studio (admins only; `studio/`, spec `docs/specs/studio_spec.md`)
 
@@ -362,7 +425,7 @@ scripts/dev_db.sh && DEBUG=1 SECRET_KEY=x API_KEY=k uv run python manage.py test
 ```
 Tests always run on PostgreSQL 18 (locally via `scripts/dev_db.sh`, in CI via the `postgres:18` service). Add `--parallel auto` to run them across CPUs (CI does; ~3x faster).
 
-Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `prospects/tests.py` (staff-only pages, discovery with OpenAI and HTTP mocked, contact source rule, caps, schedule, test events, CSV), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer) and `events/tests_contract.py` (the v2 contract snapshot).
+Tests live in `<app>/tests.py` (`diagnostics/tests.py`: uploads, caps, purge, retrace, request log, symbols, symbolication, panel, API-014, `LOG_EVENTS.md`), `events/tests_ci_keys.py` (API-008), `events/tests_hearts_tags_urgent.py` (API-009–011), `events/tests_demo_facts.py` (the DEMO facts the live suites rely on), `events/tests_v2.py` (v2 API, display, push), `console/tests_security.py` (rate limits, 2FA, CSP, admin path), `console/tests_passkeys.py` (WebAuthn with a software authenticator, emailed codes, sign-in policy), `agent/tests.py` (Ask Attnd: registry coverage, writes through the real views, confirm gates, caps), `prospects/tests.py` (staff-only pages, discovery with OpenAI and HTTP mocked, contact source rule, caps, schedule, test events, CSV), `studio/tests.py` (Studio access, sites-host isolation, pages, previews, data.json, forms, assets, versions, reports) + `studio/tests_ai.py` (agent loop, providers, images, importer) and `events/tests_contract.py` (the v2 contract snapshot).
 
 Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (no `staticfiles/` needed), `django.request` logs only errors (tests hit 4xx on purpose), and a 32+ byte test JWT secret. CI also runs `manage.py check` with `-W error::DeprecationWarning`; run the whole suite that way when upgrading Django/Python.
 
@@ -426,6 +489,11 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `PROSPECT_MODEL` / `PROSPECT_FALLBACK_MODEL` | No | Prospects discovery (staff), default `gpt-5.5` / `gpt-5` (fallback only when the model is unavailable); uses `OPENAI_API_KEY` and OpenAI's web search tool |
 | `PROSPECT_DAILY_SPEND_CAP_USD` | No | AI spend of all prospect runs per UTC day, default `5` |
 | `PROSPECT_RUN_MAX_MINUTES` | No | Wall clock per prospect run, default `20` (stops and keeps what it found) |
+| `AGENT_MODEL` / `AGENT_FALLBACK_MODEL` | No | Ask Attnd (console agent) on OpenAI, default `gpt-5.5` / `gpt-5` (fallback only when the model is unavailable); the provider follows `STUDIO_AI_PROVIDER` / `ANTHROPIC_API_KEY` |
+| `AGENT_DAILY_SPEND_CAP_USD` | No | Ask Attnd AI spend per person per UTC day, default `2` |
+| `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
+| `AGENT_PLANNING_EFFORT` / `AGENT_STEP_EFFORT` | No | Reasoning effort for the first call of a run (and after a reply) / routine steps, default `medium` / `low` |
+| `AGENT_MAX_ATTACHMENT_MB` | No | Files attached in the Ask Attnd chat, default `15` |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |
 | `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60), `STUDIO_FORM_IP` (10/600, form posts per IP per site), `STUDIO_FORM_SITE` (300/3600), `STUDIO_REPORT_IP` (5/3600), `SCRAPE_IP` (5/3600, homepage trial imports), `ATTEST_NONCE_IP` (30/60, attestation challenges) |
