@@ -299,3 +299,4 @@ class WellKnownTests(TestCase):
         self.assertIsInstance(data, list)
         self.assertEqual(data[0]['relation'], ['delegate_permission/common.handle_all_urls'])
         self.assertIn('android_app', data[0]['target']['namespace'])
+

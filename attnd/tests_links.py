@@ -4,11 +4,16 @@ from attnd import links
 
 
 class AppLinkTests(SimpleTestCase):
-    @override_settings(SITE_URL='https://dev.attnd.app')
-    def test_app_links_always_use_attnd_app(self):
-        # The apps verify and scan attnd.app links only, so dev's SITE_URL never leaks into QR codes.
-        self.assertEqual(links.join_url('DEMO'), 'https://attnd.app/join/DEMO/')
-        self.assertEqual(links.shared_plan_url('DEMO', 'eyJ2IjoxfQ=='), 'https://attnd.app/p/DEMO/eyJ2IjoxfQ')
+    def test_dev_server_links_use_dev_attnd_app(self):
+        # Nov 20, 2026: dev events get dev.attnd.app links (iOS opens both domains; a browser open hits dev).
+        with override_settings(SITE_URL='https://dev.attnd.app'):
+            self.assertEqual(links.join_url('DEMO'), 'https://dev.attnd.app/join/DEMO/')
+            self.assertEqual(links.shared_plan_url('DEMO', 'eyJ2IjoxfQ=='), 'https://dev.attnd.app/p/DEMO/eyJ2IjoxfQ')
+
+    def test_everything_else_uses_attnd_app(self):
+        for site in ('https://attnd.app', 'http://localhost:8000', 'https://example.herokuapp.com', ''):
+            with override_settings(SITE_URL=site):
+                self.assertEqual(links.join_url('DEMO'), 'https://attnd.app/join/DEMO/')
 
     def test_qr_helpers(self):
         self.assertTrue(links.qr_png('x').startswith(b'\x89PNG'))

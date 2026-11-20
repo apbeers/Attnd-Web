@@ -329,6 +329,8 @@ base64url (no padding) of `{"v":1,"ids":[…],"d":"YYYY-MM-DD"?}`, ≤ 1,500 cha
 `shared_plan`) lists the items in the event's time zone with a QR of the link (`/p/<code>/<payload>/qr.svg`). Invalid
 payload → the plain join page; unknown event → the join 404; opens count as `link_open`.
 
+Link origin (`attnd/links.py`, Nov 20, 2026): join and shared-plan links (QR codes, posters, `join_url` in the API, share pages) are `https://attnd.app/...`, except on the dev server (`SITE_URL` https://dev.attnd.app), which makes `https://dev.attnd.app/...` links so a dev event opened in a browser reaches the dev server instead of production's 404. iOS lists both domains as associated domains; Android App Links are verified for attnd.app only, so dev links open in the browser on Android.
+
 Well-known files served from `join/views.py`:
 - `/.well-known/apple-app-site-association` — iOS Universal Links + App Clips (`/join/*` and `/p/*`, QR images excluded)
 - `/.well-known/assetlinks.json` — Android App Links (domain-wide; the app's intent filter picks `/join/` and `/p/`)
