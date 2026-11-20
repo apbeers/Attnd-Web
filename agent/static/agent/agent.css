@@ -24,10 +24,12 @@
 .agent__panel[hidden] { display: none; }
 .agent__head { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--color-border); }
-.agent__title { flex: 1; margin: 0; font-size: var(--text-md); color: var(--color-brand); }
-.agent__mode { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4);
-  background: var(--color-subtle); border-bottom: 1px solid var(--color-border); }
-.agent__switch { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); font-weight: 600; }
+.agent__titles { flex: 1; min-width: 0; }
+.agent__title { margin: 0; font-size: var(--text-md); color: var(--color-brand); }
+.agent__status { font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent__status:empty { display: none; }
+.agent__switch { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); font-weight: 600;
+  color: var(--color-muted); margin-right: var(--space-1); cursor: pointer; }
 .agent__recent { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border); max-height: 12rem; overflow: auto; }
 .agent__recent-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
 .agent__log { flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
@@ -46,14 +48,28 @@
 .agent__confirm:focus { outline: 2px solid var(--color-focus); }
 .agent__confirm-title { font-weight: 600; color: var(--color-warning-text); }
 .agent__confirm-text { margin: var(--space-1) 0 var(--space-2); font-size: var(--text-sm); }
-.agent__footer { padding: var(--space-2) var(--space-3) var(--space-3); border-top: 1px solid var(--color-border); display: grid; gap: var(--space-2); }
-.agent__status { color: var(--color-muted); min-height: 1.2em; }
+.agent__footer { padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border); display: grid; gap: var(--space-1); }
+.agent__links { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.agent__links[hidden] { display: none; }
 .agent__files { list-style: none; margin: 0; padding: 0; font-size: var(--text-xs); color: var(--color-muted); }
-.agent__form { display: grid; gap: var(--space-2); }
-.agent__form textarea { resize: vertical; min-height: 2.6rem; }
-.agent__actions { justify-content: space-between; }
-.agent__attach { cursor: pointer; }
-.agent__attach:focus-within { outline: 2px solid var(--color-focus); }
+.agent__files:empty { display: none; }
+/* One line that grows to three, with the attach and send buttons inside the same box. */
+.agent__form { display: flex; align-items: flex-end; gap: var(--space-1); padding: 4px; border: 1px solid var(--color-border);
+  border-radius: 1.25rem; background: var(--color-surface); }
+.agent__form:focus-within { border-color: var(--color-brand); box-shadow: 0 0 0 2px var(--color-brand-soft); }
+.agent__form textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; box-shadow: none; background: transparent;
+  padding: .45rem .25rem; font: inherit; font-size: var(--text-sm); line-height: 1.4; min-height: calc(1.4em + .9rem);
+  max-height: calc(4.2em + .9rem); overflow-y: auto; }
+.agent__icon { flex: none; display: inline-grid; place-items: center; width: 2.1rem; height: 2.1rem; padding: 0; border: 0;
+  border-radius: 50%; background: none; color: var(--color-muted); cursor: pointer; }
+.agent__icon:hover { color: var(--color-brand); background: var(--color-brand-soft); }
+.agent__icon:focus-visible, .agent__attach:focus-within { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.agent__icon[hidden] { display: none; }
+.agent__send { color: #fff; background: var(--color-brand); }
+.agent__send:hover { color: #fff; background: var(--color-brand-dark); }
+.agent__send:disabled { opacity: .5; cursor: default; }
+.agent__stop { color: #fff; background: var(--color-danger); }
+.agent__stop:hover { color: #fff; background: var(--color-danger); }
 
 /* Phones: a bottom sheet. */
 @media (max-width: 600px) {

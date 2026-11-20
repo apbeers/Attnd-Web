@@ -6,15 +6,16 @@
     {% icon "stars" %}<span>Ask Attnd</span><span class="agent__busy spinner" hidden></span></button>
   <div class="agent__panel" id="agent-panel" role="dialog" aria-modal="false" aria-labelledby="agent-title" hidden>
     <header class="agent__head">
-      <h2 class="agent__title" id="agent-title">{% icon "stars" %} Ask Attnd</h2>
+      <div class="agent__titles">
+        <h2 class="agent__title" id="agent-title">{% icon "stars" %} Ask Attnd</h2>
+        <div class="agent__status" data-agent-status aria-live="polite"></div>
+      </div>
+      <label class="agent__switch" title="Background: works out of sight and refreshes this page when something on it changed. Watch: opens each page as it changes.">
+        <input type="checkbox" data-agent-watch> Watch</label>
       <button type="button" class="button button--ghost button--small" data-agent-history aria-expanded="false"
               aria-controls="agent-recent">{% icon "history" %}<span class="visually-hidden">Recent requests</span></button>
       <button type="button" class="button button--ghost button--small" data-agent-close aria-label="Close Ask Attnd">{% icon "close" %}</button>
     </header>
-    <div class="agent__mode" role="group" aria-label="While Attnd works">
-      <label class="agent__switch"><input type="checkbox" data-agent-watch> Watch</label>
-      <span class="small muted" data-agent-mode-help>Works in the background; this page refreshes when something on it changed.</span>
-    </div>
     <div class="agent__recent" id="agent-recent" hidden>
       <div class="eyebrow">Recent requests</div>
       <ul class="agent__recent-list" data-agent-recent></ul>
@@ -31,21 +32,18 @@
       </div>
     </div>
     <div class="agent__footer">
-      <div class="agent__status small" data-agent-status aria-live="polite"></div>
-      <div class="cluster cluster--tight">
-        <button type="button" class="button button--secondary button--small" data-agent-stop hidden>{% icon "stop" %} Stop</button>
+      <div class="agent__links" data-agent-links>
         <button type="button" class="link-button small" data-agent-undo hidden>{% icon "undo" %} Undo all changes from this run</button>
         <button type="button" class="link-button small" data-agent-refresh hidden>Updated · Refresh</button>
       </div>
       <ul class="agent__files" data-agent-files></ul>
       <form class="agent__form" data-agent-form>{% csrf_token %}
+        <label class="agent__icon agent__attach" title="Attach a file">{% icon "paperclip" %}<span class="visually-hidden">Attach a file</span>
+          <input type="file" class="visually-hidden" data-agent-file accept="application/pdf,image/*,text/plain,text/csv"></label>
         <label class="visually-hidden" for="agent-input">Ask Attnd</label>
-        <textarea id="agent-input" name="goal" rows="2" maxlength="4000" placeholder="What should Attnd do?" data-agent-input></textarea>
-        <div class="cluster cluster--tight agent__actions">
-          <label class="button button--ghost button--small agent__attach" title="Attach a file">{% icon "paperclip" %}<span class="visually-hidden">Attach a file</span>
-            <input type="file" class="visually-hidden" data-agent-file accept="application/pdf,image/*,text/plain,text/csv"></label>
-          <button type="submit" class="button button--primary button--small" data-agent-send>{% icon "send" %} Send</button>
-        </div>
+        <textarea id="agent-input" name="goal" rows="1" maxlength="4000" placeholder="What should Attnd do?" data-agent-input></textarea>
+        <button type="submit" class="agent__icon agent__send" data-agent-send aria-label="Send">{% icon "send" %}</button>
+        <button type="button" class="agent__icon agent__stop" data-agent-stop aria-label="Stop" hidden>{% icon "stop" %}</button>
       </form>
     </div>
   </div>

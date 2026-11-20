@@ -15,7 +15,8 @@
   const undoButton = $('[data-agent-undo]');
   const refreshButton = $('[data-agent-refresh]');
   const watchBox = $('[data-agent-watch]');
-  const modeHelp = $('[data-agent-mode-help]');
+  const sendButton = $('[data-agent-send]');
+  const linksRow = $('[data-agent-links]');
   const filesList = $('[data-agent-files]');
   const recentBox = $('#agent-recent');
   const busy = $('.agent__busy');
@@ -59,13 +60,15 @@
 
   // ---- Background / Watch ------------------------------------------------------
   watchBox.checked = store.get('localStorage', 'attnd.agent.watch') === '1';
-  function showMode() {
-    modeHelp.textContent = watchBox.checked
-      ? 'Watch: after each change, this window opens the page that changed.'
-      : 'Works in the background; this page refreshes when something on it changed.';
+  watchBox.addEventListener('change', () => { store.set('localStorage', 'attnd.agent.watch', watchBox.checked ? '1' : '0'); });
+
+  // One-line composer that grows to three lines as you type.
+  function fitInput() {
+    input.style.height = 'auto';
+    input.style.height = (input.scrollHeight + input.offsetHeight - input.clientHeight) + 'px';
   }
-  watchBox.addEventListener('change', () => { store.set('localStorage', 'attnd.agent.watch', watchBox.checked ? '1' : '0'); showMode(); });
-  showMode();
+  input.addEventListener('input', fitInput);
+  function syncLinks() { linksRow.hidden = undoButton.hidden && refreshButton.hidden; }
 
   // Unsaved input on the page: never reload over it.
   document.addEventListener('input', (e) => {
@@ -141,7 +144,9 @@
     launcher.classList.toggle('needs-you', waiting);
     busy.hidden = run.status !== 'running';
     stopButton.hidden = !run.active;
+    sendButton.hidden = run.active && run.status === 'running';
     undoButton.hidden = !run.undo || (pending && pending.kind === 'undo');
+    syncLinks();
     input.placeholder = run.status === 'waiting_reply' ? 'Your answer…' : 'What should Attnd do?';
     statusLine.textContent = statusText(run);
     if (!run.active && wasActive) finished();
@@ -162,13 +167,13 @@
     const here = location.pathname;
     const touched = (eventId && run.changed_events.includes(eventId)) || run.changed_urls.includes(here);
     if (!touched || watchBox.checked) return;
-    if (dirty) { refreshButton.hidden = false; return; }
+    if (dirty) { refreshButton.hidden = false; syncLinks(); return; }
     store.set('sessionStorage', 'attnd.agent.open', panel.hidden ? '' : '1');
     location.reload();
   }
 
   function watchNavigate(url) {
-    if (dirty) { refreshButton.hidden = false; return; }
+    if (dirty) { refreshButton.hidden = false; syncLinks(); return; }
     store.set('sessionStorage', 'attnd.agent.open', '1');
     if (url === location.pathname) location.reload(); else location.assign(url);
   }
@@ -202,7 +207,7 @@
     e.preventDefault();
     const text = input.value.trim();
     if (!text) { input.focus(); return; }
-    const send = $('[data-agent-send]');
+    const send = sendButton;
     send.disabled = true;
     try {
       if (run && run.status === 'waiting_reply') {
@@ -216,11 +221,13 @@
         attachments = [];
         filesList.textContent = '';
         refreshButton.hidden = true;
+        syncLinks();
         wasActive = true;
         live = true;
         renderRun(data);
       }
       input.value = '';
+      fitInput();
     } catch (err) {
       bubble('error', err.message);
       if (err.data && err.data.run) { show(err.data.run.id); }
