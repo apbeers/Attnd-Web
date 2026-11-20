@@ -131,7 +131,9 @@ def _thread(run_id, resume):
 
 
 def tools_for(user):
-    return FIXED_TOOLS + [registry.tool_definition(a) for a in registry.writes_for(user).values()]
+    from agent import components
+    return (FIXED_TOOLS + components.tool_definitions()
+            + [registry.tool_definition(a) for a in registry.writes_for(user).values()])
 
 
 def _provider():
@@ -234,7 +236,12 @@ def _pending_outcome(run, step):
         return 'Error: the paused action was not found.'
     if step.kind == AgentStep.KIND_QUESTION:
         reply = run.steps.filter(kind=AgentStep.KIND_REPLY, seq__gt=step.seq).order_by('-seq').first()
-        return f'The person replied: {reply.text}' if reply else 'The person did not reply.'
+        if not reply:
+            return 'The person did not reply.'
+        from agent import components
+        opened = components.picks_since(run, step.seq)
+        return f'The person replied: {reply.text}' + (
+            '\n(Meanwhile they opened in the chat: ' + '; '.join(opened) + ')' if opened else '')
     with transaction.atomic():
         step = AgentStep.objects.select_for_update().get(pk=step.pk)
         if step.confirm_state == AgentStep.CONFIRM_CANCELLED:
@@ -272,12 +279,16 @@ def _first_message(run):
         events_text = f'(could not list them: {exc})'
     earlier = []
     since = timezone.now() - timedelta(hours=48)
-    for old in AgentRun.objects.filter(user=run.user, created_at__gte=since).exclude(pk=run.pk).order_by('-created_at')[:6]:
+    previous = list(AgentRun.objects.filter(user=run.user, created_at__gte=since).exclude(pk=run.pk)
+                    .order_by('-created_at')[:6])
+    for old in previous:
         earlier.insert(0, f'- Request: {old.goal[:300]} → {old.status}: {(old.summary or old.error)[:400]}')
+    from agent import components
+    shown = components.earlier(run, previous)  # console components shown / opened in the chat (JSON, never HTML)
     attachments = [f'- id {a.pk}: {a.name} ({a.content_type}, {a.size // 1024} KB)'
                    for a in AgentAttachment.objects.filter(user=run.user, run=run)]
     return context_message(run, internal.trim(page_text, 0, 8000), internal.trim(events_text, 0, 5000), earlier,
-                           attachments)
+                           attachments, shown)
 
 
 def _deadline(run):
@@ -395,6 +406,9 @@ def _call(run, call):
             return _tool_pages(run, call, args)
         if name in ('list_events', 'search_events'):
             return _tool_events(run, call, args)
+        if name in ('show', 'get_component'):  # console components in the chat (agent/components.py)
+            from agent import components
+            return (components.show_tool if name == 'show' else components.get_tool)(run, call, args)
         action = registry.writes_for(run.user).get(name)
         if action is None:
             add_step(run, tool=name, call_id=call.id, arguments=args, ok=False,
@@ -546,10 +560,10 @@ def confirm(run, step_id, posted_hash):
             raise GateError('Nothing is waiting for confirmation.')
         if not posted_hash or posted_hash != step.confirm_hash or args_hash(step.tool, step.arguments) != step.confirm_hash:
             raise GateError('This confirmation doesn\'t match the action that is waiting. Nothing was done.')
-        if step.kind == AgentStep.KIND_UNDO:
+        if step.kind in (AgentStep.KIND_UNDO, AgentStep.KIND_BUTTON):  # the person's own (undo all, a chat button)
             step.confirm_state = AgentStep.CONFIRM_EXECUTED
             step.save(update_fields=['confirm_state'])
-            undo = True
+            undo = step.kind
         else:
             if run.status != AgentRun.WAITING_CONFIRMATION or run.state.get('pending_call') != step.call_id:
                 raise GateError('This run is not waiting for that action any more.')
@@ -558,9 +572,26 @@ def confirm(run, step_id, posted_hash):
             run.status = AgentRun.RUNNING
             run.save(update_fields=['status'])
             undo = False
-    if undo:
+    if undo == AgentStep.KIND_UNDO:
         return _undo_all(run, step)
+    if undo == AgentStep.KIND_BUTTON:
+        return _run_button(run, step)
     spawn(run.pk, resume=True)
+    return step
+
+
+def _run_button(run, step):
+    """A confirmed button from a chat component: the same internal request as the model's action."""
+    action = registry.writes_for(run.user).get(step.tool)
+    if action is None or not action.confirm:
+        step.ok, step.text = False, 'That action is not available.'
+        step.save(update_fields=['ok', 'text'])
+        return step
+    try:
+        _run_write(run, action, step.arguments, step)
+    except internal.Signedout as exc:
+        step.ok, step.text = False, str(exc)[:2000]
+        step.save(update_fields=['ok', 'text'])
     return step
 
 
@@ -574,7 +605,7 @@ def cancel(run, step_id):
         step.text = f'Cancelled: {step.confirm_summary}'
         step.ok = False
         step.save(update_fields=['confirm_state', 'text', 'ok'])
-        if step.kind == AgentStep.KIND_UNDO:
+        if step.kind in (AgentStep.KIND_UNDO, AgentStep.KIND_BUTTON):
             return step
         if run.status == AgentRun.WAITING_CONFIRMATION and run.state.get('pending_call') == step.call_id:
             run.status = AgentRun.RUNNING

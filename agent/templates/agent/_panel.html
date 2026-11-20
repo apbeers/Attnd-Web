@@ -1,7 +1,8 @@
 {% load console_tags static %}<section class="agent" id="agent" data-agent data-agent-skip
   data-event-id="{% if event.id %}{{ event.id }}{% endif %}"
   data-start-url="{% url 'agent:start' %}" data-runs-url="{% url 'agent:runs' %}" data-attach-url="{% url 'agent:attach' %}"
-  data-run-url="{% url 'agent:run' 0 %}">
+  data-run-url="{% url 'agent:run' 0 %}" data-components-url="{% url 'agent:component_render' %}"
+  data-pick-url="{% url 'agent:component_pick' %}" data-act-url="{% url 'agent:component_act' %}">
   <button type="button" class="agent__launcher" aria-expanded="false" aria-controls="agent-panel" data-agent-open>
     {% icon "stars" %}<span>Ask Attnd</span><span class="agent__busy spinner" hidden></span></button>
   <div class="agent__panel" id="agent-panel" role="dialog" aria-modal="false" aria-labelledby="agent-title" hidden>

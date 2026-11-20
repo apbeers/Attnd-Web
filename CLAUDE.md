@@ -256,10 +256,36 @@ on Save does; there is no second copy of any business logic.
   `ask_user` replies, Stop, file attach (`/console/agent/attach/`, PDF/images/text ≤ `AGENT_MAX_ATTACHMENT_MB`;
   file fields take the attachment id), recent requests, Undo all. **Background** (default): when a run that changed
   the current event or page ends, the page reloads (or shows "Updated · Refresh" with unsaved input). **Watch**
-  (`localStorage` `attnd.agent.watch`, wider screens only): each changed step opens its page. On phones (≤ 600px) it is a bottom sheet that always works in the background (no Watch switch; header = title, status, history, close), follows `window.visualViewport` (with the keyboard open the composer sits right above it, the page behind doesn't scroll; the console's viewport meta has `interactive-widget=resizes-content`) and its inputs are 16px (no iOS focus zoom); the task
-  tray stacks above the launcher. Stale runs fail / unanswered ones close in `run_scheduled_tasks`.
+  (`localStorage` `attnd.agent.watch`, wider screens only): each changed step opens its page. On phones (≤ 600px)
+  it is a bottom sheet that always works in the background (no Watch switch; header = title, status, history,
+  close), follows `window.visualViewport` (with the keyboard open the composer sits right above it, the page behind
+  doesn't scroll; the console's viewport meta has `interactive-widget=resizes-content`) and its inputs are 16px (no
+  iOS focus zoom); the task tray stacks above the launcher. Stale runs fail / unanswered ones close in
+  `run_scheduled_tasks`.
+- **Components in the chat** (`agent/components.py`; the components are console/components, see Console UX): the
+  model's `show(component, items)` tool (and `get_component`) validates the component and ids, loads the data **as
+  the person** and records a step (`AgentStep.KIND_COMPONENT`: `arguments` = `{component, items, picked}`, `result` =
+  the trimmed JSON, never HTML); the model gets the same JSON. The system prompt makes `show` the answer for events,
+  overviews, locations, schedule and updates ("What are my events?" → `show("event_tile", [{}])` + one sentence);
+  `read_page` stays the fallback for pages without a component. The next request's context gets the components of
+  the earlier runs: the latest 3 with their JSON, older ones by name and ids (`get_component` re-fetches). The panel
+  fetches the HTML from `GET /console/agent/components/?component=…&items=[…]` (our templates, rendered as the person,
+  surface `chat`) and inserts it as a card with "Open page ↗". **Tap** on a card's body (not its buttons, links or
+  form) → `POST components/pick/` shows its `detail` at once (no model call) and records a picked step (told to the
+  model with the next message or reply). **Buttons and forms** in a card post to the **same views** with fetch
+  (CSRF, header `X-Attnd-Component`): success → the card re-renders, validation errors → the view's page is answered
+  with just the component (console.middleware) and the form redraws with its errors. **Always-ask** actions
+  (`confirm=True`) are never forms in the chat: `POST components/act/` (only actions the component offers right now;
+  a gated form such as sending an update is validated first) makes a `KIND_BUTTON` step waiting for Confirm, and
+  only `agent:confirm` (`loop.confirm`: hash of exactly those arguments, single use) runs it, through the same
+  internal request as the model's actions (no model call). **Stale copies**: every card knows the entities it shows
+  (`event:3 location:12`); a chat change, an agent step that changed an event or a confirmed button re-fetches the
+  cards of that event (gone → "no longer there"). **Long chats**: the latest 10 cards stay live, older ones fold to one
+  line that re-fetches on tap.
 - Tests: `agent/tests.py` (registry and coverage, pages, writes through the real views, the loop with a scripted
-  provider: gates, cancel, injection, caps, stop, ask_user, undo all, sign-out; endpoints and the panel).
+  provider: gates, cancel, injection, caps, stop, ask_user, undo all, sign-out; endpoints and the panel) and
+  `agent/tests_components.py` (show validation, JSON-only context, taps and renders as the person, chat forms
+  through the views, the confirm gate for chat buttons and forms).
 
 ## Attnd Studio (admins only; `studio/`, spec `docs/specs/studio_spec.md`)
 

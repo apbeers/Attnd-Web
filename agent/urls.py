@@ -1,12 +1,15 @@
 from django.urls import path
 
-from agent import views
+from agent import components, views
 
 app_name = 'agent'
 urlpatterns = [
     path('runs/', views.runs, name='runs'),
     path('start/', views.start, name='start'),
     path('attach/', views.attach, name='attach'),
+    path('components/', components.render, name='component_render'),
+    path('components/pick/', components.pick, name='component_pick'),
+    path('components/act/', components.act, name='component_act'),
     path('runs/<int:run_id>/', views.run, name='run'),
     path('runs/<int:run_id>/confirm/', views.confirm, name='confirm'),
     path('runs/<int:run_id>/cancel/', views.cancel, name='cancel'),

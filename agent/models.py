@@ -52,8 +52,14 @@ class AgentRun(models.Model):
 
 class AgentStep(models.Model):
     KIND_TOOL, KIND_NOTE, KIND_QUESTION, KIND_REPLY, KIND_UNDO = 'tool', 'note', 'question', 'reply', 'undo'
+    # A console component shown in the chat (the model's `show`, or the person tapping one for its detail):
+    # arguments = {component, items: [ids…], picked}, result = the components' JSON (never HTML).
+    KIND_COMPONENT = 'component'
+    # A component's always-ask button pressed in the chat: waits for Confirm like the model's own actions.
+    KIND_BUTTON = 'button'
     KIND_CHOICES = [(KIND_TOOL, 'Tool call'), (KIND_NOTE, 'Note'), (KIND_QUESTION, 'Question'),
-                    (KIND_REPLY, 'Reply'), (KIND_UNDO, 'Undo all')]
+                    (KIND_REPLY, 'Reply'), (KIND_UNDO, 'Undo all'), (KIND_COMPONENT, 'Component'),
+                    (KIND_BUTTON, 'Button in the chat')]
     CONFIRM_PENDING, CONFIRM_CONFIRMED, CONFIRM_CANCELLED = 'pending', 'confirmed', 'cancelled'
     CONFIRM_EXECUTED, CONFIRM_EXPIRED = 'executed', 'expired'
     CONFIRM_CHOICES = [('', 'Not needed'), (CONFIRM_PENDING, 'Waiting'), (CONFIRM_CONFIRMED, 'Confirmed'),

@@ -68,6 +68,9 @@ EXCLUDED = {
     'agent:stop': 'Ask Attnd\'s own endpoints.',
     'agent:undo': 'Ask Attnd\'s own endpoints.',
     'agent:attach': 'Ask Attnd\'s own endpoints.',
+    'agent:component_render': 'Ask Attnd\'s own endpoints (the chat\'s components).',
+    'agent:component_pick': 'Ask Attnd\'s own endpoints (the chat\'s components).',
+    'agent:component_act': 'Ask Attnd\'s own endpoints (only the person\'s click confirms).',
 }
 
 # Console views whose source handles POST but that have no write action, with the reason.
@@ -205,7 +208,8 @@ def registry():
     return {'writes': writes, 'reads': reads}
 
 
-RESERVED_TOOLS = {'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish'}
+RESERVED_TOOLS = {'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show',
+                  'get_component'}
 
 
 def allowed(action, user):

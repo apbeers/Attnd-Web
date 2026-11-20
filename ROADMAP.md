@@ -190,5 +190,7 @@ Built Nov 20, 2026 (`agent/`, CLAUDE.md → Ask Attnd). Later:
 - A staff page of runs and spend across users (now: Django admin → Ask Attnd runs / usage).
 - Console components (built Nov 20, 2026: Your events, the overview's pieces, locations, schedule, updates): add the
   event details form and the app layout as components when the chat needs them; the bespoke screens (Studio editor,
-  diagnostics, AI review, prospects, history, usage, team) stay pages.
+  diagnostics, AI review, prospects, history, usage, team) stay pages. In the chat: a "new location / item" form
+  that saved could show the new row (now it redraws blank with "Saved …"); a run's model context could refresh the
+  JSON of components the person changed by hand after they were shown (now: the stored JSON + get_component).
 

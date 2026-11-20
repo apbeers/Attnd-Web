@@ -1,4 +1,6 @@
-/* Ask Attnd: the console's AI agent panel (vanilla JS, no inline handlers; text only via textContent). */
+/* Ask Attnd: the console's AI agent panel (vanilla JS, no inline handlers). Text goes in via textContent; the only
+   HTML inserted is console components rendered by the server from our own templates for this person
+   (agent/components.py), never anything the model wrote. */
 (function () {
   const root = document.querySelector('[data-agent]');
   if (!root) return;
@@ -38,6 +40,7 @@
   let wasActive = false;
   let attachments = [];
   let dirty = false;
+  const renderedSteps = new Set();  // step ids in the log (taps add steps the poll would bring again)
 
   // ---- open / close ----------------------------------------------------------
   function open(focus) {
@@ -131,6 +134,7 @@
     return el;
   }
   function renderStep(step) {
+    if (step.kind === 'component') return showComponents(step);
     if (step.kind === 'note') return bubble('assistant', step.text);
     if (step.kind === 'question') return bubble('assistant', step.text);
     if (step.kind === 'reply') return bubble('user', step.text);
@@ -152,7 +156,10 @@
     (data.steps || []).forEach((step) => {
       if (step.seq <= lastSeq) return;
       lastSeq = step.seq;
+      if (renderedSteps.has(step.id)) return;
+      renderedSteps.add(step.id);
       renderStep(step);
+      if (live && step.changed && step.event_id) refreshKeys([`event:${step.event_id}`]);
       if (live && watching() && step.changed && step.url) watchNavigate(step.url);
     });
     const pending = run.pending;
@@ -220,6 +227,7 @@
   async function show(id, isLive) {
     log.textContent = '';
     lastSeq = 0;
+    renderedSteps.clear();
     live = false;
     const data = await get(runUrl(id, '?after=0'));
     bubble('user', data.run.goal);
@@ -242,7 +250,7 @@
         renderRun(await post(runUrl(run.id, 'reply/'), { text }));
         live = true;
       } else {
-        if (!run || !run.active) { log.textContent = ''; lastSeq = 0; }
+        if (!run || !run.active) { log.textContent = ''; lastSeq = 0; renderedSteps.clear(); }
         bubble('user', text);
         const data = await post(root.dataset.startUrl, { goal: text, page: location.pathname + location.search,
                                                           event_id: eventId || '', attachments: attachments.map((a) => a.id).join(',') });
@@ -270,8 +278,16 @@
 
   $('[data-agent-confirm-yes]').addEventListener('click', async () => {
     if (!run || !confirmBox.dataset.step) return;
-    try { renderRun(await post(runUrl(run.id, 'confirm/'), { step: confirmBox.dataset.step, hash: confirmBox.dataset.hash })); live = true; poll(); }
-    catch (err) { bubble('error', err.message); }
+    try {
+      const data = await post(runUrl(run.id, 'confirm/'), { step: confirmBox.dataset.step, hash: confirmBox.dataset.hash });
+      renderRun(data);
+      live = true;
+      if (data.step) {  // a chat button (or Undo all) ran right away: its outcome, and fresh copies of what it touched
+        bubble('step', data.step.text).classList.toggle('is-failed', !data.step.ok);
+        if (data.step.changed && data.step.event_id) { refreshKeys([`event:${data.step.event_id}`]); pageChanged(data.step.event_id); }
+      }
+      poll();
+    } catch (err) { bubble('error', err.message); }
   });
   $('[data-agent-confirm-no]').addEventListener('click', async () => {
     if (!run || !confirmBox.dataset.step) return;
@@ -300,6 +316,205 @@
       item.textContent = `Attached: ${data.attachment.name}`;
       filesList.appendChild(item);
     } catch (err) { bubble('error', err.message); }
+  });
+
+  // ---- console components in the chat (console/components, agent/components.py) ----------------------------------
+  // Each card holds one component: HTML rendered by the server as this person, with its ids and the entities it
+  // shows (data-keys "event:3 location:12"). Tapping the body shows its detail (no model call); buttons and forms
+  // post to the same views as the page; always-ask ones wait for Confirm (agent:component_act → agent:confirm).
+  const LIVE_CARDS = 10;
+  const itemsParam = (items) => encodeURIComponent(JSON.stringify(items));
+
+  async function fetchCards(name, items) {
+    const response = await fetch(`${root.dataset.componentsUrl}?component=${encodeURIComponent(name)}&items=${itemsParam(items)}`,
+                                 { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data.error || 'Could not show this.'), { status: response.status });
+    return data.items;
+  }
+
+  function setBody(card, html) {
+    const body = document.createElement('div');
+    body.className = 'agent__card-body';
+    body.innerHTML = html;  // server-rendered component (our templates), see the note at the top
+    card.querySelector('.agent__card-body')?.remove();
+    card.prepend(body);
+    window.attndShowIf?.(body);
+  }
+
+  function makeCard(item) {
+    const card = document.createElement('div');
+    card.className = 'agent__card';
+    card.dataset.component = item.component;
+    card.dataset.ids = JSON.stringify(item.ids);
+    card.dataset.keys = (item.keys || []).join(' ');
+    card.dataset.title = item.label || item.title;
+    if (item.detail) card.dataset.detail = item.detail;
+    const foot = document.createElement('div');
+    foot.className = 'agent__card-foot';
+    if (item.url) {
+      const link = document.createElement('a');
+      link.href = item.url;
+      link.className = 'agent__open-page';
+      link.textContent = 'Open page ↗';
+      foot.appendChild(link);
+    }
+    card.appendChild(foot);
+    setBody(card, item.html);
+    return card;
+  }
+
+  function cardBox() {
+    $('[data-agent-hello]')?.remove();
+    const box = document.createElement('div');
+    box.className = 'agent__component';
+    log.appendChild(box);
+    return box;
+  }
+
+  async function showComponents(step) {
+    const box = cardBox();
+    try {
+      (await fetchCards(step.component.name, step.component.items)).forEach((item) => box.appendChild(makeCard(item)));
+    } catch (err) {
+      box.className = 'agent__msg agent__msg--step is-failed';
+      box.textContent = err.status === 404 ? 'This is no longer there.' : err.message;
+    }
+    foldOld();
+    log.scrollTop = log.scrollHeight;
+    return box;
+  }
+
+  function liveCards() { return [...log.querySelectorAll('.agent__card:not(.is-folded):not(.is-gone)')]; }
+
+  // Long chats: the latest cards stay live; older ones fold into one line that re-fetches when tapped.
+  function foldOld() {
+    const cards = liveCards();
+    cards.slice(0, Math.max(0, cards.length - LIVE_CARDS)).forEach((card) => {
+      card.classList.add('is-folded');
+      card.querySelector('.agent__card-body')?.remove();
+      const line = document.createElement('button');
+      line.type = 'button';
+      line.className = 'link-button small agent__folded';
+      line.textContent = `▸ ${card.dataset.title}`;
+      line.addEventListener('click', async () => {
+        line.remove();
+        card.classList.remove('is-folded');
+        await refresh(card);
+        foldOld();
+      });
+      card.prepend(line);
+    });
+  }
+
+  async function refresh(card) {
+    card.classList.add('is-busy');
+    try {
+      const [item] = await fetchCards(card.dataset.component, [JSON.parse(card.dataset.ids)]);
+      setBody(card, item.html);
+      card.dataset.keys = (item.keys || []).join(' ');
+    } catch (err) {
+      if (err.status === 404) {
+        card.classList.add('is-gone');
+        const note = document.createElement('p');
+        note.className = 'small muted';
+        note.textContent = `${card.dataset.title}: no longer there (deleted, or no access).`;
+        card.querySelector('.agent__card-body')?.replaceChildren(note);
+      }
+    } finally { card.classList.remove('is-busy'); }
+  }
+
+  // Copies of something that changed (a chat button, the agent, a run) are fetched again.
+  function refreshKeys(keys, except) {
+    liveCards().forEach((card) => {
+      if (card === except) return;
+      const mine = card.dataset.keys.split(' ');
+      if (keys.some((k) => mine.includes(k))) refresh(card);
+    });
+  }
+
+  function pageChanged(changedEventId) {
+    if (eventId && changedEventId === eventId) { refreshButton.hidden = false; syncLinks(); }
+  }
+
+  async function pick(card) {
+    if (!run) return;
+    card.classList.add('is-busy');
+    try {
+      const data = await post(root.dataset.pickUrl, { run: run.id, component: card.dataset.component, ids: card.dataset.ids });
+      renderedSteps.add(data.step.id);
+      const box = cardBox();
+      data.items.forEach((item) => box.appendChild(makeCard(item)));
+      foldOld();
+      box.scrollIntoView({ block: 'nearest' });
+    } catch (err) { bubble('error', err.message); }
+    finally { card.classList.remove('is-busy'); }
+  }
+
+  async function act(card, action, form) {
+    if (!run) return;
+    const body = form ? new FormData(form) : new FormData();
+    body.set('run', run.id);
+    body.set('component', card.dataset.component);
+    body.set('ids', card.dataset.ids);
+    body.set('action', action);
+    try {
+      const data = await post(root.dataset.actUrl, body);
+      if (data.invalid) { setBody(card, data.items[0].html); return; }
+      renderedSteps.add(data.step.id);
+      bubble('step', data.step.text);
+      live = true;
+      renderRun({ run: data.run, steps: [] });
+    } catch (err) { bubble('error', err.message); }
+  }
+
+  function notices(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return [...doc.querySelectorAll('main .notice')].map((n) => n.textContent.replace('×', '').trim()).filter(Boolean);
+  }
+
+  async function submitForm(card, form, submitter) {
+    const body = new FormData(form, submitter || undefined);
+    card.classList.add('is-busy');
+    try {
+      // (getAttribute: an <input name="action"> shadows form.action)
+      const response = await fetch(form.getAttribute('action'), { method: 'POST', body, credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrf, 'X-Attnd-Component': card.dataset.component } });
+      if ((response.headers.get('Content-Type') || '').includes('json')) {
+        const data = await response.json();
+        if (data.html) { setBody(card, data.html); return; }  // errors, in place
+      }
+      if (!response.ok) throw new Error(response.status === 404 ? 'Not found, or you don’t have access to it.'
+                                                              : 'That didn’t work. Please try again.');
+      const said = notices(await response.text());
+      if (!response.redirected) throw new Error(said.join(' ') || 'Not saved. Open the page to see why.');
+      bubble('step', said.join(' ') || 'Saved ✓').classList.add('is-changed');
+      const keys = card.dataset.keys.split(' ');
+      await refresh(card);
+      refreshKeys(keys, card);
+      const ids = JSON.parse(card.dataset.ids);
+      if (ids.event_id) pageChanged(ids.event_id);
+    } catch (err) { bubble('error', err.message); }
+    finally { card.classList.remove('is-busy'); }
+  }
+
+  log.addEventListener('click', (e) => {
+    const card = e.target.closest('.agent__card');
+    if (!card || card.classList.contains('is-folded') || card.classList.contains('is-gone')) return;
+    const button = e.target.closest('[data-component-act]');
+    if (button) { e.preventDefault(); act(card, button.dataset.componentAct); return; }
+    const title = e.target.closest('.title-link');
+    if (title && card.dataset.detail) { e.preventDefault(); pick(card); return; }
+    if (e.target.closest('a, button, input, select, textarea, label, summary, details, form, [data-copy]')) return;
+    if (card.dataset.detail && e.target.closest('.agent__card-body')) pick(card);
+  });
+  log.addEventListener('submit', (e) => {
+    const form = e.target.closest('form[data-component-form]');
+    const card = form && form.closest('.agent__card');
+    if (!card) return;
+    e.preventDefault();
+    if (form.dataset.confirmAction) act(card, form.dataset.confirmAction, form);
+    else submitForm(card, form, e.submitter);
   });
 
   // ---- recent requests ---------------------------------------------------------------------

@@ -18,9 +18,13 @@ def _error(message, status=400):
 
 
 def step_json(step):
-    return {'seq': step.seq, 'id': step.pk, 'kind': step.kind, 'tool': step.tool, 'text': step.text, 'ok': step.ok,
-            'changed': step.changed, 'url': step.url, 'event_id': step.event_id, 'confirm': step.confirm_state,
-            'at': step.created_at.isoformat()}
+    out = {'seq': step.seq, 'id': step.pk, 'kind': step.kind, 'tool': step.tool, 'text': step.text, 'ok': step.ok,
+           'changed': step.changed, 'url': step.url, 'event_id': step.event_id, 'confirm': step.confirm_state,
+           'at': step.created_at.isoformat()}
+    if step.kind == AgentStep.KIND_COMPONENT:  # the panel fetches the HTML (agent/components.py: render)
+        out['component'] = {'name': step.arguments.get('component', ''), 'items': step.arguments.get('items') or [],
+                            'picked': bool(step.arguments.get('picked'))}
+    return out
 
 
 def run_json(run):
@@ -100,11 +104,13 @@ def run(request, run_id):
 def confirm(request, run_id):
     r = _run(request, run_id)
     try:
-        loop.confirm(r, int(request.POST.get('step') or 0), request.POST.get('hash', ''))
+        step = loop.confirm(r, int(request.POST.get('step') or 0), request.POST.get('hash', ''))
     except loop.GateError as exc:
         return _error(str(exc), status=409)
     r.refresh_from_db()
-    return JsonResponse({'run': run_json(r)})
+    # Undo all and chat buttons ran right here: the panel shows their outcome (and refreshes components).
+    done = step_json(step) if step.kind in (AgentStep.KIND_UNDO, AgentStep.KIND_BUTTON) else None
+    return JsonResponse({'run': run_json(r), 'step': done})
 
 
 @login_required
