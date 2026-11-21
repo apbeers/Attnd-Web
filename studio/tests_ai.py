@@ -217,7 +217,7 @@ class ProviderTests(StudioTestCase):
     @override_settings(ANTHROPIC_API_KEY='sk-ant-test', STUDIO_AI_PROVIDER='auto')
     def test_anthropic_over_urllib(self):
         self.assertIsInstance(ai.get_provider(), ai.AnthropicProvider)
-        reply = {'model': 'claude-opus-5-5', 'stop_reason': 'tool_use', 'usage': {'input_tokens': 100, 'output_tokens': 20},
+        reply = {'model': 'claude-sonnet-5-5', 'stop_reason': 'tool_use', 'usage': {'input_tokens': 100, 'output_tokens': 20},
                  'content': [{'type': 'thinking', 'thinking': '', 'signature': 'sig'},
                              {'type': 'text', 'text': 'Writing it.'},
                              {'type': 'tool_use', 'id': 'tu1', 'name': 'write_file',
@@ -243,7 +243,7 @@ class ProviderTests(StudioTestCase):
         body = json.loads(request.data)
         self.assertEqual(request.full_url, 'https://api.anthropic.com/v1/messages')
         self.assertEqual(request.headers['X-api-key'], 'sk-ant-test')
-        self.assertEqual(body['model'], 'claude-opus-5-5')
+        self.assertEqual(body['model'], 'claude-sonnet-5-5')
         self.assertEqual(body['fallbacks'], 'default')
         self.assertNotIn('temperature', body)
         self.assertNotIn('thinking', body)

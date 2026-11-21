@@ -135,7 +135,7 @@
   function renderStep(step) {
     if (step.kind === 'component') return showComponents(step);
     if (step.kind === 'note') return bubble('assistant', step.text);
-    if (step.kind === 'question') return bubble('assistant', step.text);
+    if (step.kind === 'question') return question(step);
     if (step.kind === 'reply') return bubble('user', step.text);
     const el = bubble('step', step.text);
     el.classList.toggle('is-failed', !step.ok);
@@ -148,6 +148,39 @@
       el.append(' ', link);
     }
     return el;
+  }
+
+  // ask_user with options: tappable chips that send the answer (only while that question waits).
+  function question(step) {
+    const el = bubble('assistant', step.text);
+    if (!(step.options || []).length) return el;
+    const row = document.createElement('div');
+    row.className = 'agent__chips';
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Answers');
+    step.options.forEach((option) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'agent__chip';
+      chip.textContent = option;
+      chip.dataset.questionStep = step.id;
+      chip.addEventListener('click', () => answer(option, row));
+      row.appendChild(chip);
+    });
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+  async function answer(text, row) {
+    if (!run || run.status !== 'waiting_reply') return;
+    row.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try { renderRun(await post(runUrl(run.id, 'reply/'), { text })); live = true; poll(); }
+    catch (err) { bubble('error', err.message); row.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+  }
+  function syncChips() {
+    log.querySelectorAll('[data-question-step]').forEach((chip) => {
+      chip.disabled = !(run && run.status === 'waiting_reply');
+    });
   }
 
   function renderRun(data) {
@@ -182,6 +215,7 @@
     undoButton.hidden = !run.undo || (pending && pending.kind === 'undo');
     syncLinks();
     input.placeholder = run.status === 'waiting_reply' ? 'Your answer…' : 'What should Attnd do?';
+    syncChips();
     statusLine.textContent = statusText(run);
     if (!run.active && wasActive) finished();
     wasActive = run.active;

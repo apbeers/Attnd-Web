@@ -19,4 +19,5 @@ dependencies = [
     "cbor2==6.3.0",
     "google-auth==2.62.2",
     "cryptography==50.0.2",
+    "anthropic>=2.12.0",
 ]

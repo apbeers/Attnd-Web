@@ -17,10 +17,10 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then add a passkey (or an authenticator app) at the first admin sign-in, on dev and again on production (passkeys are per domain), and save the recovery codes. |
 | 13. CI keys (live tests) | ✅ Nov 15, 2026: `CI_API_KEYS` set on production (release v109; takes effect once API-008 is released to `main`), `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web. |
 | 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
-| 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15); optional `ANTHROPIC_API_KEY`. |
+| 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15). AI on Claude Sonnet 5.5 (step 18). |
 | 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026): moved to git branch `parked/tickets` (API-017), organizers use Eventbrite for now. The setup steps live on that branch. Optional: drop dev's orphan `tickets_*` tables (step 16). |
 | 17. Prospects (staff) | ✅ No setup: it uses the existing `OPENAI_API_KEY` (OpenAI's web search tool, ~$0.01 per search + tokens). The schedule is off until turned on in `/console/prospects/settings/`. Optional: `PROSPECT_MODEL`, `PROSPECT_DAILY_SPEND_CAP_USD` (default 5), `PROSPECT_RUN_MAX_MINUTES` (step 17). |
-| 18. Ask Attnd (console agent) | ✅ No setup: it uses the existing `OPENAI_API_KEY` (Responses API, gpt-5.5 → gpt-5). Optional: `AGENT_MODEL`, `AGENT_DAILY_SPEND_CAP_USD` (default 2 per person per UTC day), `AGENT_MAX_STEPS` (40). Available to every console user on dev and, after the next release, production. |
+| 18. Ask Attnd (console agent) | ✅ Runs on Anthropic's Claude Haiku 5.5 (`ANTHROPIC_API_KEY` set on dev and production, Nov 21, 2026; Studio on Claude Sonnet 5.5, step 18). Without the key it uses the existing `OPENAI_API_KEY` (gpt-5-mini → gpt-5). Optional: `AGENT_PROVIDER`, `AGENT_ANTHROPIC_MODEL`, `AGENT_DAILY_SPEND_CAP_USD` (default 2 per person per UTC day), `AGENT_MAX_STEPS` (40). |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
@@ -47,7 +47,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
       command.
 - [ ] Attnd Studio (step 15): buy a separate domain for hosted event sites (not a subdomain of attnd.app), then
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
-      with a go-ahead; until then sites are served on the Heroku hostnames. Optional: `ANTHROPIC_API_KEY`.
+      with a go-ahead; until then sites are served on the Heroku hostnames. (`ANTHROPIC_API_KEY`: done, step 18.)
 - [x] Tickets prep (Wallet passes, not payments; nothing built yet; done Nov 15, 2026): Apple Pass Type ID `pass.com.arcu.attnd.tickets`
       + Pass Type ID certificate (✅ Pass Type ID registered Nov 15, 2026; key, CSR, `.cer` and PEM in
       `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass` on the owner's Mac, plus the password manager), and a Google Pay & Wallet Console business
@@ -710,7 +710,7 @@ On those hostnames the app serves only the sites (console, admin and API are 404
    Published sites move to the new address (the apps get the new `website_url` with the next refresh). Optionally do the
    same for dev with a second domain or a subdomain of it (`dev.attndsites.com`, `-a attnd-dev`).
 
-**Optional settings:** `ANTHROPIC_API_KEY` (Studio then uses Claude, `claude-opus-5-5`; otherwise OpenAI `gpt-5.5`
+**Settings:** `ANTHROPIC_API_KEY` (set on dev and production, Nov 21, 2026: Studio uses Claude, `claude-sonnet-5-5` (`STUDIO_ANTHROPIC_MODEL`); otherwise OpenAI `gpt-5.5`
 with `gpt-5` as fallback), `STUDIO_DAILY_SPEND_CAP_USD` (default 5). Studio is for admins only (staff and
 superusers; Nov 19, 2026): `STUDIO_BETA_EMAILS` (default empty) is only an explicit override, and the old **Studio
 beta** invite page is gone.
@@ -930,3 +930,20 @@ Region, themes, caps and the schedule (off by default; Heroku Scheduler's `run_s
 are edited on the dashboard's Settings tab. Manual run from a shell: `heroku run -a attnd-dev python manage.py
 find_prospects --max 10`. Outreach is done by a person and must follow CAN-SPAM (who you are, a physical mailing
 address, an opt-out that is honoured); Attnd never emails prospects.
+
+## 18. Ask Attnd and Studio on Anthropic ✅
+
+Done Nov 21, 2026 (owner): `ANTHROPIC_API_KEY` is set on **attnd-dev and attnd-web**, and both AI features run on
+Anthropic:
+- **Ask Attnd** (`agent/`): the official `anthropic` SDK with `claude-haiku-5-5` ($0.10 / $0.50 per million input /
+  output tokens, cache reads a tenth); `AGENT_PROVIDER` defaults to `anthropic` when the key is set (`openai` to switch
+  back). A request Claude declines continues on OpenAI (`AGENT_REFUSAL_MODEL`, gpt-5-mini), so keep `OPENAI_API_KEY`.
+- **Studio** (`studio/`): `STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5` ($2 / $10) on both apps; dev also has
+  `STUDIO_AI_PROVIDER=anthropic`, production's is `auto` (Anthropic because the key is set). Images and vision stay on
+  OpenAI.
+```bash
+heroku config:set -a attnd-dev ANTHROPIC_API_KEY=sk-ant-… STUDIO_AI_PROVIDER=anthropic STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5
+heroku config:set -a attnd-web ANTHROPIC_API_KEY=sk-ant-… STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5
+```
+To be done in the Anthropic Console: a monthly spend limit as a second cap behind `AGENT_DAILY_SPEND_CAP_USD` /
+`STUDIO_DAILY_SPEND_CAP_USD`, and no training on customer data (docs/LLC_MIGRATION.md).

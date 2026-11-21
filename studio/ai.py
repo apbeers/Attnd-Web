@@ -67,11 +67,15 @@ def price(model):
 CACHED_INPUT_FACTOR = 0.1  # cached input tokens cost a tenth of fresh ones (OpenAI and Anthropic cache reads)
 
 
-def token_cost(model, input_tokens, output_tokens, cached_tokens=0):
+CACHE_WRITE_FACTOR = 1.25  # Anthropic: 5-minute cache writes cost 1.25x fresh input
+
+
+def token_cost(model, input_tokens, output_tokens, cached_tokens=0, cache_write_tokens=0):
     per_in, per_out = price(model)
     cached = min(max(cached_tokens, 0), input_tokens)
-    fresh = input_tokens - cached
-    return Decimal(str(round((fresh + cached * CACHED_INPUT_FACTOR) * per_in / 1_000_000
+    written = min(max(cache_write_tokens, 0), input_tokens - cached)
+    fresh = input_tokens - cached - written
+    return Decimal(str(round((fresh + cached * CACHED_INPUT_FACTOR + written * CACHE_WRITE_FACTOR) * per_in / 1_000_000
                              + output_tokens * per_out / 1_000_000, 4)))
 
 

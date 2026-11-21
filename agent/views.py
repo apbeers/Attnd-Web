@@ -21,6 +21,8 @@ def step_json(step):
     out = {'seq': step.seq, 'id': step.pk, 'kind': step.kind, 'tool': step.tool, 'text': step.text, 'ok': step.ok,
            'changed': step.changed, 'url': step.url, 'event_id': step.event_id, 'confirm': step.confirm_state,
            'at': step.created_at.isoformat()}
+    if step.kind == AgentStep.KIND_QUESTION:
+        out['options'] = step.arguments.get('options') or []
     if step.kind == AgentStep.KIND_COMPONENT:  # the panel fetches the HTML (agent/components.py: render)
         out['component'] = {'name': step.arguments.get('component', ''), 'items': step.arguments.get('items') or [],
                             'picked': bool(step.arguments.get('picked'))}
@@ -39,6 +41,7 @@ def run_json(run):
         'pending': {'step': pending.pk, 'summary': pending.confirm_summary, 'hash': pending.confirm_hash,
                     'kind': pending.kind} if pending else None,
         'question': question.text if question else None,
+        'options': (question.arguments.get('options') or []) if question else [],
         'undo': loop.undo_available(run), 'undone': run.undone_at is not None,
         'changed_events': sorted({c['event_id'] for c in changed if c['event_id']}),
         'changed_urls': sorted({c['url'] for c in changed if c['url']}),

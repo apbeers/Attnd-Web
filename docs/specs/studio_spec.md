@@ -123,7 +123,7 @@ The AI sees every asset (id, kind, size, description, tags) and references them 
   used when `ANTHROPIC_API_KEY` is set; `fallbacks: "default"` on refusals; a prompt-cache breakpoint on the newest
   block). The fallback model is used only when the error says the model is missing or not available to the account. `STUDIO_AI_PROVIDER` = `auto` (Anthropic when its key exists, else OpenAI) / `openai` / `anthropic`.
   Models (Nov 2026; settings): `STUDIO_OPENAI_MODEL` `gpt-5.5` (OpenAI's strongest coding model) falling back to
-  `STUDIO_OPENAI_FALLBACK_MODEL` `gpt-5` if the account can't use it; `STUDIO_ANTHROPIC_MODEL` `claude-opus-5-5`;
+  `STUDIO_OPENAI_FALLBACK_MODEL` `gpt-5` if the account can't use it; `STUDIO_ANTHROPIC_MODEL` `claude-sonnet-5-5` (Nov 21, 2026; was `claude-opus-5-5`);
   images `STUDIO_IMAGE_MODEL` `gpt-image-2` falling back to `gpt-image-1`. Prices per model in `STUDIO_PRICES`
   (conservative estimates; unknown models are priced high so the cap errs safe). Every call is logged in
   `StudioUsage`.

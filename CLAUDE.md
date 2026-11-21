@@ -56,7 +56,8 @@ attnd-web is the coordinating repo for all three. Any feature that touches the A
 Avoid third-party libraries. Use Django and the Python standard library first; the organizer console uses
 its own small design system (`console/static/console/console.css`, see Console UX), inline SVG icons
 (`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. Existing server dependencies are kept where the standard
-library has no equivalent (Postgres driver, Pillow, OpenAI SDK, Google auth, HTTP/2 for APNs via
+library has no equivalent (Postgres driver, Pillow, OpenAI SDK, the official Anthropic SDK `anthropic` (Ask Attnd only,
+Nov 21, 2026; Studio's Anthropic path stays on urllib), Google auth, HTTP/2 for APNs via
 `httpx[http2]`, CBOR for App Attest and passkeys; `cryptography`, installed with google-auth, verifies App Attest and passkey signatures). Stripe would be the exception if ticketing comes back (parked, see Tickets). The public site (`home/`, `join/`) uses one hand-written
 stylesheet (`home/static/home/site.css`) — no vendored frameworks, icon fonts or web fonts.
 Upgrade Python packages with `uv run python scripts/upgrade_deps.py` (also runs weekly in CI).
@@ -231,10 +232,25 @@ on Save does; there is no second copy of any business logic.
   run (after commit), the panel polls `GET /console/agent/runs/<id>/?after=<seq>` every 1.5 s. Tools: the
   registered writes allowed for the person + `read_page`, `list_pages`, `list_events`, `search_events`, `ask_user`,
   `finish`; strict schemas, no parallel tool calls, reasoning `AGENT_PLANNING_EFFORT` (first call / after a reply)
-  and `AGENT_STEP_EFFORT` (routine steps). Provider = Studio's layer (`studio.ai.get_provider(model=…,
-  fallback_model=…, effort=…, parallel_tool_calls=False)`: OpenAI Responses API chained with
-  `previous_response_id`, or Anthropic when `ANTHROPIC_API_KEY` is set); every call's cost via
-  `studio.ai.token_cost` into `AgentUsage`. Each run starts with the person's current page (read as them), their
+  and `AGENT_STEP_EFFORT` (routine steps). **Provider** (`agent/providers.py`, separate from Studio's
+  `STUDIO_AI_PROVIDER`): `AGENT_PROVIDER` = `anthropic` (default when `ANTHROPIC_API_KEY` is set) → `ClaudeProvider`,
+  the official `anthropic` SDK, Messages API with our own tool loop, `AGENT_ANTHROPIC_MODEL` `claude-haiku-5-5`
+  (owner, Nov 21, 2026): no `thinking` (adaptive is the default), `output_config.effort` low/medium, no
+  temperature/top_p/top_k, no prefill, strict tools (a 400 about strict schemas → resent without `strict`, remembered
+  per process), `tool_choice` auto + `disable_parallel_tool_use`, cache breakpoints on the stable system prompt
+  (tools + system) and on the newest message, every assistant block (thinking included) passed back unchanged,
+  append-only history; `stop_reason` checked first: `refusal` → the run continues on OpenAI
+  (`AGENT_REFUSAL_MODEL` gpt-5-mini, `loop._refusal_fallback`, from the same context block + what was done),
+  `max_tokens` → one retry at 32K, `pause_turn` → continued; the SDK's typed errors become messages. `openai` →
+  `studio.ai.OpenAIProvider` (Responses API chained with `previous_response_id`, `AGENT_MODEL` gpt-5-mini). A paused
+  run stores `provider_name` so it resumes on the same provider. Every call's cost via `studio.ai.token_cost`
+  (cache reads ×0.1, Anthropic cache writes ×1.25) into `AgentUsage`. Each run starts with the **context block**
+  (`agent.prompts.context_block`, in the first user message after the cached prefix): now in UTC and in the event's
+  zone, the current event as JSON (id, name, code, status, zone, start/end in its zone, each event day's date,
+  `single_day`, counts, the person's role), the current page; with no current event, the person's events with their
+  days. The system prompt makes the model resolve "the day of the event", "tomorrow at noon", "4pm" itself and never
+  ask for a date format; `ask_user(question, options)` only when truly ambiguous, the options shown as chips that
+  send the answer (`run_json.options`, `step_json.options`). Then the person's current page (read as them), their
   events and the last 48 h of their runs. Caps: `AGENT_MAX_STEPS` model calls, `AGENT_RUN_MAX_MINUTES`,
   `AGENT_DAILY_SPEND_CAP_USD` per person per UTC day (also checked by the start endpoint, 429).
 - **Always ask** (`confirm=True`, the run pauses as `waiting_confirmation`; the panel shows `summary(ctx)`, e.g.
@@ -285,7 +301,9 @@ on Save does; there is no second copy of any business logic.
 - Tests: `agent/tests.py` (registry and coverage, pages, writes through the real views, the loop with a scripted
   provider: gates, cancel, injection, caps, stop, ask_user, undo all, sign-out; endpoints and the panel) and
   `agent/tests_components.py` (show validation, JSON-only context, taps and renders as the person, chat forms
-  through the views, the confirm gate for chat buttons and forms).
+  through the views, the confirm gate for chat buttons and forms) and `agent/tests_claude.py` (the Anthropic request
+  shape, blocks passed back, cache reads, refusal → OpenAI, max_tokens / pause_turn, typed errors, the context block,
+  one-day events schedule without asking, multi-day ones ask with day chips; the SDK is mocked, never called).
 
 ## Attnd Studio (admins only; `studio/`, spec `docs/specs/studio_spec.md`)
 
@@ -317,7 +335,7 @@ sets the **app's look**; Attnd hosts the site.
   Messages API over urllib when `ANTHROPIC_API_KEY` is set, with a prompt-cache breakpoint), agent loop with tools
   write/edit/delete/read file, set_app_look, generate_image, set_flyer, in a background thread (like AI import); the
   editor polls `runs/<id>/` (no WebSockets), the preview reloads on every file change, a failed run shows **Retry**
-  (`runs/<id>/retry/`). Defaults: `gpt-5.5` → `gpt-5` fallback (only when the model is unavailable), `claude-opus-5-5`,
+  (`runs/<id>/retry/`). Defaults: `gpt-5.5` → `gpt-5` fallback (only when the model is unavailable), `claude-sonnet-5-5` (owner, Nov 21, 2026: Studio runs on Anthropic on dev and production; `STUDIO_AI_PROVIDER` auto/anthropic),
   images `gpt-image-2` → `gpt-image-1`. Daily spend cap per event (`STUDIO_DAILY_SPEND_CAP_USD`, $10: a full import
   costs ~$2–4) over `StudioUsage` (cached input at a tenth); vision describes uploads. Scrape extraction, tags and
   vision stay on Chat Completions with structured output (no tools, still supported).
@@ -526,7 +544,8 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `GITHUB_SYMBOLICATE_REPO` / `GITHUB_SYMBOLICATE_REF` | No | Default `apbeers/Attnd-iOS` / `main` |
 | `SITES_HOST` | No | Attnd Studio's sites domain (no scheme), e.g. `attndsites.com`. Default: the Heroku app's herokuapp.com hostname for attnd.app / dev.attnd.app, `127.0.0.1:8000` with `DEBUG` |
 | `STUDIO_BETA_EMAILS` | No | Comma-separated emails that also get Studio (an explicit override; Studio is otherwise staff/superusers only), default empty |
-| `ANTHROPIC_API_KEY` | No | Studio uses Claude (`STUDIO_ANTHROPIC_MODEL`, default `claude-opus-5-5`) when set; `STUDIO_AI_PROVIDER=auto/openai/anthropic` |
+| `ANTHROPIC_API_KEY` | No | Ask Attnd uses Claude Haiku 5.5 when set (`AGENT_PROVIDER`); Studio uses Claude (`STUDIO_ANTHROPIC_MODEL`, default `claude-sonnet-5-5`) per `STUDIO_AI_PROVIDER=auto/openai/anthropic` (auto = when the key is set). Set on dev and production (Nov 21, 2026): both Studio and Ask Attnd run on Anthropic |
+| `STUDIO_ANTHROPIC_MODEL` | No | Studio's Claude model, default `claude-sonnet-5-5` ($2 / $10 per MTok; dev and production set it explicitly) |
 | `STUDIO_OPENAI_MODEL` / `STUDIO_OPENAI_FALLBACK_MODEL` | No | Default `gpt-5.5` / `gpt-5` |
 | `STUDIO_IMAGE_MODEL` / `STUDIO_IMAGE_FALLBACK_MODEL` / `STUDIO_VISION_MODEL` | No | Default `gpt-image-2` / `gpt-image-1` / `OPENAI_MODEL` |
 | `STUDIO_DAILY_SPEND_CAP_USD` | No | Studio AI spend per event per UTC day, default `10` (a full import is ~$2–4) |
@@ -536,7 +555,10 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `PROSPECT_MODEL` / `PROSPECT_FALLBACK_MODEL` | No | Prospects discovery (staff), default `gpt-5.5` / `gpt-5` (fallback only when the model is unavailable); uses `OPENAI_API_KEY` and OpenAI's web search tool |
 | `PROSPECT_DAILY_SPEND_CAP_USD` | No | AI spend of all prospect runs per UTC day, default `5` |
 | `PROSPECT_RUN_MAX_MINUTES` | No | Wall clock per prospect run, default `20` (stops and keeps what it found) |
-| `AGENT_MODEL` / `AGENT_FALLBACK_MODEL` | No | Ask Attnd (console agent) on OpenAI, default `gpt-5-mini` (the cheaper model, owner Nov 21, 2026) / `gpt-5` (fallback only when the model is unavailable); the provider follows `STUDIO_AI_PROVIDER` / `ANTHROPIC_API_KEY` |
+| `AGENT_PROVIDER` | No | Ask Attnd's provider: `anthropic` (default when `ANTHROPIC_API_KEY` is set) or `openai` |
+| `AGENT_ANTHROPIC_MODEL` | No | Ask Attnd on Anthropic, default `claude-haiku-5-5` (owner, Nov 21, 2026) |
+| `AGENT_REFUSAL_MODEL` | No | OpenAI model a run continues on when Claude declines it (Haiku has no server-side fallback), default `gpt-5-mini` |
+| `AGENT_MODEL` / `AGENT_FALLBACK_MODEL` | No | Ask Attnd (console agent) on OpenAI, default `gpt-5-mini` (the cheaper model, owner Nov 21, 2026) / `gpt-5` (fallback only when the model is unavailable) |
 | `AGENT_DAILY_SPEND_CAP_USD` | No | Ask Attnd AI spend per person per UTC day, default `2` |
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
 | `AGENT_PLANNING_EFFORT` / `AGENT_STEP_EFFORT` | No | Reasoning effort for the first call of a run (and after a reply) / routine steps, default `medium` / `low` |

@@ -57,7 +57,7 @@ sales tax on the $299/$499 tiers and ticketing).
 | Mailgun (Heroku add-on) | Moves with the Heroku app; sending domain `mg.attnd.app` unchanged | Update the account contact email |
 | Cloudinary (Heroku add-ons, dev + prod) | Move with the apps; update account owner emails | PDF/ZIP delivery setting stays |
 | OpenAI (server key) | Create an LLC organization, new API key, billing on the LLC card; turn off data sharing/training for customer data | Rotate `OPENAI_API_KEY` on both apps |
-| Anthropic (optional `ANTHROPIC_API_KEY`) | Same as OpenAI | |
+| Anthropic (`ANTHROPIC_API_KEY`, two keys: attnd-dev and attnd-web, set Nov 21, 2026; Ask Attnd on Claude Haiku 5.5, Studio on Claude Sonnet 5.5) | Same as OpenAI: an LLC organization in the Anthropic Console, new key, billing and a monthly spend limit on the LLC card, no training on customer data | Rotate `ANTHROPIC_API_KEY` on both apps |
 | Stripe (tickets, tiers; not set up yet) | **Create it in the LLC's name from day one** (EIN, LLC bank account), Connect platform profile | Never on a personal account |
 | Studio sites domain (to buy) | Buy it in the LLC's name/registrar account | |
 | Claude Code cloud environment / GitHub app | Re-authorize under the LLC GitHub org; environment secrets re-created | |
@@ -88,6 +88,10 @@ Accounts and services:
   day by `AGENT_DAILY_SPEND_CAP_USD`): it sends console page text (event content, team member emails, organizer
   notes) to OpenAI as the signed-in organizer, so the LLC's OpenAI org must have data sharing/training off and the
   privacy policy / organizer terms should mention the AI assistant as a processor).
+- Anthropic (Nov 21, 2026): the Anthropic Console account and two API keys (`ANTHROPIC_API_KEY` on attnd-dev and
+  attnd-web). **Ask Attnd** runs on Claude Haiku 5.5 (`AGENT_PROVIDER`, the official `anthropic` SDK) and **Studio** on
+  Claude Sonnet 5.5 (`STUDIO_ANTHROPIC_MODEL`, Studio's urllib provider); like OpenAI before it, Ask Attnd it receives console page text (event content, team emails,
+  notes) as the signed-in organizer, so the privacy policy / organizer terms should name Anthropic as a processor.
 - Prospects data (staff sales pipeline, `prospects/`): organizer contact details scraped from public event pages,
   with do-not-contact flags. Moves with the database; outreach from the LLC must identify the LLC and its physical
   mailing address (CAN-SPAM).

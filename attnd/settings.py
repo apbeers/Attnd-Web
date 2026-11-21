@@ -349,7 +349,7 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 STUDIO_AI_PROVIDER = os.getenv('STUDIO_AI_PROVIDER', 'auto').strip().lower()
 STUDIO_OPENAI_MODEL = os.getenv('STUDIO_OPENAI_MODEL', 'gpt-5.5')
 STUDIO_OPENAI_FALLBACK_MODEL = os.getenv('STUDIO_OPENAI_FALLBACK_MODEL', 'gpt-5')
-STUDIO_ANTHROPIC_MODEL = os.getenv('STUDIO_ANTHROPIC_MODEL', 'claude-opus-5-5')
+STUDIO_ANTHROPIC_MODEL = os.getenv('STUDIO_ANTHROPIC_MODEL', 'claude-sonnet-5-5')  # owner, Nov 21, 2026
 STUDIO_IMAGE_MODEL = os.getenv('STUDIO_IMAGE_MODEL', 'gpt-image-2')
 STUDIO_IMAGE_FALLBACK_MODEL = os.getenv('STUDIO_IMAGE_FALLBACK_MODEL', 'gpt-image-1')
 STUDIO_VISION_MODEL = os.getenv('STUDIO_VISION_MODEL', '') or os.getenv('OPENAI_MODEL', 'gpt-5-mini')
@@ -372,6 +372,8 @@ STUDIO_PRICES = {
     'gpt-5': (1.25, 10.0),
     'gpt-5-mini': (0.25, 2.0),
     'claude-opus-5-5': (4.0, 20.0),
+    'claude-sonnet-5-5': (2.0, 10.0),
+    'claude-haiku-5-5': (0.10, 0.50),  # prompts <= 100K tokens (Ask Attnd's are far smaller); cache reads a tenth
     'image': 0.25,
 }
 
@@ -384,7 +386,12 @@ PROSPECT_RUN_MAX_MINUTES = int(os.getenv('PROSPECT_RUN_MAX_MINUTES', '20'))  # w
 PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # OpenAI's web_search tool: $10 per 1,000 calls (+ its content as input tokens)
 
 # Ask Attnd (agent/): the console's AI agent. Every tool runs the real console view as the signed-in person.
-# Provider: the same as Studio's (STUDIO_AI_PROVIDER / ANTHROPIC_API_KEY); on OpenAI these models.
+# Provider (agent/providers.py, separate from Studio's STUDIO_AI_PROVIDER): anthropic (default when ANTHROPIC_API_KEY
+# is set; the official SDK, Claude Haiku 5.5) or openai (these models).
+AGENT_PROVIDER = os.getenv('AGENT_PROVIDER', '').strip().lower() or ('anthropic' if ANTHROPIC_API_KEY else 'openai')
+AGENT_ANTHROPIC_MODEL = os.getenv('AGENT_ANTHROPIC_MODEL', 'claude-haiku-5-5')  # owner, Nov 21, 2026
+# Claude Haiku has no server-side refusal fallback: a declined run continues on OpenAI with this model.
+AGENT_REFUSAL_MODEL = os.getenv('AGENT_REFUSAL_MODEL', 'gpt-5-mini')
 AGENT_MODEL = os.getenv('AGENT_MODEL', 'gpt-5-mini')  # owner, Nov 21, 2026: the cheaper model (was gpt-5.5)
 AGENT_FALLBACK_MODEL = os.getenv('AGENT_FALLBACK_MODEL', 'gpt-5')  # only when AGENT_MODEL is unavailable
 AGENT_DAILY_SPEND_CAP_USD = float(os.getenv('AGENT_DAILY_SPEND_CAP_USD', '2'))  # per person per UTC day

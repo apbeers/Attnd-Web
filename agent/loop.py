@@ -48,9 +48,14 @@ FIXED_TOOLS = [
     {'name': 'search_events', 'description': 'Find the person\'s events by name or code.',
      'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['query'], 'properties': {
          'query': {'type': 'string'}}}, 'strict': True},
-    {'name': 'ask_user', 'description': 'Ask the person one short question and wait for the answer.',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['question'], 'properties': {
-         'question': {'type': 'string'}}}, 'strict': True},
+    {'name': 'ask_user', 'description': 'Ask the person one short question and wait for the answer. Only when it '
+                                        'is truly ambiguous; pass the possible answers as options (tappable chips).',
+     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['question', 'options'],
+                    'properties': {
+                        'question': {'type': 'string'},
+                        'options': {'type': ['array', 'null'], 'items': {'type': 'string'},
+                                    'description': '2-6 short answers the person can tap (e.g. the event days), or '
+                                                   'null for an open question'}}}, 'strict': True},
     {'name': 'finish', 'description': 'End the run with a short summary for the person.',
      'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['summary'], 'properties': {
          'summary': {'type': 'string'}}}, 'strict': True},
@@ -136,10 +141,11 @@ def tools_for(user):
             + [registry.tool_definition(a) for a in registry.writes_for(user).values()])
 
 
-def _provider():
-    from studio import ai
-    return ai.get_provider(model=settings.AGENT_MODEL, fallback_model=settings.AGENT_FALLBACK_MODEL,
-                           effort=settings.AGENT_PLANNING_EFFORT, parallel_tool_calls=False)
+def _provider(name=None, model=None):
+    """Ask Attnd's provider (agent/providers.py): Claude Haiku 5.5 on Anthropic by default, or OpenAI. `name` /
+    `model` restore a paused run's provider."""
+    from agent import providers
+    return providers.get_provider(name=name, model=model)
 
 
 # ---------------------------------------------------------------------------
@@ -201,8 +207,9 @@ def resume_run(run_id):
     run.save(update_fields=['started_at'])
     try:
         from studio.ai import ToolCall
-        provider = _provider()
-        provider.restore(run.state.get('provider') or {})
+        saved = run.state.get('provider') or {}
+        provider = _provider(run.state.get('provider_name') or None, saved.get('model') or None)
+        provider.restore(saved)
         messages = list(run.state.get('messages') or [])
         calls = [ToolCall(c['id'], c['name'], c['args']) for c in run.state.get('calls') or []]
         done = dict(run.state.get('results') or {})
@@ -295,7 +302,24 @@ def _deadline(run):
     return (run.started_at or timezone.now()) + timedelta(minutes=settings.AGENT_RUN_MAX_MINUTES)
 
 
+def _refusal_fallback(run, messages, refused):
+    """Claude declined (no server-side fallback on Haiku): this run continues on OpenAI (AGENT_REFUSAL_MODEL) from
+    the same context block, told what the run already did."""
+    provider = _provider('openai', settings.AGENT_REFUSAL_MODEL)
+    from agent.providers import first_text
+    done = [s.text for s in run.steps.exclude(kind=AgentStep.KIND_NOTE).order_by('seq') if s.text][-20:]
+    text = first_text(messages)
+    if done:
+        text += '\n\nALREADY DONE IN THIS REQUEST (do not repeat):\n' + '\n'.join(f'- {t}' for t in done)
+    logger.warning('Ask Attnd run %s: %s refused (%s); continuing on %s', run.pk, run.model, refused.category,
+                   provider.model)
+    run.provider, run.model = provider.name, provider.model
+    run.save(update_fields=['provider', 'model'])
+    return provider, provider.start(text)
+
+
 def _loop(run, provider, messages):
+    from agent.providers import Refused
     from studio import ai
     tools = tools_for(run.user)
     planning = True
@@ -313,10 +337,17 @@ def _loop(run, provider, messages):
         planning = False
         try:
             turn = provider.chat(SYSTEM_PROMPT, messages, tools)
+        except Refused as exc:
+            if provider.name != 'anthropic':
+                raise StopRun('The AI declined this request. Try rephrasing it.')
+            provider, messages = _refusal_fallback(run, messages, exc)
+            planning = True
+            continue
         except ai.AIError as exc:
             raise StopRun(str(exc))
         model = turn.model or provider.model
-        cost = ai.token_cost(model, turn.input_tokens, turn.output_tokens, turn.cached_tokens)
+        cost = ai.token_cost(model, turn.input_tokens, turn.output_tokens, turn.cached_tokens,
+                             getattr(turn, 'cache_written', 0))
         AgentUsage.objects.create(user=run.user, run=run, provider=provider.name, model=model[:64],
                                   input_tokens=turn.input_tokens, cached_tokens=turn.cached_tokens,
                                   output_tokens=turn.output_tokens, cost_usd=cost)
@@ -353,6 +384,7 @@ def _loop(run, provider, messages):
 def _pause(run, provider, messages, calls, results, call, pause):
     run.state = {
         'messages': messages, 'provider': provider.state() if hasattr(provider, 'state') else {},
+        'provider_name': getattr(provider, 'name', ''),
         'calls': [{'id': c.id, 'name': c.name, 'args': c.args} for c in calls],
         'results': {c.id: text for c, text in results}, 'pending_call': call.id,
     }
@@ -396,8 +428,9 @@ def _call(run, call):
         raise Finished(str(args.get('summary') or 'Done.')[:4000])
     if name == 'ask_user':
         question = str(args.get('question') or '').strip()[:1000] or 'Could you tell me more?'
+        options = [str(o).strip()[:80] for o in (args.get('options') or []) if str(o).strip()][:6]
         step = add_step(run, kind=AgentStep.KIND_QUESTION, tool='ask_user', call_id=call.id, text=question,
-                        arguments={'question': question})
+                        arguments={'question': question, 'options': options})
         raise Pause(AgentRun.WAITING_REPLY, step)
     try:
         if name == 'read_page':
