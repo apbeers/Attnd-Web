@@ -213,7 +213,7 @@ class PagePerfTests(PerfBase):
         for i in range(3):
             Event.objects.create(name=f'Other {i}', event_code=f'OTHER{i}', start_time=timezone.now(), user=self.user)
         bounds = {'/console/': 8,
-                  f'/console/events/{self.event.id}/': 18,  # +1: the QR card's phones line (API-026)
+                  f'/console/events/{self.event.id}/': 19,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2)
                   f'/console/events/{self.event.id}/locations/': 11,
                   f'/console/events/{self.event.id}/schedule/': 12,
                   f'/console/events/{self.event.id}/usage/': 21}

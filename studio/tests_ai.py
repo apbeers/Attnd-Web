@@ -666,7 +666,7 @@ class ImporterTests(StudioTestCase):
             jobs.run_job(job.pk)
         job.refresh_from_db()
         event = job.event
-        self.assertEqual(event.plan, 'studio')
+        self.assertEqual(event.plan, 'standard')  # designing never needs the plan; publishing does (D1)
         run = StudioRun.objects.get(site__event=event)
         self.assertEqual((run.kind, run.context['import_url']), (StudioRun.KIND_IMPORT, 'https://new.example/'))
         start.assert_called_once_with(run)
@@ -717,7 +717,7 @@ class ImporterTests(StudioTestCase):
         with mock.patch('studio.importer.start_import') as start:
             jobs._bring_into_studio(job, event)
         event.refresh_from_db()
-        self.assertEqual(event.plan, 'studio')
+        self.assertEqual(event.plan, 'standard')
         start.assert_called_once()
 
     def test_ai_import_form_sets_the_flag(self):

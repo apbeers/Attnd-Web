@@ -1,0 +1,15 @@
+{% extends 'console/base.html' %}
+{% load console_tags humanize %}
+{% block title %}{{ customer.email }} · Platform{% endblock %}
+{% block content %}
+<div class="stack">
+{% include 'platform_admin/_nav.html' %}
+<div class="panel stack">
+  <h2 class="title-3">{{ customer.email }}</h2>
+  <p class="small muted">Joined {{ customer.date_joined|date:"M j, Y" }} · last active {{ customer.last_login|naturaltime|default:"never" }}{% if row %} · AI ${{ row.ai_month|floatformat:2 }} this month (limit {{ row.ai_limit }}), ${{ row.ai_total|floatformat:2 }} in all · paid ${{ row.paid_usd|floatformat:0 }}{% endif %}</p>
+  {% if row %}<div class="cluster small">{% for k, v in row.features.items %}<span class="chip">{{ k }} · {{ v }}</span>{% endfor %}</div>{% endif %}
+</div>
+<div class="panel stack stack--tight"><h3 class="title-4">Events</h3><ul class="list list--inset">{% for e in events %}<li class="cluster"><a class="grow" href="{% url 'platform:event' e.event.pk %}">{{ e.event.name }}</a><span class="badge">{{ e.plan }}</span><span class="small muted">{{ e.event.get_status_display }}</span></li>{% empty %}<li class="muted small">No events.</li>{% endfor %}</ul></div>
+<div class="panel stack stack--tight"><h3 class="title-4">Payments</h3>{% for p in payments %}<p class="small">{{ p.paid_at|date:"M j, Y" }} · {{ p.event.name }} · {{ p.get_plan_display }} · ${{ p.amount_usd|floatformat:0 }}</p>{% empty %}<p class="small muted">None recorded.</p>{% endfor %}</div>
+</div>
+{% endblock %}

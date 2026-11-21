@@ -157,7 +157,9 @@ Follow-ups:
 ### Stripe checkout for the two tiers
 Stripe Checkout (the expected exception to the dependency policy) for the two event tiers: **Standard** (import and
 manage an existing event) and **Studio** (AI designs the site, flyer and app look; Attnd hosts the site). `Event.plan`
-already exists and staff switch it by hand; checkout would set it (and `paid`) from a webhook. Prices
+already exists; today an organizer's "Upgrade to publish" / "Remove the limit" is an `UpgradeRequest` a superuser
+approves in the Platform admin (D2, which records a `PaymentRecord`); checkout would set the plan (and `paid`) from a
+webhook and create the `PaymentRecord` itself, at the prices in `PlatformSettings`. Prices
 (owner, Nov 15, 2026): **$299 per event** = bring an event in, **$499 per event** = Studio + ticketing. The home page
 already says "$299 per event, flat"; add the $499 tier there when Studio leaves beta.
 

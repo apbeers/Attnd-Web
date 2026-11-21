@@ -51,7 +51,8 @@ def _target(slug, token, asset=False):
     if site is None:
         raise Http404
     if token is None:
-        if asset and not site.suspended and site.event.plan == Event.PLAN_STUDIO:
+        from platform_admin.plans import can_go_live
+        if asset and not site.suspended and can_go_live(site.event):
             # Assets stay reachable while the site is unpublished: the app's logo and flyer may point at them.
             files = site.published.files if site.published else {}
             return Target(site, files, site.published, f'/{site.slug}/', preview=False)
@@ -304,8 +305,9 @@ def not_found(request, exception=None):
 def sitemap(request):
     """The sites host's sitemap: every published site that is up (not taken down, Studio plan)."""
     from xml.sax.saxutils import escape
-    sites = (Site.objects.filter(published__isnull=False, suspended=False, event__plan=Event.PLAN_STUDIO)
-             .select_related('event').order_by('pk'))
+    from platform_admin.plans import can_go_live
+    sites = [s for s in Site.objects.filter(published__isnull=False, suspended=False).select_related('event')
+             .order_by('pk') if can_go_live(s.event)]
     rows = ''.join(f'<url><loc>{escape(hosting.sites_origin() + "/" + s.slug + "/")}</loc>'
                    f'{"<lastmod>" + s.published_at.date().isoformat() + "</lastmod>" if s.published_at else ""}</url>'
                    for s in sites)

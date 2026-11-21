@@ -81,6 +81,7 @@ def component(name, title, description, **options):
 def registry():
     from console.components import (catalog, catalog_chat, catalog_credit, catalog_more,  # noqa: F401  (registers them)
                                     catalog_prospects, catalog_screens, catalog_website)
+    from platform_admin import components  # noqa: F401  (platform_health, D2)
     from agent import proposals  # noqa: F401  (change_preview, stage I)
     return REGISTRY
 
@@ -160,6 +161,8 @@ def clean_parent(ids):
 
 
 def allowed(comp, user):
+    if comp.audience == 'superuser':  # the Platform admin (D2)
+        return bool(getattr(user, 'is_superuser', False))
     if comp.audience == 'staff':
         return bool(getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False))
     if comp.audience == 'studio':  # Attnd Studio (studio.access: staff, superusers, STUDIO_BETA_EMAILS)

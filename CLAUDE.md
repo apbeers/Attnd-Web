@@ -736,7 +736,7 @@ on Save does; there is no second copy of any business logic.
   one-day events schedule without asking, multi-day ones ask with day chips; the SDK is mocked, never called) and
   `agent/tests_fullscreen.py` (the full-screen page, `from` / `event` checks, follow-up chips, stage texts).
 
-## Attnd Studio (admins only; `studio/`, spec `docs/specs/studio_spec.md`)
+## Attnd Studio (every organizer designs, publishing needs the Studio plan; `studio/`, spec `docs/specs/studio_spec.md`)
 
 A second tier (`Event.plan`: `standard` = import/manage, `studio` = Studio; no checkout yet, Stripe later): an AI
 writes the event's **website** (raw multi-page HTML/CSS/JS), makes **flyer art** and sets the **app's look**; Attnd
@@ -761,10 +761,16 @@ hosts the site.
   tab refreshes when the first version lands; or Use Studio for this event), `website_versions` (Preview ↗, Restore as the draft, Publish this one), `website_forms`
   (entries per form, CSV, Delete), `website_assets` (files, Delete). They make the canvas **Website** tab (Studio users
   only; `?tab=website` opens on it) and the **Website** page (`studio:editor`, sidenav "Website").
-- **Access** (`studio/access.py`, Nov 19, 2026: admins only): staff and superusers, plus emails in `STUDIO_BETA_EMAILS`
-  (an explicit override, default empty). The old beta invite list (`StudioAccess`) and its staff page are gone. Everyone else gets 404 on every Studio URL and sees no entry point (sidenav
-  "Studio"). Staff: `/console/studio/reports/` (abuse reports, take down/restore; topbar "Studio reports"). Team roles as today: any member edits drafts;
-  owner/admins switch the plan, publish, unpublish and change the address.
+- **Access** (`studio/access.py`, D1, owner Nov 21, 2026): **every signed-in organizer** builds, edits and previews
+  their event's website (`has_studio_access` = signed in; the team's roles decide which events; AI spend counts toward
+  the person's monthly credit and Studio's per-event daily cap still applies). There is no "Use Studio for this
+  event" step: every Website tab opens on `website_overview` (its empty state for a new site). **Publishing** needs the
+  **Studio plan** (`platform_admin.plans.can_go_live`: `Event.plan == studio`, or the Platform admin's per-event
+  "allow site publishing" override) and the owner or an event admin (`can_publish`). Without it Publish is **Upgrade
+  to publish · $499** (`request_upgrade`, `console:event_upgrade_request`: an `UpgradeRequest` + an email to `ADMINS`;
+  "Upgrade requested · we'll email you" while it waits); the API's `website_url`, the sites host and its sitemap only
+  serve sites of events that can go live. Only staff switch plans by hand. Staff: `/console/studio/reports/` (abuse
+  reports, take down/restore; topbar "Studio reports").
 - **Models** (`studio/models.py`): `Site` (1:1 event, slug, `draft`/`published` → `SiteVersion`, suspended,
   preview secret), `SiteVersion` (files `{path: text}`, app look, flyer asset; every AI run, code save and restore makes
   one), `StudioAsset` (UUID, Cloudinary *raw* storage when configured), `StudioRun` (one AI turn, working copy),
@@ -799,6 +805,28 @@ hosts the site.
 - **Publishing** (`publishing.py`): publish = site serves that version + its app look (accent, logo, display) and flyer
   are copied onto the event + `content_version` bump; the bundle's `event.website_url` (API-016) is the live URL.
 - Custom domains are designed (spec §13), not built.
+
+## Plans and the Platform admin (D1 + D2, owner Nov 21, 2026; `platform_admin/`)
+
+- **Plans** (`platform_admin/plans.py`): **Free** (unpaid demo, the free phone limit, API-025), **Standard** ($299:
+  paid, no phone limit, nearby listing), **Studio** ($499: Standard + publishing the Studio website). `plan_of(event)`
+  from `Event.plan` / `paid`. Prices, the free phone limit and new accounts' daily AI imports live in
+  `PlatformSettings` (pk 1, cached 30 s; first values 299 / 499 / `FREE_DEVICE_LIMIT`); every price label comes from
+  there (`price_label`). No checkout yet (Stripe, ROADMAP): **Remove the limit** (a Standard request) and **Upgrade to
+  publish** (a Studio request) make an `UpgradeRequest` (one pending per event and kind) and email `ADMINS`.
+- **Platform admin** (`/console/platform/`, `platform:home`, **superusers only**, 404 otherwise; topbar "Platform";
+  canvas tab **Platform** = the `platform_health` component, audience `superuser`): tabs **Overview** (health: AI spend
+  vs the alert, events live now, sign-ups this week, failed AI jobs and push failures in 24 h, Google API counters),
+  **Pricing** (`save_platform_pricing`), **Customers** (every account: events, plans, paid total, AI month / all vs
+  limit, last active, features used: AI imports, Ask Attnd runs, Studio sites built / published, notifications sent,
+  themes, screens edited, claims, phones joined; search, sort, CSV `platform:customers_csv`; a customer page
+  `platform:customer`), **Upgrade requests** (Approve = plan + paid + a `PaymentRecord` at the request's price, Decline),
+  **Event overrides** (`platform:event`: plan Free / Standard / Studio, free phone limit (a number or none), allow site
+  publishing, Studio daily AI cap, nearby listing, website watching, the owner's AI credit (`AiLimitOverride`), notes;
+  `EventOverride`, read by `events.free_limit`, `studio.ai.daily_cap` and `plans.can_go_live`), **AI spend** (the
+  credit components; `/console/ai-spend/` still works). Every change always asks (page `data-confirm`, Ask Attnd
+  `save_platform_pricing`, `approve_upgrade_request`, `decline_upgrade_request`, `save_event_overrides`, confirm=True,
+  namespace audience `superuser`) and is a History `LogEntry`. Tests: `platform_admin/tests.py`.
 
 ## Tickets: parked on git branch `parked/tickets`
 

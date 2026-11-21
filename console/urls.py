@@ -56,6 +56,7 @@ urlpatterns = [
 
     path('events/<int:event_id>/display/', v.display_settings, name='display'),
     path('events/<int:event_id>/changes/', v.event_changes, name='event_changes'),
+    path('events/<int:event_id>/upgrade/', v.event_upgrade_request, name='event_upgrade_request'),
     path('events/<int:event_id>/changes/publish/', v.event_publish_changes, name='event_publish_changes'),
     path('events/<int:event_id>/changes/discard/', v.event_discard_changes, name='event_discard_changes'),
     path('events/<int:event_id>/live-activity/', v.event_live_activity, name='event_live_activity'),

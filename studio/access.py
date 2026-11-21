@@ -1,8 +1,9 @@
-"""Who may use Attnd Studio (admins only for now) and what they may do on an event."""
+"""Who may use Attnd Studio and what they may do on an event (D1, owner Nov 21, 2026): every organizer designs,
+edits and previews websites for their events; publishing one needs the event's Studio plan (or the owner's
+override in the Platform admin)."""
 
 from functools import wraps
 
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -16,13 +17,9 @@ def is_staff(user):
 
 
 def has_studio_access(user):
-    """Staff and superusers only, plus an explicit STUDIO_BETA_EMAILS override (default none; case-insensitive)."""
-    if not user or not user.is_authenticated:
-        return False
-    if is_staff(user):
-        return True
-    email = (user.email or '').strip().lower()
-    return bool(email) and email in settings.STUDIO_BETA_EMAILS
+    """Every signed-in organizer (D1): building and previewing a website is open to all; AI spend counts toward their
+    monthly AI credit and Studio's per-event daily cap. Publishing is gated per event (`can_publish`)."""
+    return bool(user and user.is_authenticated)
 
 
 def cached_access(request):
@@ -33,11 +30,14 @@ def cached_access(request):
 
 
 def can_switch_plan(event, user):
-    return is_staff(user) or (has_studio_access(user) and event.can_manage_team(user))
+    """Plans change through an approved upgrade (the Platform admin); staff can still switch by hand."""
+    return is_staff(user)
 
 
 def can_publish(event, user):
-    return event.can_manage_team(user) and has_studio_access(user)
+    """The owner and event admins, on an event whose plan lets the site go live (Studio, or the owner's override)."""
+    from platform_admin.plans import can_go_live
+    return event.can_manage_team(user) and can_go_live(event)
 
 
 def studio_required(view):

@@ -125,6 +125,10 @@ Accounts and services:
   the home page's anonymous counts (`home.HomeMetric`) and the composer's waiting submissions (`home.PendingImport`,
   deleted after a day). Terms of Service should cover demo events, the 20-phone free limit, claims of events made from
   public pages (staff-approved hand-over) and AI-generated content.
+- Pricing (D2, Nov 21, 2026): Standard $299 and Studio $499 per event, kept in `PlatformSettings` (Platform admin →
+  Pricing). Upgrades are requests a superuser approves; each approval is a `PaymentRecord` (event, plan, amount, who).
+  Payments are collected outside Attnd for now (no checkout); invoices, sales tax and the payment account should be in
+  the LLC's name, and the Terms should name the plans and what each includes.
 Legal/policy surface (to re-issue in the LLC's name):
 - Privacy policy (`/privacy/`), Terms of Service (to write), Terms of Sale + Organizer Agreement (tickets), App Store
   privacy labels, Play data safety, support email, App Review contact.

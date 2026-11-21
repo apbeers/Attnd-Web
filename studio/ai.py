@@ -84,18 +84,24 @@ def spent_today(event):
     return total or Decimal('0')
 
 
-def daily_cap():
+def daily_cap(event=None):
+    """Studio's AI per event per UTC day: the owner's per-event override, else the AI limits' value."""
+    if event is not None:
+        from platform_admin.models import EventOverride
+        override = EventOverride.of(event)
+        if override is not None and override.studio_daily_cap_usd is not None:
+            return Decimal(override.studio_daily_cap_usd)
     from credit.ledger import limits
     return Decimal(limits().studio_daily_usd)
 
 
 def budget_left(event):
-    return daily_cap() - spent_today(event)
+    return daily_cap(event) - spent_today(event)
 
 
 def check_budget(event):
     if budget_left(event) <= 0:
-        raise BudgetExceeded(f'Today\'s AI budget for this event (${daily_cap():.2f}) is used up. '
+        raise BudgetExceeded(f'Today\'s AI budget for this event (${daily_cap(event):.2f}) is used up. '
                              f'It resets at midnight UTC; you can still edit the code by hand.')
 
 
@@ -117,7 +123,7 @@ def usage_summary(event, days=30):
     since = timezone.now() - timedelta(days=days)
     rows = StudioUsage.objects.filter(event=event, created_at__gte=since)
     agg = rows.aggregate(cost=Sum('cost_usd'), inp=Sum('input_tokens'), out=Sum('output_tokens'), img=Sum('images'))
-    return {'today': spent_today(event), 'cap': daily_cap(), 'month': agg['cost'] or 0,
+    return {'today': spent_today(event), 'cap': daily_cap(event), 'month': agg['cost'] or 0,
             'input_tokens': agg['inp'] or 0, 'output_tokens': agg['out'] or 0, 'images': agg['img'] or 0}
 
 

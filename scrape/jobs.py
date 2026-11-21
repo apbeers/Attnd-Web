@@ -316,8 +316,7 @@ def _bring_into_studio(job, event):
         return
     try:
         from studio import importer, publishing
-        publishing.switch_plan(event, Event.PLAN_STUDIO)
-        site = publishing.ensure_site(event, job.created_by)
+        site = publishing.ensure_site(event, job.created_by)  # building is free; publishing needs the Studio plan
         importer.start_import(site, job.urls[0], job.created_by)
         job.result = {**job.result, 'studio_import': True}
         job.save(update_fields=['result'])

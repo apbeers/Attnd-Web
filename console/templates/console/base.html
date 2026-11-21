@@ -28,7 +28,8 @@
     <a class="button button--secondary button--small" href="{% url 'credit:spend' %}">{% icon "chart" %} AI spend</a>
     <a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>
     <a class="button button--secondary button--small" href="{% url 'console:dashboard' %}?onboarding=1" title="What a new organizer sees (your data isn't touched)">{% icon "stars" %} Preview onboarding</a>{% endif %}
-    {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
+    {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'platform:home' %}">{% icon "gauge" %} Platform</a>
+    <a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
     <a class="button button--secondary button--small" href="{% url 'admin:index' %}">Admin</a>{% endif %}
     {% chat_default as chat_on %}<form method="post" action="{% url 'console:chat_default' %}" class="chat-switch-form">{% csrf_token %}
       <input type="hidden" name="on" value="{{ chat_on|yesno:'0,1' }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">

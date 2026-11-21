@@ -1,0 +1,12 @@
+<div class="stack" data-live>
+  <div class="grid grid--4 grid--stats">
+    <div class="panel metric"><div class="stat__value">${{ d.ai_month }}</div><div class="eyebrow">AI this month · alert at ${{ d.ai_alert }} ({{ d.ai_percent }}%)</div></div>
+    <div class="panel metric"><div class="stat__value">{{ d.events_live }}</div><div class="eyebrow">Events live now</div></div>
+    <div class="panel metric"><div class="stat__value">{{ d.signups_week }}</div><div class="eyebrow">Sign-ups this week</div></div>
+    <div class="panel metric"><div class="stat__value">{{ d.failed_jobs }}</div><div class="eyebrow">Failed AI jobs (24 h)</div></div>
+    <div class="panel metric"><div class="stat__value">{{ d.push_failures }}</div><div class="eyebrow">Push failures (24 h)</div></div>
+  </div>
+  <div class="panel stack stack--tight"><h2 class="title-4">Google APIs today</h2>
+    {% if d.google %}<ul class="list list--inset small">{% for g in d.google %}<li class="cluster"><span class="grow mono">{{ g.api }}</span><span class="muted">{{ g.counts }}</span></li>{% endfor %}</ul>{% else %}<p class="small muted">No calls yet today.</p>{% endif %}</div>
+  {% if surface == 'chat' %}<p class="small"><a href="{{ d.url }}">Open the Platform admin</a></p>{% endif %}
+</div>

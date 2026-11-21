@@ -54,7 +54,8 @@ class Site(models.Model):
 
     @property
     def is_live(self):
-        return bool(self.published_id) and not self.suspended and self.event.plan == Event.PLAN_STUDIO
+        from platform_admin.plans import can_go_live
+        return bool(self.published_id) and not self.suspended and can_go_live(self.event)
 
     def public_url(self):
         from studio import hosting

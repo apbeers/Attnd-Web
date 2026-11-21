@@ -99,7 +99,9 @@ class RegistryTests(ComponentTestCase):
         staff_only = {n for n, c in C.registry().items() if c.audience == 'staff'}
         studio = {n for n, c in C.registry().items() if c.audience == 'studio'}
         self.assertEqual(studio, {'website_overview', 'website_versions', 'website_assets', 'website_forms'})
-        self.assertEqual(set(C.registry()) - staff_only - studio, set(self.ids))
+        superuser = {n for n, c in C.registry().items() if c.audience == 'superuser'}
+        self.assertEqual(superuser, {'platform_health'})
+        self.assertEqual(set(C.registry()) - staff_only - studio - superuser, set(self.ids))
         self.assertEqual(staff_only, {'prospect_row', 'prospect_detail', 'prospect_run_row', 'prospect_settings_form',
                                       'ai_spend_summary', 'ai_limits_form', 'ai_limit_overrides'})
 

@@ -154,10 +154,12 @@ def switch_plan(event, plan):
 
 
 def website_url(event):
-    """For the bundle (API-016): the live site's URL or None."""
-    if event.plan != Event.PLAN_STUDIO:
-        return None  # no query for standard events
+    """For the bundle (API-016): the live site's URL or None (a site goes live only on the Studio plan or with the
+    owner's override, platform_admin.plans.can_go_live)."""
+    from platform_admin.plans import can_go_live
+    if not can_go_live(event):
+        return None
     site = Site.objects.filter(event=event).first()
-    if site is None or not site.published_id or site.suspended or event.plan != Event.PLAN_STUDIO:
+    if site is None or not site.published_id or site.suspended:
         return None
     return hosting.site_url(site) or None

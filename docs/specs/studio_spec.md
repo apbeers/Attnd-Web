@@ -8,10 +8,11 @@ Server-only feature plus one additive API key (**API-016** `event.website_url`).
   (AI designs everything, Attnd hosts the site). No payments yet (Stripe later, `ROADMAP.md`). Staff, or an event's
   owner/admin who has Studio access, switch an event to Studio on its Studio page. Prices are not shown anywhere new
   (the home page only has its existing pricing line).
-- **Admins only** (Nov 19, 2026; it was an invite-only beta before): a person has Studio access when they are
-  staff/superuser, or their email is in `STUDIO_BETA_EMAILS` (an explicit override, default empty; case-insensitive).
-  The beta invite list (`StudioAccess` model and its staff page) was removed (migration `studio.0003`). Without access
-  every Studio URL is a 404 and no entry point is shown (sidenav item, import checkbox, staff links).
+- **Every organizer designs** (D1, owner Nov 21, 2026; before: admins only): any signed-in team member builds, edits
+  and previews the event's site (AI spend counts toward their monthly credit; the per-event daily cap stays). There is
+  no switch-to-Studio step. **Publishing** needs the Studio plan ($499) or the Platform admin's per-event override
+  (`platform_admin.plans.can_go_live`); otherwise Publish reads "Upgrade to publish · $499" and makes an upgrade
+  request the owner approves in the Platform admin. Automatic "bring into Studio" on AI imports stays staff-only.
 - **Who edits**: the event's team with today's roles. Any team member (with Studio access) edits drafts, chats with the
   AI, uploads assets and reads form submissions; publishing, unpublishing, the site address and switching the plan
   need the owner or an event admin (`Event.can_manage_team`), like publishing the event.

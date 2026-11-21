@@ -1491,7 +1491,8 @@
                   prospect_row: 'Prospects', prospect_detail: 'Prospects', prospect_run_row: 'Prospects',
                   prospect_settings_form: 'Prospects', website_overview: 'Website', website_versions: 'Website',
                   website_assets: 'Website', website_forms: 'Website', ai_spend_summary: 'AI spend',
-                  ai_limits_form: 'AI spend', ai_limit_overrides: 'AI spend' };
+                  ai_limits_form: 'AI spend', ai_limit_overrides: 'AI spend',
+                  platform_health: 'Platform' };
   // A count beside a tab's name (agent/canvas.py ALERT_COUNTS): a filled alert badge when it waits for the person.
   function setTabCount(label, count, alert) {
     const tab = tabs.get(label);
@@ -1505,12 +1506,12 @@
     button.append(' ', badge);
   }
   const ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
-                 'Website', 'History', 'Prospects', 'AI spend'];
+                 'Website', 'History', 'Prospects', 'AI spend', 'Platform'];
   const SECTION_ORDER = ['event_tile', 'event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports',
                          'notification_form', 'notification_row', 'app_layout', 'website_watching',
                          'event_context_form', 'event_flyer', 'website_overview', 'website_versions', 'website_forms',
                          'website_assets', 'object_history', 'event_versions',
-                         'prospect_run_row', 'prospect_row', 'ai_spend_summary'];
+                         'prospect_run_row', 'prospect_row', 'ai_spend_summary', 'platform_health'];
   const EMPTY = { location_row: 'No locations yet. Add stages, booths, food, anywhere attendees go.',
                   schedule_item_row: 'No schedule items yet.', notification_row: 'No notifications sent or scheduled yet.',
                   event_tile: 'No events yet.', prospect_row: 'No open prospects. Run a discovery from its settings.',
@@ -1968,7 +1969,9 @@
   // Staff: the Prospects tab (runs, then the open prospects by fit); absent for everyone else.
   async function preloadProspects() {
     if (!('staff' in root.dataset)) return;
-    for (const name of ['prospect_run_row', 'prospect_row', 'ai_spend_summary']) {
+    const names = ['prospect_run_row', 'prospect_row', 'ai_spend_summary'];
+    if ('superuser' in root.dataset) names.push('platform_health');
+    for (const name of names) {
       let items = [];
       try { items = await fetchCards(name, [{}]); } catch (e) { /* none yet */ }
       toCanvas(name, items, {}, true);

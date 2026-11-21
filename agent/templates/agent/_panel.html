@@ -1,6 +1,6 @@
 {% load console_tags static %}<section class="agent{% if mode == 'full' %} agent--full{% endif %}" id="agent" data-agent data-agent-skip
   data-agent-src="{% static 'agent/agent.js' %}"{% first_run as show_tour %}{% if show_tour %} data-first-run{% endif %}
-  data-mode="{{ mode|default:'panel' }}"{% if user.is_staff or user.is_superuser %} data-staff{% endif %} data-assistant-url="{% url 'console:assistant' %}"
+  data-mode="{{ mode|default:'panel' }}"{% if user.is_staff or user.is_superuser %} data-staff{% endif %}{% if user.is_superuser %} data-superuser{% endif %} data-assistant-url="{% url 'console:assistant' %}"
   data-event-id="{% if agent_event.id %}{{ agent_event.id }}{% elif event.id %}{{ event.id }}{% endif %}"
   {% if mode == 'full' %}data-from="{{ back_url }}"{% endif %}
   data-start-url="{% url 'agent:start' %}" data-runs-url="{% url 'agent:runs' %}" data-attach-url="{% url 'agent:attach' %}"

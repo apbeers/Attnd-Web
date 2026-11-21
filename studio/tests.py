@@ -83,35 +83,34 @@ class StudioTestCase(TestCase):
 
 class AccessTests(StudioTestCase):
     def test_who_has_access(self):
-        """Admins only: staff and superusers, plus the explicit STUDIO_BETA_EMAILS override."""
-        self.assertTrue(has_studio_access(self.owner))  # STUDIO_BETA_EMAILS (this class's override)
+        """Every signed-in organizer designs (D1); publishing is plan-gated (can_publish)."""
+        self.assertTrue(has_studio_access(self.owner))
         other = User.objects.create_user('o', 'Other@Example.com', 'pw')
-        self.assertFalse(has_studio_access(other))
-        staff = User.objects.create_user('s', 's@example.com', 'pw', is_staff=True)
-        self.assertTrue(has_studio_access(staff))
-        superuser = User.objects.create_user('su', 'su@example.com', 'pw', is_superuser=True)
-        self.assertTrue(has_studio_access(superuser))
+        self.assertTrue(has_studio_access(other))
+        from django.contrib.auth.models import AnonymousUser
+        self.assertFalse(has_studio_access(AnonymousUser()))
 
     def test_default_setting_is_empty(self):
         import attnd.settings as module  # the real default, not this class's override
         self.assertEqual(module.STUDIO_BETA_EMAILS, [])
 
-    def test_without_access_everything_is_404_and_hidden(self):
+    def test_every_team_member_designs_but_publishing_needs_studio(self):
         member = User.objects.create_user('m', 'member@example.com', 'pw')
         EventMember.objects.create(event=self.event, user=member, role=EventMember.ROLE_ADMIN)
         client = Client()
         client.force_login(member)
-        for name in ('editor', 'code'):
-            self.assertEqual(client.get(reverse(f'studio:{name}', args=[self.event.pk])).status_code, 404, name)
-        self.assertEqual(client.post(reverse('studio:design', args=[self.event.pk]), {'instruction': 'hi'}).status_code, 404)
-        # Nor in the chat: the Website components and design_website are Studio-only.
+        self.assertEqual(client.get(reverse('studio:editor', args=[self.event.pk])).status_code, 200)
         from agent import registry as agent_registry
         from console import components as C
-        self.assertNotIn('design_website', agent_registry.writes_for(member))
-        self.assertNotIn('website_overview', C.for_user(member))
-        overview = client.get(reverse('console:event', args=[self.event.pk]))
-        self.assertNotContains(overview, reverse('studio:editor', args=[self.event.pk]))
-        self.assertNotContains(client.get(reverse('console:event_new')), 'studio_import')
+        self.assertIn('design_website', agent_registry.writes_for(member))
+        self.assertIn('website_overview', C.for_user(member))
+        from studio.access import can_publish
+        self.assertTrue(can_publish(self.event, member))  # this event is on the Studio plan
+        event = Event.objects.create(name='Market', event_code='MKT9', user=self.owner, start_time=timezone.now())
+        self.assertFalse(can_publish(event, self.owner))  # free: Upgrade to publish
+        stranger = User.objects.create_user('x2', 'x2@example.com', 'pw')
+        client.force_login(stranger)
+        self.assertEqual(client.get(reverse('studio:editor', args=[self.event.pk])).status_code, 404)
 
     def test_access_user_sees_the_entry_points(self):
         overview = self.client.get(reverse('console:event', args=[self.event.pk]))
@@ -139,38 +138,21 @@ class AccessTests(StudioTestCase):
         self.assertNotContains(dashboard, '/console/studio/access/')
         self.assertContains(dashboard, reverse('studio:reports'))
 
-    def test_switching_an_event_to_studio(self):
+    def test_a_new_event_goes_straight_to_the_empty_state(self):
         event = Event.objects.create(name='Market', event_code='MKT1', user=self.owner, start_time=timezone.now())
-        url = reverse('studio:editor', args=[event.pk])
-        page = self.client.get(url)
-        self.assertContains(page, 'Use Studio for this event')
-        self.assertFalse(Site.objects.filter(event=event).exists())
-        self.assertEqual(self.client.get(reverse('studio:code', args=[event.pk])).status_code, 404)
-        version = event.content_version
-        self.client.post(url, {'action': 'switch'})
-        event.refresh_from_db()
-        self.assertEqual(event.plan, Event.PLAN_STUDIO)
-        self.assertGreater(event.content_version, version)
-        self.assertTrue(Site.objects.filter(event=event).exists())
-        page = self.client.get(url)
-        self.assertContains(page, 'No website yet')  # a new site has no built version yet: the empty state
+        page = self.client.get(reverse('studio:editor', args=[event.pk]))
+        self.assertNotContains(page, 'Use Studio for this event')
+        self.assertContains(page, 'No website yet')
         self.assertContains(page, 'Start from scratch')
-        self.assertNotContains(page, '<iframe')
+        self.assertTrue(Site.objects.filter(event=event).exists())
+        event.refresh_from_db()
+        self.assertEqual(event.plan, Event.PLAN_STANDARD)
 
-    def test_contributor_cannot_switch_or_publish(self):
-        event = Event.objects.create(name='Market', event_code='MKT2', user=self.owner, start_time=timezone.now())
+    def test_contributor_cannot_publish(self):
         helper = User.objects.create_user('h', 'helper@example.com', 'pw')
-        self.enterContext(override_settings(STUDIO_BETA_EMAILS=['owner@example.com', 'helper@example.com']))
-        EventMember.objects.create(event=event, user=helper, role=EventMember.ROLE_CONTRIBUTOR)
         EventMember.objects.create(event=self.event, user=helper, role=EventMember.ROLE_CONTRIBUTOR)
         client = Client()
         client.force_login(helper)
-        page = client.get(reverse('studio:editor', args=[event.pk]))
-        self.assertContains(page, 'The owner or an event admin can switch this event to Studio.')
-        client.post(reverse('studio:editor', args=[event.pk]), {'action': 'switch'})
-        event.refresh_from_db()
-        self.assertEqual(event.plan, Event.PLAN_STANDARD)
-        # On a Studio event a contributor edits drafts but can't publish.
         self.assertEqual(client.get(reverse('studio:editor', args=[self.event.pk])).status_code, 200)
         saved = client.post(reverse('studio:code', args=[self.event.pk]),
                             {'files': json.dumps({'index.html': PAGE + '<!-- x -->'})}).json()

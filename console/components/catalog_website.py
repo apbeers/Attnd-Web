@@ -24,7 +24,7 @@ def _event(user, event_id, event):
 
 def _site(event):
     from studio import publishing
-    return publishing.ensure_site(event) if event.plan == event.PLAN_STUDIO else None
+    return publishing.ensure_site(event)  # every event may have a website (D1)
 
 
 class StartForm(forms.Form):
@@ -41,24 +41,28 @@ def _start_form(action, label, style, busy):
 @component('website_overview', 'Website', "The event's Attnd Studio website: the live preview of the draft, which "
            'version is live, its address once published, Publish / Unpublish (always ask). Without a built version: '
            '"No website yet" with Build from your current website / Start from scratch. Changes are asked for in the '
-           'chat (design_website). Without Studio on the event: Use Studio for this event.',
-           actions=(('enable_studio', 'Use Studio for this event'), ('publish_website', 'Publish the draft'),
-                    ('unpublish_website', 'Take the site offline')),
+           'chat (design_website). Publishing needs the Studio plan: without it, Upgrade to publish (a request to Attnd).',
+           actions=(('publish_website', 'Publish the draft'), ('unpublish_website', 'Take the site offline'),
+                    ('request_upgrade', 'Upgrade to publish')),
            audience='studio', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
 def website_overview(user, event_id=None, event=None):
     from studio import hosting
-    from studio.access import can_publish, can_switch_plan
+    from platform_admin import plans
+    from studio.access import can_publish
     from studio.models import StudioRun
     from studio.views import run_task
     event = _event(user, event_id, event)
     site = _site(event)
     base = {'event_id': event.pk, 'name': f'Website · {event.name}', 'enabled': site is not None,
             'page_url': reverse('studio:editor', args=[event.pk])}
-    if site is None:
-        actions = [{'name': 'enable_studio', 'style': 'primary'}] if can_switch_plan(event, user) else []
-        return {**base, 'actions': actions}
     draft, live = site.draft, site.published
     actions = []
+    if not plans.can_go_live(event) and event.can_manage_team(user):
+        from platform_admin.models import UpgradeRequest
+        asked = UpgradeRequest.objects.filter(event=event, kind='studio', status='pending').exists()
+        actions.append({'name': 'request_upgrade', 'style': 'primary', 'fields': {'kind': 'studio'},
+                        'label': 'Upgrade requested · we’ll email you' if asked
+                        else f'Upgrade to publish · {plans.price_label("studio")}', 'disabled': asked})
     if can_publish(event, user):
         if draft and 'index.html' in (draft.files or {}) and not site.suspended and (not live or live.pk != draft.pk):
             actions.append({'name': 'publish_website', 'style': 'primary'})
@@ -76,7 +80,8 @@ def website_overview(user, event_id=None, event=None):
         starts.append(_start_form(reverse('studio:start', args=[event.pk]), 'Start from scratch',
                                   'outline' if source else 'primary', 'Starting your website…'))
     live_shown = bool(live and not site.suspended)
-    return {**base, 'actions': actions if built else [a for a in actions if a['name'] != 'publish_website'],
+    return {**base, 'actions': actions if built else [a for a in actions if a['name'] not in ('publish_website', 'request_upgrade')],
+            'plan': plans.LABELS[plans.plan_of(event)], 'can_go_live': plans.can_go_live(event),
             'built': built, 'source': website_source(event) if not built else '',
             # A preview only of a version with a home page (an empty draft would answer "Not found").
             'preview': hosting.preview_url(site) if hosting.sites_origin() and built else '',

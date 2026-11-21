@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'prospects.apps.ProspectsConfig',
     'agent.apps.AgentConfig',
     'credit.apps.CreditConfig',
+    'platform_admin.apps.PlatformAdminConfig',  # superusers: prices, customers, upgrades, overrides (D2)
 ]
 
 MIDDLEWARE = [

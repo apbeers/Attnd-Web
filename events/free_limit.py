@@ -21,11 +21,23 @@ UNCOUNTED_PREFIXES = ('ci-', 'showcase-')
 REVIEW_CODES = {'FWFM2026', 'ATIS2026', 'DACN2026'}
 
 
-def limit():
-    return int(getattr(settings, 'FREE_DEVICE_LIMIT', FREE_DEVICE_LIMIT))
+def limit(event=None):
+    """Free phones of an unpaid event: the owner's per-event override, else the Platform admin's setting
+    (PlatformSettings; its first value FREE_DEVICE_LIMIT)."""
+    if event is not None:
+        from platform_admin.models import EventOverride
+        override = EventOverride.of(event)
+        if override is not None and override.free_device_limit is not None:
+            return int(override.free_device_limit)
+    from platform_admin.models import PlatformSettings
+    return int(PlatformSettings.load().free_device_limit)
 
 
 def exempt(event):
+    from platform_admin.models import EventOverride
+    override = EventOverride.of(event)
+    if override is not None and override.no_free_limit:
+        return True
     code = (event.event_code or '').upper()
     return bool(event.paid or event.showcase or code in REVIEW_CODES
                 or code == str(getattr(settings, 'DEMO_EVENT_CODE', 'DEMO') or '').upper())
@@ -47,7 +59,7 @@ def status(event):
     """For the console: {limited, used, limit, left, full}."""
     if exempt(event):
         return {'limited': False}
-    n, cap = used(event), limit()
+    n, cap = used(event), limit(event)
     return {'limited': True, 'used': n, 'limit': cap, 'left': max(cap - n, 0), 'full': n >= cap}
 
 
@@ -57,7 +69,7 @@ def admit(event, device_id):
     device_id = str(device_id)[:128]
     if EventJoin.objects.filter(event=event, device_id=device_id).exists():
         return True
-    if counted(device_id) and not exempt(event) and used(event) >= limit():
+    if counted(device_id) and not exempt(event) and used(event) >= limit(event):
         return False
     try:
         with transaction.atomic():
@@ -67,5 +79,6 @@ def admit(event, device_id):
     return True
 
 
-def refusal():
-    return {'error': ERROR, 'message': MESSAGE.format(limit=limit()), 'limit': limit()}
+def refusal(event=None):
+    n = limit(event)
+    return {'error': ERROR, 'message': MESSAGE.format(limit=n), 'limit': n}

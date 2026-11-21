@@ -27,7 +27,8 @@ urlpatterns = [
     path(settings.ADMIN_URL_PATH, admin.site.urls),
     path('csp-report/', public(attnd_views.csp_report), name='csp_report'),
     path('console/diagnostics/', include('diagnostics.urls')),  # staff only (API-013)
-    path('console/ai-spend/', include('credit.urls')),  # staff only: AI spend, limits, overrides (credit/)
+    path('console/ai-spend/', include('credit.urls')),  # staff; also the Platform admin's AI spend tab
+    path('console/platform/', include('platform_admin.urls')),  # superusers: prices, customers, upgrades (D2)  # staff only: AI spend, limits, overrides (credit/)
     path('console/prospects/', include('prospects.urls')),  # staff only: the sales pipeline
     path('console/agent/', include('agent.urls')),  # Ask Attnd, the console's AI agent (signed-in organizers)
     path('console/', include('studio.urls')),  # Attnd Studio editor + staff pages (beta users only, else 404)

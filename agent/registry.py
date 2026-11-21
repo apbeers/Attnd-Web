@@ -57,6 +57,7 @@ EXCLUDED = {
     'console:event_qr': 'A PNG image of the join QR code (the overview has the join link).',
     'console:event_poster': 'A printable poster; the overview has the same join link and code.',
     'studio:version_preview': 'Redirects to a signed preview link on the sites host (outside the console).',
+    'platform:customers_csv': 'CSV download of the customers list; the Customers tab shows the same.',
     'credit:export': 'CSV download of the month\'s AI calls; the AI spend page shows the same numbers.',
     'console:event_preview_qr': 'An image (the preview QR code), no content.',
     'console:event_phones': 'JSON for the QR card\'s live phone line; the card shows the same.',
@@ -93,7 +94,8 @@ POST_EXCLUDED = {
     'console:walkthrough_skip': EXCLUDED['console:walkthrough_skip'],
 }
 
-NAMESPACE_AUDIENCE = {'diagnostics': 'staff', 'prospects': 'staff', 'studio': 'studio', 'credit': 'staff'}
+NAMESPACE_AUDIENCE = {'diagnostics': 'staff', 'prospects': 'staff', 'studio': 'studio', 'credit': 'staff',
+                      'platform': 'superuser'}
 URL_AUDIENCE = {'studio:reports': 'staff', 'console:admin_usage': 'superuser', 'console:event_paid': 'staff'}
 
 TOOL_NAME_RE = re.compile(r'^[a-z][a-z0-9_]{2,63}$')

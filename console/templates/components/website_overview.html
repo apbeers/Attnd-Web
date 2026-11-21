@@ -1,10 +1,6 @@
 {% load console_tags %}{# website_overview: the event's Studio website: live preview, state, publish, ask for a change. #}<div class="stack component component--website_overview" id="website">
   {% if surface == 'chat' %}<h3 class="title-4">{% icon "brush" %} {{ d.name }}</h3>{% endif %}
-  {% if not d.enabled %}
-    <p>Attnd Studio designs and hosts a website for this event, kept in sync with the app. Ask for any change in the chat.</p>
-    {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>
-    {% else %}<p class="small muted">The owner or an event admin can switch this event to Studio.</p>{% endif %}
-  {% elif not d.built %}
+  {% if not d.built %}
     {% if d.working %}<p class="small" data-website-working="{{ d.working.id }}"><span class="spinner" aria-hidden="true"></span> {{ d.working.title }}: {{ d.working.progress }}</p>{% endif %}
     <div class="website-empty">
       <span class="website-empty__icon" aria-hidden="true">{% icon "globe" "icon--xl" %}</span>
@@ -19,7 +15,8 @@
         {% if d.suspended %}<span class="badge badge--danger">Taken down by Attnd</span>
         {% elif d.public_url %}<span class="badge badge--success">Live</span> version {{ d.live }} at <a href="{{ d.public_url }}" target="_blank" rel="noopener">{{ d.public_url }}</a>
         {% else %}<span class="badge badge--neutral">Not published</span>{% endif %}
-        {% if d.draft %} · draft: version {{ d.draft }}{% if d.pages %} ({{ d.pages|length }} page{{ d.pages|length|pluralize }}){% endif %}{% endif %}
+        {% if not d.can_go_live %} · <span class="muted">Publishing needs the Studio plan</span>{% endif %}
+      {% if d.draft %} · draft: version {{ d.draft }}{% if d.pages %} ({{ d.pages|length }} page{{ d.pages|length|pluralize }}){% endif %}{% endif %}
       </p>
       {% if d.preview %}<button type="button" class="button button--outline button--small" data-dialog-open="#{{ uid }}site-full-{{ d.event_id }}">{% icon "expand" %} Full screen preview</button>{% endif %}
       {% if d.actions %}{% include 'components/_actions.html' with actions=d.actions %}{% endif %}

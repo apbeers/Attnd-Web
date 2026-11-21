@@ -319,8 +319,9 @@ def event_lifecycle(user, event_id=None, event=None):
     limit_form = None
     if limit.get('limited') and manage:
         from console.views_events import LimitRequestForm
+        from platform_admin.plans import price_label
         limit_form = form_json(LimitRequestForm(), ['message'], action=_r('console:event_limit_request', args=[event.pk]),
-                               submit=[{'label': 'Remove the limit', 'style': 'primary'}])
+                               submit=[{'label': f'Remove the limit · {price_label("standard")}', 'style': 'primary'}])
         limit_form['no_ai'] = True
     return {'event_id': event.pk, 'name': f'Status · {event.name}', 'status': event.get_status_display(),
             'public': event.public, 'manage': manage, 'owner': role == 'owner', 'limit': limit, 'limit_form': limit_form,

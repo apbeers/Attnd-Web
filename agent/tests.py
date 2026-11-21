@@ -184,7 +184,7 @@ class RegistryTests(AgentTestCase):
         organizer_tools = registry.writes_for(self.owner)
         staff_tools = registry.writes_for(staff)
         for name in ('delete_diagnostics_session', 'retrace_stack', 'create_test_events', 'run_prospect_discovery',
-                     'take_down_studio_site', 'publish_website'):
+                     'take_down_studio_site'):
             self.assertNotIn(name, organizer_tools)
             self.assertIn(name, staff_tools)
         self.assertNotIn('assign_event_owner', staff_tools)  # superusers only
@@ -208,6 +208,10 @@ class RegistryTests(AgentTestCase):
             ('console/history.html', 'revision'): 'restore_version',
             ('console/changeset.html', 'discard'): 'discard_ai_changes',
             ('components/changeset_review.html', ''): 'apply_ai_changes',
+            ('platform_admin/home.html', 'platform:pricing'): 'save_platform_pricing',
+            ('platform_admin/home.html', 'platform:approve'): 'approve_upgrade_request',
+            ('platform_admin/home.html', 'platform:decline'): 'decline_upgrade_request',
+            ('platform_admin/event.html', 'platform:event_save'): 'save_event_overrides',
         }
         root = Path(settings.BASE_DIR)
         found = []

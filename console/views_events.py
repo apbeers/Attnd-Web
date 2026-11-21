@@ -433,12 +433,11 @@ def event_overview(request, event):
 
 
 def _studio_import_run(event, user):
-    """The newest "Bring into Studio" run, for the overview's notice (Studio beta users only)."""
-    if event.plan != Event.PLAN_STUDIO:
-        return None
-    from studio.access import has_studio_access
+    """The newest "Bring into Studio" run, for the overview's notice: Studio events, and staff (whose AI imports bring
+    the website in automatically). Everyone else follows the chat's task card."""
+    from studio.access import is_staff
     from studio.models import StudioRun
-    if not has_studio_access(user):
+    if event.plan != Event.PLAN_STUDIO and not is_staff(user):
         return None
     return (StudioRun.objects.filter(site__event=event, kind=StudioRun.KIND_IMPORT).select_related('site')
             .order_by('-created_at').first())
@@ -515,6 +514,38 @@ def event_status(request, event):
     return redirect('console:event', event_id=event.pk)
 
 
+class UpgradeRequestForm(forms.Form):
+    kind = forms.ChoiceField(choices=[('standard', 'Standard'), ('studio', 'Studio')])
+    message = forms.CharField(label='Anything we should know?', required=False, max_length=2000,
+                              widget=forms.Textarea(attrs={'rows': 3}))
+
+
+@agent_action('request_upgrade', "Ask Attnd to upgrade an event: kind 'standard' (paid: no phone limit, nearby "
+              "listing) or 'studio' (Standard + publishing its website). Shows the price; no payment here: Attnd emails "
+              'back and approves it.', form=UpgradeRequestForm, title='Asked for an upgrade')
+@event_view
+@require_POST
+def event_upgrade_request(request, event):
+    from platform_admin import plans
+    form = UpgradeRequestForm(request.POST)
+    back = redirect(request.POST.get('next') if url_has_allowed_host_and_scheme(request.POST.get('next'), None)
+                    else reverse('console:event', args=[event.pk]))
+    if not event.can_manage_team(request.user) or not form.is_valid():
+        if _wants_json(request):
+            return JsonResponse({'saved': False, 'error': 'Only the owner and event admins can ask for an upgrade.'},
+                                status=403)
+        messages.error(request, 'Only the owner and event admins can ask for an upgrade.')
+        return back
+    kind = form.cleaned_data['kind']
+    req, created = plans.request_upgrade(event, request.user, kind, form.cleaned_data['message'])
+    text = (f'Thanks! We’ll email you about {plans.LABELS[kind]} ({plans.price_label(kind)}).' if created
+            else 'You already asked; we’ll email you.')
+    if _wants_json(request):
+        return JsonResponse({'saved': True, 'message': text})
+    messages.success(request, text)
+    return back
+
+
 class LimitRequestForm(forms.Form):
     """Remove the limit (API-025): a note to the Attnd team, who mark the event paid."""
     message = forms.CharField(label='Anything we should know?', required=False, max_length=2000,
@@ -529,8 +560,6 @@ class LimitRequestForm(forms.Form):
 @require_POST
 def event_limit_request(request, event):
     from attnd.ratelimit import RateLimit
-    from django.conf import settings
-    from django.core.mail import send_mail
     from events import free_limit
     form = LimitRequestForm(request.POST)
     back = redirect('console:event', event_id=event.pk)
@@ -542,14 +571,12 @@ def event_limit_request(request, event):
         messages.error(request, 'You already asked today; we’ll be in touch by email.')
         return back
     used = free_limit.status(event)
-    admins = [email for _, email in getattr(settings, 'ADMINS', [])]
-    body = (f'{request.user.email} asks to remove the free limit of “{event.name}” ({event.event_code}, id {event.pk}).\n'
-            f'{used["used"]} of {used["limit"]} free spots used.\n\n{form.cleaned_data["message"] or "(no note)"}\n\n'
-            f'Mark it paid: {settings.SITE_URL}{reverse("console:event", args=[event.pk])}')
+    from platform_admin import plans  # D2: a Standard upgrade request the owner approves in the Platform admin
+    note = f'{used["used"]} of {used["limit"]} free spots used.\n\n{form.cleaned_data["message"] or ""}'.strip()
+    plans.request_upgrade(event, request.user, 'standard', note)
     limit.hit(request.user.pk)
-    if admins:
-        send_mail(f'Remove the limit: {event.name}', body, None, admins, fail_silently=True)
-    messages.success(request, 'Thanks! We’ll email you about taking the event live.')
+    messages.success(request, f'Thanks! We’ll email you about Standard ({plans.price_label("standard")}): no phone '
+                              'limit and nearby listing.')
     return back
 
 

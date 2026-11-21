@@ -31,9 +31,7 @@ def _ctx(event, **extra):
 
 
 def _site_or_404(event):
-    if event.plan != Event.PLAN_STUDIO:
-        raise Http404
-    return publishing.ensure_site(event)
+    return publishing.ensure_site(event)  # every event may have a website (D1); publishing is gated by plan
 
 
 def _json_error(message, status=400):
@@ -44,24 +42,13 @@ def _json_error(message, status=400):
 # Editor
 # ---------------------------------------------------------------------------
 
-@agent_action('enable_studio', 'Switch an event to Attnd Studio (owner/admins).', fixed={'action': 'switch'},
-              title='Switched to Studio')
 @agent_action('studio_editor', "An event's website (Attnd Studio): the live preview, versions, publish state, address, "
               'assets and form entries. Changes to the site go through design_website.', kind='read')
 @studio_event_view
 def editor(request, event):
     """The Website page: the same components as the full-screen chat's Website tab (Ask Attnd is the one chat)."""
-    if request.method == 'POST' and request.POST.get('action') == 'switch' and event.plan != Event.PLAN_STUDIO:
-        if not can_switch_plan(event, request.user):
-            messages.error(request, 'Only the owner and event admins can switch this event to Studio.')
-        else:
-            publishing.switch_plan(event, Event.PLAN_STUDIO)
-            publishing.ensure_site(event, request.user)
-            messages.success(request, 'This event now uses Attnd Studio.')
-        return redirect('studio:editor', event_id=event.pk)
-    if event.plan == Event.PLAN_STUDIO:
-        publishing.ensure_site(event, request.user)
-    return render(request, 'studio/website.html', _ctx(event, studio=event.plan == Event.PLAN_STUDIO))
+    publishing.ensure_site(event, request.user)
+    return render(request, 'studio/website.html', _ctx(event, studio=True))
 
 
 def _state(site):
@@ -118,7 +105,7 @@ def run_task(run):
 
 def _budget_error(event):
     if ai.budget_left(event) <= 0:
-        return _json_error(f'Today\'s AI budget for this event is used up (${ai.daily_cap():.2f} '
+        return _json_error(f'Today\'s AI budget for this event is used up (${ai.daily_cap(event):.2f} '
                            f'per day). It resets at midnight UTC.', status=429)
     return None
 
@@ -199,7 +186,7 @@ def run_retry(request, event, run_id):
     wants_json = 'application/json' in request.headers.get('Accept', '')
     error = None
     if ai.budget_left(event) <= 0:
-        error = (f'Today\'s AI budget for this event is used up (${ai.daily_cap():.2f} per day). '
+        error = (f'Today\'s AI budget for this event is used up (${ai.daily_cap(event):.2f} per day). '
                  f'It resets at midnight UTC.')
     else:
         with transaction.atomic():

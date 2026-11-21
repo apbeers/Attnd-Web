@@ -217,7 +217,7 @@ class JoinV2(ApiKeyRequired, View):
         # A preview phone never uses one of them.
         from events import free_limit
         if preview_user is None and not free_limit.admit(event, device_id):
-            return JsonResponse(free_limit.refusal(), status=409)
+            return JsonResponse(free_limit.refusal(event), status=409)
         device = register_device(device_id, event=event, api_version=API_VERSION, **body)
         answer = {'status': 'ok', 'content_version': event.content_version}
         if preview_user is not None:
