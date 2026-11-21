@@ -19,7 +19,7 @@
   </div>
 {% endif %}
 {% comment %} Your events in sections (owner, Nov 21, 2026; console.components.catalog.sectioned, the same rules as the
-canvas and the chat): Happening now, Upcoming, Past (6, then "Show all past events"), Showcase & demo (staff, folded). {% endcomment %}
+canvas and the chat): Happening now, Upcoming, Past (6, then "Show all past events"), Showcase & demo (staff); every section open (owner, Nov 21, 2026). {% endcomment %}
 {% for sec in sections %}
 <section class="section events-section" id="events-{{ sec.key }}">
   {% if sec.folded %}<details><summary class="eyebrow">{{ sec.label }} · {{ sec.events|length }}</summary>

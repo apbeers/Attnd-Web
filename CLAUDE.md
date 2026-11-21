@@ -206,10 +206,11 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   (`Event.timing`), ended, watching, unassigned.
 - **Your events in sections** (batch 6, owner Nov 21, 2026; `catalog.sectioned` / `event_section`): **Happening now**
   (started, not ended, soonest first), **Upcoming** (soonest first; drafts by their dates), **Past** (most recent first,
-  6 then "Show all past events") and, for staff only, a folded **Showcase & demo** (showcase events + DEMO); counts in
+  6 then "Show all past events") and, for staff only, **Showcase & demo** (showcase events + DEMO); counts in
   the headings, empty sections hidden. The same rules everywhere: the dashboard, the canvas Events tab and chat answers
-  (`event_tile` carries `group` / `section`; `agent/canvas.py` and agent.js `appendGrouped` draw folding headings: on
-  the canvas only Showcase & demo starts folded, in the chat column everything but Happening now), and the agent's
+  (`event_tile` carries `group` / `section`; `agent/canvas.py` and agent.js `appendGrouped` draw one block per section,
+  `.agent__groupsec`: its heading spanning the width, then its own cards in the grid's columns). **Every section starts
+  open** (owner, Nov 21, 2026); the heading's toggle folds one by hand and nothing remembers it. Also the agent's
   `list_events` / `events_json` (each event's `section`).
 - **Maps and addresses** (`console/static/console/maps.js` with `GOOGLE_MAPS_BROWSER_KEY`, else console.js's
   OpenStreetMap `pinPicker`; both wired by `window.attndEnhance(scope)` for every form on a page and every chat /

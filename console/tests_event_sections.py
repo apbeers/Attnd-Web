@@ -58,6 +58,16 @@ class EventSectionsTests(TestCase):
         self.assertIn('data-group-toggle="now"', canvas)
         self.assertIn('Show all past events (8)', canvas)
         self.assertEqual(canvas.count('data-more'), 2)
+        # Each section is its own block: its heading, then its own cards (not headings and cards side by side in one
+        # grid); every section starts open (owner, Nov 21, 2026).
+        import re
+        blocks = re.findall(r'<section class="agent__groupsec" data-group-section="(\w+)"([^>]*)>(.*?)</section>', canvas, re.S)
+        self.assertEqual([b[0] for b in blocks], ['now', 'upcoming', 'past'])
+        for group, attrs, inner in blocks:
+            self.assertNotIn('data-folded', attrs, group)
+            self.assertIn(f'data-group-toggle="{group}" aria-expanded="true"', inner)
+            self.assertIn('class="agent__card"', inner, group)
+        self.assertEqual(re.findall(r'data-group-section="past".*?</section>', canvas, re.S)[0].count('class="agent__card"'), 8)
         # The agent's list: every event carries its section.
         from agent.components import events_json
         text = events_json(self.owner)
@@ -66,11 +76,11 @@ class EventSectionsTests(TestCase):
         data = C.load(self.owner, 'event_tile', {'event_id': self.soon.pk})
         self.assertEqual((data['group'], data['section']), ('upcoming', 'Upcoming'))
 
-    def test_staff_showcase_section_folded(self):
+    def test_staff_showcase_section_open(self):
         staff = User.objects.create_user('s', 's@example.com', 'pw', is_staff=True)
         self.show.user = staff
         self.show.save()
         client = TwoFactorClient()
         client.force_login(staff)
         page = client.get(reverse('console:dashboard') + '?page=1', secure=True).content.decode()
-        self.assertIn('<details><summary class="eyebrow">Showcase &amp; demo · 1</summary>', page)
+        self.assertIn('<h2 class="eyebrow">Showcase &amp; demo · 1</h2>', page)  # open like every section

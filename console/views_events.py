@@ -188,7 +188,7 @@ def dashboard(request):
         return landing
     # Each event is the event_tile component (console/components); the counts are correlated subqueries.
     sections = [{'key': key, 'label': SECTION_LABELS[key], 'events': events, 'shown': events[:PAST_SHOWN] if key == 'past' else events,
-                 'more': events[PAST_SHOWN:] if key == 'past' else [], 'folded': key == 'showcase'}
+                 'more': events[PAST_SHOWN:] if key == 'past' else [], 'folded': False}  # all open (owner)
                 for key, events in sectioned(list(annotated_events(request.user)), request.user)]
     return render(request, 'console/dashboard.html', {'sections': sections, 'running_jobs': running})
 

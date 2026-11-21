@@ -259,7 +259,7 @@
 }
 
 .agent__group { margin: var(--space-3) 0 var(--space-1); }
-.canvas__cards--rows > .agent__group { padding: 0 var(--space-2); }
+.canvas__cards--rows .agent__group { padding: 0 var(--space-2); }
 .agent__target-line { display: flex; align-items: center; gap: var(--space-2); }
 
 /* Restoring the conversation on load (A21): hidden until it is complete and scrolled, then one gentle fade-in */
@@ -353,12 +353,12 @@
   letter-spacing: inherit; text-transform: inherit; background: none; border: 0; cursor: pointer; }
 .agent__group-toggle::before { content: "▾"; font-size: .8em; transition: transform .15s ease; }
 .agent__group-toggle[aria-expanded="false"]::before { transform: rotate(-90deg); }
-[data-folded~="now"] > [data-group="now"], [data-folded~="upcoming"] > [data-group="upcoming"],
-[data-folded~="past"] > [data-group="past"], [data-folded~="showcase"] > [data-group="showcase"],
-[data-folded~="scheduled"] > [data-group="scheduled"], [data-folded~="sent"] > [data-group="sent"],
-[data-folded~="past"] > .agent__group-more,
-[data-folded]:not([data-all-past]) > [data-more] { display: none; }
-[data-all-past] > .agent__group-more { display: none; }
+/* One block per group, across the whole width of the list's grid, with its own cards in the same columns */
+.agent__groupsec { grid-column: 1 / -1; display: grid; gap: inherit; grid-template-columns: inherit; align-content: start; }
+.canvas__cards--rows > .agent__groupsec { gap: 0; }
+.agent__groupsec > .agent__group, .agent__groupsec > .agent__group-more { grid-column: 1 / -1; justify-self: start; }
+.agent__groupsec[data-folded] > .agent__card, .agent__groupsec[data-folded] > .agent__group-more,
+.agent__groupsec:not([data-all-past]) > [data-more] { display: none; }
 @media (prefers-reduced-motion: reduce) { .agent__group-toggle::before { transition: none; } }
 
 /* Scrolled up while new lines arrive: a pill back to the newest (agent.js stick) */
