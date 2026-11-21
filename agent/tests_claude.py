@@ -129,6 +129,35 @@ class ClaudeProviderTests(AgentTestCase):
         self.assertEqual(usage[1].provider, 'anthropic')
         self.assertEqual(usage[1].cost_usd, token_cost('claude-haiku-5-5', 3200, 40, 3000))
 
+    def test_schemas_fit_anthropic_strict_mode(self):
+        """Found on dev: "Enum value 'new' does not match declared type ['string', 'null']"."""
+        schema = {'type': 'object', 'additionalProperties': False, 'required': ['when', 'n'], 'properties': {
+            'when': {'type': ['string', 'null'], 'enum': ['now', 'later']},
+            'kind': {'type': 'string', 'enum': ['a']},
+            'n': {'type': ['integer', 'null'], 'minimum': 1, 'maximum': 5},
+            'list': {'type': 'array', 'items': {'type': ['string', 'null'], 'enum': ['x']}, 'maxItems': 3}}}
+        out = providers.claude_schema(schema)
+        self.assertEqual(out['properties']['when']['enum'], ['now', 'later', None])
+        self.assertEqual(out['properties']['kind']['enum'], ['a'])
+        self.assertNotIn('minimum', out['properties']['n'])
+        self.assertEqual(out['properties']['list']['items']['enum'], ['x', None])
+        self.assertNotIn('maxItems', out['properties']['list'])
+        self.assertEqual(schema['properties']['when']['enum'], ['now', 'later'])  # the original is unchanged
+        # Every real tool: no nullable enum without null.
+        from agent.loop import tools_for
+
+        def walk(node):
+            if isinstance(node, dict):
+                if 'enum' in node and isinstance(node.get('type'), list) and 'null' in node['type']:
+                    self.assertIn(None, node['enum'])
+                for v in node.values():
+                    walk(v)
+            elif isinstance(node, list):
+                for v in node:
+                    walk(v)
+        for tool in providers.ClaudeProvider(client=FakeClient([])).tools(tools_for(self.owner)):
+            walk(tool['input_schema'])
+
     def test_haiku_price(self):
         cost = token_cost('claude-haiku-5-5', 1_000_000, 1_000_000)
         self.assertEqual(str(cost), '0.6')

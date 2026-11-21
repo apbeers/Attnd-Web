@@ -65,6 +65,25 @@ def get_provider(name=None, model=None):
                              effort=settings.AGENT_PLANNING_EFFORT, parallel_tool_calls=False)
 
 
+UNSUPPORTED_KEYWORDS = ('minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'minLength',
+                        'maxLength', 'pattern', 'minItems', 'maxItems', 'uniqueItems')
+
+
+def claude_schema(schema):
+    """A tool schema as Anthropic's strict mode accepts it (a copy): an enum on a nullable type also lists null
+    (the API checks every enum value against the declared type), and numeric / length / pattern constraints are
+    dropped (not supported; our views validate anyway)."""
+    if isinstance(schema, list):
+        return [claude_schema(s) for s in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out = {k: claude_schema(v) for k, v in schema.items() if k not in UNSUPPORTED_KEYWORDS}
+    kind = out.get('type')
+    if 'enum' in out and isinstance(kind, list) and 'null' in kind and None not in out['enum']:
+        out['enum'] = [*out['enum'], None]
+    return out
+
+
 def _block_dict(block):
     if isinstance(block, dict):
         return block
@@ -126,7 +145,7 @@ class ClaudeProvider:
         strict = self.model not in _strict_refused
         out = []
         for t in tools:
-            tool = {'name': t['name'], 'description': t['description'][:1000], 'input_schema': t['parameters']}
+            tool = {'name': t['name'], 'description': t['description'][:1000], 'input_schema': claude_schema(t['parameters'])}
             if strict and t.get('strict'):
                 tool['strict'] = True
             out.append(tool)
