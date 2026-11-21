@@ -144,6 +144,9 @@ class ChangeProposal(models.Model):
     changes = models.JSONField(default=list)
     status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=PENDING)
     results = models.JSONField(default=list, blank=True)  # [{index, ok, text}]
+    # Live ops (stage I6): a notification drafted with the changes {title, body, urgent}; after Apply the chat shows
+    # it in the notification form, prefilled, and sending still asks to confirm.
+    notification = models.JSONField(default=dict, blank=True)
     undo_id = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     decided_at = models.DateTimeField(null=True, blank=True)

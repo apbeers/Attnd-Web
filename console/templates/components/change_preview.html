@@ -10,6 +10,8 @@
           {% for f in r.rows %}<span class="small change-preview__diff"><span class="muted">{{ f.0 }}</span> <del>{{ f.1 }}</del> → <ins>{{ f.2 }}</ins></span>{% empty %}<span class="small muted">{{ r.action }}</span>{% endfor %}</span>
       </label></li>{% endfor %}
     </ul>
+    {% if d.notification %}<div class="change-preview__notify small"><span class="muted">Then notify attendees{% if d.notification.urgent %} <span class="badge badge--danger badge--pill">Urgent</span>{% endif %}:</span>
+      <strong>{{ d.notification.title }}</strong> {{ d.notification.body }}<br><span class="muted">You check it and send it after Apply.</span></div>{% endif %}
     <div class="cluster">
       <button class="button button--primary button--small">{% icon "check" %} Apply</button>
       <button class="button button--ghost button--small" name="cancel" value="1" formnovalidate>Cancel</button>

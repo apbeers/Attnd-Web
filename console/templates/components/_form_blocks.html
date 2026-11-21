@@ -8,6 +8,13 @@
       <button type="button" class="button button--outline button--small" data-fill-go>{% icon "stars" %} Fill from this website?</button>
       <span class="small muted" data-fill-status role="status" aria-live="polite"></span>
     </div>
+{% elif r.name == 'lock_preview' %}<div class="lock-preview" data-lock-preview aria-hidden="true">
+      <span class="eyebrow">On attendees’ lock screens</span>
+      <div class="lock-preview__card"><span class="lock-preview__icon">A</span>
+        <div class="lock-preview__text"><span class="lock-preview__app">ATTND · {{ r.event }}<span class="lock-preview__now">now</span></span>
+          <strong data-lock-title>Title</strong><span data-lock-body>Your message to attendees</span></div></div>
+      <span class="small muted">Title <span data-count-title>0/60</span> · Text <span data-count-body>0/256</span></span>
+    </div>
 {% elif r.name == 'found_image' %}<div class="found-image field">
       <img src="{{ r.src }}" alt="" width="96" height="64" loading="lazy" decoding="async">
       <p class="small"><span class="badge badge--info badge--pill">{% icon "stars" %} Found automatically</span>

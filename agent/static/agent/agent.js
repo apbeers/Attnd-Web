@@ -1012,6 +1012,7 @@
       const savedLine = stepLine((data.messages || []).join(' ') || 'Saved', 'changed');
       const ids0 = JSON.parse(card.dataset.ids);
       if (data.undo) addUndo(savedLine, data.undo, 'available', ids0.event_id);
+      if (data.next) showNext(data.next);  // live ops: the drafted notification, prefilled (sending still asks)
       const keys = card.dataset.keys.split(' ');
       const made = (data.location || '').match(/\/console\/events\/(\d+)\/$/);
       if (card.dataset.component === 'event_new_form' && made) {  // an empty event was created: work on it here
@@ -1031,6 +1032,19 @@
       if (ids.event_id) pageChanged(ids.event_id);
     } catch (err) { bubble('error', err.message); }
     finally { card.classList.remove('is-busy'); }
+  }
+
+  async function showNext(next) {
+    try {
+      const [item] = await fetchCards(next.component, [next.ids]);
+      if (!item) return;
+      const box = cardBox();
+      const card = makeCard(item);
+      box.appendChild(card);
+      const form = card.querySelector('form');
+      if (form && next.fill) applyFill(form, Object.fromEntries(Object.entries(next.fill).map(([k, v]) => [k, String(v)])), false);
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } catch (e) { /* the notifications page still has it */ }
   }
 
   function onCardClick(e) {

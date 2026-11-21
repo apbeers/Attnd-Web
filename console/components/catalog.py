@@ -569,7 +569,7 @@ def notification_form(user, event_id=None, event=None, form=None):
         url = reverse('console:notifications', args=[event.pk])
         data = form_json(form, ['title', 'body', ('choices', 'when'),
                                 ('show_if', 'when:later', 'send-time', ['send_time']), 'urgent',
-                                ('block', 'urgent_warning')],
+                                ('block', 'urgent_warning'), ('block', 'lock_preview', {'event': event.name})],
                          action=url, submit=[{'label': 'Send', 'style': 'primary', 'icon': 'send'}],
                          confirm_action='send_notification')
     return {

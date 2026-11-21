@@ -209,3 +209,26 @@ class ConversationTests(HarnessCase):
                 AgentRun.objects.filter(pk=r['id']).update(status='done')
                 r2 = self.client.post(reverse('agent:start'), {'goal': 'More', 'thread': 'c' * 32}).json()['run']
                 self.assertNotEqual(r2['thread'], 'c' * 32)
+
+
+class LiveOpsTests(HarnessCase):
+    def test_running_late_previews_the_edit_with_a_drafted_notification(self):
+        from django.urls import reverse
+
+        from agent.models import ChangeProposal
+        changes = [{'tool': 'edit_schedule_item', 'label': self.item.name, 'arguments_json': json.dumps(self.args(
+            'edit_schedule_item', event_id=self.event.pk, item_id=self.item.pk,
+            start_time=(self.item.start_time + timedelta(minutes=20)).astimezone(
+                __import__('zoneinfo').ZoneInfo('America/Chicago')).strftime('%Y-%m-%dT%H:%M')))}]
+        self.run_with([[('propose_changes', {'event_id': self.event.pk, 'title': 'Prairie Lights 20 min late',
+                                             'changes': changes, 'notify_title': 'Prairie Lights starts 20 min late',
+                                             'notify_body': 'New time: 20 minutes later at the Main Stage.',
+                                             'notify_urgent': False})],
+                       [('finish', {'summary': 'Preview ready.', 'suggest': None})]])
+        proposal = ChangeProposal.objects.get()
+        self.assertEqual(proposal.notification['title'], 'Prairie Lights starts 20 min late')
+        response = self.client.post(reverse('agent:proposal_apply', args=[proposal.pk]), {'keep': ['0']},
+                                    secure=True).json()
+        self.assertEqual(response['next']['component'], 'notification_form')
+        self.assertEqual(response['next']['fill']['urgent'], False)
+        self.assertFalse(Notification.objects.exists())  # drafted, never sent by Apply

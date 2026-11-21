@@ -568,8 +568,36 @@
     });
   }
 
+  // Stage I7: a notification's lock-screen preview and its length counters follow the form as you type.
+  function enhanceLockPreview(scope) {
+    scope.querySelectorAll('[data-lock-preview]').forEach((box) => {
+      const form = box.closest('form');
+      if (!form || box.dataset.bound) return;
+      box.dataset.bound = '1';
+      const title = form.querySelector('[name=title]');
+      const body = form.querySelector('[name=body]');
+      const urgent = form.querySelector('[name=urgent]');
+      const sync = () => {
+        box.querySelector('[data-lock-title]').textContent = title?.value || 'Title';
+        box.querySelector('[data-lock-body]').textContent = body?.value || 'Your message to attendees';
+        box.classList.toggle('is-urgent', !!urgent?.checked);
+        [[title, '[data-count-title]'], [body, '[data-count-body]']].forEach(([el, sel]) => {
+          const out = box.querySelector(sel);
+          if (el && out) {
+            const max = parseInt(el.getAttribute('maxlength') || '0', 10);
+            out.textContent = max ? `${el.value.length}/${max}` : String(el.value.length);
+            out.classList.toggle('tone-danger', !!max && el.value.length > max - 10);
+          }
+        });
+      };
+      [title, body, urgent].forEach((el) => el?.addEventListener(el.type === 'checkbox' ? 'change' : 'input', sync));
+      sync();
+    });
+  }
+
   window.attndEnhance = function (scope) {
     scope = scope || document;
+    enhanceLockPreview(scope);
     enhanceTimeZones(scope);
     enhanceTabLists(scope);
     scope.querySelectorAll('form').forEach((form) => { enhanceMaps(form); enhanceFill(form); });

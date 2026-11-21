@@ -30,7 +30,8 @@ TOOL = {
                    'untick any). Use it instead of the write tools whenever a request changes 2 or more things '
                    '(bulk edits, shifting times, tagging, hiding). Each change is one write tool with its arguments. '
                    'Not for sending, publishing or deleting (those always ask on their own).',
-    'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['event_id', 'title', 'changes'],
+    'parameters': {'type': 'object', 'additionalProperties': False,
+                   'required': ['event_id', 'title', 'changes', 'notify_title', 'notify_body', 'notify_urgent'],
                    'properties': {
                        'event_id': {'type': 'integer'},
                        'title': {'type': 'string', 'description': 'what the whole change does, e.g. "Move Saturday '
@@ -42,7 +43,15 @@ TOOL = {
                                'tool': {'type': 'string', 'description': 'a write tool name, e.g. edit_schedule_item'},
                                'arguments_json': {'type': 'string', 'description': 'that tool\'s arguments as a JSON '
                                                                                    'object'},
-                               'label': {'type': 'string', 'description': 'the row, e.g. "Prairie Lights"'}}}}}},
+                               'label': {'type': 'string', 'description': 'the row, e.g. "Prairie Lights"'}}}},
+                       'notify_title': {'type': ['string', 'null'], 'description': 'live changes attendees must '
+                                        'know about (a set running late, moved, cancelled): a notification title to '
+                                        'draft with the changes (≤ 60 characters), else null'},
+                       'notify_body': {'type': ['string', 'null'], 'description': 'its text (≤ 240 characters), with '
+                                       'the new time / place, else null'},
+                       'notify_urgent': {'type': ['boolean', 'null'], 'description': 'true only for cancellations, '
+                                         'safety and big changes (urgent reaches everyone and is capped at 3 an '
+                                         'hour)'}}},
     'strict': True,
 }
 
@@ -117,13 +126,21 @@ def propose_tool(run, call, args):
         return 'Error, nothing previewed:\n' + '\n'.join(problems)
     if not changes:
         return 'Nothing would change: everything already has those values.'
+    notification = {}
+    if (args.get('notify_title') or '').strip() and (args.get('notify_body') or '').strip():
+        notification = {'title': args['notify_title'].strip()[:60], 'body': args['notify_body'].strip()[:256],
+                        'urgent': bool(args.get('notify_urgent'))}
     proposal = ChangeProposal.objects.create(run=run, event=event, title=str(args.get('title') or 'Changes')[:200],
-                                             changes=changes)
+                                             changes=changes, notification=notification)
     loop.add_step(run, kind=AgentStep.KIND_COMPONENT, tool='propose_changes', call_id=call.id, event_id=event.pk,
                   arguments={'component': 'change_preview', 'items': [{'event_id': event.pk,
                                                                       'proposal_id': proposal.pk}], 'picked': False},
                   text=f'Preview: {proposal.title} ({len(changes)} change{"s" if len(changes) != 1 else ""})',
                   result=json.dumps({'proposal': proposal.pk, 'changes': len(changes)}))
+    if notification:
+        return (f'Preview shown with {len(changes)} change(s) and the drafted notification; nothing is changed or sent '
+                'yet. After Apply the person checks the notification and sends it (that asks to confirm). Finish now '
+                'with one short sentence.')
     return (f'Preview shown with {len(changes)} change(s); nothing is changed yet. The person applies or cancels it '
             'on the card. Finish now with one short sentence (don\'t list the changes again).')
 
@@ -143,7 +160,7 @@ def change_preview(user, event_id=None, proposal_id=None):
     return {'id': proposal.pk, 'event_id': proposal.event_id, 'name': proposal.title, 'status': proposal.status,
             'rows': rows, 'count': len(rows), 'undo': proposal.undo_id,
             'url': reverse('agent:proposal_apply', args=[proposal.pk]),
-            'applied': sum(1 for r in proposal.results or [] if r.get('ok'))}
+            'applied': sum(1 for r in proposal.results or [] if r.get('ok')), 'notification': proposal.notification}
 
 
 @login_required
@@ -186,4 +203,9 @@ def apply(request, proposal_id):
     proposal.save(update_fields=['status', 'decided_at', 'results', 'undo_id'])
     failed = len(results) - applied
     text = f'Applied {applied} change{"s" if applied != 1 else ""}' + (f'; {failed} didn’t work' if failed else '') + '.'
-    return JsonResponse({'saved': True, 'messages': [text], 'undo': entry.pk if entry else None})
+    out = {'saved': True, 'messages': [text], 'undo': entry.pk if entry else None}
+    if proposal.notification and applied:  # live ops: the drafted notification, prefilled, still sent by the person
+        out['next'] = {'component': 'notification_form', 'ids': {'event_id': proposal.event_id},
+                       'fill': {'title': proposal.notification['title'], 'body': proposal.notification['body'],
+                                'urgent': proposal.notification.get('urgent', False)}}
+    return JsonResponse(out)
