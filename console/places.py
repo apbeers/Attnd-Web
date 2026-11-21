@@ -2,7 +2,8 @@
 
 - `search(query, near)`: address / place search for the form's "Find" button when the browser has no Google Maps
   key (or it failed to load): Google Places Text Search with the server key, else OpenStreetMap's Nominatim (one
-  search per click, never as-you-type: Nominatim's usage policy forbids autocomplete). Cached a day.
+  search per click, never as-you-type: Nominatim's usage policy forbids autocomplete). Google answers are cached
+  in attnd/google.py (coordinates 30 days, labels and addresses a day), Nominatim's a day.
 - `fill_from_website(event, url)`: "Fill from this website?" on a new or empty location: the page is fetched with
   Studio's SSRF-guarded fetcher, Claude Haiku reads it (structured output) and returns suggestions for the empty
   fields only. Nothing is saved: the person reviews the form and saves it (and can undo that save).
@@ -34,36 +35,20 @@ def search(query, near=None, limit=5):
     query = ' '.join((query or '').split())[:200]
     if len(query) < 3:
         return []
+    if settings.GOOGLE_PLACES_API_KEY:
+        return _google(query, near, limit)  # cached in attnd/google.py (coordinates 30 days, labels a day)
     key = _key('search', query, near)
     found = cache.get(key)
     if found is None:
-        found = _google(query, near, limit) if settings.GOOGLE_PLACES_API_KEY else _nominatim(query, near, limit)
+        found = _nominatim(query, near, limit)
         cache.set(key, found, 24 * 3600)
     return found
 
 
 def _google(query, near, limit):
-    import httpx
-    body = {'textQuery': query, 'pageSize': limit}
-    if near:
-        body['locationBias'] = {'circle': {'center': {'latitude': near[0], 'longitude': near[1]}, 'radius': 50000}}
-    try:
-        resp = httpx.post('https://places.googleapis.com/v1/places:searchText', json=body, timeout=8, headers={
-            'X-Goog-Api-Key': settings.GOOGLE_PLACES_API_KEY,
-            'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location'})
-        resp.raise_for_status()
-        places = resp.json().get('places') or []
-    except Exception as exc:
-        logger.warning('Place search failed: %s', exc.__class__.__name__)
-        return []
-    out = []
-    for p in places:
-        loc = p.get('location') or {}
-        if loc.get('latitude') is None:
-            continue
-        out.append({'label': (p.get('displayName') or {}).get('text') or p.get('formattedAddress', ''),
-                    'address': p.get('formattedAddress', ''), 'lat': loc['latitude'], 'lng': loc['longitude']})
-    return out
+    from attnd import google
+    return [{'label': p['label'], 'address': p['address'], 'lat': p['lat'], 'lng': p['lng']}
+            for p in google.text_search(query, near=near, radius=50000, limit=limit)]
 
 
 def _nominatim(query, near, limit):

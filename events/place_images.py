@@ -25,6 +25,7 @@ import logging
 import re
 import threading
 from decimal import Decimal
+from datetime import timedelta
 from urllib.parse import quote, urljoin
 
 from django.conf import settings
@@ -157,26 +158,33 @@ def from_event_pages(location, pages):
     return found[:4]
 
 
+def _place_key(location):
+    """What the stored place id was looked up for: a changed name or address looks it up again."""
+    return hashlib.sha256(f'{location.name}|{location.address}'.lower().encode()).hexdigest()[:32]
+
+
 def venue_website(location):
+    """The place's own website: ``Location.website``, else Google Places (attnd/google.py). The place id is kept on
+    the location indefinitely (Google's terms allow it; '' = nothing found) and looked up once per name + address;
+    later looks only ask Place Details for that id's website (cached a day)."""
+    from attnd import google
     if location.website:
         return location.website
-    key = getattr(settings, 'GOOGLE_PLACES_API_KEY', '')
-    if not key or not location.name:
+    if not google.key_configured() or not location.name:
         return ''
-    import httpx
-    body = {'textQuery': f'{location.name} {location.address or location.event.address}'.strip(), 'pageSize': 1}
-    if location.has_coordinates:
-        body['locationBias'] = {'circle': {'center': {'latitude': float(location.latitude),
-                                                      'longitude': float(location.longitude)}, 'radius': 300}}
-    try:
-        resp = httpx.post('https://places.googleapis.com/v1/places:searchText', json=body, timeout=8, headers={
-            'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'places.websiteUri,places.displayName'})
-        resp.raise_for_status()
-        places = resp.json().get('places') or []
-    except Exception as exc:
-        logger.info('Places website lookup failed: %s', exc.__class__.__name__)
-        return ''
-    return (places[0].get('websiteUri') or '') if places else ''
+    key = _place_key(location)
+    if location.google_place_key == key:
+        return google.place_website(location.google_place_id) if location.google_place_id else ''
+    near = (float(location.latitude), float(location.longitude)) if location.has_coordinates else None
+    found = google.text_search(f'{location.name} {location.address or location.event.address}', near=near,
+                               radius=300, limit=1, website=True)
+    if not found and google.over_quota('places_text'):
+        return ''  # refused today: don't remember "nothing found"
+    place_id = found[0]['place_id'] if found else ''
+    from events.models import Location
+    Location.objects.filter(pk=location.pk).update(google_place_id=place_id, google_place_key=key)  # no content bump
+    location.google_place_id, location.google_place_key = place_id, key
+    return found[0].get('website', '') if found else ''
 
 
 def from_venue(location):
@@ -333,6 +341,9 @@ def find_for(location, pages=None, force=False):
     from events.models import PlaceImageAttempt
     if not force and not wanted(location):
         return 'skipped'
+    if not force and PlaceImageAttempt.objects.filter(location=location, result__in=('none', 'found'),
+                                                      created_at__gte=timezone.now() - timedelta(days=30)).exists():
+        return 'skipped'  # looked already: backfills and retries never repeat the searches (a person's Find a photo does)
     if not enabled() or budget_left() <= 0:
         PlaceImageAttempt.objects.create(location=location, event=location.event, result='skipped',
                                          detail='disabled or over the daily cap')

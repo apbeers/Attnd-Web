@@ -713,6 +713,31 @@ before the removal, tag `tickets-parked-2026-11-19` on the same commit). On `dev
 `bundle.tickets` stay in v2 and are always `null` (installed apps decode them; `events/tests_contract.py` checks it);
 the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-picking from that branch.
 
+## Google APIs and caching (owner, Nov 21, 2026; `attnd/google.py`)
+
+- **One helper for every server-side Google call**: `google.text_search(query, near, radius, limit, website)` (Places
+  API (New) Text Search, field mask `places.id,displayName,formattedAddress,location` + `websiteUri` when asked),
+  `google.place_website(place_id)` (Place Details, `websiteUri` only), `google.geocode(address)` (Geocoding API). Server
+  key `GOOGLE_PLACES_API_KEY`, 8 s timeout, one log line per call, no retries. Users: `scrape.service._geocode` /
+  `_places_text_search` (imports, refreshes, paste imports, new locations from website changes), `console.places.search`
+  (the location form's Find), `events.place_images.venue_website`. Play Integrity, FCM and the browser's Maps JS /
+  Geolocation are separate.
+- **Caching per the Maps Platform terms** (Service Specific Terms + Places / Geocoding policies, checked Nov 21, 2026):
+  place ids may be kept indefinitely (`Location.google_place_id`, with `google_place_key` = the name + address it was
+  looked up for; a changed name or address looks it up again; '' = nothing found); latitude / longitude (and the place
+  id) cached ≤ 30 days; other Places content (labels, formatted addresses, websites) a day; "nothing found" 30 days.
+  Database cache keys = hash of the normalised query + the bias area rounded to 0.01°. Venue websites: one Text Search
+  per place, then only Place Details by id; `place_images.find_for` skips places already looked at in the last 30 days
+  unless a person presses Find a photo (`force`), so backfills and retries never repeat searches.
+- **Quotas** (Google Cloud daily quotas, SETUP.md): a 429 / `RESOURCE_EXHAUSTED` / `OVER_QUERY_LIMIT` is logged once,
+  then that API answers "nothing" without calling Google until midnight Pacific; a refused lookup is never remembered
+  as "nothing found". **Counters** per Pacific day and API (calls, cache hits, errors, quota refusals; `google.usage()`)
+  on the staff **Diagnostics → Endpoints** page.
+- **Browser**: `console/static/console/maps.js` loads Google's Maps JS only when a map or address field is on screen
+  (IntersectionObserver, 200 px margin) or focused; `PlaceAutocompleteElement` bills per session (its own session
+  tokens; it has no minimum-characters option). The home page's Geolocation result is kept a day in `localStorage`.
+  The Android app's walking routes are cached in the app (no change). Tests: `attnd/tests_google.py`.
+
 ## Images (owner, Nov 21, 2026; `attnd/images.py`, `{% img %}` in `console/templatetags/attnd_images.py`)
 
 - **One pipeline** for every image the platform draws or ships: `images.variant(url, w, h=None, crop=False)` →

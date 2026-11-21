@@ -472,82 +472,38 @@ def gather_sources(urls: list[str], crawl: bool = True, on_page=None, colors=Non
 # Google Places enrichment
 # ---------------------------------------------------------------------------
 
-_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
-_PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 
 
-def _geocode(query: str, api_key: str) -> tuple[float, float, str, None] | None:
+def _geocode(query: str, api_key: str = "") -> tuple[float, float, str, None] | None:
     """
-    Geocode a free-text address or place name.
-    Returns (lat, lng, formatted_address, None) or None on failure.
-    The trailing None keeps the shape consistent with _places_text_search.
+    Geocode a free-text address or place name (attnd/google.py: cached, counted, quota-safe).
+    Returns (lat, lng, formatted_address, None) or None. The trailing None keeps the shape of _places_text_search.
     """
-    try:
-        resp = httpx.get(
-            _GEOCODE_URL,
-            params={"address": query, "key": api_key},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        status = body.get("status", "UNKNOWN")
-        results = body.get("results", [])
-        if not results:
-            error_msg = body.get("error_message", "")
-            logger.warning(
-                "Geocode zero results for %r (status=%s%s)",
-                query, status, f": {error_msg}" if error_msg else "",
-            )
-            return None
-        loc = results[0]["geometry"]["location"]
-        address = results[0].get("formatted_address", "")
-        return loc["lat"], loc["lng"], address, None
-    except Exception as exc:
-        logger.warning("Geocode failed for %r: %s", query, exc)
+    from attnd import google
+    found = google.geocode(query)
+    if not found:
+        logger.info("Geocode found nothing for %r", query[:80])
         return None
+    return found["lat"], found["lng"], found.get("address", ""), None
 
 
 def _places_text_search(
     query: str,
-    api_key: str,
+    api_key: str = "",
     bias_lat: float | None = None,
     bias_lng: float | None = None,
 ) -> tuple[float, float, str, str | None] | None:
     """
-    Use the Places API Text Search to find a place.
-    Returns (lat, lng, formatted_address, photo_url_or_None) or None on failure.
+    Places Text Search for one place (attnd/google.py: cached, counted, quota-safe), biased within 50 km.
+    Returns (lat, lng, formatted_address, None) or None. (No Google photos: their terms forbid storing them; place
+    images come from events/place_images.py.)
     """
-    body: dict = {"textQuery": query, "pageSize": 1}
-    if bias_lat and bias_lng:
-        body["locationBias"] = {
-            "circle": {
-                "center": {"latitude": bias_lat, "longitude": bias_lng},
-                "radius": 50_000,  # 50 km
-            }
-        }
-    try:
-        resp = httpx.post(
-            _PLACES_SEARCH_URL,
-            json=body,
-            headers={
-                "X-Goog-Api-Key": api_key,
-                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location",
-            },
-            timeout=8,
-        )
-        resp.raise_for_status()
-        places = resp.json().get("places", [])
-        if not places:
-            return None
-        place = places[0]
-        loc = place.get("location", {})
-        address = place.get("formattedAddress", "")
-        # (No Google photos: their terms forbid storing them and the links expire; place images come from
-        # events/place_images.py.)
-        return loc.get("latitude", 0), loc.get("longitude", 0), address, None
-    except Exception as exc:
-        logger.warning("Places text search failed for %r: %s", query, exc)
+    from attnd import google
+    near = (bias_lat, bias_lng) if bias_lat and bias_lng else None
+    found = google.text_search(query, near=near, radius=50_000, limit=1)
+    if not found:
         return None
+    return found[0]["lat"], found[0]["lng"], found[0].get("address", ""), None
 
 
 def _km(lat1, lng1, lat2, lng2):

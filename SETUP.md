@@ -845,6 +845,17 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
   - **API restrictions:** restrict the key to those two APIs.
   - **Application restrictions:** None. Heroku has no fixed IP address.
 - **Put:** both Heroku apps.
+- **Daily quotas** ✅ (owner, Nov 21, 2026, project `attnd-df28e` → APIs & Services → Places API (New) → Quotas &
+  System Limits, "per day"): Autocomplete **300**, GetPlace **150**, SearchText **400**, SearchNearby **30**, Photo media
+  **30**, reviews / media / summary **0**. Recent usage had been ~244 SearchText a day (place-image venue lookups during
+  the cover backfill), before the caching below. The same from the command line (the quota names are listed by the
+  first command):
+  `gcloud services quota list --service=places.googleapis.com --consumer=projects/attnd-df28e` and
+  `gcloud alpha services quota update --service=places.googleapis.com --consumer=projects/attnd-df28e --metric=<metric> --unit=1/d/{project} --value=<n>`.
+- **When a quota is reached** Google answers 429 / `RESOURCE_EXHAUSTED`; `attnd/google.py` logs it once and that API
+  returns "nothing" (no pin, no venue website) until midnight Pacific, when Google resets the daily quotas. Nothing
+  else breaks: imports keep the AI's own coordinates, the console's Find falls back to typing coordinates. The staff
+  Diagnostics → Endpoints page shows calls, cache hits, errors and refusals per day ("over quota" badge).
 
 **`APNS_KEY_ID`, `APNS_AUTH_KEY`**: iPhone push notifications.
 - **Create:** [developer.apple.com](https://developer.apple.com/account/resources/authkeys/list) → **Keys → +**, name it "Attnd APNs", tick **Apple Push Notifications service (APNs)**, then **Continue → Register → Download**. The Key ID is shown on that page.

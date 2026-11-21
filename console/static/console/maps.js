@@ -29,6 +29,19 @@
     return loading;
   }
 
+  // Google's Maps JS (and its billing) starts only when a map or an address field is actually on screen (or the
+  // field is focused), never just because a console page has a hidden form.
+  function whenVisible(el) {
+    return new Promise((resolve) => {
+      if (!('IntersectionObserver' in window)) { resolve(); return; }
+      let done = false;
+      const go = () => { if (done) return; done = true; io.disconnect(); el.removeEventListener('focusin', go); resolve(); };
+      const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && go(), { rootMargin: '200px' });
+      io.observe(el);
+      el.addEventListener('focusin', go);
+    });
+  }
+
   const setValue = (input, value) => {
     if (!input) return;
     input.value = value;
@@ -43,7 +56,10 @@
   async function addressAutocomplete(input, coords) {
     if (!input || input.dataset.autocomplete) return;
     input.dataset.autocomplete = '1';
+    await whenVisible(input);
     const maps = await load();
+    // PlaceAutocompleteElement groups a person's typing and their pick into one session token by itself (billed per
+    // session, not per keystroke); it has no minimum-characters option.
     const { PlaceAutocompleteElement } = await maps.importLibrary('places');
     const widget = new PlaceAutocompleteElement();
     widget.className = 'place-autocomplete';
@@ -69,6 +85,7 @@
   async function pinMap(el, latInput, lngInput, center, zoom, others, opts) {
     opts = opts || {};
     if (!latInput) { latInput = document.createElement('input'); lngInput = document.createElement('input'); }
+    await whenVisible(el);
     const maps = await load();
     const { Map } = await maps.importLibrary('maps');
     const { AdvancedMarkerElement, PinElement } = await maps.importLibrary('marker');

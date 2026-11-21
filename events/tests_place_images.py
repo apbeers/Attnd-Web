@@ -88,6 +88,7 @@ class PlaceImageTests(TestCase):
         self.assertEqual(result, 'none')
         self.assertIn('400 px wide', PlaceImageAttempt.objects.get().detail)
         self.files['https://fest.example/img/main-stage-night.jpg'] = jpeg()
+        PlaceImageAttempt.objects.all().delete()  # a second automatic look only happens once the first is forgotten
         result, _ = self.run_find(self.stage, BAD)
         self.assertEqual(result, 'none')
         self.assertFalse(self.stage.image)

@@ -230,9 +230,16 @@ def endpoints(request):
     hours = {'1h': 1, '24h': 24, '7d': 24 * 7, '30d': 24 * 30}.get(window, 24)
     since = (timezone.now() - timedelta(hours=hours)).replace(minute=0, second=0, microsecond=0)
     timing.flush()
+    from datetime import date
+
+    from attnd import google
+    today = date.fromisoformat(google._today())
+    days = [(today - timedelta(days=n)).isoformat() for n in range(3)]
     return render(request, 'diagnostics/endpoints.html', {
         'section': 'diagnostics', 'rows': timing.table(since), 'window': window,
-        'windows': ['1h', '24h', '7d', '30d']})
+        'windows': ['1h', '24h', '7d', '30d'],
+        'google': [{'day': d, 'api': api, 'over': i == 0 and google.over_quota(api), **n}
+                   for i, d in enumerate(days) for api, n in google.usage(d).items()]})
 
 
 @agent_action('retrace_stack', 'Retrace a pasted Android stack trace with a stored mapping.', returns_page=True,

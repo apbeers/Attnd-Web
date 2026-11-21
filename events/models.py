@@ -247,6 +247,10 @@ class Location(CoordinatesMixin, models.Model):
     # `image_never_refetch` = the organizer removed a found one (never look again).
     image_auto = models.BooleanField(default=False)
     image_source_url = models.URLField(max_length=1024, blank=True)
+    # Google's place id for this location (attnd/google.py; their terms allow keeping place ids indefinitely), '' =
+    # looked up and nothing found; google_place_key = the name + address it was looked up for (changed → look again).
+    google_place_id = models.CharField(max_length=300, blank=True)
+    google_place_key = models.CharField(max_length=32, blank=True)
     image_credit = models.CharField(max_length=300, blank=True)  # API-022: in the bundle
     image_license = models.CharField(max_length=120, blank=True)
     image_fetched_at = models.DateTimeField(null=True, blank=True)

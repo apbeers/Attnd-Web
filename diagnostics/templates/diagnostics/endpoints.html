@@ -16,5 +16,15 @@
     <td class="num">{{ r.avg|default:"–" }} ms</td><td class="num">{{ r.p50|default:"–" }} ms</td><td class="num strong">{{ r.p95|default:"–" }} ms</td><td class="num">{{ r.max }} ms</td>
   </tr>{% empty %}<tr><td colspan="9" class="muted">No API requests in this window yet.</td></tr>{% endfor %}</tbody>
 </table></div></div>
+<h2 class="title-3" id="google">Google APIs</h2>
+<p class="muted small">Server-side Google calls (attnd/google.py) per Pacific day, when Google's daily quotas reset: calls
+  made, answers from our cache, errors, and quota refusals (the API then answers “nothing” until midnight Pacific).</p>
+<div class="panel panel--flush"><div class="scroll-x"><table class="data-table data-table--compact">
+  <thead><tr><th>Day</th><th>API</th><th class="num">Calls</th><th class="num">Cache hits</th><th class="num">Errors</th><th class="num">Quota</th></tr></thead>
+  <tbody>{% for n in google %}<tr>
+    <td>{{ n.day }}</td><td class="mono">{{ n.api }}{% if n.over %} <span class="badge badge--danger">over quota</span>{% endif %}</td>
+    <td class="num">{{ n.calls }}</td><td class="num">{{ n.hits }}</td><td class="num">{{ n.errors }}</td><td class="num">{% if n.quota %}<span class="tone-danger strong">{{ n.quota }}</span>{% else %}0{% endif %}</td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
 </div>
 {% endblock %}
