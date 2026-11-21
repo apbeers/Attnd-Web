@@ -318,3 +318,55 @@ class PhoneChatFirstTests(AgentTestCase):
         self.client.post(reverse('console:chat_default'), {'on': '0'}, HTTP_USER_AGENT=phone, secure=True)
         self.assertEqual(self.client.get(url, HTTP_USER_AGENT=phone, secure=True).status_code, 200)
         self.assertFalse(ConsolePreference.objects.get(user=self.owner).phone_chat)
+
+
+class LeaveChatTests(AgentTestCase):
+    """Batch 6 §1: switching Chat as default off takes the person out of the full-screen chat, to the page it was
+    about, with the floating panel closed (?chat=closed: the launcher pulses)."""
+
+    def post(self, nxt, **extra):
+        return self.client.post(reverse('console:chat_default'), {'on': '0', 'next': nxt, **extra}, secure=True)
+
+    def test_targets(self):
+        overview = reverse('console:event', args=[self.event.pk])
+        chat = reverse('console:assistant')
+        locations = reverse('console:locations', args=[self.event.pk])
+        cases = [
+            (f'{chat}?event={self.event.pk}&from={locations}', locations),
+            (f'{chat}?event={self.event.pk}', overview),
+            (f'{chat}?from=/console/account/', reverse('console:dashboard')),  # off-limits: not a target
+            (chat, reverse('console:dashboard')),
+            (f'{chat}?event=999999', reverse('console:dashboard')),  # not theirs
+            (locations, locations),  # off on an ordinary page: stays there
+        ]
+        for nxt, path in cases:
+            response = self.post(nxt)
+            self.assertEqual(response.status_code, 302, nxt)
+            self.assertTrue(response['Location'].startswith(path + '?'), (nxt, response['Location']))
+            self.assertIn('chat=closed', response['Location'])
+            self.assertIn('page=1', response['Location'])
+
+    def test_json_shape_and_on(self):
+        chat = reverse('console:assistant')
+        data = self.client.post(reverse('console:chat_default'), {'on': '0', 'next': f'{chat}?event={self.event.pk}'},
+                                HTTP_ACCEPT='application/json', secure=True).json()
+        self.assertEqual(data['chat_default'], False)
+        self.assertTrue(data['redirect'].startswith(reverse('console:event', args=[self.event.pk])))
+        on = self.client.post(reverse('console:chat_default'), {'on': '1', 'event_id': self.event.pk},
+                              HTTP_ACCEPT='application/json', secure=True).json()
+        self.assertEqual(on, {'chat_default': True, 'redirect': f'{chat}?event={self.event.pk}'})
+
+    def test_phone_and_the_loader_flag(self):
+        phone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
+        chat = reverse('console:assistant')
+        response = self.client.post(reverse('console:chat_default'), {'on': '0', 'next': f'{chat}?event={self.event.pk}'},
+                                    HTTP_USER_AGENT=phone, secure=True)
+        self.assertIn('chat=closed', response['Location'])
+        from pathlib import Path
+
+        from django.conf import settings
+        js = (Path(settings.BASE_DIR) / 'agent/static/agent/agent-loader.js').read_text()
+        self.assertIn("params.get('chat') === 'closed'", js)
+        self.assertIn("removeItem('attnd.agent.open')", js)
+        self.assertIn('Ask Attnd is still here', js)
+        self.assertIn('set_chat_default', __import__('agent.registry', fromlist=['x']).registry()['writes'])

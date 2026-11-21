@@ -548,6 +548,11 @@ on Save does; there is no second copy of any business logic.
 - **Chat as default** (A20): the top bar's switch (`ConsolePreference.chat_default`, `console:chat_default`, agent
   action `set_chat_default`): `/console/` and an event's overview open the full-screen chat (`?event=`); internal
   agent reads and `?page=1` (Exit) aren't redirected.
+  Switching it **off** (batch 6) leaves the full-screen chat for the page it was about (`leave_chat_target`: `?from=`
+  when it is a console path that isn't off-limits, else the event's Overview, else Your events; off on an ordinary
+  page stays there) with `?page=1&chat=closed`; JSON callers get `{chat_default, redirect}`. On arrival
+  `agent-loader.js` keeps the floating panel closed (clears `attnd.agent.open` / `.active`, the thread stays) and
+  pulses the launcher three times (reduced motion: the tooltip "Ask Attnd is still here" for 4 s). Phones the same.
 - **Reload without jumps** (A21): one request restores the conversation (`agent:runs?chat=1,2,3` returns the runs with
   their steps), drawn hidden, scrolled once, faded in; the canvas (tabs, sections, cards, active tab) is drawn on the
   server (`agent/canvas.py`) and adopted by agent.js. Measured on a reload with 6 runs: scroll events 5 → 0, CLS

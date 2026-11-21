@@ -125,15 +125,42 @@ def chat_default(request):
     field = 'phone_chat' if ConsolePreference.is_phone(request) else 'chat_default'  # phones have their own (I15)
     ConsolePreference.objects.update_or_create(user=request.user, defaults={field: on})
     messages.success(request, 'The chat is now your default view.' if on else 'Pages are your default view again.')
-    if _wants_json(request):
-        return JsonResponse({'chat_default': on})
     from django.utils.http import url_has_allowed_host_and_scheme
     back = request.POST.get('next') or ''
     if not (back.startswith('/console/') and url_has_allowed_host_and_scheme(back, {request.get_host()})):
         back = reverse('console:dashboard')
-    if on and not back.startswith(reverse('console:assistant')):
-        return redirect(reverse('console:assistant') + (f'?event={request.POST["event_id"]}' if request.POST.get('event_id', '').isdigit() else ''))
-    return redirect(back)
+    event_id = request.POST.get('event_id', '')
+    if on:
+        target = back if back.startswith(reverse('console:assistant')) else (
+            reverse('console:assistant') + (f'?event={event_id}' if event_id.isdigit() else ''))
+    else:
+        target = leave_chat_target(request, back, event_id)
+    if _wants_json(request):
+        return JsonResponse({'chat_default': on, 'redirect': target})
+    return redirect(target)
+
+
+def leave_chat_target(request, back, event_id=''):
+    """Chat as default switched off (batch 6): out of the full-screen chat to the page it was about (?from= when it is a
+    console path, else the event's Overview, else Your events), with ?chat=closed so the page shows the floating
+    panel closed and its launcher pulsing. Off on an ordinary page: that page, the same way."""
+    from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+    from agent.registry import off_limits
+    parts = urlsplit(back)
+    if parts.path.startswith(reverse('console:assistant')):
+        query = parse_qs(parts.query)
+        source = (query.get('from') or [''])[0]
+        chat_event = (query.get('event') or [event_id or ''])[0]
+        if source.startswith('/console/') and not off_limits(source) and not source.startswith(reverse('console:assistant')):
+            back = source
+        elif str(chat_event).isdigit() and events_for_user(request.user).filter(pk=int(chat_event)).exists():
+            back = reverse('console:event', args=[int(chat_event)])
+        else:
+            back = reverse('console:dashboard')
+        parts = urlsplit(back)
+    query = [(k, v) for k, values in parse_qs(parts.query).items() for v in values if k not in ('chat', 'page')]
+    query += [('page', '1'), ('chat', 'closed')]  # page=1: no redirect back into the chat on the way
+    return urlunsplit(('', '', parts.path, urlencode(query), ''))
 
 
 @agent_action('events_list', 'Your events (upcoming and past) with their codes and counts.', kind='read')
