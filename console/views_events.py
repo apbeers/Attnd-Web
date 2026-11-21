@@ -273,21 +273,62 @@ def task_json(job):
         # Friendly steps (scrape.jobs.Steps) the tray shows when a task is opened; a queued job has one.
         'steps': [{'text': st.get('text', ''), 'state': st.get('state', 'done')} for st in (job.steps or [])]
                  or ([{'text': 'Waiting to start…', 'state': 'running'}] if job.status == IngestJob.QUEUED else []),
-        'result_label': ('See the colours' if job.kind == IngestJob.KIND_THEME else 'Review the changes'
-                         if url and '/changes/' in url else 'Open the event') if url else '',
+        'result_label': ('See the colours' if job.kind == IngestJob.KIND_THEME
+                         else f"Review {_plural_changes(result.get('pending', 0))}" if url and '/changes/' in url
+                         else 'Open the event') if url else '',
+        # A failed task can run again (its sources are kept; a file that was attached has to be attached again).
+        'retry_url': (reverse('console:task_retry', args=[job.pk])
+                      if job.status == IngestJob.FAILED and _retryable(job) else ''),
     }
+
+
+def _plural_changes(n):
+    return f'{n} change' + ('' if n == 1 else 's')
+
+
+def _retryable(job):
+    return job.kind in (IngestJob.KIND_CREATE, IngestJob.KIND_REFRESH, IngestJob.KIND_THEME) and (
+        job.urls or job.text or job.kind == IngestJob.KIND_THEME or (job.event_id and job.event.source_urls))
+
+
+@agent_action('retry_background_task', 'Run a failed background task (an AI import, a check for updates, picking '
+              'colours) again with the same sources.', params={'job_id': P('string', 'the task id')}, json=True,
+              title='Started it again')
+@login_required
+@require_POST
+def task_retry(request, job_id):
+    job = get_object_or_404(IngestJob, pk=job_id, created_by=request.user, status=IngestJob.FAILED)
+    if job.event_id and not job.event.can_edit(request.user):
+        raise Http404
+    if not _retryable(job):
+        return JsonResponse({'error': 'Attach the file again to try once more.'}, status=400)
+    again = IngestJob.objects.create(
+        kind=job.kind, trigger=job.trigger if job.trigger != IngestJob.TRIGGER_WATCH else IngestJob.TRIGGER_CONSOLE,
+        event=job.event, created_by=request.user, urls=job.urls, text=job.text, instructions=job.instructions,
+        timezone=job.timezone, studio_import=job.studio_import, testing_only=job.testing_only)
+    jobs.enqueue(again)
+    return JsonResponse({'task': task_json(again)}, status=202)
 
 
 @agent_action('background_tasks', 'Running and recent background tasks (AI imports and updates).', kind='read')
 @login_required
 def tasks_feed(request):
-    """Running background tasks for this person, plus ones that finished in the last 10 minutes."""
+    """Running background tasks for this person, plus ones that finished in the last 10 minutes; `?ids=` adds
+    those tasks of theirs whatever their age (Ask Attnd's task cards in an older chat)."""
     recent = timezone.now() - timedelta(minutes=10)
     visible_events = events_for_user(request.user).values('id')
-    qs = (IngestJob.objects.filter(Q(created_by=request.user) | Q(event__in=visible_events,
-                                                                   trigger=IngestJob.TRIGGER_WATCH))
-          .filter(Q(status__in=[IngestJob.QUEUED, IngestJob.RUNNING]) | Q(finished_at__gte=recent))
-          .select_related('event').order_by('-created_at')[:20])
+    mine = Q(created_by=request.user) | Q(event__in=visible_events, trigger=IngestJob.TRIGGER_WATCH)
+    wanted = Q(status__in=[IngestJob.QUEUED, IngestJob.RUNNING]) | Q(finished_at__gte=recent)
+    import uuid
+    asked = []
+    for raw in (request.GET.get('ids') or '').split(',')[:20]:
+        try:
+            asked.append(uuid.UUID(raw.strip()))
+        except ValueError:
+            continue
+    if asked:
+        wanted |= Q(pk__in=asked)
+    qs = IngestJob.objects.filter(mine).filter(wanted).select_related('event').order_by('-created_at')[:20 + len(asked)]
     tasks = [task_json(j) for j in qs]
     return JsonResponse({'tasks': tasks, 'active': sum(t['status'] in ('queued', 'running') for t in tasks)})
 

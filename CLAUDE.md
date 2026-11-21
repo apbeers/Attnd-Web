@@ -495,8 +495,13 @@ on Save does; there is no second copy of any business logic.
   `canvas.ALERT_COUNTS` (Review) are filled badges (`.tab-count--alert`, `--color-danger` / `--color-on-danger`,
   defined for light and dark), informational counts are muted (`.tab-count`); agent.js `setTabCount`. **Height**: on
   desktop the full-screen chat fills exactly `100dvh` under the top bar (body flex column, no outer scroll).
-  **Background tasks in the chat**: a working line with the thinking ring and the task's current friendly step above
-  the composer (`[data-agent-tasks]`, console.js `renderChatLines`), then a done line with its result link; the task
+  **Background tasks in the chat** (batch 5, Nov 21, 2026): a step that started a background job (its JSON answer
+  `{"task": …}` → `step_json.task`) is drawn as a **live task card** at that step (agent.js `taskCard`): title,
+  spinner, each friendly step (✓ / running / ×), the current step as a hint, then the result link ("Review 4
+  changes") or the reason in plain words + **Retry** (`console:task_retry`, agent write `retry_background_task`: the
+  same sources again; a failed paste with a file needs the file again). It polls `console:tasks?ids=` (those tasks
+  whatever their age) every 2 s while running. Tasks without a card keep the working line above the composer
+  (`[data-agent-tasks]`, console.js `renderChatLines`), then a done line with its result link; the task
   tray on the desktop full screen sits bottom-left with the chat and opens upward (elsewhere near the launcher).
 - **Colours apply at once** (owner, Nov 21, 2026): `{% event_theme_style %}` always draws `<style
   data-event-theme="<id>">` on an event's pages (empty without a theme or with the website switch off); after a save,

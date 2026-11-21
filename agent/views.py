@@ -134,6 +134,18 @@ def step_label(step):
     return text
 
 
+def started_task(step):
+    """The id of the background task (console task feed) a step started, from its JSON answer ({"task": {…}})."""
+    if not step.ok or not step.result.startswith('{"task"'):
+        return ''
+    try:
+        return str((json.loads(step.result).get('task') or {}).get('id') or '')
+    except ValueError:  # (trimmed at 4,000 characters)
+        import re
+        found = re.match(r'\{"task": \{"id": "([0-9a-f-]{36})"', step.result)
+        return found.group(1) if found else ''
+
+
 def step_json(step, undo=None):
     out = {'seq': step.seq, 'id': step.pk, 'kind': step.kind, 'tool': step.tool, 'text': step_label(step), 'ok': step.ok,
            'changed': step.changed, 'url': step.url, 'event_id': step.event_id, 'confirm': step.confirm_state,
@@ -143,6 +155,9 @@ def step_json(step, undo=None):
         out['undo'] = {'id': step.undo_id, 'state': state or 'expired'}
     if step.kind == AgentStep.KIND_QUESTION:
         out['options'] = step.arguments.get('options') or []
+    task = started_task(step)
+    if task:  # a background job this step started: the chat draws a live task card here
+        out['task'] = task
     if step.kind == AgentStep.KIND_COMPONENT:  # the panel fetches the HTML (agent/components.py: render)
         out['component'] = {'name': step.arguments.get('component', ''), 'items': step.arguments.get('items') or [],
                             'picked': bool(step.arguments.get('picked'))}

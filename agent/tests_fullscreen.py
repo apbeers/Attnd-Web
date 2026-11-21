@@ -1,4 +1,5 @@
 """Ask Attnd full screen (/console/assistant/), follow-up suggestions, the thinking line's stage text."""
+import json
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -116,3 +117,45 @@ class TalkToAPersonTests(TestCase):
         self.assertEqual(views.suggestions(run), ['Show the schedule'])
         from django.urls import reverse
         self.assertTrue(reverse('agent:contact'))
+
+
+class TaskCardTests(TestCase):
+    """Batch 5: a background job started in the conversation is a live card at that step (the step's JSON carries
+    the task id); the feed answers for those ids whatever their age; a failed task can run again."""
+
+    def setUp(self):
+        from events.models import Event
+        from django.utils import timezone
+        self.user = User.objects.create_user('t', 't@example.com', 'pw')
+        self.event = Event.objects.create(name='E', event_code='TASK1', user=self.user, start_time=timezone.now(),
+                                          source_urls=['https://example.com/'])
+        self.client.force_login(self.user)
+
+    def test_step_feed_and_retry(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from django.utils import timezone
+
+        from agent.views import step_json
+        from scrape.models import IngestJob
+        job = IngestJob.objects.create(kind=IngestJob.KIND_REFRESH, event=self.event, created_by=self.user,
+                                       status=IngestJob.FAILED, error='The AI couldn’t read those sources.',
+                                       finished_at=timezone.now() - timedelta(hours=3))
+        run = AgentRun.objects.create(user=self.user, goal='check for updates')
+        step = AgentStep.objects.create(run=run, seq=1, tool='check_for_updates', changed=True,
+                                        result=json.dumps({'task': {'id': str(job.pk), 'title': 'x'}}))
+        self.assertEqual(step_json(step)['task'], str(job.pk))
+        feed = self.client.get('/console/tasks/', secure=True).json()['tasks']
+        self.assertEqual(feed, [])  # three hours old: not in the tray
+        (t,) = self.client.get(f'/console/tasks/?ids={job.pk},nonsense', secure=True).json()['tasks']
+        self.assertEqual(t['status'], 'failed')
+        self.assertTrue(t['retry_url'])
+        with patch('scrape.jobs.enqueue') as enqueue:
+            again = self.client.post(t['retry_url'], secure=True)
+        self.assertEqual(again.status_code, 202)
+        enqueue.assert_called_once()
+        self.assertEqual(again.json()['task']['status'], 'queued')
+        other = User.objects.create_user('o', 'o@example.com', 'pw')
+        self.client.force_login(other)
+        self.assertEqual(self.client.post(t['retry_url'], secure=True).status_code, 404)

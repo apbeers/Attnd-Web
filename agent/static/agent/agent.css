@@ -307,3 +307,18 @@
 
 .agent__feedback-more { flex-basis: 100%; max-width: 28rem; }
 .agent__feedback-more textarea { width: 100%; }
+
+/* A background task started in the conversation (batch 5): a live card at that step */
+.agent__taskcard { display: grid; gap: var(--space-2); margin: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4);
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.agent__taskcard.is-failed { background: var(--color-danger-soft); border-color: var(--color-danger-line); }
+.agent__taskcard.is-done { border-color: var(--color-success-line); }
+.agent__taskcard-head { display: flex; align-items: center; gap: var(--space-2); }
+.agent__taskcard-title { font-size: var(--text-sm); }
+.agent__taskcard-steps { display: grid; gap: .3rem; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.agent__taskcard-steps .task-step { display: flex; align-items: center; gap: var(--space-2); }
+.agent__taskcard-steps .task-step--done { color: var(--color-muted); }
+.agent__taskcard-hint { margin: 0; }
+.agent__taskcard-hint:empty, .agent__taskcard-foot:empty, .agent__taskcard-steps:empty { display: none; }
+.agent__taskcard-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.agent__taskcard-foot p { margin: 0; flex-basis: 100%; }

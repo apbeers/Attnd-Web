@@ -210,6 +210,7 @@
       if (echoedReply !== null && step.text === echoedReply) { echoedReply = null; return document.createComment('reply'); }
       return bubble('user', step.text);
     }
+    if (step.task) return taskCard(step);
     const el = stepLine(step.text, !step.ok ? 'failed' : step.changed ? 'changed' : '');
     if (step.url && step.changed) {
       const link = document.createElement('a');
@@ -222,6 +223,100 @@
     if (step.undo) addUndo(el, step.undo.id, step.undo.state, step.event_id);
     return el;
   }
+
+  // ---- Background tasks started in the conversation: a live card at that step (batch 5) ---------------------
+  // Title, spinner, each friendly step as it happens (✓ / running / ×), the current step as a hint; when done the
+  // result link ("Review 4 changes"), when it fails the reason in plain words and Retry. Polls the console's task
+  // feed (?ids=) while one is running; nothing moves with reduced motion (CSS).
+  const TASKS_FEED = '/console/tasks/';
+  const taskEsc = (t) => String(t || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let taskTimer = null;
+  function taskCard(step) {
+    const card = document.createElement('section');
+    card.className = 'agent__taskcard is-running';
+    card.dataset.taskCard = step.task;
+    card.setAttribute('aria-live', 'polite');
+    card.innerHTML = `<header class="agent__taskcard-head"><span class="agent__thinking-spinner" aria-hidden="true"></span>
+      <strong class="agent__taskcard-title">${taskEsc(step.text)}</strong></header>
+      <ol class="agent__taskcard-steps"></ol><p class="agent__taskcard-hint small muted"></p><div class="agent__taskcard-foot"></div>`;
+    log.appendChild(card);
+    if (live) window.attndReveal?.(card, 'in');
+    if (!thinking.hidden) log.appendChild(thinking);
+    stick();
+    pollTasks();
+    return card;
+  }
+  function drawTask(card, t) {
+    const running = t.status === 'queued' || t.status === 'running';
+    card.classList.toggle('is-running', running);
+    card.classList.toggle('is-done', t.status === 'done');
+    card.classList.toggle('is-failed', t.status === 'failed');
+    const head = card.querySelector('.agent__taskcard-head');
+    const mark = running ? '<span class="agent__thinking-spinner" aria-hidden="true"></span>'
+      : t.status === 'failed' ? '<span class="status-mark status-mark--danger" aria-hidden="true">×</span>'
+      : '<span class="status-mark status-mark--success" aria-hidden="true">✓</span>';
+    const headHtml = `${mark}<strong class="agent__taskcard-title">${taskEsc(t.title)}</strong>`;
+    if (head.innerHTML !== headHtml) head.innerHTML = headHtml;
+    const steps = (t.steps || []).map((st) => {
+      const m = st.state === 'running' ? '<span class="spinner" aria-hidden="true"></span>'
+        : `<span class="status-mark status-mark--${{ done: 'success', failed: 'danger', waiting: 'warning' }[st.state] || 'info'}" aria-hidden="true">${{ done: '✓', failed: '×', waiting: '!' }[st.state] || '•'}</span>`;
+      return `<li class="task-step task-step--${taskEsc(st.state)}">${m}<span>${taskEsc(st.text)}</span></li>`;
+    }).join('');
+    const list = card.querySelector('.agent__taskcard-steps');
+    if (list.innerHTML !== steps) list.innerHTML = steps;
+    const done = (t.steps || []).filter((st) => st.state === 'done').length;
+    card.querySelector('.agent__taskcard-hint').textContent = running
+      ? (t.progress || (done ? `${done} step${done === 1 ? '' : 's'} done…` : 'Starting…')) : (t.summary || '');
+    const foot = card.querySelector('.agent__taskcard-foot');
+    let footHtml = '';
+    if (t.status === 'done' && t.url) footHtml = `<a class="button button--primary button--small" href="${taskEsc(t.url)}" data-task-result>${taskEsc(t.result_label || 'Open')}</a>`;
+    if (t.status === 'failed') {
+      footHtml = `<p class="small tone-danger">${taskEsc(t.error || 'That didn’t work.')}</p>`
+        + (t.retry_url ? `<button type="button" class="button button--outline button--small" data-task-retry="${taskEsc(t.retry_url)}">Retry</button>` : '');
+    }
+    if (foot.innerHTML !== footHtml) foot.innerHTML = footHtml;
+  }
+  async function pollTasks() {
+    clearTimeout(taskTimer);
+    const cards = [...log.querySelectorAll('[data-task-card]')];
+    const ids = [...new Set(cards.filter((c) => !c.dataset.final).map((c) => c.dataset.taskCard))];
+    if (!ids.length) return;
+    try {
+      const response = await fetch(`${TASKS_FEED}?ids=${encodeURIComponent(ids.join(','))}`, { credentials: 'same-origin' });
+      const data = await response.json();
+      const byId = Object.fromEntries((data.tasks || []).map((t) => [t.id, t]));
+      cards.forEach((card) => {
+        const t = byId[card.dataset.taskCard];
+        if (!t) return;
+        const was = card.dataset.status;
+        drawTask(card, t);
+        card.dataset.status = t.status;
+        if (t.status === 'done' || t.status === 'failed') {
+          card.dataset.final = '1';
+          if (was && was !== t.status) window.attndReveal?.(card, 'pulse');
+          if (t.status === 'done' && t.event_id) refreshKeys?.([`event:${t.event_id}`]);
+        }
+      });
+    } catch (e) { /* try again on the next tick */ }
+    if (cards.some((c) => !c.dataset.final)) taskTimer = setTimeout(pollTasks, document.hidden ? 8000 : 2000);
+  }
+  log.addEventListener('click', async (e) => {
+    const retry = e.target.closest('[data-task-retry]');
+    if (retry) {
+      retry.disabled = true;
+      try {
+        const data = await post(retry.dataset.taskRetry, {});
+        const card = retry.closest('[data-task-card]');
+        card.dataset.taskCard = data.task.id;
+        delete card.dataset.final;
+        drawTask(card, data.task);
+        pollTasks();
+      } catch (err) { retry.disabled = false; bubble('error', err.message); }
+      return;
+    }
+    const link = e.target.closest('[data-task-result]');
+    if (link && canvasOn() && openUrl(link.getAttribute('href'))) e.preventDefault();
+  });
 
   // ---- Undo next to every change (console/undo.py: one recorded change, 24 h, then Redo) ----------------
   const undoUrl = (id) => root.dataset.undoUrl.replace(/\/0\/$/, `/${id}/`);

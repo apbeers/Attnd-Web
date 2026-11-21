@@ -832,6 +832,7 @@
       const boxes = document.querySelectorAll('[data-agent-tasks]');
       if (!boxes.length) return;
       const lines = tasks.filter((t) => {
+        if (document.querySelector(`[data-task-card="${CSS.escape(t.id)}"]`)) return false;  // it has its card in the chat
         const running = t.status === 'queued' || t.status === 'running';
         if (running) watchedHere.add(t.id);
         return running || watchedHere.has(t.id);

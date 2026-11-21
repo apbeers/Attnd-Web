@@ -10,6 +10,7 @@ urlpatterns = [
     path('signup/', login_not_required(views.SignUpView.as_view()), name='signup'),
     path('account/', views.account, name='account'),
     path('tasks/', v.tasks_feed, name='tasks'),
+    path('tasks/<uuid:job_id>/retry/', v.task_retry, name='task_retry'),
     path('chat-default/', v.chat_default, name='chat_default'),
     path('undo/last/', views_undo.undo_last, name='undo_last'),
     path('assistant/', agent_views.assistant_page, name='assistant'),
