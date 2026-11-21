@@ -514,15 +514,15 @@
   function showSuggestions(list) {
     suggestBox.textContent = '';
     suggestBox.hidden = !list.length;
-    // "Talk to a person" is offered after a 👎 (with its note), never as a standing chip (owner, Nov 21, 2026).
-    list = list.filter((text) => !/^talk to a person$/i.test(text.trim()));
-    suggestBox.hidden = !list.length;
+    // "Talk to a person" is never a standing chip: only when the answer offers it (someone asked how to reach a
+    // person; platform help), and then it opens the contact form at once. /contact works any time.
     list.forEach((text) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'agent__chip';
       chip.textContent = text;
       chip.addEventListener('click', () => {
+        if (/^talk to a person$/i.test(text.trim())) { talkToPerson(''); return; }
         input.value = text; fitInput(); form.requestSubmit();
       });
       suggestBox.appendChild(chip);
@@ -543,57 +543,8 @@
     if (last && last.classList.contains('agent__msg--assistant') && sameText(last.textContent, text.replace(LINK_RE, '$1'))) return last;
     return bubble('assistant', text);
   }
-  // 👍 / 👎 under a finished answer (stage I): stored with the run for staff review.
-  function addFeedback(msg, r) {
-    if (!msg || msg.nextElementSibling?.matches?.('.agent__feedback') || r.buttons) return;
-    const row = document.createElement('div');
-    row.className = 'agent__feedback';
-    row.setAttribute('role', 'group');
-    row.setAttribute('aria-label', 'Was this helpful?');
-    [['1', '👍', 'Helpful'], ['-1', '👎', 'Not helpful']].forEach(([value, mark, label]) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'agent__feedback-button';
-      b.textContent = mark;
-      b.setAttribute('aria-label', label);
-      b.setAttribute('aria-pressed', String(String(r.feedback) === value));
-      b.addEventListener('click', async () => {
-        const on = b.getAttribute('aria-pressed') !== 'true';
-        try {
-          await post(runUrl(r.id, 'feedback/'), { value: on ? value : '' });
-          row.querySelectorAll('.agent__feedback-button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
-          b.setAttribute('aria-pressed', String(on));
-          window.attndReveal?.(b, 'pulse');
-          row.querySelector('.agent__feedback-more')?.remove();
-          if (on && value === '-1') notHelpful(row, r);
-        } catch (e) { /* not important enough to show an error */ }
-      });
-      row.appendChild(b);
-    });
-    msg.after(row);
-  }
-  // After a 👎: what went wrong (stored with the feedback) and, from there, Talk to a person.
-  function notHelpful(row, r) {
-    const more = document.createElement('form');
-    more.className = 'agent__feedback-more stack stack--tight';
-    more.innerHTML = '<label class="small" for="agent-fb-' + r.id + '">What went wrong? <span class="muted">(optional)</span></label>'
-      + '<textarea id="agent-fb-' + r.id + '" rows="2" maxlength="500"></textarea>'
-      + '<div class="cluster cluster--tight"><button class="button button--secondary button--small">Send note</button>'
-      + '<button type="button" class="link-button small" data-feedback-person>Talk to a person</button></div>';
-    const note = more.querySelector('textarea');
-    more.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      try {
-        await post(runUrl(r.id, 'feedback/'), { value: '-1', note: note.value });
-        more.innerHTML = '<p class="small muted">Thanks, that helps. <button type="button" class="link-button small" data-feedback-person>Talk to a person</button></p>';
-        more.querySelector('[data-feedback-person]').addEventListener('click', () => talkToPerson(note.value));
-      } catch (err) { /* keep the form */ }
-    });
-    more.querySelector('[data-feedback-person]').addEventListener('click', () => talkToPerson(note.value));
-    row.appendChild(more);
-    window.attndReveal?.(more, 'in');
-    note.focus();
-  }
+  // No 👍 / 👎 under answers (owner, Nov 21, 2026: clutter). agent:feedback and AgentRun.feedback stay, unused here.
+  function addFeedback() {}
   function finished() {
     if (run.summary) addFeedback(answerOnce(run.summary), run);
     if (run.error && run.status !== 'done') errorBubble(run);

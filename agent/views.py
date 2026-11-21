@@ -185,8 +185,8 @@ FOLLOW_UPS = {
 def suggestions(run):
     if run.status != AgentRun.DONE:
         return []
-    if run.suggestions:  # "Talk to a person" comes after a 👎, never as a chip
-        return [s for s in run.suggestions if s.strip().lower() != 'talk to a person'][:4]
+    if run.suggestions:  # "Talk to a person" only when the agent offered it (the chip opens the contact form)
+        return list(run.suggestions)[:4]
     last = run.steps.filter(kind=AgentStep.KIND_COMPONENT).order_by('-seq').first()
     if last is not None:
         return FOLLOW_UPS.get(last.arguments.get('component', ''), [])[:4]

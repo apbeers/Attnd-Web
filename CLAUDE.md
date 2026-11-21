@@ -697,9 +697,9 @@ on Save does; there is no second copy of any business logic.
   - **First-run walkthrough** (`first_run`): import → review → layout → publish → share as progress chips for people
     with ≤ 2 events, shown instead of the briefing until finished or skipped (`console:walkthrough_skip`,
     `ConsolePreference.walkthrough_done`).
-  - **Talk to a person** (`agent:contact`): offered only after a 👎 on an answer (with a "What went wrong?" note
-    stored as `feedback_note`), and by the `/contact` command; never a standing button or suggestion chip (owner,
-    Nov 21, 2026). A form in the chat that emails `ADMIN_EMAILS` with the person's email as Reply-To, the run id, its request and outcome, the page and event;
+  - **Talk to a person** (`agent:contact`): the `/contact` command, and a "Talk to a person" chip only when the agent
+    offers it (it can't help, or someone asks how to reach support; the chip opens the form at once); never a
+    standing button (owner, Nov 21, 2026). A form in the chat that emails `ADMIN_EMAILS` with the person's email as Reply-To, the run id, its request and outcome, the page and event;
     3 per person per hour.
 - **Quality harness** (stage I, `agent/harness.py`): scripted requests (add a location, shift every set 30 min, send an
   urgent notification, an ambiguous day, a password question, a prompt injection in a location's description), each
@@ -707,7 +707,8 @@ on Save does; there is no second copy of any business logic.
   the gate) and database checks; replies must not leak JSON or internal names. `agent/tests_harness.py` grades
   scripted runs (the checker) and, with `AGENT_HARNESS_LIVE=1` + `ANTHROPIC_API_KEY`, the real model in a throwaway
   database (`.github/workflows/agent-harness.yml`, nightly + on demand, secret `ANTHROPIC_HARNESS_KEY`, JSON report).
-  **👍 / 👎** under every finished answer (`agent:feedback`, `AgentRun.feedback` / `feedback_note`; admin filter).
+  No 👍 / 👎 under answers since Nov 21, 2026 (owner: clutter); `agent:feedback` and `AgentRun.feedback` /
+  `feedback_note` stay (admin filter) for older runs.
 - Tests: `agent/tests.py` (registry and coverage, pages, writes through the real views, the loop with a scripted
   provider: gates, cancel, injection, caps, stop, ask_user, undo all, sign-out; endpoints and the panel) and
   `agent/tests_components.py` (show validation, JSON-only context, taps and renders as the person, chat forms

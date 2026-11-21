@@ -96,8 +96,8 @@ class StageTextTests(AgentTestCase):
 
 
 class TalkToAPersonTests(TestCase):
-    """Batch 5 (owner, Nov 21, 2026): Talk to a person comes after a 👎 (with its note), not above the composer or as a
-    standing chip; the contact endpoint and the /contact command stay."""
+    """Talk to a person is no standing button (owner, Nov 21, 2026): no 👍 / 👎 under answers any more; the /contact
+    command, the contact endpoint, and a "Talk to a person" chip only when the agent offers it."""
 
     def test_not_standing(self):
         from pathlib import Path
@@ -110,11 +110,13 @@ class TalkToAPersonTests(TestCase):
         self.assertNotIn('data-agent-person', (root / 'agent/templates/agent/_panel.html').read_text())
         js = (root / 'agent/static/agent/agent.js').read_text()
         self.assertIn("key: 'contact'", js)
-        self.assertIn('notHelpful(row, r)', js)
+        self.assertNotIn('notHelpful(', js)
+        self.assertNotIn('agent__feedback-button', js)
         user = User.objects.create_user('p', 'p@example.com', 'pw')
         run = AgentRun.objects.create(user=user, goal='x', status=AgentRun.DONE,
                                       suggestions=['Show the schedule', 'Talk to a person'])
-        self.assertEqual(views.suggestions(run), ['Show the schedule'])
+        self.assertEqual(views.suggestions(run), ['Show the schedule', 'Talk to a person'])
+        self.assertIn("talkToPerson(''); return;", js)
         from django.urls import reverse
         self.assertTrue(reverse('agent:contact'))
 
