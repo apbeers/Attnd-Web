@@ -91,6 +91,11 @@ class Command(BaseCommand):
             import logging
             logging.getLogger(__name__).exception('Plan suggestions failed')
 
+        # F5: with the database task queue and no `tasks` dyno, drain what is due (≤ 4 minutes, before the next run).
+        import background
+        if background.database_queue():
+            call_command('run_tasks', once=True, max_seconds=240, stdout=self.stdout)
+
         # Inline jobs run in daemon threads; give them a moment to finish in this one-off dyno.
         import threading
         import time

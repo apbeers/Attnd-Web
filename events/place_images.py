@@ -407,6 +407,11 @@ def schedule(location_id):
     background thread (an import of 40 places doesn't start 40 threads)."""
     if not getattr(settings, 'PLACE_IMAGES_ON_CREATE', True):
         return
+    import background
+    if background.database_queue():  # F5: a run_tasks worker picks it up once this transaction commits
+        from events.tasks import find_place_image
+        find_place_image.enqueue(location_id)
+        return
 
     def put():
         global _queue

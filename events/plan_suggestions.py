@@ -320,6 +320,11 @@ def schedule(event_id):
     """After a content push: regenerate in the background once the edits settle (never in a request)."""
     if not settings.ANTHROPIC_API_KEY or not getattr(settings, 'PLAN_SUGGESTIONS_AUTO', True):
         return
+    import background
+    if background.database_queue():  # F5: run by a worker once the edits settle
+        from events.tasks import refresh_plan_suggestions
+        refresh_plan_suggestions.using(run_after=timezone.now() + timedelta(seconds=DEBOUNCE_SECONDS + 5)).enqueue(event_id)
+        return
     with _lock:
         if event_id in _timers:
             _timers[event_id].cancel()

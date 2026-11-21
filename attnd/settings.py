@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sitemaps',
+    'background.apps.BackgroundConfig',  # django.tasks on our own database queue (F5)
     'django.contrib.humanize',  # naturaltime / intcomma in the console (F4)
     'django.contrib.postgres',  # GIN trigram + BRIN indexes for diagnostics (built into Django)
     'cloudinary_storage',
@@ -405,6 +406,14 @@ STUDIO_IMAGE_FALLBACK_MODEL = os.getenv('STUDIO_IMAGE_FALLBACK_MODEL', 'gpt-imag
 # $10: a full import (a 10-25 page site rebuilt in one run) costs roughly $2-4 with gpt-5.5 and prompt caching, up
 # to ~$6 on Claude, so $5 left little or nothing for the chat turns that follow it on the same day.
 STUDIO_DAILY_SPEND_CAP_USD = float(os.getenv('STUDIO_DAILY_SPEND_CAP_USD', '10'))
+
+# Background tasks (F5): Django's tasks framework. TASKS_BACKEND=database queues them in Postgres
+# (background.backend.DatabaseBackend) for `manage.py run_tasks` (a `tasks` dyno, or Heroku Scheduler's
+# `run_scheduled_tasks`, which drains the queue for up to 4 minutes); otherwise (default) work keeps running in this
+# process's background threads and TASKS is Django's immediate backend.
+TASKS_BACKEND = os.getenv('TASKS_BACKEND', 'threads')
+TASKS = {'default': {'BACKEND': 'background.backend.DatabaseBackend' if TASKS_BACKEND == 'database'
+                     else 'django.tasks.backends.immediate.ImmediateBackend'}}
 
 # Place images found automatically (stage D, events/place_images.py): on for new places (not in tests), checked by
 # Claude Haiku's vision, a cost cap over every look per UTC day.

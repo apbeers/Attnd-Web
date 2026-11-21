@@ -90,6 +90,7 @@ diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, req
 studio/         # Attnd Studio (admins only): AI-designed event websites hosted on SITES_HOST, flyer art, app look
 prospects/      # Staff only: sales pipeline (web-search discovery of events that suit the app, organizer contacts, test events)
 agent/          # Ask Attnd: the console's AI agent (registry of console views, internal requests, run loop, panel)
+background/     # django.tasks on our own Postgres queue (F5): DatabaseBackend, QueuedTask, run_tasks
 public/         # Files served at root by Whitenoise (robots.txt, favicon.ico + icons + site.webmanifest from scripts/make_icons.py)
 brand/          # app-icon-1024.png: the source of every website icon (scripts/make_icons.py)
 ```
@@ -718,6 +719,14 @@ uv run python manage.py runserver
 ## Background work
 
 - **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
+- **django.tasks** (F5, `background/`): Django's tasks framework on our own Postgres queue
+  (`background.backend.DatabaseBackend`, `QueuedTask`; claims with `SKIP LOCKED`, priority, `run_after`, results,
+  3 attempts, stale RUNNING requeued after 30 min). Off by default (`TASKS_BACKEND=threads`: today's in-process threads,
+  TASKS = Django's immediate backend). With `TASKS_BACKEND=database`, `background.enqueue` / the tasks in
+  `events/tasks.py` (place images, plan suggestions with a 95 s `run_after`) go to the queue, run by the `tasks`
+  dyno (`manage.py run_tasks`, Procfile, scaled to 0 by default) or, without one, by `run_scheduled_tasks`
+  (`run_tasks --once --max-seconds 240`). AI imports keep their own `IngestJob` queue, Ask Attnd and Studio runs their
+  threads (they need seconds, not minutes). Tests: `background/tests.py`.
 - **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events, keeps the DEMO event happening now and runs a scheduled prospect discovery when it is on and due, and refreshes out-of-date "Plan your day" suggestions (API-021).
 - **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged. Urgent notifications (API-011) go to every device with a token (time-sensitive APNs alert, high-priority FCM data message) plus an APNs `liveactivity` update to every `Device.live_activity_token` in the event; at most `URGENT_MAX_PER_HOUR` (3) per event, beyond that they go out as normal. iOS tokens are sent per APNs topic (API-019, `send_apns_groups`): App Clip devices (`Device.app_clip`) on `APNS_CLIP_TOPIC` (default `<APNS_TOPIC>.clip`, Live Activities `+ .push-type.liveactivity`), the app's on `APNS_TOPIC`.
 
@@ -803,6 +812,9 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
 | `AGENT_EFFORT` | No | Ask Attnd's reasoning effort, one for every call of a run and the whole conversation (so the prompt cache holds), default `medium`. Replaces `AGENT_PLANNING_EFFORT` (still read as a fallback) and `AGENT_STEP_EFFORT` (ignored) |
 | `AGENT_MAX_ATTACHMENT_MB` | No | Files attached in the Ask Attnd chat, default `15` |
+| `TASKS_BACKEND` | No | `threads` (default) or `database` (django.tasks on the Postgres queue, F5; scale the `tasks` dyno or rely on the scheduler) |
+| `DB_POOL` / `DB_POOL_MAX` | No | psycopg 3 connection pool on (default `1`) / its size per process (default `8`) |
+| `CACHE_BACKEND` | No | `database` (default, the `attnd_cache` table) or `locmem` |
 | `PLACE_IMAGES_ENABLED` / `PLACE_IMAGES_DAILY_CAP_USD` | No | Place images found automatically (API-022), default on (needs `ANTHROPIC_API_KEY`) / `1` USD per UTC day for every look |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |

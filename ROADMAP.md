@@ -78,9 +78,9 @@ Built on `develop` in this order; ticked as it ships.
 - [x] **D. Place images in our own store** (event pages, venue site, Wikimedia; API-022 `image_credit`).
 - [x] **E. Packages**: latest everything, psycopg 3 + pooling; Python stays `3.15` in `.python-version` (newest 3.15.x
   on Heroku and CI).
-- [ ] **F. Django built-ins**: database cache ✅, LoginRequiredMiddleware ✅, Postgres search ✅, humanize + db_default ✅
+- [x] **F. Django built-ins**: database cache ✅, LoginRequiredMiddleware ✅, Postgres search ✅, humanize + db_default ✅
   (no GeneratedField: the ends we query need interval maths, which Postgres won't store), django.tasks with our own
-  DB-backed worker (last).
+  DB-backed worker ✅ (built, off by default: `TASKS_BACKEND=database` on dev first, then a `tasks` dyno or the scheduler).
 - [x] **G. Security** ✅: ALLOWED_HOSTS, Scrypt, Permissions-Policy, SECRET_KEY_FALLBACKS, Ask Attnd rate limit + magic bytes.
 - [x] **H. Performance** ✅ (agent.js split into modules still open, see A): no head scripts to defer (all at the end of body), lazy Ask Attnd, cached root files, sized images, polling back-off.
 - [ ] **I. Chat-first additions** (Tiers 1–3: preview-before-apply, briefing / readiness, paste anything, server-side
