@@ -1,8 +1,9 @@
 {% extends 'console/base.html' %}
 {% load console_tags %}
 {% block title %}{% if location.pk %}{{ location.name }}{% else %}New location{% endif %} · {{ event.name }}{% endblock %}
+{% block crumb_back %}{% url 'console:locations' event.id %}{% endblock %}
+{% block crumbs_more %}<li><a href="{% url 'console:locations' event.id %}">Locations</a></li><li><span aria-current="page">{% if location.pk %}{{ location.name }}{% else %}New location{% endif %}</span></li>{% endblock %}
 {% block event_content %}
-<a href="{% url 'console:locations' event.id %}" class="back-link">← All locations</a>
 <h2 class="title-2">{% if location.pk %}{{ location.name }}{% else %}New location{% endif %}</h2>
 <div class="split">
   <div class="split__main panel panel--roomy">

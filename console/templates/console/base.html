@@ -52,7 +52,14 @@
     </div>
   {% endif %}
   {% if event and section %}
-    <a class="back-link" href="{% url 'console:dashboard' %}">← Your events</a>
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a class="crumbs__back" href="{% block crumb_back %}{% url 'console:dashboard' %}{% endblock %}" aria-label="Back" title="Back">{% icon "arrow-left" %}</a>
+      <ol>
+        <li><a href="{% url 'console:dashboard' %}">Your events</a></li>
+        <li>{% block crumb_event %}{% if section == 'overview' %}<span aria-current="page">{{ event.name }}</span>{% else %}<a href="{% url 'console:event' event.id %}">{{ event.name }}</a>{% endif %}{% endblock %}</li>
+        {% block crumbs_more %}{% endblock %}
+      </ol>
+    </nav>
     {% component "event_header" event=event %}
     <div class="event-shell">
       <nav class="sidenav" aria-label="Event">

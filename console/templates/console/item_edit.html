@@ -1,8 +1,9 @@
 {% extends 'console/base.html' %}
 {% load console_tags %}
 {% block title %}{% if item.pk %}{{ item.name }}{% else %}New schedule item{% endif %} · {{ event.name }}{% endblock %}
+{% block crumb_back %}{% url 'console:schedule' event.id %}{% endblock %}
+{% block crumbs_more %}<li><a href="{% url 'console:schedule' event.id %}">Schedule</a></li><li><span aria-current="page">{% if item.pk %}{{ item.name }}{% else %}New schedule item{% endif %}</span></li>{% endblock %}
 {% block event_content %}
-<a href="{% url 'console:schedule' event.id %}" class="back-link">← Schedule</a>
 <h2 class="title-2">{% if item.pk %}{{ item.name }}{% else %}New schedule item{% endif %}</h2>
 <div class="stack">
 <div class="panel panel--roomy">

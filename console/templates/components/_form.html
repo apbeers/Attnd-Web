@@ -3,7 +3,8 @@ JSON, `blocks` = the component's template for page-specific rows ('block' kind).
 submits it to the same view (a form that always asks goes through the confirm gate first). {% endcomment %}<form method="post" action="{{ form.action }}"{% if form.multipart %} enctype="multipart/form-data"{% endif %}{% if surface == 'chat' %} data-component-form{% if form.confirm_action %} data-confirm-action="{{ form.confirm_action }}"{% endif %}{% endif %}>{% csrf_token %}
   {% for error in form.errors %}<div class="notice notice--error">{{ error }}</div>{% endfor %}
   {% include 'components/_form_rows.html' with rows=form.layout %}
-  <div class="cluster">
+  <div class="{% if surface == 'chat' %}cluster{% else %}action-bar{% endif %}">
+    {% if surface != 'chat' and form.summary %}<div class="action-bar__summary">{{ form.summary }}</div>{% endif %}
     {% for b in form.submit %}<button class="button button--{{ b.style|default:'primary' }}"{% if b.name %} name="{{ b.name }}" value="{{ b.value }}"{% endif %}>{% if b.icon %}{% icon b.icon %} {% endif %}{{ b.label }}</button>
     {% endfor %}
   </div>
