@@ -8,7 +8,7 @@ The Anthropic provider has the loop interface of `studio.ai` (start / chat / add
 restore / effort), so `agent.loop` drives both the same way; we host the tool loop ourselves (tools run our views).
 
 Request rules for claude-haiku-5-5 (see the model's migration notes):
-- adaptive thinking is the default: `thinking` is omitted; depth is `output_config.effort` (low / medium);
+- adaptive thinking is the default: `thinking` is omitted; depth is `output_config.effort` (one `AGENT_EFFORT` for every call, so the cache holds);
 - no temperature / top_p / top_k, no assistant prefill (the conversation always ends with a user turn);
 - strict tools, `tool_choice` auto with `disable_parallel_tool_use`;
 - prompt caching: a breakpoint on the (stable) system prompt caches tools + system; one on the newest message caches
@@ -57,13 +57,13 @@ def get_provider(name=None, model=None):
     if name == 'anthropic':
         if not settings.ANTHROPIC_API_KEY:
             raise AIError('AGENT_PROVIDER is anthropic but ANTHROPIC_API_KEY is not set.')
-        return ClaudeProvider(model=model or settings.AGENT_ANTHROPIC_MODEL, effort=settings.AGENT_PLANNING_EFFORT)
+        return ClaudeProvider(model=model or settings.AGENT_ANTHROPIC_MODEL, effort=settings.AGENT_EFFORT)
     from studio import ai
     import os
     if not os.getenv('OPENAI_API_KEY'):
         raise AIError('No AI key is configured on the server (ANTHROPIC_API_KEY or OPENAI_API_KEY).')
     return ai.OpenAIProvider(model=model or settings.AGENT_MODEL, fallback_model=settings.AGENT_FALLBACK_MODEL,
-                             effort=settings.AGENT_PLANNING_EFFORT, parallel_tool_calls=False)
+                             effort=settings.AGENT_EFFORT, parallel_tool_calls=False)
 
 
 UNSUPPORTED_KEYWORDS = ('minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'minLength',

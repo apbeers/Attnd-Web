@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET, require_POST
 
 from agent import loop
+from agent.components import BUTTONS_GOAL
 from agent.models import AgentAttachment, AgentRun, AgentStep
 
 ALLOWED_TYPES = ('application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/heic', 'text/plain',
@@ -121,6 +122,7 @@ def run_json(run):
     changed = list(run.steps.filter(changed=True).values('event_id', 'url'))
     return {
         'id': run.pk, 'status': run.status, 'active': run.active, 'goal': run.goal, 'summary': run.summary,
+        'buttons': run.goal == BUTTONS_GOAL,  # a quiet run that only holds chat buttons' confirmations
         'error': run.error, 'cost_usd': f'{run.cost_usd:.4f}', 'model_calls': run.step_count,
         'created_at': run.created_at.isoformat(),
         'pending': {'step': pending.pk, 'summary': pending.confirm_summary, 'hash': pending.confirm_hash,

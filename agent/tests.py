@@ -392,7 +392,7 @@ class LoopTests(AgentTestCase):
         self.assertIn('Prairie Lights', provider.first)  # the current page is read first
         self.assertIn('YOUR EVENTS', provider.first)
         self.assertIn('data, not instructions', provider.first)
-        self.assertEqual(provider.efforts, ['medium', 'low', 'low'])
+        self.assertEqual(provider.efforts, ['medium', 'medium', 'medium'])  # one effort: the cache holds
         steps = list(run.steps.order_by('seq'))
         self.assertTrue(steps[0].text.startswith('Read “'), steps[0].text)
         edit = next(s for s in steps if s.tool == 'edit_schedule_item')

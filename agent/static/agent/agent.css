@@ -38,10 +38,12 @@
 .agent__msg--user { align-self: flex-end; color: #fff; background: var(--color-brand); }
 .agent__msg--assistant { align-self: flex-start; background: var(--color-brand-soft); }
 .agent__msg--error { align-self: flex-start; color: var(--color-danger); background: var(--color-danger-soft); }
-.agent__msg--step { align-self: stretch; max-width: none; padding: var(--space-1) var(--space-2); color: var(--color-muted);
-  background: none; border-left: 2px solid var(--color-border); border-radius: 0; }
-.agent__msg--step.is-changed { color: var(--color-text); border-left-color: var(--color-success); }
-.agent__msg--step.is-failed { color: var(--color-danger); border-left-color: var(--color-danger); }
+.agent__msg--step { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-1) var(--space-2); align-self: stretch;
+  max-width: none; padding: var(--space-1) var(--space-2); color: var(--color-muted); background: none; border-radius: var(--radius); }
+.agent__msg--step > .status-mark { margin-top: .05rem; }
+.agent__step-text { flex: 1 1 10rem; min-width: 0; }
+.agent__msg--step.is-changed { color: var(--color-text); background: color-mix(in srgb, var(--color-success-soft) 55%, transparent); }
+.agent__msg--step.is-failed { color: var(--color-danger-text); background: color-mix(in srgb, var(--color-danger-soft) 70%, transparent); }
 .agent__open { margin-left: var(--space-1); font-weight: 600; }
 .agent__undo { margin-left: var(--space-1); padding: .1rem .55rem; font: inherit; font-size: var(--text-xs); font-weight: 600;
   color: var(--color-brand); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-pill); cursor: pointer; }
@@ -62,10 +64,7 @@
 .agent__card[data-detail] .agent__card-body { cursor: pointer; }
 .agent__card[data-detail] .agent__card-body:hover > * { box-shadow: 0 2px 10px rgba(0, 0, 0, .08); }
 .agent__card.is-busy { opacity: .6; pointer-events: none; }
-.agent__card.is-gone { padding: var(--space-1) var(--space-2); border-left: 2px solid var(--color-border); }
-.agent__card-foot { display: flex; justify-content: flex-end; }
-.agent__card-foot:empty { display: none; }
-.agent__open-page { font-size: var(--text-xs); font-weight: 600; text-decoration: none; }
+.agent__card.is-gone { padding: var(--space-1) var(--space-2); background: var(--color-surface-2); border-radius: var(--radius); }
 .agent__folded { text-align: left; }
 /* Tappable answers (ask_user options) and follow-up suggestions. */
 .agent__chips { display: flex; flex-wrap: wrap; gap: var(--space-1); align-self: flex-start; }
@@ -125,7 +124,6 @@
 .agent__msg { border-radius: 1.1rem; }
 .agent__msg--user { border-bottom-right-radius: .35rem; }
 .agent__msg--assistant { color: var(--color-text); border-bottom-left-radius: .35rem; }
-.agent__msg--step.is-changed { color: var(--color-text); }
 .agent__footer { padding: var(--space-2) var(--space-3) var(--space-3); }
 .agent__form { padding: 6px 6px 6px 4px; border-radius: 1.4rem; background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .agent__send { width: 2.35rem; height: 2.35rem; }
@@ -182,22 +180,41 @@
 .canvas__cards--rows { grid-template-columns: 1fr; gap: 0; }
 .canvas__cards--rows .agent__card .list--boxed { border-radius: 0; border-width: 0 0 1px; box-shadow: none; }
 .canvas .agent__card { font-size: var(--text-md); }
-.canvas .agent__card-foot { padding-top: var(--space-1); }
 .canvas__empty { display: grid; place-items: center; align-content: center; gap: var(--space-2); height: 100%; text-align: center; }
 .canvas__empty-mark { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; font-size: 1.6rem; color: var(--color-brand-text);
   background: var(--color-brand-soft); border-radius: 1.2rem; }
 /* Details open as an overlay on the canvas: breadcrumb + back arrow; Esc / the arrow goes back a level. */
 .canvas__overlay { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--color-surface);
-  animation: canvas-in .18s ease-out; }
+  overflow: hidden; }
 .canvas__overlay[hidden] { display: none; }
 .canvas__overlay-head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) var(--space-5) var(--space-3);
   border-bottom: 1px solid var(--color-border); }
 .canvas__overlay-head .crumbs { margin: 0; }
 .canvas__overlay-head .crumbs__back { cursor: pointer; font: inherit; }
 .canvas__overlay-head [data-overlay-title]:focus { outline: none; }
-.canvas__overlay-body { flex: 1; overflow-y: auto; padding: var(--space-5); display: grid; gap: var(--space-4); align-content: start; }
-@keyframes canvas-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .canvas__overlay { animation: none; } }
+.canvas__overlay-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: var(--space-5); }
+/* Open: slides in from the right with a fade. Back (the arrow, Esc, a crumb): the level slides out to the right with
+   a fade, the one below comes back; nested levels animate between them. No motion with prefers-reduced-motion. */
+.canvas__overlay.is-entering, .canvas__level.is-entering { animation: canvas-in .22s cubic-bezier(.2, .8, .2, 1) both; }
+.canvas__overlay.is-leaving, .canvas__level.is-leaving { animation: canvas-out .2s cubic-bezier(.4, 0, .8, .4) both; pointer-events: none; }
+.canvas__level.is-returning { animation: canvas-return .22s ease-out both; }
+.canvas__level { display: grid; gap: var(--space-4); align-content: start; }
+.canvas__level[hidden] { display: none; }
+@keyframes canvas-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes canvas-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(36px); } }
+@keyframes canvas-return { from { opacity: .3; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .canvas__overlay.is-entering, .canvas__overlay.is-leaving, .canvas__level.is-entering, .canvas__level.is-leaving,
+  .canvas__level.is-returning { animation: none; }
+}
+/* Sections of a tab (Updates: compose, then every update) and the tab's toolbar (Add location…). */
+.canvas__toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-bottom: var(--space-3); }
+.canvas__section + .canvas__section { margin-top: var(--space-5); }
+/* (the compose form gets a soft card on the canvas) */
+.canvas [data-section=notification_form] .agent__card { padding: var(--space-4) var(--space-5); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.canvas__heading { margin: 0 0 var(--space-2); }
+.canvas__none { padding: var(--space-5) 0; text-align: center; }
+.canvas [data-sortable] > .agent__card.dragging { opacity: .4; }
 @media (max-width: 1023px) {
   .assistant { grid-template-columns: 1fr; height: auto; }
   .canvas { display: none; }

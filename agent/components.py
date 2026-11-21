@@ -181,10 +181,19 @@ def render(request):
     return JsonResponse({'items': rendered(request, name, found)})
 
 
-def _own_run(request):
+BUTTONS_GOAL = 'Buttons in the chat'
+
+
+def _own_run(request, create=False):
+    """The run a tap belongs to. With `create` (always-ask buttons), a chat that has no request yet (the full-screen
+    canvas before anything was asked) gets a quiet run of its own to hold the confirmation: no model call."""
     raw = request.POST.get('run') or ''
     if not raw.isdigit():
-        raise Http404
+        if not create:
+            raise Http404
+        return AgentRun.objects.create(user=request.user, goal=BUTTONS_GOAL, status=AgentRun.DONE,
+                                       summary='', session_key=request.session.session_key or '',
+                                       host=request.get_host(), secure=request.is_secure())
     return get_object_or_404(AgentRun, pk=int(raw), user=request.user)
 
 
@@ -241,7 +250,6 @@ def act(request):
     agent:confirm (loop.confirm: single use, the hash of exactly these arguments)."""
     from agent.internal import ActionContext
     from agent.views import run_json, step_json
-    run = _own_run(request)
     name = request.POST.get('component', '')
     if name not in C.registry():
         return _error('Unknown component.')
@@ -266,6 +274,7 @@ def act(request):
         if not form.is_valid():
             again = C.finish(comp, ids, comp.data(request.user, **ids, form=form))
             return JsonResponse({'invalid': True, 'items': rendered(request, name, [(ids, again)])})
+    run = _own_run(request, create=True)
     if run.steps.filter(confirm_state=AgentStep.CONFIRM_PENDING).exists():
         return _error('Answer the confirmation that is waiting first.', status=409)
     args = _tool_args(action, ids, request.POST)

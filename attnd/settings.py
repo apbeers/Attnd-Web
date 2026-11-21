@@ -399,8 +399,9 @@ AGENT_FALLBACK_MODEL = os.getenv('AGENT_FALLBACK_MODEL', 'gpt-5')  # only when A
 AGENT_DAILY_SPEND_CAP_USD = float(os.getenv('AGENT_DAILY_SPEND_CAP_USD', '2'))  # per person per UTC day
 AGENT_MAX_STEPS = int(os.getenv('AGENT_MAX_STEPS', '40'))  # model calls per run
 AGENT_RUN_MAX_MINUTES = int(os.getenv('AGENT_RUN_MAX_MINUTES', '15'))  # wall clock per run (waiting doesn't count)
-AGENT_PLANNING_EFFORT = os.getenv('AGENT_PLANNING_EFFORT', 'medium')  # reasoning effort: first call / after a reply
-AGENT_STEP_EFFORT = os.getenv('AGENT_STEP_EFFORT', 'low')  # reasoning effort: routine steps
+# One reasoning effort for every call of a run and the whole conversation (a changed effort loses the prompt cache).
+# AGENT_PLANNING_EFFORT (the old first-call setting) is still read as a fallback; AGENT_STEP_EFFORT is ignored.
+AGENT_EFFORT = os.getenv('AGENT_EFFORT') or os.getenv('AGENT_PLANNING_EFFORT') or 'medium'
 AGENT_MAX_ATTACHMENT_MB = int(os.getenv('AGENT_MAX_ATTACHMENT_MB', '15'))
 
 # ---------------------------------------------------------------------------

@@ -56,7 +56,7 @@ def api_error(cls, status, text):
 
 
 @override_settings(ANTHROPIC_API_KEY='sk-ant-test', AGENT_PROVIDER='anthropic', AGENT_ANTHROPIC_MODEL='claude-haiku-5-5',
-                   AGENT_PLANNING_EFFORT='medium', AGENT_STEP_EFFORT='low')
+                   AGENT_EFFORT='medium')
 class ClaudeProviderTests(AgentTestCase):
     def run_claude(self, responses, run=None, fallback=None, **kwargs):
         client = FakeClient(responses)
@@ -113,7 +113,11 @@ class ClaudeProviderTests(AgentTestCase):
         ])
         self.assertEqual(run.status, AgentRun.DONE)
         second = client.requests[1]
-        self.assertEqual(second['output_config'], {'effort': 'low'})  # routine step
+        # One effort for the whole run: every request's parameters except the growing messages are identical,
+        # so the cached prefix (tools + system + earlier turns) is reused.
+        self.assertEqual(second['output_config'], {'effort': 'medium'})
+        same = lambda body: {k: v for k, v in body.items() if k != 'messages'}  # noqa: E731
+        self.assertEqual(same(client.requests[0]), same(second))
         assistant = second['messages'][1]
         self.assertEqual(assistant['role'], 'assistant')
         self.assertEqual(assistant['content'][0], {'type': 'thinking', 'thinking': '', 'signature': 'sig-toolu_1'})

@@ -329,7 +329,6 @@ def _loop(run, provider, messages):
     from agent.providers import Refused
     from studio import ai
     tools = tools_for(run.user)
-    planning = True
     while True:
         _check_not_stopped(run)
         if run.step_count >= settings.AGENT_MAX_STEPS:
@@ -340,15 +339,14 @@ def _loop(run, provider, messages):
         if budget_left(run.user) <= 0:
             raise StopRun(budget_message(), AgentRun.STOPPED)
         if hasattr(provider, 'effort'):
-            provider.effort = settings.AGENT_PLANNING_EFFORT if planning else settings.AGENT_STEP_EFFORT
-        planning = False
+            # One effort for every call of a run and across the conversation: a changed effort misses the prompt cache.
+            provider.effort = settings.AGENT_EFFORT
         try:
             turn = provider.chat(SYSTEM_PROMPT, messages, tools)
         except Refused as exc:
             if provider.name != 'anthropic':
                 raise StopRun('The AI declined this request. Try rephrasing it.')
             provider, messages = _refusal_fallback(run, messages, exc)
-            planning = True
             continue
         except ai.AIError as exc:
             raise StopRun(str(exc))

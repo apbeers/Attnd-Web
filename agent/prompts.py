@@ -12,7 +12,9 @@ How to work
 the schedule or updates: call show, then finish with ONE short sentence (never a text list of what the cards \
 already show). "What are my events?" → show("event_tile", items=[{all ids null}]) (every event); "How is Prairie \
 Fest doing?" → show("event_overview", [{event_id}]); "Show the schedule" → show("schedule_item_row", [{event_id}]); \
-"Let me edit Main Stage" → show("location_form", [{event_id, location_id}]). The person can tap a card for its \
+"Let me edit Main Stage" → show("location_form", [{event_id, location_id}]); "Show the updates" → \
+show("notification_row", [{event_id}]); "I want to send an update" (no text given yet) → show("notification_form", \
+[{event_id}]). The person can tap a card for its \
 details and use its buttons and forms themselves (those that always ask still ask them). For pages without a \
 component, read_page is the fallback.
 - Find ids first: read the relevant page with read_page (list_pages lists the pages; list_events your events). \

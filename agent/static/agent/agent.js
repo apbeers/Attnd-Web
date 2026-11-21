@@ -156,20 +156,44 @@
     log.scrollTop = log.scrollHeight;
     return el;
   }
+  // A step line: a small status mark in a tinted circle (✓ changed, + added, × failed, • looked), then the text.
+  // (No coloured left-border brackets: owner, Nov 21, 2026.)
+  function stepLine(text, state) {
+    $('[data-agent-hello]')?.remove();
+    const el = document.createElement('div');
+    el.className = 'agent__msg agent__msg--step';
+    const kind = state === 'failed' ? 'danger' : state === 'changed' ? (/^(Added|Created|Saved new|Scheduled|Sent)\b/.test(text) ? 'added' : 'success') : '';
+    const mark = document.createElement('span');
+    mark.className = `status-mark${kind ? ` status-mark--${kind}` : ''}`;
+    mark.setAttribute('aria-hidden', 'true');
+    mark.textContent = { danger: '×', added: '+', success: '✓' }[kind] || '•';
+    const label = document.createElement('span');
+    label.className = 'agent__step-text';
+    label.textContent = text;
+    el.append(mark, label);
+    if (state === 'failed') el.classList.add('is-failed');
+    if (state === 'changed') el.classList.add('is-changed');
+    log.appendChild(el);
+    if (!thinking.hidden) log.appendChild(thinking);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
   function renderStep(step) {
     if (step.kind === 'component') return showComponents(step);
     if (step.kind === 'note') return bubble('assistant', step.text);
     if (step.kind === 'question') return question(step);
-    if (step.kind === 'reply') return bubble('user', step.text);
-    const el = bubble('step', step.text);
-    el.classList.toggle('is-failed', !step.ok);
-    el.classList.toggle('is-changed', step.changed);
+    if (step.kind === 'reply') {
+      if (echoedReply !== null && step.text === echoedReply) { echoedReply = null; return document.createComment('reply'); }
+      return bubble('user', step.text);
+    }
+    const el = stepLine(step.text, !step.ok ? 'failed' : step.changed ? 'changed' : '');
     if (step.url && step.changed) {
       const link = document.createElement('a');
       link.href = step.url;
       link.textContent = 'Open';
       link.className = 'agent__open';
-      el.append(' ', link);
+      link.addEventListener('click', (e) => { if (canvasOn() && openUrl(step.url)) e.preventDefault(); });
+      el.append(link);
     }
     if (step.undo) addUndo(el, step.undo.id, step.undo.state, step.event_id);
     return el;
@@ -191,8 +215,7 @@
       button.disabled = true;
       try {
         const data = await post(undoUrl(id), {});
-        const said = bubble('step', data.message);
-        said.classList.add('is-changed');
+        const said = stepLine(data.message, 'changed');
         button.textContent = redo ? 'Redone' : 'Undone';
         if (data.redo) addUndo(said, data.redo, 'available', data.event_id, !redo);
         const eid = data.event_id || changedEventId;
@@ -413,7 +436,7 @@
     lastSeq = 0;
     live = false;
     const data = await get(runUrl(id, '?after=0'));
-    bubble('user', data.run.goal);
+    if (!data.run.buttons) bubble('user', data.run.goal);
     wasActive = data.run.active;
     renderRun(data);
     if (!data.run.active && data.run.summary) bubble('assistant', data.run.summary);
@@ -422,19 +445,51 @@
   }
 
   // ---- sending -------------------------------------------------------------------------------
+  // Sending: the typed text morphs into the new message bubble and moves from the composer up to its place in the
+  // log (FLIP: the bubble is created at its final spot, then animated from where the text was), while the composer
+  // clears at the same time. Reduced motion: a plain fade.
+  let echoedReply = null;  // a reply already drawn by flyUp (its step from the server isn't drawn again)
+  function flyUp(text) {
+    const from = input.getBoundingClientRect();
+    const inStyle = getComputedStyle(input);
+    const el = bubble('user', text);
+    const to = el.getBoundingClientRect();
+    if (reduceMotionSend.matches || !el.animate || !from.width) {
+      el.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+      return el;
+    }
+    const elStyle = getComputedStyle(el);
+    const dx = (from.left + parseFloat(inStyle.paddingLeft)) - (to.left + parseFloat(elStyle.paddingLeft));
+    const dy = (from.top + parseFloat(inStyle.paddingTop)) - (to.top + parseFloat(elStyle.paddingTop));
+    const sx = Math.min(1.25, Math.max(.6, from.width / Math.max(to.width, 1)));
+    el.style.transformOrigin = 'left top';
+    el.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(${sx}, 1)`, backgroundColor: 'transparent', color: inStyle.color,
+        borderRadius: '1.4rem', boxShadow: 'none' },
+      { transform: 'none', backgroundColor: elStyle.backgroundColor, color: elStyle.color,
+        borderRadius: elStyle.borderRadius },
+    ], { duration: 320, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    return el;
+  }
+  const reduceMotionSend = window.matchMedia('(prefers-reduced-motion: reduce)');
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = input.value.trim();
     if (!text) { input.focus(); return; }
     const send = sendButton;
     send.disabled = true;
+    const replying = run && run.status === 'waiting_reply';
+    if (replying) echoedReply = text;
+    const sent = flyUp(text);
+    input.value = '';  // the composer clears while the bubble flies up
+    fitInput();
     try {
-      if (run && run.status === 'waiting_reply') {
+      if (replying) {
         renderRun(await post(runUrl(run.id, 'reply/'), { text }));
         live = true;
       } else {
         if (!run || !run.active) { lastSeq = 0; }
-        bubble('user', text);
         showSuggestions([]);
         const data = await post(root.dataset.startUrl, { goal: text, page: full ? fromPage : location.pathname + location.search,
                                                           event_id: eventId || '', attachments: attachments.map((a) => a.id).join(',') });
@@ -447,9 +502,10 @@
         live = true;
         renderRun(data);
       }
-      input.value = '';
-      fitInput();
     } catch (err) {
+      sent.remove();  // not sent: the text goes back into the composer
+      echoedReply = null;
+      if (!input.value) { input.value = text; fitInput(); }
       bubble('error', err.message);
       if (err.data && err.data.run) { show(err.data.run.id); }
     } finally {
@@ -468,8 +524,7 @@
       renderRun(data);
       live = true;
       if (data.step) {  // a chat button (or Undo all) ran right away: its outcome, and fresh copies of what it touched
-        const line = bubble('step', data.step.text);
-        line.classList.toggle('is-failed', !data.step.ok);
+        const line = stepLine(data.step.text, !data.step.ok ? 'failed' : data.step.changed ? 'changed' : '');
         if (data.step.undo) addUndo(line, data.step.undo.id, data.step.undo.state, data.step.event_id);
         if (data.step.changed && data.step.event_id) { refreshKeys([`event:${data.step.event_id}`]); pageChanged(data.step.event_id); }
       }
@@ -538,21 +593,6 @@
     card.dataset.title = item.label || item.title;
     if (item.detail) card.dataset.detail = item.detail;
     if (item.detail_ids) card.dataset.detailIds = JSON.stringify(item.detail_ids);
-    const foot = document.createElement('div');
-    foot.className = 'agent__card-foot';
-    if (item.url) {
-      const link = document.createElement('a');
-      link.href = item.url;
-      link.className = 'agent__open-page';
-      // Wide screens: the chat stays open where it was over the new page. Phones: the sheet closes to show it.
-      link.addEventListener('click', () => {
-        store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop));
-        if (phone.matches) store.remove('sessionStorage', 'attnd.agent.open');
-      });
-      link.textContent = 'Open page ↗';
-      foot.appendChild(link);
-    }
-    card.appendChild(foot);
     setBody(card, item.html);
     return card;
   }
@@ -576,14 +616,13 @@
       } else if (canvasOn()) {
         // Full screen: compact tiles in the chat, the cards themselves on the canvas.
         box.classList.add('agent__tiles');
-        const tab = toCanvas(step.component.name, items);
-        items.forEach((item, i) => box.appendChild(makeTile(item, tab, i)));
+        const sec = toCanvas(step.component.name, items);
+        items.forEach((item, i) => box.appendChild(makeTile(item, sec, i)));
       } else {
         items.forEach((item) => box.appendChild(makeCard(item)));
       }
     } catch (err) {
-      box.className = 'agent__msg agent__msg--step is-failed';
-      box.textContent = err.status === 404 ? 'This is no longer there.' : err.message;
+      box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
     }
     foldOld();
     log.scrollTop = log.scrollHeight;
@@ -634,8 +673,16 @@
 
   // Copies of something that changed (a chat button, the agent, a run) are fetched again.
   function refreshKeys(keys, except) {
+    // Canvas list sections of a changed event reload whole (new rows appear, deleted ones go)…
+    const sections = canvas ? [...canvas.querySelectorAll('.canvas__section[data-parent]')].filter((sec) => {
+      const parent = JSON.parse(sec.dataset.parent || '{}');
+      return sec.dataset.component.endsWith('_row') || sec.dataset.component === 'event_tile'
+        ? keys.some((k) => k === `event:${parent.event_id}` || (!parent.event_id && k.startsWith('event:'))) : false;
+    }) : [];
+    sections.forEach(reloadSection);
+    // …and every other copy is fetched again on its own.
     liveCards().forEach((card) => {
-      if (card === except) return;
+      if (card === except || sections.some((sec) => sec.contains(card))) return;
       const mine = card.dataset.keys.split(' ');
       if (keys.some((k) => mine.includes(k))) refresh(card);
     });
@@ -661,9 +708,8 @@
   }
 
   async function act(card, action, form) {
-    if (!run) return;
     const body = form ? new FormData(form) : new FormData();
-    body.set('run', run.id);
+    body.set('run', run ? run.id : '');  // none yet: the server starts a quiet one for the buttons
     body.set('component', card.dataset.component);
     body.set('ids', card.dataset.ids);
     body.set('action', action);
@@ -671,7 +717,8 @@
       const data = await post(root.dataset.actUrl, body);
       if (data.invalid) { setBody(card, data.items[0].html); return; }
       renderedSteps.add(data.step.id);
-      bubble('step', data.step.text);
+      if (!run || run.id !== data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
+      stepLine(data.step.text, '');
       live = true;
       renderRun({ run: data.run, steps: [] });
     } catch (err) { bubble('error', err.message); }
@@ -700,11 +747,18 @@
                                                               : 'That didn’t work. Please try again.');
       const said = notices(await response.text());
       if (!response.redirected) throw new Error(said.join(' ') || 'Not saved. Open the page to see why.');
-      const savedLine = bubble('step', said.join(' ') || 'Saved ✓');
-      savedLine.classList.add('is-changed');
+      const savedLine = stepLine(said.join(' ') || 'Saved', 'changed');
       const ids0 = JSON.parse(card.dataset.ids);
       if (said.undo) addUndo(savedLine, said.undo, 'available', ids0.event_id);
       const keys = card.dataset.keys.split(' ');
+      const level = overlayStack.length ? overlayStack[overlayStack.length - 1] : null;
+      const created = /_form$/.test(card.dataset.component) && !/"(location_id|item_id)"/.test(card.dataset.ids)
+                      && !(submitter && submitter.name === 'save_add');
+      if (level && level.el.contains(card) && created) {  // a new location / item: back to the list, which shows it
+        refreshKeys(keys.length ? keys : [`event:${ids0.event_id}`], card);
+        popOverlay();
+        return;
+      }
       await refresh(card);
       refreshKeys(keys, card);
       const ids = JSON.parse(card.dataset.ids);
@@ -720,7 +774,13 @@
     if (button) { e.preventDefault(); act(card, button.dataset.componentAct); return; }
     const title = e.target.closest('.title-link');
     if (title && card.dataset.detail) { e.preventDefault(); pick(card); return; }
-    if (e.target.closest('a, button, input, select, textarea, label, summary, details, form, [data-copy]')) return;
+    // Full screen: links to events, locations, the schedule and updates open on the canvas, not as pages.
+    const link = e.target.closest('a[href]');
+    if (link && canvasOn() && !link.target && !link.hasAttribute('download') && openUrl(link.getAttribute('href'), link)) {
+      e.preventDefault();
+      return;
+    }
+    if (e.target.closest('a, button, input, select, textarea, label, summary, details, form, [data-copy], .drag-handle')) return;
     if (card.dataset.detail && e.target.closest('.agent__card-body')) pick(card);
   }
   function onCardSubmit(e) {
@@ -737,13 +797,23 @@
   });
 
   // ---- Full screen: the canvas (tabs of what the chat showed) and the detail overlay ---------------------------
-  const KINDS = { event_tile: 'Events', event_overview: 'Overview', event_stats: 'Overview', live_on_phone: 'Overview',
-                  needs_review: 'Overview', event_header: 'Overview', location_row: 'Locations', location_form: 'Locations',
+  // Each tab holds sections, one per component (Updates: the compose form, then every update). A list section
+  // remembers its parent ids ({event_id}) and reloads as a whole when something of that event changes, so new
+  // rows appear and deleted ones go. Toolbars add things (Add location, Add schedule item…) in the overlay.
+  const KINDS = { event_tile: 'Events', event_new_form: 'Events', event_overview: 'Overview', event_stats: 'Overview',
+                  live_on_phone: 'Overview', needs_review: 'Overview', event_header: 'Overview', event_form: 'Overview',
+                  object_history: 'Overview', location_row: 'Locations', location_form: 'Locations',
                   schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Updates',
                   notification_form: 'Updates' };
   const ORDER = ['Events', 'Overview', 'Locations', 'Schedule', 'Updates'];
-  const tabs = new Map();  // label -> {button, pane}
-  let overlayStack = [];   // [{title, items}]
+  const SECTION_ORDER = ['event_tile', 'event_overview', 'notification_form', 'notification_row'];
+  const EMPTY = { location_row: 'No locations yet. Add stages, booths, food, anywhere attendees go.',
+                  schedule_item_row: 'No schedule items yet.', notification_row: 'No updates sent or scheduled yet.',
+                  event_tile: 'No events yet.' };
+  const HEADINGS = { notification_row: 'Sent and scheduled' };
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const tabs = new Map();  // label -> {button, pane, label}
+  let overlayStack = [];   // [{title, items, el}]
   let overlayOpener = null;
 
   function selectTab(label) {
@@ -753,8 +823,16 @@
       t.button.tabIndex = on ? 0 : -1;
       t.pane.hidden = !on;
     });
-    if (overlayStack.length) closeOverlay(false);
+    if (overlayStack.length) closeOverlay(false, true);
   }
+
+  function toolbarFor(label) {
+    const add = (text, name, title) => ({ text, run: (b) => openComponent(name, { event_id: eventId }, title, b) });
+    if (label === 'Locations' && eventId) return [add('Add location', 'location_form', 'New location')];
+    if (label === 'Schedule' && eventId) return [add('Add schedule item', 'schedule_item_form', 'New schedule item')];
+    return (TOOLBARS[label] || []).filter((x) => !x.needsEvent || eventId);
+  }
+  const TOOLBARS = {};  // more toolbar buttons per tab (filled below where their components exist)
 
   function ensureTab(label) {
     if (tabs.has(label)) return tabs.get(label);
@@ -776,6 +854,20 @@
     pane.setAttribute('role', 'tabpanel');
     pane.setAttribute('aria-labelledby', button.id);
     pane.hidden = true;
+    const tools = toolbarFor(label);
+    if (tools.length) {
+      const row = document.createElement('div');
+      row.className = 'canvas__toolbar';
+      tools.forEach((tool) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'button button--primary button--small';
+        b.textContent = `+ ${tool.text}`;
+        b.addEventListener('click', () => tool.run(b));
+        row.appendChild(b);
+      });
+      pane.appendChild(row);
+    }
     const t = { button, pane, label };
     tabs.set(label, t);
     const sorted = [...tabs.values()].sort((a, b) => ORDER.indexOf(a.label) - ORDER.indexOf(b.label));
@@ -791,18 +883,76 @@
     if (next) { selectTab(next.label); next.button.focus(); }
   });
 
-  function toCanvas(name, items) {
-    const t = ensureTab(KINDS[name] || 'More');
-    t.pane.textContent = '';
+  function section(t, name) {
+    let el = t.pane.querySelector(`:scope > [data-section="${name}"]`);
+    if (el) return el;
+    el = document.createElement('section');
+    el.className = 'canvas__section';
+    el.dataset.section = name;
+    const rank = (n) => { const i = SECTION_ORDER.indexOf(n); return i < 0 ? 50 : i; };
+    const after = [...t.pane.querySelectorAll(':scope > [data-section]')].find((s) => rank(s.dataset.section) > rank(name));
+    t.pane.insertBefore(el, after || null);
+    return el;
+  }
+
+  function fillSection(sec, name, items) {
+    sec.textContent = '';
+    if (HEADINGS[name]) {
+      const h = document.createElement('h3');
+      h.className = 'title-4 canvas__heading';
+      h.textContent = HEADINGS[name];
+      sec.appendChild(h);
+    }
     const wrap = document.createElement('div');
     wrap.className = 'canvas__cards' + (name.endsWith('_row') ? ' canvas__cards--rows' : '');
     items.forEach((item) => wrap.appendChild(makeCard(item)));
-    t.pane.appendChild(wrap);
-    selectTab(t.label);
-    return t;
+    if (!items.length) {
+      const p = document.createElement('p');
+      p.className = 'canvas__none muted';
+      p.textContent = EMPTY[name] || 'Nothing here yet.';
+      wrap.appendChild(p);
+    }
+    sec.appendChild(wrap);
+    if (name === 'location_row' && items.length > 1 && window.makeSortable) sortable(wrap, sec);
+    return wrap;
   }
 
-  function makeTile(item, tab, index, onOpen) {
+  // Locations on the canvas can be dragged into the order attendees see (the same endpoint as the page).
+  function sortable(wrap, sec) {
+    wrap.dataset.sortable = '';
+    window.makeSortable(wrap, {
+      handle: '.drag-handle',
+      async onEnd() {
+        const parent = JSON.parse(sec.dataset.parent || '{}');
+        const order = [...wrap.querySelectorAll(':scope > .agent__card')].map((c) => JSON.parse(c.dataset.ids).location_id);
+        try {
+          await post(root.dataset.reorderUrl.replace(/\/0\//, `/${parent.event_id}/`), { order: order.join(',') });
+          stepLine('Saved the new order of the locations', 'changed');
+        } catch (err) { bubble('error', err.message); }
+      },
+    });
+  }
+
+  function toCanvas(name, items, parent, quiet) {
+    const t = ensureTab(KINDS[name] || 'More');
+    const sec = section(t, name);
+    if (parent) sec.dataset.parent = JSON.stringify(parent);
+    else if (name.endsWith('_row') && items[0] && items[0].ids.event_id) sec.dataset.parent = JSON.stringify({ event_id: items[0].ids.event_id });
+    else if (name === 'event_tile') sec.dataset.parent = '{}';
+    sec.dataset.component = name;
+    fillSection(sec, name, items);
+    if (!quiet) selectTab(t.label);
+    return sec;
+  }
+
+  // A whole list section again (new rows appear, deleted ones go): one request instead of one per card.
+  async function reloadSection(sec) {
+    const name = sec.dataset.component;
+    try { fillSection(sec, name, await fetchCards(name, [JSON.parse(sec.dataset.parent || '{}')])); }
+    catch (err) { if (err.status === 404 || /none found/.test(err.message)) fillSection(sec, name, []); }
+  }
+
+  function makeTile(item, sec, index, onOpen) {
     const tile = document.createElement('button');
     tile.type = 'button';
     tile.className = 'agent__tile';
@@ -823,8 +973,9 @@
     tile.append(mark, text, arrow);
     tile.addEventListener('click', () => {
       if (onOpen) { overlayOpener = tile; onOpen(); return; }
-      selectTab(tab.label);
-      const card = tab.pane.querySelectorAll('.agent__card')[index];
+      const t = [...tabs.values()].find((x) => x.pane.contains(sec));
+      if (t) selectTab(t.label);
+      const card = sec.querySelectorAll('.agent__card')[index];
       if (card && card.dataset.detail) openDetail(card, tile);
       else card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
@@ -832,7 +983,6 @@
   }
 
   async function openDetail(card, opener) {
-    const overlay = canvas.querySelector('[data-canvas-overlay]');
     const ids = JSON.parse(card.dataset.ids);
     const keep = card.dataset.detailIds ? JSON.parse(card.dataset.detailIds) : Object.keys(ids);
     const detailIds = Object.fromEntries(Object.entries(ids).filter(([k]) => keep.includes(k)));
@@ -847,24 +997,98 @@
         items = await fetchCards(card.dataset.detail, [detailIds]);
       }
       if (!overlayStack.length) overlayOpener = opener || card;
-      showOverlay(card.dataset.title, items, true);
+      showOverlay(card.dataset.title, await withHistory(card.dataset.detail, detailIds, items), true);
     } catch (err) { bubble('error', err.message); }
     finally { card.classList.remove('is-busy'); }
   }
 
+  // An item's detail also shows its history when there is one (object_history), under the form.
+  async function withHistory(name, ids, items) {
+    if (!HISTORY_OF[name] || !ids[HISTORY_OF[name]]) return items;
+    try { return items.concat(await fetchCards('object_history', [ids])); } catch (e) { return items; }
+  }
+  const HISTORY_OF = {};  // detail component -> the id that has a history (filled where object_history exists)
+
+  // Open any component in the overlay (toolbar buttons, links inside cards, finished background tasks).
+  async function openComponent(name, ids, title, opener) {
+    try {
+      const items = await withHistory(name, ids, await fetchCards(name, [ids]));
+      if (!overlayStack.length) overlayOpener = opener || document.activeElement;
+      showOverlay(title || items[0].label || items[0].title, items, overlayStack.length > 0);
+      return true;
+    } catch (err) { bubble('error', err.message); return false; }
+  }
+
+  // Console pages the canvas can show itself (links in cards, step links, the task tray): everything for events,
+  // locations, the schedule and updates stays in full screen. Anything else (Studio, the AI review, diagnostics…)
+  // opens as a page.
+  const ROUTES = [
+    [/^\/console\/events\/(\d+)\/locations\/new\/$/, (m) => ['location_form', { event_id: +m[1] }, 'New location']],
+    [/^\/console\/events\/(\d+)\/locations\/(\d+)\/$/, (m) => ['location_form', { event_id: +m[1], location_id: +m[2] }]],
+    [/^\/console\/events\/(\d+)\/schedule\/new\/$/, (m) => ['schedule_item_form', { event_id: +m[1] }, 'New schedule item']],
+    [/^\/console\/events\/(\d+)\/schedule\/(\d+)\/$/, (m) => ['schedule_item_form', { event_id: +m[1], item_id: +m[2] }]],
+    [/^\/console\/events\/(\d+)\/$/, (m) => ['event_overview', { event_id: +m[1] }]],
+    [/^\/console\/events\/(\d+)\/(locations|schedule|notifications)\/$/, (m) => ({ tab: { locations: 'Locations', schedule: 'Schedule', notifications: 'Updates' }[m[2]], event: +m[1] })],
+  ];
+  function openUrl(href, opener) {
+    if (!canvasOn() || !href) return false;
+    let url;
+    try { url = new URL(href, location.origin); } catch (e) { return false; }
+    if (url.origin !== location.origin || url.search) return false;
+    for (const [pattern, target] of ROUTES) {
+      const m = url.pathname.match(pattern);
+      if (!m) continue;
+      const to = target(m);
+      if (to.tab) {
+        if (to.event !== eventId || !tabs.has(to.tab)) return false;
+        selectTab(to.tab);
+        return true;
+      }
+      if (to[0] === 'event_overview' && to[1].event_id === eventId && tabs.has('Overview')) { selectTab('Overview'); return true; }
+      openComponent(to[0], to[1], to[2], opener);
+      return true;
+    }
+    return false;
+  }
+  window.attndCanvasOpen = openUrl;  // console.js: links in the task tray open here in full screen
+
   function showOverlay(title, items, push) {
     const overlay = canvas.querySelector('[data-canvas-overlay]');
-    if (!push) overlayStack = [];
-    overlayStack.push({ title, items });
-    renderOverlay();
+    const body = overlay.querySelector('[data-overlay-body]');
+    if (!push) { overlayStack = []; body.textContent = ''; }
+    const level = document.createElement('div');
+    level.className = 'canvas__level';
+    items.forEach((item) => level.appendChild(makeCard(item)));
+    const below = overlayStack[overlayStack.length - 1];
+    overlayStack.push({ title, items, el: level });
+    if (below) below.el.hidden = true;
+    body.appendChild(level);
+    const opening = overlay.hidden;
+    overlay.classList.remove('is-leaving');
     overlay.hidden = false;
+    if (!reduceMotion.matches) animate(opening ? overlay : level, opening ? 'is-entering' : 'is-entering');
+    renderCrumbs();
+    body.scrollTop = 0;
     overlay.querySelector('[data-overlay-title]').focus();
   }
 
-  function renderOverlay() {
-    const overlay = canvas.querySelector('[data-canvas-overlay]');
+  // One CSS animation class at a time; resolves when it ends (at once with reduced motion).
+  function animate(el, cls) {
+    return new Promise((resolve) => {
+      if (reduceMotion.matches) { resolve(); return; }
+      el.classList.remove('is-entering', 'is-leaving', 'is-returning');
+      void el.offsetWidth;  // restart the animation
+      el.classList.add(cls);
+      let done = false;
+      const end = () => { if (done) return; done = true; el.classList.remove(cls); resolve(); };
+      el.addEventListener('animationend', end, { once: true });
+      setTimeout(end, 400);  // in case the animation never runs (hidden, interrupted)
+    });
+  }
+
+  function renderCrumbs() {
+    const overlay = canvas.querySelector('[data-overlay-crumbs]').closest('[data-canvas-overlay]');
     const crumbs = overlay.querySelector('[data-overlay-crumbs]');
-    const body = overlay.querySelector('[data-overlay-body]');
     crumbs.textContent = '';
     const current = [...tabs.values()].find((t) => !t.pane.hidden);
     const trail = [current ? current.label : 'Canvas', ...overlayStack.map((l) => l.title)];
@@ -880,29 +1104,43 @@
         b.type = 'button';
         b.className = 'link-button';
         b.textContent = text;
-        b.addEventListener('click', () => { overlayStack = overlayStack.slice(0, i); if (overlayStack.length) renderOverlay(); else closeOverlay(true); });
+        b.addEventListener('click', () => popTo(i));
         li.appendChild(b);
       }
       crumbs.appendChild(li);
     });
     overlay.querySelector('[data-overlay-title]').textContent = trail[trail.length - 1];
-    body.textContent = '';
-    const level = overlayStack[overlayStack.length - 1];
-    level.items.forEach((item) => body.appendChild(makeCard(item)));
   }
 
-  function closeOverlay(returnFocus) {
+  // Back: the current level slides out to the right with a fade (the open animation in reverse); the level below
+  // comes back. From the first level the whole overlay leaves the same way.
+  let popping = false;
+  async function popTo(depth) {
+    if (popping || !overlayStack.length) return;
+    if (depth <= 0) { await closeOverlay(true); return; }
+    popping = true;
+    const top = overlayStack[overlayStack.length - 1];
+    await animate(top.el, 'is-leaving');
+    overlayStack.splice(depth).forEach((l) => l.el.remove());
+    const back = overlayStack[overlayStack.length - 1];
+    back.el.hidden = false;
+    animate(back.el, 'is-returning');
+    renderCrumbs();
+    canvas.querySelector('[data-overlay-title]').focus();
+    popping = false;
+  }
+  function popOverlay() { popTo(overlayStack.length - 1); }
+
+  async function closeOverlay(returnFocus, instant) {
     const overlay = canvas.querySelector('[data-canvas-overlay]');
+    if (overlay.hidden) return;
+    if (!instant) { popping = true; await animate(overlay, 'is-leaving'); popping = false; }
     overlayStack = [];
     overlay.hidden = true;
+    overlay.classList.remove('is-leaving');
     overlay.querySelector('[data-overlay-body]').textContent = '';
     if (returnFocus && overlayOpener && document.contains(overlayOpener)) overlayOpener.focus();
     overlayOpener = null;
-  }
-  function popOverlay() {
-    overlayStack.pop();
-    if (overlayStack.length) { renderOverlay(); canvas.querySelector('[data-overlay-title]').focus(); }
-    else closeOverlay(true);
   }
   if (canvas) {
     const overlay = canvas.querySelector('[data-canvas-overlay]');
@@ -919,11 +1157,20 @@
     });
   }
 
-  // The event the page is about: its overview, locations, schedule and updates are on the canvas from the start.
+  // The event the page is about: its overview, locations, schedule and updates (the compose form and every update)
+  // are on the canvas from the start; empty lists say so, and the toolbars add to them.
   async function preloadCanvas() {
-    if (!canvasOn() || !eventId) return;
-    for (const name of ['event_overview', 'location_row', 'schedule_item_row', 'notification_row']) {
-      try { toCanvas(name, await fetchCards(name, [{ event_id: eventId }])); } catch (e) { /* none yet */ }
+    if (!canvasOn()) return;
+    if (!eventId) {
+      try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
+      selectTab('Events');
+      return;
+    }
+    const parent = { event_id: eventId };
+    for (const name of ['event_overview', 'location_row', 'schedule_item_row', 'notification_form', 'notification_row']) {
+      let items = [];
+      try { items = await fetchCards(name, [parent]); } catch (e) { /* none yet: the section says so */ }
+      toCanvas(name, items, parent, true);
     }
     selectTab('Overview');
   }

@@ -194,6 +194,27 @@ class PanelEndpointTests(AgentTestCase):
                                  {'step': step.pk, 'hash': pending['hash']}, secure=True)
         self.assertEqual(again.status_code, 409)
 
+    def test_a_gated_button_works_before_anything_was_asked(self):
+        # The full-screen canvas shows the event before the person typed anything: there is no run yet, so the
+        # server starts a quiet one (no model call) to hold the confirmation; the gate is the same.
+        response = self.act(run='')
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertTrue(data['run']['buttons'])
+        self.assertNotEqual(data['run']['id'], self.run.pk)
+        run = AgentRun.objects.get(pk=data['run']['id'])
+        self.assertEqual((run.user, run.status, run.step_count), (self.owner, AgentRun.DONE, 0))
+        self.assertTrue(Location.objects.filter(pk=self.booth.pk).exists())
+        ok = self.client.post(reverse('agent:confirm', args=[run.pk]),
+                              {'step': data['run']['pending']['step'], 'hash': data['run']['pending']['hash']},
+                              secure=True)
+        self.assertEqual(ok.status_code, 200)
+        self.assertFalse(Location.objects.filter(pk=self.booth.pk).exists())
+        # Someone else's event: refused before any run is made.
+        before = AgentRun.objects.count()
+        self.assertEqual(self.act(client=self.other_client, run='').status_code, 404)
+        self.assertEqual(AgentRun.objects.count(), before)
+
     def test_cancel_runs_nothing(self):
         pending = self.act().json()['run']['pending']
         self.client.post(reverse('agent:cancel', args=[self.run.pk]), {'step': pending['step']}, secure=True)

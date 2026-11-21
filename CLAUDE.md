@@ -261,11 +261,13 @@ on Save does; there is no second copy of any business logic.
 - **Run loop** (`agent/loop.py`): `AgentRun` / `AgentStep` / `AgentUsage` / `AgentAttachment`; a daemon thread per
   run (after commit), the panel polls `GET /console/agent/runs/<id>/?after=<seq>` every 1.5 s. Tools: the
   registered writes allowed for the person + `read_page`, `list_pages`, `list_events`, `search_events`, `ask_user`,
-  `finish`; strict schemas, no parallel tool calls, reasoning `AGENT_PLANNING_EFFORT` (first call / after a reply)
-  and `AGENT_STEP_EFFORT` (routine steps). **Provider** (`agent/providers.py`, separate from Studio's
+  `finish`; strict schemas, no parallel tool calls, **one** reasoning effort `AGENT_EFFORT` (default `medium`) for
+  every call of a run and across the conversation (Nov 21, 2026: switching effort between calls missed the prompt
+  cache each time; `tests_claude` checks every request's parameters are identical apart from the messages; the old
+  `AGENT_PLANNING_EFFORT` is still read as a fallback, `AGENT_STEP_EFFORT` is ignored). **Provider** (`agent/providers.py`, separate from Studio's
   `STUDIO_AI_PROVIDER`): `AGENT_PROVIDER` = `anthropic` (default when `ANTHROPIC_API_KEY` is set) → `ClaudeProvider`,
   the official `anthropic` SDK, Messages API with our own tool loop, `AGENT_ANTHROPIC_MODEL` `claude-haiku-5-5`
-  (owner, Nov 21, 2026): no `thinking` (adaptive is the default), `output_config.effort` low/medium, no
+  (owner, Nov 21, 2026): no `thinking` (adaptive is the default), `output_config.effort` = `AGENT_EFFORT`, no
   temperature/top_p/top_k, no prefill, `strict` only on Ask Attnd's own small tools (`STRICT_TOOLS`: found on dev, the API
   takes ≤ 20 strict tools and the ~80 form-derived write schemas are a "compiled grammar too large"; the views validate
   writes; a 400 about strict → resent without, remembered per process), schemas adapted by `claude_schema` (a nullable
@@ -302,7 +304,7 @@ on Save does; there is no second copy of any business logic.
   is an always-ask step that restores those revisions through the History view. It can't unsend updates.
 - **Panel** (`agent/static/agent/agent.js`, `agent.css`): launcher "Ask Attnd", chat with live steps, confirm card,
   `ask_user` replies, Stop, file attach (`/console/agent/attach/`, PDF/images/text ≤ `AGENT_MAX_ATTACHMENT_MB`;
-  file fields take the attachment id), recent requests, Undo all. **One conversation**: new requests are added below the earlier ones (sessionStorage `attnd.agent.chat` = the run ids, `attnd.agent.scroll` = the log's scroll position), so taps, follow-ups and page loads keep the chat; "+" (New chat) starts over; a request picked from the history list starts a conversation with it. "Open page ↗" keeps the chat open at the same place over the new page on wide screens (phones close the sheet). On phones the sheet takes the whole visible height. **Background** (default): when a run that changed
+  file fields take the attachment id), recent requests, Undo all. **One conversation**: new requests are added below the earlier ones (sessionStorage `attnd.agent.chat` = the run ids, `attnd.agent.scroll` = the log's scroll position), so taps, follow-ups and page loads keep the chat; "+" (New chat) starts over; a request picked from the history list starts a conversation with it. Cards have no "Open page ↗" link (removed Nov 21, 2026): tapping a card opens its detail in the chat (or the canvas). On phones the sheet takes the whole visible height. **Background** (default): when a run that changed
   the current event or page ends, the page reloads (or shows "Updated · Refresh" with unsaved input). **Watch**
   (`localStorage` `attnd.agent.watch`, wider screens only): each changed step opens its page. On phones (≤ 600px)
   it is a bottom sheet that always works in the background (no Watch switch; header = title, status, history,
@@ -325,6 +327,30 @@ on Save does; there is no second copy of any business logic.
   interactive components (forms save in place through the views, always-ask buttons still confirm). A pick is
   recorded in the run (`components/pick`) when there is one, else the detail is fetched directly (`detail_ids` on
   each rendered card). Narrower than 1024px the page works like the panel (cards in the chat, no canvas).
+  Each tab holds **sections**, one per component (`data-section`): with `?event=` the canvas preloads Overview,
+  Locations, Schedule and **Updates** (the `notification_form` compose card, then "Sent and scheduled": every
+  `notification_row`; sending and scheduling still go through the confirm), empty lists say so. A list section keeps
+  its parent ids and reloads as a whole when anything of that event changes (one request; new rows appear, deleted
+  ones go). Tab toolbars add things in the overlay (Add location, Add schedule item); Locations can be dragged into
+  order (`reorder_locations`, the page's endpoint). Links inside canvas cards to events, locations, the schedule and
+  updates open on the canvas (`ROUTES` in agent.js, `window.attndCanvasOpen`), not as pages; a new location / item
+  saved in the overlay goes back to the list. **Back animation**: open slides in from the right with a fade; Back
+  (arrow, Esc, a crumb) slides the level out to the right with a fade and brings the one below back, nested levels
+  animate between them, none with `prefers-reduced-motion`. Always-ask buttons work before anything was asked: with
+  no run, `components/act` starts a quiet one (`BUTTONS_GOAL`, status done, no model call; `run_json.buttons`, its
+  goal isn't drawn as a message) to hold the confirmation.
+- **Rows that open for editing** (`location_row`, `schedule_item_row`, pages and chat alike): the whole row is the
+  tap target (the title link stretches over it, `row-link__target::after`; buttons and the drag handle sit above), a
+  chevron with "Edit" on hover/focus (always on touch), hover / focus / pressed states, and an accessible name ("Edit
+  Allyn Fincher at The Nobleman Hotel"). Narrow containers (container queries on the row's own width) put the day and
+  time on their own line above the title and wrap the side figures, so nothing overlaps.
+- **Status marks** (owner, Nov 21, 2026: no rounded boxes with a coloured left border anywhere, a guard test checks
+  the stylesheets): chat steps start with a small mark in a tinted circle (✓ changed, + added, × failed, • looked;
+  `.status-mark--success/added/danger/warning/info`), failed and changed lines are lightly tinted; notices get the same
+  leading mark; `panel--accent` / `panel--warning` are tinted cards; urgent rows are a tinted row with the Urgent badge.
+- **Send animation**: Enter / Send morphs the typed text into the new bubble: FLIP from the textarea's text position
+  to the bubble's final spot (~320 ms, ease-out, Web Animations API), the composer clears at the same time; a failed
+  send puts the text back. Reduced motion: a plain fade. A reply drawn this way isn't drawn again when its step comes.
 - **Follow-up chips**: `finish(summary, suggest)` (2–4 short requests, `AgentRun.suggestions`); without them
   `views.suggestions` derives them from the last component shown (`FOLLOW_UPS`). `run_json.suggestions` (done runs
   only) → chips above the composer (`data-agent-suggest`); tapping one sends it.
@@ -342,7 +368,7 @@ on Save does; there is no second copy of any business logic.
   `read_page` stays the fallback for pages without a component. The next request's context gets the components of
   the earlier runs: the latest 3 with their JSON, older ones by name and ids (`get_component` re-fetches). The panel
   fetches the HTML from `GET /console/agent/components/?component=…&items=[…]` (our templates, rendered as the person,
-  surface `chat`) and inserts it as a card with "Open page ↗". **Tap** on a card's body (not its buttons, links or
+  surface `chat`) and inserts it as a card. **Tap** on a card's body (not its buttons, links or
   form) → `POST components/pick/` shows its `detail` at once (no model call) and records a picked step (told to the
   model with the next message or reply). **Buttons and forms** in a card post to the **same views** with fetch
   (CSRF, header `X-Attnd-Component`): success → the card re-renders, validation errors → the view's page is answered
@@ -619,7 +645,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `AGENT_MODEL` / `AGENT_FALLBACK_MODEL` | No | Ask Attnd (console agent) on OpenAI, default `gpt-5-mini` (the cheaper model, owner Nov 21, 2026) / `gpt-5` (fallback only when the model is unavailable) |
 | `AGENT_DAILY_SPEND_CAP_USD` | No | Ask Attnd AI spend per person per UTC day, default `2` |
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
-| `AGENT_PLANNING_EFFORT` / `AGENT_STEP_EFFORT` | No | Reasoning effort for the first call of a run (and after a reply) / routine steps, default `medium` / `low` |
+| `AGENT_EFFORT` | No | Ask Attnd's reasoning effort, one for every call of a run and the whole conversation (so the prompt cache holds), default `medium`. Replaces `AGENT_PLANNING_EFFORT` (still read as a fallback) and `AGENT_STEP_EFFORT` (ignored) |
 | `AGENT_MAX_ATTACHMENT_MB` | No | Files attached in the Ask Attnd chat, default `15` |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |

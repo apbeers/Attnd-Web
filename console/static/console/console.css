@@ -266,8 +266,8 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .panel--roomy { padding: var(--space-6); }
 .panel--flush { padding: 0; overflow: hidden; }
 .panel--empty { padding: var(--space-7) var(--space-5); text-align: center; color: var(--color-muted); }
-.panel--accent, .panel--warning { border-left: 4px solid var(--color-brand-mid); }
-.panel--warning { border-left-color: var(--color-warning); }
+.panel--accent { background: var(--color-brand-soft); border-color: var(--color-brand-line); }
+.panel--warning { background: var(--color-warning-soft); border-color: var(--color-warning-line); }
 .panel--danger { border-color: var(--color-danger-line); }
 .panel--link { display: block; height: 100%; color: inherit; text-decoration: none; transition: box-shadow .15s, transform .15s; }
 .panel--link:hover { color: inherit; box-shadow: var(--shadow-hover); transform: translateY(-1px); }
@@ -287,7 +287,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .list--inset > li { padding-inline: 0; }
 .list--boxed { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden;
   box-shadow: var(--shadow-sm); }
-.list > li.is-urgent { background: var(--color-danger-soft); box-shadow: inset 3px 0 0 var(--color-danger); }
+.list > li.is-urgent { background: var(--color-danger-soft); }
 .hearts { display: inline-flex; align-items: center; gap: var(--space-1); }
 .list__empty { padding: var(--space-7) 1.25rem !important; text-align: center; color: var(--color-muted); }
 
@@ -308,6 +308,23 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
   color: inherit; opacity: .6; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .notice__close:hover { opacity: 1; }
 .notice > :last-child { margin-bottom: 0; }
+/* Status marks (owner, Nov 21, 2026: no coloured left-border brackets anywhere): a small leading icon in a tinted
+   circle, the same in notices, the Ask Attnd chat's steps and the task tray (.status-mark, ✓ / + / × / !). */
+.status-mark { flex: none; display: inline-grid; place-items: center; width: 1.35rem; height: 1.35rem; font-size: .78rem;
+  font-weight: 800; line-height: 1; border-radius: 50%; color: var(--color-muted); background: var(--color-subtle); }
+.status-mark--success { color: var(--color-success-text); background: var(--color-success-line); }
+.status-mark--added { color: var(--color-brand-text); background: var(--color-brand-line); }
+.status-mark--danger { color: var(--color-danger-text); background: var(--color-danger-line); }
+.status-mark--warning { color: var(--color-warning-text); background: var(--color-warning-line); }
+.status-mark--info { color: var(--color-info-text, var(--color-info)); background: var(--color-info-line); }
+.notice:is(.notice--success, .notice--error, .notice--warning, .notice--info) { padding-left: 3.1rem; }
+.notice:is(.notice--success, .notice--error, .notice--warning, .notice--info)::before { position: absolute; left: 1.05rem; top: .8rem;
+  display: grid; place-items: center; width: 1.35rem; height: 1.35rem; font-size: .78rem; font-weight: 800; line-height: 1; border-radius: 50%; }
+.notice--success::before { content: '✓'; color: var(--color-success-text); background: var(--color-success-line); }
+.notice--error::before { content: '×'; font-size: 1rem; color: var(--color-danger-text); background: var(--color-danger-line); }
+.notice--warning::before { content: '!'; color: var(--color-warning-text); background: var(--color-warning-line); }
+.notice--info::before { content: 'i'; font-family: Georgia, serif; color: var(--color-info-text, var(--color-info)); background: var(--color-info-line); }
+.notice--compact::before { top: .45rem; }
 
 /* Badges: small status labels (pills) */
 .badge { display: inline-flex; align-items: center; gap: .3em; padding: .35em .7em; font-size: .72em; font-weight: 700; line-height: 1;
@@ -432,7 +449,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 /* Live dot + "Happening now" */
 .badge--live { background: var(--color-brand); color: var(--color-on-brand); }
 .live-dot { width: .5em; height: .5em; border-radius: 50%; background: #fff; animation: live-pulse 1.4s ease-in-out infinite; }
-.live-panel { border-top: 4px solid var(--color-brand-mid); text-align: center; }
+.live-panel { text-align: center; }
 .live-panel img { background: #fff; padding: .5rem; border-radius: var(--radius); }
 .live-panel ol { text-align: left; }
 .live-panel img { display: block; margin: 0 auto; max-width: 180px; }
@@ -440,7 +457,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
   font-weight: 600; color: var(--color-on-brand); background: var(--color-brand); border-radius: var(--radius-pill); }
 
 /* Schedule list */
-.schedule-time { width: 6.5rem; flex-shrink: 0; }
+.schedule-time { flex: 0 0 auto; min-width: 6.5rem; }
 
 /* AI change review */
 .diff-old { background: var(--color-danger-soft); text-decoration: line-through; color: var(--color-danger-text); padding: 0 .25rem; border-radius: .25rem; }
@@ -570,7 +587,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .diag-table tbody tr:hover { background: var(--color-subtle); }
 .diag-table .diag-msg { overflow-wrap: anywhere; }
 .diag-row--server { background: var(--color-info-soft); }
-.diag-row--linked { box-shadow: inset 3px 0 0 var(--color-info); }
+.diag-row--linked { background: var(--color-info-soft); }
 .diag-row--selected, .diag-table tbody tr.diag-row--selected:hover { background: var(--color-brand-soft); }
 .diag-detail td { background: var(--color-subtle); cursor: default; }
 .diag-detail pre { margin: 0; white-space: pre-wrap; font: var(--text-xs)/1.5 var(--font-mono); }
@@ -609,6 +626,46 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
   .component__grid > :is(.component--event_header, .component--needs_review) { grid-column: 1 / -1; }
   .component__grid > .component--live_on_phone { grid-column: 2; grid-row: 3; }
 }
+/* Rows that open their detail for editing (location_row, schedule_item_row): the whole row is the tap target (the
+   title link stretches over it, buttons and the drag handle sit above), with a chevron + "Edit", hover, focus and
+   pressed states. The li is the container; its inner row decides the layout from the row's own width. */
+.row-link { position: relative; transition: background-color .15s ease; }
+.row-link__inner { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.row-link__text { min-width: 0; }
+.row-link__target { overflow-wrap: anywhere; }
+.row-link__target::after { content: ''; position: absolute; inset: 0; z-index: 0; border-radius: inherit; cursor: pointer; }
+.row-link__target:focus-visible { outline: none; }
+.row-link__target:focus-visible::after { outline: 3px solid var(--color-focus); outline-offset: -3px; }
+.row-link__above, .row-link .drag-handle { position: relative; z-index: 1; }
+.row-link__side { display: flex; align-items: center; gap: var(--space-3); flex: none; }
+.row-link__chevron { display: inline-flex; align-items: center; gap: .15rem; font-size: var(--text-sm); font-weight: 600;
+  color: var(--color-muted); transition: color .15s ease, transform .15s ease; }
+.row-link__edit { opacity: 0; transition: opacity .15s ease; }
+.row-link:hover { background: var(--color-brand-soft); }
+.row-link:hover .row-link__chevron, .row-link:focus-within .row-link__chevron { color: var(--color-brand-text); transform: translateX(2px); }
+.row-link:hover .row-link__edit, .row-link:focus-within .row-link__edit { opacity: 1; }
+.row-link:active { background: var(--color-brand-line); }
+.row-link.is-hidden .row-link__target { color: var(--color-muted); }
+.row-link .drag-handle { display: none; }  /* only where the list can be reordered: */
+#location-list .row-link .drag-handle, [data-sortable] .row-link .drag-handle { display: inline-block; }
+.schedule-time .component__day { display: block; }
+/* Narrow rows (the chat, the phone sheet, a narrow canvas): the time goes on its own line above the title, and the
+   side figures wrap under the text, so nothing overlaps. */
+@container component (max-width: 34rem) {
+  .component--schedule_item_row .row-link__inner { flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+  .component--schedule_item_row .schedule-time { flex-basis: 100%; min-width: 0; }
+  .component--schedule_item_row .schedule-time .component__day { display: inline; }
+  .component--schedule_item_row .schedule-time .component__day::after { content: ' · '; }
+  .component--schedule_item_row .row-link__text { flex: 1 1 0; }
+}
+@container component (max-width: 26rem) {
+  .component--location_row .row-link__inner { flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+  .component--location_row .row-link__text { flex: 1 1 calc(100% - 5rem); }
+  .component--location_row .row-link__side { flex-basis: 100%; justify-content: flex-start; padding-left: calc(36px + var(--space-3)); }
+  .component--location_row .row-link__side .row-link__chevron { margin-left: auto; }
+}
+@media (hover: none) { .row-link__edit { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .row-link, .row-link__chevron, .row-link__edit { transition: none; } }
 /* Very narrow containers (a 320px phone, a split screen): rows stack their side figures under the text. */
 @container component (max-width: 18rem) {
   .component .thumb { width: 36px; height: 36px; }

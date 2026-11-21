@@ -107,6 +107,32 @@ class RegistryTests(ComponentTestCase):
                 self.assertNotIn('{#', html)
                 self.assertNotIn('{%', html)
 
+    def test_rows_open_their_detail_for_editing(self):
+        # The whole row is the tap target (a stretched title link) with a chevron + "Edit" and a name that says so.
+        for name, label in (('schedule_item_row', 'Edit Prairie Lights at Main Stage'),
+                            ('location_row', 'Edit Main Stage (Stage)')):
+            data = C.load(self.owner, name, self.ids[name])
+            for surface in ('page', 'chat'):
+                html = C.render(name, data, self.request(), surface=surface)
+                self.assertIn(f'aria-label="{label}"', html, (name, surface))
+                self.assertIn('row-link__target', html)
+                self.assertIn('row-link__chevron', html)
+        css = open('console/static/console/console.css').read()
+        self.assertIn('.row-link__target::after', css)
+        self.assertIn('cursor: pointer', css)
+        # Narrow rows put the day and time on their own line instead of a fixed column the text runs into.
+        self.assertIn('@container component (max-width: 34rem)', css)
+        self.assertNotIn('.schedule-time { width: 6.5rem', css)
+
+    def test_no_coloured_left_border_accents(self):
+        # Owner, Nov 21, 2026: no rounded boxes with a coloured left border; status is a small leading mark.
+        import re
+        for path in ('console/static/console/console.css', 'agent/static/agent/agent.css', 'home/static/home/site.css'):
+            css = open(path).read()
+            self.assertIsNone(re.search(r'border-left(-color)?\s*:', css), path)
+            self.assertIsNone(re.search(r'inset\s+\d+px\s+0\s+0', css), path)
+        self.assertIn('.status-mark--success', open('console/static/console/console.css').read())
+
     def test_list_components_expand_from_their_parent(self):
         Location.objects.create(event=self.event, name='Taco Booth', sort_order=2)
         rows = C.instances(self.owner, 'location_row', [{'event_id': self.event.pk}])
