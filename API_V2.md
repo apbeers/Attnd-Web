@@ -583,7 +583,7 @@ Catalogue version 1:
 | `event_info` | `header` (part `website`), `about`, `faq`, `amenities`, `getting_there`, `accessibility`, `policies`, `weather_plan`, `links` |
 | `options_event` | `header`, `website`, `event_info_link` |
 | `map_overlay` | `now_playing`, `selected_place` |
-| `home` | `header`, `urgent`, `countdown`, `now_next`, `plan_today`, `liked`, `whats_on`, `map`, `places`, `updates`, `faq`, `getting_there`, `about`, `links`, `flyer`, `website` |
+| `home` | `header`, `urgent`, `countdown`, `now_next`, `plan_today`, `liked`, `whats_on`, `map`, `places`, `updates`, `faq`, `getting_there`, `about`, `links`, `flyer`, `website` (the automatic Home layout leaves `now_next` out since Nov 21, 2026: `whats_on` covers it; organizers can still add it) |
 
 Client rules: drop unknown screens, types, parts and conditions; a type appears once per screen (the first); at most
 24 sections per screen; a screen with nothing valid left, or no `layout`, uses the built-in layout; screenshot modes

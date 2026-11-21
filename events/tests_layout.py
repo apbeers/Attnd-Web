@@ -141,9 +141,9 @@ class AutomaticLayoutTests(TestCase):
         ScheduledItem.objects.create(event=self.event, user=self.user, location=self.stage, name='Band',
                                      start_time=self.start)
         self.assertEqual(types(self.auto('festival')['home']['sections']),
-                         ['header', 'urgent', 'countdown', 'now_next', 'plan_today', 'liked', 'whats_on', 'map'])
+                         ['header', 'urgent', 'countdown', 'plan_today', 'liked', 'whats_on', 'map'])
         self.assertEqual(types(self.auto('standard')['home']['sections']),
-                         ['header', 'urgent', 'countdown', 'now_next', 'plan_today', 'liked', 'map', 'whats_on',
+                         ['header', 'urgent', 'countdown', 'plan_today', 'liked', 'map', 'whats_on',
                           'places'])
         intimate = self.auto('intimate')['home']['sections']
         self.assertEqual(types(intimate), ['header', 'urgent', 'countdown', 'whats_on', 'places'])

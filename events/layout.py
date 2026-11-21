@@ -149,15 +149,15 @@ DEFAULTS = {
                    _s('accessibility'), _s('policies'), _s('weather_plan'), _s('links')],
     'options_event': [_s('header'), _s('website'), _s('event_info_link')],
     'map_overlay': [_s('now_playing'), _s('selected_place')],
-    'home': [_s('header'), _s('urgent'), _s('countdown'), _s('now_next', when=['not:after_end']), _s('plan_today'),
+    'home': [_s('header'), _s('urgent'), _s('countdown'), _s('plan_today'),
              _s('liked'), _s('map'), _s('updates', limit=3), _s('faq', limit=3), _s('getting_there'), _s('about')],
 }
 
 HOME_BY_PRESET = {
-    'festival': [_s('header'), _s('urgent'), _s('countdown'), _s('now_next', when=['not:after_end']),
+    'festival': [_s('header'), _s('urgent'), _s('countdown'),
                  _s('plan_today'), _s('liked'), _s('whats_on', limit=6), _s('map'), _s('updates', limit=3),
                  _s('faq', limit=3), _s('getting_there')],
-    'standard': [_s('header'), _s('urgent'), _s('countdown'), _s('now_next', when=['not:after_end']),
+    'standard': [_s('header'), _s('urgent'), _s('countdown'),
                  _s('plan_today'), _s('liked'), _s('map'), _s('whats_on', limit=6), _s('places', limit=8),
                  _s('updates', limit=3), _s('faq', limit=3), _s('getting_there'), _s('about')],
     'intimate': [_s('header'), _s('urgent'), _s('countdown'), _s('whats_on', limit=12, title='Agenda'),
