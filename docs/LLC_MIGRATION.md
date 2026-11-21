@@ -59,7 +59,7 @@ sales tax on the $299/$499 tiers and ticketing).
 | OpenAI (server key) | Create an LLC organization, new API key, billing on the LLC card; turn off data sharing/training for customer data | Rotate `OPENAI_API_KEY` on both apps |
 | Anthropic (`ANTHROPIC_API_KEY`, two keys: attnd-dev and attnd-web, set Nov 21, 2026; Ask Attnd on Claude Haiku 5.5, Studio on Claude Sonnet 5.5) | Same as OpenAI: an LLC organization in the Anthropic Console, new key, billing and a monthly spend limit on the LLC card, no training on customer data | Rotate `ANTHROPIC_API_KEY` on both apps |
 | Stripe (tickets, tiers; not set up yet) | **Create it in the LLC's name from day one** (EIN, LLC bank account), Connect platform profile | Never on a personal account |
-| Studio sites domain (to buy) | Buy it in the LLC's name/registrar account | |
+| Studio sites domain (to buy, e.g. `attnd.site`; sites run on the herokuapp.com hostname until then) | Buy it in the LLC's name/registrar account, then set `SITES_HOST` on dev and production | |
 | Claude Code cloud environment / GitHub app | Re-authorize under the LLC GitHub org; environment secrets re-created | |
 | Store listings, support/marketing/privacy URLs, review contact | Point to `@attnd.app` addresses and the LLC | `store/en-US/*` in both app repos |
 

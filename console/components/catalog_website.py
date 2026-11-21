@@ -27,19 +27,21 @@ def _site(event):
     return publishing.ensure_site(event) if event.plan == event.PLAN_STUDIO else None
 
 
-class DesignForm(forms.Form):
-    instruction = forms.CharField(label='What should change on the website?', max_length=8000,
-                                  widget=forms.Textarea(attrs={'rows': 2, 'placeholder': 'Make the hero bigger, add a sponsors page…'}))
+class StartForm(forms.Form):
+    """No fields: the empty state's buttons are background forms (the task appears as a live card in the chat)."""
 
 
-class BringInForm(forms.Form):
-    url = forms.URLField(label='Your current website', max_length=2000, assume_scheme='https')
-    note = forms.CharField(label='Notes for the AI (optional)', max_length=2000, required=False)
+def _start_form(action, label, style, busy):
+    data = form_json(StartForm(), [], action=action, submit=[{'label': label, 'style': style}])
+    data['background'] = busy
+    data['no_ai'] = True
+    return data
 
 
 @component('website_overview', 'Website', "The event's Attnd Studio website: the live preview of the draft, which "
-           'version is live, its address, Publish / Unpublish (always ask), Bring an existing site in, and a box to '
-           'ask for a change (design_website). Without Studio on the event: Use Studio for this event.',
+           'version is live, its address once published, Publish / Unpublish (always ask). Without a built version: '
+           '"No website yet" with Build from your current website / Start from scratch. Changes are asked for in the '
+           'chat (design_website). Without Studio on the event: Use Studio for this event.',
            actions=(('enable_studio', 'Use Studio for this event'), ('publish_website', 'Publish the draft'),
                     ('unpublish_website', 'Take the site offline')),
            audience='studio', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
@@ -63,22 +65,35 @@ def website_overview(user, event_id=None, event=None):
         if live:
             actions.append({'name': 'unpublish_website', 'style': 'outline'})
     active = site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).first()
-    design = form_json(DesignForm(), ['instruction'], action=reverse('studio:design', args=[event.pk]),
-                       submit=[{'label': 'Ask Studio', 'style': 'primary'}])
-    design['background'] = 'Working on the website…'
-    design['no_ai'] = True
-    bring = None
-    if not (draft and draft.files):
-        bring = form_json(BringInForm(initial={'url': (event.source_urls or [''])[0]}), ['url', 'note'],
-                          action=reverse('studio:import', args=[event.pk]),
-                          submit=[{'label': 'Bring it into Studio', 'style': 'outline'}])
-        bring['background'] = 'Bringing your website in…'
-        bring['no_ai'] = True
-    return {**base, 'actions': actions, 'preview': hosting.preview_url(site) if hosting.sites_origin() and draft else '',
-            'draft': draft.number if draft else None, 'live': live.number if live else None,
-            'public_url': site.public_url() if live and not site.suspended else '', 'address': site.public_url(),
-            'suspended': site.suspended, 'pages': draft.pages if draft else [],
-            'working': run_task(active) if active else None, 'design': design, 'bring': bring}
+    built = bool(draft and 'index.html' in (draft.files or {}))
+    starts = []
+    if not built and not active:
+        source = website_source(event)
+        if source:
+            starts.append(_start_form(reverse('studio:import', args=[event.pk]), 'Build from your current website',
+                                      'primary', 'Building from your website…'))
+            starts[-1]['hidden'] = {'url': source}
+        starts.append(_start_form(reverse('studio:start', args=[event.pk]), 'Start from scratch',
+                                  'outline' if source else 'primary', 'Starting your website…'))
+    live_shown = bool(live and not site.suspended)
+    return {**base, 'actions': actions if built else [a for a in actions if a['name'] != 'publish_website'],
+            'built': built, 'source': website_source(event) if not built else '',
+            # A preview only of a version with a home page (an empty draft would answer "Not found").
+            'preview': hosting.preview_url(site) if hosting.sites_origin() and built else '',
+            'draft': draft.number if draft and built else None, 'live': live.number if live else None,
+            # The address only once published (never the raw sites host of a draft).
+            'public_url': site.public_url() if live_shown else '',
+            'suspended': site.suspended, 'pages': draft.pages if built else [],
+            'working': run_task(active) if active else None, 'starts': starts}
+
+
+def website_source(event):
+    """The event's current website to build from (https only), or ''."""
+    from events.context import https_url
+    for url in (event.source_urls or []):
+        if https_url(url) or (isinstance(url, str) and url.startswith('http://')):
+            return url
+    return ''
 
 
 @component('website_versions', 'Website versions', "Every version of the event's website (newest first, which one is "

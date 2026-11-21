@@ -4,19 +4,25 @@
     <p>Attnd Studio designs and hosts a website for this event, kept in sync with the app. Ask for any change in the chat.</p>
     {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>
     {% else %}<p class="small muted">The owner or an event admin can switch this event to Studio.</p>{% endif %}
+  {% elif not d.built %}
+    {% if d.working %}<p class="small" data-website-working="{{ d.working.id }}"><span class="spinner" aria-hidden="true"></span> {{ d.working.title }}: {{ d.working.progress }}</p>{% endif %}
+    <div class="website-empty">
+      <span class="website-empty__icon" aria-hidden="true">{% icon "globe" "icon--xl" %}</span>
+      <p class="strong">No website yet</p>
+      {% if d.starts %}<p class="small muted">{% if d.source %}Build it from <span class="mono">{{ d.source|truncatechars:60 }}</span>, or start from the event's own details.{% else %}Studio builds a first version from the event's own details. Ask for any change in the chat afterwards.{% endif %}</p>
+      <div class="cluster">{% for f in d.starts %}{% include 'components/_form.html' with form=f %}{% endfor %}</div>{% endif %}
+    </div>
   {% else %}
     <p class="small">
       {% if d.suspended %}<span class="badge badge--danger">Taken down by Attnd</span>
       {% elif d.public_url %}<span class="badge badge--success">Live</span> version {{ d.live }} at <a href="{{ d.public_url }}" target="_blank" rel="noopener">{{ d.public_url }}</a>
-      {% else %}<span class="badge badge--neutral">Not published</span> · it will be at <span class="mono">{{ d.address }}</span>{% endif %}
+      {% else %}<span class="badge badge--neutral">Not published</span>{% endif %}
       {% if d.draft %} · draft: version {{ d.draft }}{% if d.pages %} ({{ d.pages|length }} page{{ d.pages|length|pluralize }}){% endif %}{% endif %}
     </p>
     {% if d.working %}<p class="small" data-website-working="{{ d.working.id }}"><span class="spinner" aria-hidden="true"></span> {{ d.working.title }}: {{ d.working.progress }}</p>{% endif %}
     {% if d.preview %}<div class="website-preview"><iframe src="{{ d.preview }}" title="Preview of the draft website" sandbox="allow-scripts allow-forms allow-popups" referrerpolicy="no-referrer" loading="lazy"></iframe></div>
-    {% elif d.draft %}<p class="small muted">The preview needs the sites address (SITES_HOST).</p>
-    {% else %}<p class="small muted">No website yet. Ask for one below, or bring your current site in.</p>{% endif %}
+    {% else %}<p class="small muted">The preview needs the sites address (SITES_HOST).</p>{% endif %}
     {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
-    {% include 'components/_form.html' with form=d.design %}
-    {% if d.bring %}<details class="small"><summary>Bring your current website into Studio</summary>{% include 'components/_form.html' with form=d.bring %}</details>{% endif %}
+    <p class="small muted">{% icon "stars" %} Ask for changes in the chat: “make the hero bigger”, “add a sponsors page”.</p>
   {% endif %}
 </div>

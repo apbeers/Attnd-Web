@@ -152,7 +152,10 @@ class AccessTests(StudioTestCase):
         self.assertEqual(event.plan, Event.PLAN_STUDIO)
         self.assertGreater(event.content_version, version)
         self.assertTrue(Site.objects.filter(event=event).exists())
-        self.assertContains(self.client.get(url), 'What should change on the website?')
+        page = self.client.get(url)
+        self.assertContains(page, 'No website yet')  # a new site has no built version yet: the empty state
+        self.assertContains(page, 'Start from scratch')
+        self.assertNotContains(page, '<iframe')
 
     def test_contributor_cannot_switch_or_publish(self):
         event = Event.objects.create(name='Market', event_code='MKT2', user=self.owner, start_time=timezone.now())
@@ -625,6 +628,53 @@ class ReportTests(StudioTestCase):
         url = f'/{self.site.slug}/_attnd/report'
         self.sites(url, 'post', data={'reason': 'spam'})
         self.assertEqual(self.sites(url, 'post', data={'reason': 'spam'}).status_code, 429)
+
+
+class WebsiteTabTests(StudioTestCase):
+    """Owner feedback on the Website tab (Nov 21, 2026): no design box of its own (the chat is the one place to ask),
+    an empty state with Build from your current website / Start from scratch, a preview that works, and no address
+    while the site isn't published."""
+
+    def test_the_preview_url_answers_200_for_a_built_draft(self):
+        from console import components as C
+        data = C.load(self.owner, 'website_overview', {'event_id': self.event.pk})
+        self.assertTrue(data['built'])
+        path = data['preview'].split(SITES, 1)[1]
+        response = self.sites(path)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Fair')
+        self.assertEqual(data['public_url'], '')  # not published: no address shown
+        page = self.client.get(reverse('studio:editor', args=[self.event.pk]))
+        self.assertNotContains(page, 'What should change on the website?')
+        self.assertNotContains(page, 'Bring your current website into Studio')
+        self.assertNotContains(page, SITES + '/' + self.site.slug + '/<')  # no raw address before publishing
+        self.publish()
+        self.assertTrue(C.load(self.owner, 'website_overview', {'event_id': self.event.pk})['public_url'])
+
+    def test_an_empty_draft_shows_the_placeholder_not_an_iframe(self):
+        from console import components as C
+        publishing.new_version(self.site, self.owner, files={}, summary='Empty')
+        self.event.source_urls = ['https://www.artsfair.example/']
+        self.event.save()
+        data = C.load(self.owner, 'website_overview', {'event_id': self.event.pk})
+        self.assertFalse(data['built'])
+        self.assertEqual(data['preview'], '')
+        labels = [f['submit'][0]['label'] for f in data['starts']]
+        self.assertEqual(labels, ['Build from your current website', 'Start from scratch'])
+        page = self.client.get(reverse('studio:editor', args=[self.event.pk]))
+        self.assertContains(page, 'No website yet')
+        self.assertNotContains(page, '<iframe')
+        # Start from scratch: a design run from the event's own details, as a task (the chat's live card).
+        with self.captureOnCommitCallbacks(execute=False):
+            response = self.client.post(reverse('studio:start', args=[self.event.pk]), HTTP_ACCEPT='application/json')
+        self.assertEqual(response.status_code, 202)
+        run = StudioRun.objects.get()
+        self.assertIn(self.event.name, run.prompt)
+        self.assertEqual(response.json()['task']['id'], f'studio-{run.pk}')
+        # While it works the empty state shows the progress, not the buttons.
+        self.assertEqual(C.load(self.owner, 'website_overview', {'event_id': self.event.pk})['starts'], [])
+        from agent import registry as agent_registry
+        self.assertIn('start_website_from_scratch', agent_registry.writes_for(self.owner))
 
 
 class DesignWebsiteTests(StudioTestCase):

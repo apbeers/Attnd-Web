@@ -300,6 +300,12 @@
     } catch (e) { /* try again on the next tick */ }
     if (cards.some((c) => !c.dataset.final)) taskTimer = setTimeout(pollTasks, document.hidden ? 8000 : 2000);
   }
+  // A background form in a card (the Website tab's Build buttons…) started a task: its live card in the chat.
+  document.addEventListener('attnd:task-started', (e) => {
+    if (!e.detail?.inChat || !e.detail.task) return;
+    const card = taskCard({ task: e.detail.task.id, text: e.detail.task.title });
+    drawTask(card, e.detail.task);
+  });
   log.addEventListener('click', async (e) => {
     const retry = e.target.closest('[data-task-retry]');
     if (retry) {

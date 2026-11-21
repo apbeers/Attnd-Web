@@ -958,7 +958,10 @@
         if (!response.ok || !data.task) throw new Error(data.error || 'Something went wrong. Please try again.');
         if (button) buttonsByTask[data.task.id] = button;
         render([data.task, ...lastTasks.filter((t) => t.id !== data.task.id)]);
-        tray.classList.add('is-open');
+        // Inside an Ask Attnd card (chat or canvas) the chat draws the live task card; elsewhere the tray opens.
+        const inChat = form.closest('.agent__card, [data-canvas]');
+        document.dispatchEvent(new CustomEvent('attnd:task-started', { detail: { task: data.task, inChat: !!inChat } }));
+        if (!inChat || !document.querySelector('[data-agent-log]')) tray.classList.add('is-open');
         if (form.dataset.afterStart === 'reset') form.reset();
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
         watch();

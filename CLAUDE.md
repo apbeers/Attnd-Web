@@ -686,9 +686,13 @@ hosts the site.
   `delete_studio_form_entry` (POST `entry`), plus the existing code / settings / flyer / undo actions. The console task
   feed lists Studio runs as tasks `studio-<id>` (`_studio_tasks`, `?ids=`); Retry = `studio:run_retry` (JSON task).
   **Components** (`console/components/catalog_website.py`, audience `studio` = `studio.access.has_studio_access`):
-  `website_overview` (sandboxed signed preview iframe of the draft, live / draft versions, address, Publish /
-  Unpublish, "What should change on the website?" (a background form to `design`), Bring your current site in, or
-  Use Studio for this event), `website_versions` (Preview ↗, Restore as the draft, Publish this one), `website_forms`
+  `website_overview` (sandboxed signed preview iframe of the draft only when the draft has a home page, live / draft
+  versions, the address only once published (never the raw sites host of a draft), Publish / Unpublish; no design box:
+  changes are asked for in the chat; without a built version a **"No website yet"** empty state with **Build from your
+  current website** (`bring_into_studio` with the event's source URL, shown only when it has one) and **Start from
+  scratch** (`start_website_from_scratch`, `studio:start`: `design` with `studio.views.starter_instruction(event)`), both
+  background forms whose task becomes the chat's live card (console.js `attnd:task-started` → agent.js `taskCard`); the
+  tab refreshes when the first version lands; or Use Studio for this event), `website_versions` (Preview ↗, Restore as the draft, Publish this one), `website_forms`
   (entries per form, CSV, Delete), `website_assets` (files, Delete). They make the canvas **Website** tab (Studio users
   only; `?tab=website` opens on it) and the **Website** page (`studio:editor`, sidenav "Website").
 - **Access** (`studio/access.py`, Nov 19, 2026: admins only): staff and superusers, plus emails in `STUDIO_BETA_EMAILS`

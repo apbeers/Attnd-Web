@@ -45,7 +45,8 @@ Do these steps once, in order. Each step says which values go where. For any sin
 - [x] App Review sample events: FWFM2026, ATIS2026 and DACN2026 on production are **kept on purpose**: App Review uses
       them (owner, Nov 19, 2026). The release phase's `seed_test_data` keeps them current; don't delete them or the
       command.
-- [ ] Attnd Studio (step 15): buy a separate domain for hosted event sites (not a subdomain of attnd.app), then
+- [ ] Attnd Studio (step 15): buy a separate domain for Studio sites (e.g. `attnd.site`; owner, Nov 21, 2026: until
+      then sites stay on the herokuapp.com hostname), then
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
       with a go-ahead; until then sites are served on the Heroku hostnames. (`ANTHROPIC_API_KEY`: done, step 18.)
 - [x] Tickets prep (Wallet passes, not payments; nothing built yet; done Nov 15, 2026): Apple Pass Type ID `pass.com.arcu.attnd.tickets`

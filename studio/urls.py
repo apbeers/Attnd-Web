@@ -7,6 +7,7 @@ urlpatterns = [
     path('studio/reports/', v.reports, name='reports'),
     path('events/<int:event_id>/studio/', v.editor, name='editor'),
     path('events/<int:event_id>/studio/design/', v.design, name='design'),
+    path('events/<int:event_id>/studio/start/', v.start_from_scratch, name='start'),
     path('events/<int:event_id>/studio/runs/<int:run_id>/retry/', v.run_retry, name='run_retry'),
     path('events/<int:event_id>/studio/code/', v.code, name='code'),
     path('events/<int:event_id>/studio/undo/', v.undo, name='undo'),

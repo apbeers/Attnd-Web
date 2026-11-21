@@ -118,6 +118,52 @@ def _budget_error(event):
     return None
 
 
+def starter_instruction(event):
+    """The first design of a site started from scratch: built from what the event already has."""
+    from events.content import models_q_visible_location
+    bits = [f'Design a website for "{event.name}"']
+    if event.address:
+        bits.append(f'at {event.address}')
+    text = ' '.join(bits) + '.'
+    places = list(event.location_set.filter(hidden=False).values_list('name', flat=True)[:8])
+    items = event.scheduleditem_set.filter(hidden=False).filter(models_q_visible_location()).count()
+    if event.description:
+        text += f' About it: {event.description[:600]}'
+    text += (' Pages: a home page with the dates, what it is and how to get the app; the schedule (the data library\'s '
+             '<attnd-schedule>), the places with a map (<attnd-locations>, <attnd-map>) and the updates.')
+    if places:
+        text += f' Places include {", ".join(places)}.'
+    if items:
+        text += f' There are {items} schedule items.'
+    text += ' Use the event\'s colours and logo when it has them. Keep it simple, readable and fast on phones.'
+    return text
+
+
+def _start_design(request, event, text):
+    site = _site_or_404(event)
+    error = _budget_error(event)
+    if error:
+        return error
+    with transaction.atomic():
+        Site.objects.select_for_update().get(pk=site.pk)  # one request at a time per site
+        if site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).exists():
+            return _json_error('Studio is still working on the last request.', status=409)
+        run = StudioRun.objects.create(site=site, created_by=request.user, prompt=text)
+        StudioMessage.objects.create(site=site, role=StudioMessage.ROLE_USER, text=text, run=run,
+                                     created_by=request.user)
+        agent.start(run)
+    return JsonResponse({'task': run_task(run)}, status=202)
+
+
+@agent_action('start_website_from_scratch', "Start the event's website from scratch: Studio's designer builds a first "
+              'version from the event\'s own details (background; a new draft version).', json=True,
+              title='Started a new website')
+@studio_event_view
+@require_POST
+def start_from_scratch(request, event):
+    return _start_design(request, event, starter_instruction(event))
+
+
 @agent_action('design_website', "Change the event's website (Attnd Studio's designer: pages, sections, styles, "
               'images, flyer art, the app look). Runs in the background and makes a new draft version; publishing '
               'is separate (publish_website). Use it for any request about the website ("make the hero bigger", '
@@ -133,18 +179,7 @@ def design(request, event):
         return _json_error('Write what you want to change.')
     if len(text) > 8000:
         return _json_error('That message is too long (8,000 characters at most).')
-    error = _budget_error(event)
-    if error:
-        return error
-    with transaction.atomic():
-        Site.objects.select_for_update().get(pk=site.pk)  # one request at a time per site
-        if site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).exists():
-            return _json_error('Studio is still working on the last request.', status=409)
-        run = StudioRun.objects.create(site=site, created_by=request.user, prompt=text)
-        StudioMessage.objects.create(site=site, role=StudioMessage.ROLE_USER, text=text, run=run,
-                                     created_by=request.user)
-        agent.start(run)
-    return JsonResponse({'task': run_task(run)}, status=202)
+    return _start_design(request, event, text)
 
 
 @agent_action('retry_studio_run', 'Retry a failed Studio AI run.', title='Retried a Studio run')
@@ -344,8 +379,9 @@ def site_settings(request, event):
     return redirect('studio:editor', event_id=event.pk)
 
 
-@agent_action('bring_into_studio', "Bring the organizer's existing website into Studio: its pages, images and fonts "
-              'are copied and the AI rebuilds the site (background, a few minutes).', json=True,
+@agent_action('bring_into_studio', "Build the event's website from its current website: its pages, images and fonts "
+              'are copied and Studio\'s designer rebuilds the site (background, a few minutes). Without a url: the '
+              "event's own website.", json=True,
               params={'url': P('string', 'the website address'), 'note': P('string', 'notes for the AI', nullable=True)},
               title='Started bringing a website in')
 @studio_event_view
