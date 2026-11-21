@@ -28,7 +28,7 @@ from agent.registry import agent_action, param as P
 
 from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, LocationForm,
                                        NotificationEditForm,
-                                       NotificationForm, RefreshForm, ScheduledItemForm, SourcesForm,
+                                       NotificationForm, PasteImportForm, RefreshForm, ScheduledItemForm, SourcesForm,
                                        TeamInviteForm)
 from events import push
 from events.content import mark_locked, restore, save_revision
@@ -212,6 +212,8 @@ def task_json(job):
         title = f'Importing {event_name}' if job.status != IngestJob.DONE else f'Imported {event_name}'
     elif job.trigger == IngestJob.TRIGGER_WATCH:
         title = f'Website changed: updating {event_name}'
+    elif job.trigger == IngestJob.TRIGGER_PASTE:
+        title = f'Reading {job.upload_name or "what you pasted"} into {event_name}'
     else:
         title = f'Checking {event_name} for updates'
     result, url = (job.result or {}), None
@@ -418,6 +420,39 @@ def event_refresh(request, event):
         return redirect('console:event', event_id=event.pk)
     job = _job_from_form(form, kind=IngestJob.KIND_REFRESH, trigger=IngestJob.TRIGGER_CONSOLE,
                          event=event, created_by=request.user, timezone=event.timezone)
+    jobs.enqueue(job)
+    if _wants_json(request):
+        return JsonResponse({'task': task_json(job)}, status=202)
+    return redirect('console:job', job_id=job.pk)
+
+
+@agent_action('import_into_event', 'Read pasted text or an attached file (flyer image, PDF, CSV / Excel schedule, an '
+              'email) into an existing event: the AI suggests changes (new and updated locations, schedule items, '
+              'details), which wait in Review. Only that source; nothing is removed. Runs in the background.',
+              form=PasteImportForm, json=True, title='Started reading it into the event')
+@event_view
+@require_POST
+def event_import(request, event):
+    from scrape.tables import to_text
+    form = PasteImportForm(request.POST, request.FILES)
+    if not form.is_valid():
+        error = ' '.join(e for errs in form.errors.values() for e in errs)
+        if _wants_json(request):
+            return JsonResponse({'error': error}, status=400)
+        messages.error(request, error)
+        return redirect('console:event', event_id=event.pk)
+    upload = form.cleaned_data.get('upload')
+    text = (form.cleaned_data.get('text') or '').strip()
+    data = upload.read() if upload else None
+    table = to_text(upload.name, upload.content_type, data) if upload else None
+    if table is not None:  # spreadsheets and text files go to the AI as text
+        text = '\n\n'.join(filter(None, [text, f'From {upload.name}:\n{table}']))
+        data = None
+    job = IngestJob.objects.create(
+        kind=IngestJob.KIND_REFRESH, trigger=IngestJob.TRIGGER_PASTE, event=event, created_by=request.user,
+        timezone=event.timezone, text=text, instructions=form.cleaned_data.get('instructions') or '',
+        upload_name=upload.name[:256] if upload and data else '', upload_type=upload.content_type if data else '',
+        upload_data=data)
     jobs.enqueue(job)
     if _wants_json(request):
         return JsonResponse({'task': task_json(job)}, status=202)

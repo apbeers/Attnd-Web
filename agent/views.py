@@ -13,8 +13,9 @@ from agent import loop
 from agent.components import BUTTONS_GOAL
 from agent.models import AgentAttachment, AgentRun, AgentStep
 
+XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ALLOWED_TYPES = ('application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/heic', 'text/plain',
-                 'text/csv')
+                 'text/csv', XLSX)
 
 
 def sniff(head):
@@ -29,6 +30,8 @@ def sniff(head):
         return 'image/webp'
     if head[:6] in (b'GIF87a', b'GIF89a'):
         return 'image/gif'
+    if head.startswith(b'PK\x03\x04'):
+        return 'zip'  # an XLSX spreadsheet (a zip of XML)
     if head[4:8] == b'ftyp' and head[8:12] in (b'heic', b'heix', b'mif1', b'msf1', b'hevc', b'heim', b'heis'):
         return 'image/heic'
     if b'\x00' not in head:
@@ -44,7 +47,8 @@ def sniff(head):
 
 
 def _matches(kind, declared):
-    return kind == declared or (kind == 'text' and declared in ('text/plain', 'text/csv'))
+    return kind == declared or (kind == 'text' and declared in ('text/plain', 'text/csv')) or (
+        kind == 'zip' and declared == XLSX)
 
 
 def _error(message, status=400):
@@ -367,7 +371,7 @@ def attach(request):
     upload.seek(0)
     kind = sniff(head)
     if (upload.content_type or '') not in ALLOWED_TYPES or kind is None or not _matches(kind, upload.content_type):
-        return _error('Attach a PDF, an image (PNG, JPEG, WebP, GIF, HEIC) or a text/CSV file.')
+        return _error('Attach a PDF, an image (PNG, JPEG, WebP, GIF, HEIC), a text or CSV file or an Excel (.xlsx) sheet.')
     if AgentAttachment.objects.filter(user=request.user, run__isnull=True).count() >= 10:
         return _error('Send your request first (at most 10 files waiting).')
     attachment = AgentAttachment.objects.create(user=request.user, name=upload.name[:200],

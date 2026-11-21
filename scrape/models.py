@@ -20,6 +20,7 @@ class IngestJob(models.Model):
     TRIGGER_TRIAL, TRIGGER_CONSOLE, TRIGGER_SCHEDULE = 'trial', 'console', 'schedule'
     # The website watcher saw pages change: re-read only those pages (job.urls), without crawling.
     TRIGGER_WATCH = 'watch'
+    TRIGGER_PASTE = 'paste'  # pasted text or a dropped file for an existing event (stage I3): only that, no deletes
     TRIGGER_PROSPECT = 'prospect'  # a staff test copy of a prospect's event (prospects.testing)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -22,6 +22,7 @@ urlpatterns = [
 
     path('events/<int:event_id>/', v.event_overview, name='event'),
     path('events/<int:event_id>/edit/', v.event_edit, name='event_edit'),
+    path('events/<int:event_id>/import/', v.event_import, name='event_import'),
     path('events/<int:event_id>/status/', v.event_status, name='event_status'),
     path('events/<int:event_id>/sources/', v.event_sources, name='event_sources'),
     path('events/<int:event_id>/refresh/', v.event_refresh, name='event_refresh'),

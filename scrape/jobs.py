@@ -274,7 +274,8 @@ def _bring_into_studio(job, event):
 
 def _run_refresh(job):
     event = job.event
-    urls = job.urls or event.source_urls
+    pasted = job.trigger == IngestJob.TRIGGER_PASTE  # only what was pasted or dropped (stage I3)
+    urls = job.urls if pasted else (job.urls or event.source_urls)
     text = job.text or ''
     if not urls and not text and not job.upload_data:
         raise ValueError('This event has no sources to refresh from. Add a website or upload a flyer.')
@@ -285,18 +286,20 @@ def _run_refresh(job):
     data = scrape_event(
         urls=urls, text=text, attachments=_attachments(job), instructions=job.instructions,
         current=diff.current_state(event), google_api_key='',  # geocode only what changes, below
-        crawl=not watched,  # the watcher re-reads only the pages that changed
+        crawl=not (watched or pasted),  # the watcher re-reads only the pages that changed
         progress=None if watched else steps,
     )
     steps('Comparing with your event…', done='Compared with your event')
     changes = diff.compute_changes(event, data)
+    if pasted:  # a flyer or a sheet rarely lists everything: never suggest removing what it doesn't mention
+        changes = [c for c in changes if c.get('op') != Change.OP_DELETE]
     if any(c['entity'] == 'location' and c['op'] == 'create' for c in changes) and getattr(settings, 'GOOGLE_PLACES_API_KEY', ''):
         steps('Checking addresses on the map…', done='Checked addresses on the map')
     _geocode_new_locations(event, changes)
     cs = diff.save_changeset(event, job, changes, notes=data.get('notes', ''))
 
     auto_applied = 0
-    if event.update_mode != Event.UPDATE_REVIEW and cs.status == ChangeSet.PENDING:
+    if event.update_mode != Event.UPDATE_REVIEW and cs.status == ChangeSet.PENDING and not pasted:
         decisions = diff.default_decisions(cs, minor_only=event.update_mode == Event.UPDATE_MINOR)
         # Even in automatic mode, removals wait for a person (default_decisions already leaves out
         # fields someone edited by hand).

@@ -624,7 +624,28 @@
   $('[data-agent-file]').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
-    if (!file) return;
+    if (file) attachFile(file);
+  });
+  // Stage I3: drop a file anywhere on the panel / full-screen chat, or paste one (a screenshot, a copied file).
+  panel.addEventListener('dragover', (e) => {
+    if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); panel.classList.add('is-dropping'); }
+  });
+  panel.addEventListener('dragleave', (e) => { if (!panel.contains(e.relatedTarget)) panel.classList.remove('is-dropping'); });
+  panel.addEventListener('drop', (e) => {
+    panel.classList.remove('is-dropping');
+    const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    files.slice(0, 5).forEach(attachFile);
+    input.focus();
+  });
+  input.addEventListener('paste', (e) => {
+    const files = [...(e.clipboardData?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    files.slice(0, 5).forEach(attachFile);
+  });
+  async function attachFile(file) {
     const body = new FormData();
     body.append('file', file);
     try {
@@ -633,8 +654,9 @@
       const item = document.createElement('li');
       item.textContent = `Attached: ${data.attachment.name}`;
       filesList.appendChild(item);
+      if (!input.value.trim()) input.placeholder = 'What should Attnd do with it? (e.g. “Add this to my event”)';
     } catch (err) { bubble('error', err.message); }
-  });
+  }
 
   // ---- console components in the chat (console/components, agent/components.py) ----------------------------------
   // Each card holds one component: HTML rendered by the server as this person, with its ids and the entities it

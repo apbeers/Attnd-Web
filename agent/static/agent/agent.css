@@ -230,3 +230,6 @@
   font-size: .85rem; line-height: 1.4; opacity: .55; cursor: pointer; }
 .agent__feedback-button:hover, .agent__feedback-button:focus-visible { opacity: 1; border-color: var(--color-border); }
 .agent__feedback-button[aria-pressed="true"] { opacity: 1; background: var(--color-brand-soft); border-color: var(--color-brand); }
+
+/* a file dragged over the chat (stage I3) */
+.agent__panel.is-dropping { outline: 2px dashed var(--color-brand); outline-offset: -6px; }

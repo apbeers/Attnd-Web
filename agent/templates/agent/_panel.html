@@ -54,7 +54,7 @@
       <ul class="agent__files" data-agent-files></ul>
       <form class="agent__form" data-agent-form>{% csrf_token %}
         <label class="agent__icon agent__attach" title="Attach a file">{% icon "paperclip" %}<span class="visually-hidden">Attach a file</span>
-          <input type="file" class="visually-hidden" data-agent-file accept="application/pdf,image/*,text/plain,text/csv"></label>
+          <input type="file" class="visually-hidden" data-agent-file accept="application/pdf,image/*,text/plain,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         <label class="visually-hidden" for="agent-input">Ask Attnd</label>
         <textarea id="agent-input" name="goal" rows="1" maxlength="4000" placeholder="What should Attnd do?" data-agent-input></textarea>
         <button type="submit" class="agent__icon agent__send" data-agent-send aria-label="Send">{% icon "send" %}</button>

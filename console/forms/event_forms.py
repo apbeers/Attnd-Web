@@ -213,6 +213,39 @@ class RefreshForm(StyledFormMixin, forms.Form):
     ALLOWED_TYPES = AIImportForm.ALLOWED_TYPES
 
 
+class PasteImportForm(StyledFormMixin, forms.Form):
+    """Stage I3: pasted text or a dropped file (flyer image, PDF, CSV / XLSX schedule, an email) read into an existing
+    event as AI suggestions to review. Only that source: no website crawl, no removals."""
+    XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ALLOWED_TYPES = AIImportForm.ALLOWED_TYPES + ('text/plain', 'text/csv', XLSX)
+    MAX_UPLOAD = AIImportForm.MAX_UPLOAD
+    upload = forms.FileField(label='File', required=False,
+                             help_text='A flyer (image or PDF), a schedule (CSV or Excel) or a text file.')
+    text = forms.CharField(label='Pasted text', required=False, widget=forms.Textarea(attrs={'rows': 4}),
+                           help_text='An email, a lineup, a menu… anything with details of the event.')
+    instructions = AIImportForm.base_fields['instructions']
+
+    def clean_upload(self):
+        f = self.cleaned_data.get('upload')
+        if f:
+            if f.size > self.MAX_UPLOAD:
+                raise forms.ValidationError('Files must be under 15 MB.')
+            head = f.read(8)
+            f.seek(0)
+            kind = f.content_type or ''
+            ok = (kind in AIImportForm.ALLOWED_TYPES or kind in ('text/plain', 'text/csv')
+                  or (kind == self.XLSX and head.startswith(b'PK\x03\x04')))
+            if not ok:
+                raise forms.ValidationError('Upload a PDF, an image, a CSV or Excel (.xlsx) file or a text file.')
+        return f
+
+    def clean(self):
+        data = super().clean()
+        if not (data.get('upload') or (data.get('text') or '').strip()):
+            raise forms.ValidationError('Paste some text or add a file.')
+        return data
+
+
 TAGS_HELP = ('Comma separated, lower case, e.g. live music, bbq, kid-friendly. Attendees can filter and search by '
              'them. Reuse the same words across the event.')
 
