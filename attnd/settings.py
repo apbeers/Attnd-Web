@@ -82,6 +82,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Organizers' 14-day sliding sign-in (7 days idle); staff keep until-midnight (console/session_expiry.py).
+    'console.session_expiry.SessionLifetimeMiddleware',
     # Every view needs a sign-in unless it is marked public (attnd/public.py; the list: attnd/tests_public.py).
     'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
