@@ -94,7 +94,7 @@ def is_verified(request) -> bool:
 
 def mark_verified(request) -> None:
     request.session[SESSION_KEY] = str(request.user.pk)
-    request.session.cycle_key()  # new session id once fully signed in
+    request.session.cycle_key()  # new session id once fully signed in (keeps the midnight expiry, session_expiry)
 
 
 def pending_step(request):

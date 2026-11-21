@@ -209,6 +209,7 @@
 {# CSRF token for the passkey sign-in from the "Sign in" links (console/static/console/passkeys.js). #}
 <div hidden>{% csrf_token %}</div>
 {% if TRIAL_IMPORT_OPEN %}<script src="{% static 'home/home.js' %}"></script>{% endif %}
+<script src="{% static 'console/tz.js' %}"></script>
 <script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>
