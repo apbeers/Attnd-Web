@@ -446,7 +446,7 @@
   // ---- polling ---------------------------------------------------------------------------
   // Backoff (stage H): 1.5 s while steps arrive, doubling to 6 s while nothing changes, 15 s in a hidden tab.
   let quietPolls = 0;
-  const pollDelay = () => (document.hidden ? 15000 : Math.min(1500 * 2 ** quietPolls, 6000));
+  const pollDelay = () => (document.hidden ? 15000 : quietPolls < 0 ? 100 : Math.min(1500 * 2 ** quietPolls, 6000));
   function schedule() { if (!timer) timer = setTimeout(poll, pollDelay()); }
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && timer) { clearTimeout(timer); timer = null; quietPolls = 0; poll(); }
@@ -458,9 +458,11 @@
     const oldest = Math.min(...[...unfinished.values()].map((u) => u.seq - 1), lastSeq);
     const seqBefore = lastSeq;
     try {
-      renderRun(await get(runUrl(run.id, `?after=${oldest}`)));
+      // Stage I14: the server holds the request until something happens (≤ 10 s), so the next poll can follow at once.
+      const data = await get(runUrl(run.id, `?after=${oldest}${document.hidden ? '' : '&wait=10'}`));
+      renderRun(data);
       live = true;
-      quietPolls = lastSeq === seqBefore ? Math.min(quietPolls + 1, 2) : 0;
+      quietPolls = data.waited ? -1 : (lastSeq === seqBefore ? Math.min(quietPolls + 1, 2) : 0);
     }
     catch (e) { statusLine.textContent = 'Reconnecting…'; schedule(); }
   }

@@ -2,6 +2,8 @@
 
 import json
 import re
+import threading
+import time
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -294,10 +296,43 @@ def runs(request):
 def run(request, run_id):
     r = _run(request, run_id)
     after = int(request.GET.get('after') or 0) if str(request.GET.get('after') or '0').isdigit() else 0
+    waited = _wait_for_news(r, after, request.GET.get('wait'))
+    if waited:
+        r.refresh_from_db()
     rows = list(r.steps.filter(seq__gt=after).order_by('seq')[:200])
     states = undo_states(request.user, rows)
     steps = [step_json(s, states) for s in rows]
-    return JsonResponse({'run': run_json(r), 'steps': steps})
+    return JsonResponse({'run': run_json(r), 'steps': steps, 'waited': waited})
+
+
+# Long-poll (stage I14): `?wait=10` answers the moment a step lands or the run's state changes (≤ 10 s), so the chat
+# feels instant without a 1.5 s poll. At most LONG_POLLS requests of a process wait at once (gunicorn has 4 threads);
+# beyond that the request answers at once like a plain poll. The database connection goes back to the pool while it
+# waits.
+LONG_POLLS = 2
+_waiting = threading.BoundedSemaphore(LONG_POLLS)
+
+
+def _wait_for_news(r, after, wait):
+    from django.db import connection
+    if not str(wait or '').isdigit() or not r.active or connection.in_atomic_block:
+        return False
+    if r.steps.filter(seq__gt=after).exists():
+        return False
+    if not _waiting.acquire(blocking=False):
+        return False
+    try:
+        deadline = time.monotonic() + min(int(wait), 10)
+        state = (r.status, r.step_count)
+        while time.monotonic() < deadline:
+            connection.close()  # back to the pool while sleeping
+            time.sleep(0.3)
+            fresh = AgentRun.objects.filter(pk=r.pk).values_list('status', 'step_count').first()
+            if fresh != state or AgentStep.objects.filter(run_id=r.pk, seq__gt=after).exists():
+                break
+        return True
+    finally:
+        _waiting.release()
 
 
 @login_required

@@ -265,3 +265,14 @@ class SearchEverythingTests(HarnessCase):
         self.assertEqual(kinds, {'event', 'notification'})
         self.assertTrue(all(r['event_id'] == self.event.pk for r in search(self.owner, 'parking')))
         self.assertEqual(search(self.owner, 'indie folk')[0]['item_id'], self.item.pk)
+
+
+class LongPollTests(HarnessCase):
+    def test_a_long_poll_answers_at_once_when_there_is_news_and_never_waits_in_tests_transactions(self):
+        from django.urls import reverse
+        run = self.make_run()
+        data = self.client.get(reverse('agent:run', args=[run.pk]), {'after': 0, 'wait': 10}).json()
+        self.assertFalse(data['waited'])  # tests run inside a transaction: never sleeps there
+        from agent.views import _wait_for_news
+        run.status = 'done'
+        self.assertFalse(_wait_for_news(run, 0, '10'))  # finished runs answer at once
