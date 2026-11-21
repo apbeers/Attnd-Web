@@ -150,7 +150,34 @@
   // While the conversation is restored on load (A21) nothing scrolls: the log is hidden, filled in one go, then its
   // scroll position is set once and it fades in.
   let restoring = null;  // promises of cards still loading, while restoring
-  function stick() { if (!restoring) log.scrollTop = log.scrollHeight; }
+  // Follow the newest line only while the person is at the bottom (within ~80px); scrolled up, nothing moves and a
+  // "New updates ↓" pill offers the way down. Smooth, instant with reduced motion. Their own send always follows.
+  const calmScroll = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let pinned = true;
+  let autoScrolling = 0;
+  const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight <= 80;
+  const newPill = document.createElement('button');
+  newPill.type = 'button';
+  newPill.className = 'agent__newpill button button--secondary button--small';
+  newPill.textContent = 'New updates ↓';
+  newPill.hidden = true;
+  newPill.addEventListener('click', () => { pinned = true; stick(true); });
+  log.after(newPill);
+  log.addEventListener('scroll', () => {
+    if (Date.now() < autoScrolling) return;  // our own smooth scroll is still moving
+    pinned = nearBottom();
+    if (pinned) newPill.hidden = true;
+  }, { passive: true });
+  function stick(force) {
+    if (restoring) return;
+    if (force === true) pinned = true;
+    if (!pinned) { newPill.hidden = false; return; }
+    newPill.hidden = true;
+    if (log.scrollHeight - log.scrollTop - log.clientHeight < 2) return;
+    const smooth = !calmScroll.matches && live;
+    autoScrolling = Date.now() + (smooth ? 700 : 0);
+    log.scrollTo({ top: log.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  }
   // Console links in the assistant's words become real links ("Change your password → [Account](/console/account/)"):
   // only same-site paths, built with the DOM (never HTML from the model).
   const LINK_RE = /\[([^\]\n]{1,80})\]\((\/(?!\/)[^)\s]{0,200})\)/g;
@@ -263,7 +290,7 @@
       return `<li class="task-step task-step--${taskEsc(st.state)}">${m}<span>${taskEsc(st.text)}</span></li>`;
     }).join('');
     const list = card.querySelector('.agent__taskcard-steps');
-    if (list.innerHTML !== steps) list.innerHTML = steps;
+    const before = card.textContent;
     const done = (t.steps || []).filter((st) => st.state === 'done').length;
     card.querySelector('.agent__taskcard-hint').textContent = running
       ? (t.progress || (done ? `${done} step${done === 1 ? '' : 's'} done…` : 'Starting…')) : (t.summary || '');
@@ -275,6 +302,8 @@
         + (t.retry_url ? `<button type="button" class="button button--outline button--small" data-task-retry="${taskEsc(t.retry_url)}">Retry</button>` : '');
     }
     if (foot.innerHTML !== footHtml) foot.innerHTML = footHtml;
+    if (list.innerHTML !== steps) list.innerHTML = steps;
+    if (card.textContent !== before) stick();  // it grew or changed: keep the newest line in view (only when at the bottom)
   }
   async function pollTasks() {
     clearTimeout(taskTimer);
@@ -700,6 +729,7 @@
   const reduceMotionSend = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   form.addEventListener('submit', async (e) => {
+    pinned = true;  // the person's own message: always follow it
     e.preventDefault();
     const text = input.value.trim();
     if (!text) { input.focus(); return; }

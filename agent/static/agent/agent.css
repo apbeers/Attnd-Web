@@ -348,3 +348,7 @@
 [data-folded]:not([data-all-past]) > [data-more] { display: none; }
 [data-all-past] > .agent__group-more { display: none; }
 @media (prefers-reduced-motion: reduce) { .agent__group-toggle::before { transition: none; } }
+
+/* Scrolled up while new lines arrive: a pill back to the newest (agent.js stick) */
+.agent__newpill { align-self: center; position: relative; z-index: 2; margin-top: calc(-1 * var(--space-6, 2.5rem)); margin-bottom: var(--space-2); box-shadow: var(--shadow-md, 0 4px 14px rgb(0 0 0 / .15)); }
+.agent__newpill[hidden] { display: none; }

@@ -766,3 +766,24 @@ class SitesDomainMoveTests(StudioTestCase):
         version = Event.objects.get(pk=self.event.pk).content_version
         call_command('refresh_site_addresses', stdout=StringIO())
         self.assertGreater(Event.objects.get(pk=self.event.pk).content_version, version)
+
+
+class ProgressStepTests(StudioTestCase):
+    """A progress step is one row that counts up, then one ✓ with its done text (owner, Nov 21, 2026)."""
+
+    def test_progress_updates_in_place(self):
+        from studio.agent import Workspace
+        from studio.models import StudioRun
+        from studio.views import run_task
+        run = StudioRun.objects.create(site=self.site, created_by=self.owner, kind=StudioRun.KIND_IMPORT,
+                                       status=StudioRun.RUNNING, prompt='x')
+        ws = Workspace.__new__(Workspace)
+        ws.run = run
+        for n in (25, 29, 34):
+            ws.step(f'Copied {n} of 52 images, fonts and PDFs…', key='copy', done=f'Copied {n} images, fonts and PDFs')
+        self.assertEqual([s['text'] for s in run_task(run)['steps']], ['Copied 34 of 52 images, fonts and PDFs…'])
+        ws.step('Copied 52 of 52 images, fonts and PDFs…', key='copy', done='Copied 52 images, fonts and PDFs')
+        ws.step('Rebuilding the pages')
+        steps = run_task(run)['steps']
+        self.assertEqual([(s['text'], s['state']) for s in steps],
+                         [('Copied 52 images, fonts and PDFs', 'done'), ('Rebuilding the pages', 'running')])

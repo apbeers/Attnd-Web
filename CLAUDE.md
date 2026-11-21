@@ -541,8 +541,13 @@ on Save does; there is no second copy of any business logic.
   changes") or the reason in plain words + **Retry** (`console:task_retry`, agent write `retry_background_task`: the
   same sources again; a failed paste with a file needs the file again). It polls `console:tasks?ids=` (those tasks
   whatever their age) every 2 s while running. Tasks without a card keep the working line above the composer
-  (`[data-agent-tasks]`, console.js `renderChatLines`), then a done line with its result link; the task
-  tray on the desktop full screen sits bottom-left with the chat and opens upward (elsewhere near the launcher).
+  (`[data-agent-tasks]`, console.js `renderChatLines`), then a done line with its result link; the full-screen
+  chat (desktop and narrow) shows no task tray at all (owner, Nov 21, 2026: the work is in the chat: live task cards and
+  these lines); the tray stays on ordinary console pages. Task cards update progress steps in place (one row that counts
+  up, then one ✓ with its done text: Studio's `Workspace.step(text, key=, done=)`, `scrape.jobs.Steps.update`). The chat
+  log follows new lines and growing cards smoothly only while the person is within ~80px of the bottom (instant with
+  reduced motion); scrolled up, nothing moves and a "New updates ↓" pill appears (agent.js `stick`), panel and full
+  screen alike; their own send always follows.
 - **Colours apply at once** (owner, Nov 21, 2026): `{% event_theme_style %}` always draws `<style
   data-event-theme="<id>">` on an event's pages (empty without a theme or with the website switch off); after a save,
   switch, Reset or a finished Generate with AI, `window.attndRefreshTheme()` fetches `console:event_theme_css` (`{css,

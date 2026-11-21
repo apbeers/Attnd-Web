@@ -290,7 +290,7 @@ class Capture:
         self.seeds = [s for s in dict.fromkeys(seeds) if s]
         self.hosts = {site_host(s) for s in self.seeds}
         self.limits = limits or Limits()
-        self.progress = progress or (lambda text: None)
+        self.progress = progress or (lambda text, **_: None)
         self.pages, self.css_parts, self.notes = [], [], []
         self.assets = {}  # url -> {url, kind, tags, alt, page, section, priority}
         self.colors, self.fonts = Counter(), Counter()
@@ -379,7 +379,9 @@ class Capture:
             seen.add(key)
             try:
                 self.limits.check()
-                self.progress(f'Reading page {len(self.pages) + 1}: {urlparse(url).path or "/"}')
+                n = len(self.pages) + 1  # one row that counts up (the task card), not a row per page
+                self.progress(f'Reading page {n}: {urlparse(url).path or "/"}', key='read',
+                              done=f'Read {n} page{"" if n == 1 else "s"} of the website')
                 data, ctype, final = self.limits.fetch(url, MAX_HTML)
             except LimitReached as exc:
                 self.notes.append(str(exc))
@@ -567,7 +569,7 @@ def copy_assets(event, look, user, limits=None, progress=None):
     Stops at the run's caps or when the library is full; whatever was copied stays."""
     from studio.assets import AssetError, create_asset
     limits = limits or Limits()
-    progress = progress or (lambda text: None)
+    progress = progress or (lambda text, **_: None)
     plan = _plan(look)
     copied, notes, failed = {}, [], 0
 
@@ -607,7 +609,8 @@ def copy_assets(event, look, user, limits=None, progress=None):
                     failed += 1
                     logger.info('Studio import: file refused: %s', exc)
             if done % 5 == 0 or done == len(plan):
-                progress(f'Copied {len(copied)} of {len(plan)} images, fonts and PDFs…')
+                progress(f'Copied {len(copied)} of {len(plan)} images, fonts and PDFs…', key='copy',
+                         done=f'Copied {len(copied)} image{"" if len(copied) == 1 else "s"}, fonts and PDFs')
     if failed:
         notes.append(f'{failed} file{"s" if failed != 1 else ""} could not be copied (missing, too big or not an '
                      f'image, font or PDF).')

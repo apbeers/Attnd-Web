@@ -193,8 +193,21 @@ class Workspace:
         run.steps = [*run.steps, {'at': timezone.now().isoformat(), 'text': step}][-80:]
         run.save(update_fields=['working_files', 'working_look', 'working_flyer', 'files_rev', 'steps'])
 
-    def step(self, text):
-        self.run.steps = [*self.run.steps, {'at': timezone.now().isoformat(), 'text': text}][-80:]
+    def step(self, text, key=None, done=None):
+        """A friendly step for the task card. With `key`, a step with the same key just before it is updated in
+        place (progress counts: "Copied 25 of 52…" → "Copied 29 of 52…" is one row; `done` is its text once the next
+        step starts)."""
+        entry = {'at': timezone.now().isoformat(), 'text': text}
+        if key:
+            entry['key'] = key
+        if done:
+            entry['done'] = done
+        steps = list(self.run.steps or [])
+        if key and steps and steps[-1].get('key') == key:
+            steps[-1] = entry
+        else:
+            steps.append(entry)
+        self.run.steps = steps[-80:]
         self.run.save(update_fields=['steps'])
 
     def asset(self, asset_id, kinds=None):

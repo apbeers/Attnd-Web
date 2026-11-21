@@ -781,13 +781,15 @@
 
     const escapeHtml = (text) => String(text || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+    const onChatPage = !!document.querySelector('.assistant');  // /console/assistant/ (desktop and narrow)
     const shownState = new Map();  // task id -> status last drawn (new tasks fade in, finished ones pulse)
     function render(tasks) {
       lastTasks = tasks;
       const active = tasks.filter((t) => t.status === 'queued' || t.status === 'running');
       const toggle = tray.querySelector('.task-toggle');
       const list = tray.querySelector('.task-list');
-      tray.hidden = tasks.length === 0;
+      // The full-screen Ask Attnd chat shows work in the chat itself (task cards, working lines): no tray bubble there.
+      tray.hidden = tasks.length === 0 || onChatPage;
       toggle.querySelector('.task-count').textContent = active.length
         ? `${active.length} running` : `${tasks.length} finished`;
       toggle.classList.toggle('is-active', active.length > 0);
@@ -981,7 +983,7 @@
         // Inside an Ask Attnd card (chat or canvas) the chat draws the live task card; elsewhere the tray opens.
         const inChat = form.closest('.agent__card, [data-canvas]');
         document.dispatchEvent(new CustomEvent('attnd:task-started', { detail: { task: data.task, inChat: !!inChat } }));
-        if (!inChat || !document.querySelector('[data-agent-log]')) tray.classList.add('is-open');
+        if (!onChatPage && (!inChat || !document.querySelector('[data-agent-log]'))) tray.classList.add('is-open');
         if (form.dataset.afterStart === 'reset') form.reset();
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
         watch();

@@ -92,9 +92,13 @@ def run_task(run):
     """A Studio run as the console's task feed shows it (Ask Attnd's live task card, the tray)."""
     running = run.status in (StudioRun.QUEUED, StudioRun.RUNNING)
     title = ('Bringing your website into Studio' if run.kind == StudioRun.KIND_IMPORT else 'Working on the website')
-    steps = [{'text': st.get('text', ''), 'state': 'done'} for st in (run.steps or [])][-8:]
+    steps = [{'text': st.get('done') or st.get('text', ''), 'state': 'done', 'running_text': st.get('text', '')}
+             for st in (run.steps or [])][-8:]
     if steps and running:
         steps[-1]['state'] = 'running'
+        steps[-1]['text'] = steps[-1]['running_text']  # still counting: "Copied 34 of 52…"
+    for st in steps:
+        st.pop('running_text', None)
     if run.status == StudioRun.FAILED and steps:
         steps[-1]['state'] = 'failed'
     version = run.result_version.number if run.result_version_id else None
