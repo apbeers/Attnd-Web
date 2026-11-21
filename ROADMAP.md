@@ -188,9 +188,17 @@ Built Nov 20, 2026 (`agent/`, CLAUDE.md → Ask Attnd). Later:
 - Watch mode navigates the person's own window; a side-by-side "follow along" view on wide screens would be nicer.
 - Streaming the model's text into the panel (now: steps appear as each tool finishes, polled every 1.5 s).
 - A staff page of runs and spend across users (now: Django admin → Ask Attnd runs / usage).
-- Console components (built Nov 20, 2026: Your events, the overview's pieces, locations, schedule, updates): add the
-  event details form and the app layout as components when the chat needs them; the bespoke screens (Studio editor,
-  diagnostics, AI review, prospects, history, usage, team) stay pages. In the chat: a "new location / item" form
-  that saved could show the new row (now it redraws blank with "Saved …"); a run's model context could refresh the
-  JSON of components the person changed by hand after they were shown (now: the stored JSON + get_component).
+- Console components (built Nov 20–21, 2026: Your events, the overview's pieces, locations, schedule, updates, event
+  details, new event, history): add the app layout as a component when the chat needs it; the bespoke screens (Studio
+  editor, diagnostics, AI review, prospects, usage, team) stay pages. In the floating panel a "new location / item"
+  form that saved could show the new row (the full-screen canvas goes back to the list, which shows it); a run's model
+  context could refresh the JSON of components the person changed by hand after they were shown (now: the stored
+  JSON + get_component). Opening a detail on the canvas records a pick, which adds a tile to the chat each time; fold
+  repeated picks of the same item into one.
+- History (LogEntry, Nov 21, 2026) doesn't record `QuerySet.update()` writes (drag-to-reorder) or background jobs
+  outside a request (website watching auto-applying changes); record those with the job as the actor if wanted.
+
+## API-021 in the apps (not started)
+The server sends `plan_suggestions` in every bundle (API_CHANGES.md → API-021). iOS and Android: show them as the
+"Plan your day" examples when present (plan → make the plan, question → ask it), else keep the local examples.
 

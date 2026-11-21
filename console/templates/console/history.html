@@ -3,7 +3,7 @@
 {% block title %}History · {{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="panel stack">{% component "object_history" event=event %}</div>
-<h2 class="title-3">Snapshots</h2>
+<h2 class="title-3 history-snapshots">Snapshots</h2>
 <div class="cluster cluster--loose toolbar">
   <p class="muted grow">A snapshot is saved before every AI update and every restore. Restoring brings back locations, schedule and event details exactly as they were.</p>
   <form method="post" class="cluster">{% csrf_token %}<input type="hidden" name="action" value="snapshot">
