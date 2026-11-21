@@ -59,6 +59,7 @@ class ComponentTestCase(TestCase):
             'sharing_kit': {'event_id': self.event.pk}, 'event_lifecycle': {'event_id': self.event.pk},
             'event_versions': {'event_id': self.event.pk}, 'event_exports': {'event_id': self.event.pk},
             'change_preview': {'event_id': self.event.pk, 'proposal_id': self.proposal.pk},
+            'event_readiness': {'event_id': self.event.pk}, 'attention': {},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -72,7 +73,8 @@ class ComponentTestCase(TestCase):
             'website_watching': 'Source websites', 'event_context_form': 'Only add what attendees may see',
             'event_flyer': 'No flyer yet', 'sharing_kit': 'PRAIRIE', 'event_lifecycle': 'Now:',
             'event_versions': 'No saved versions yet', 'event_exports': 'CSV files',
-            'change_preview': 'Move sets later',
+            'change_preview': 'Move sets later', 'event_readiness': 'to fix',
+            'attention': 'What needs attention',
         }
 
     def request(self, user=None):
@@ -284,3 +286,24 @@ class PageTests(ComponentTestCase):
         self.assertIn('data-component-act="delete_location"', html)
         self.assertNotIn('value="delete"', html)  # no form that posts the delete directly
         self.assertIn('value="toggle_hidden"', html)  # not gated: posts to the view
+
+
+class ReadinessTests(ComponentTestCase):
+    def test_checks_find_the_problems_and_score_them(self):
+        from datetime import timedelta
+
+        from console.components.catalog_chat import checks, score
+        from events.models import ScheduledItem
+        ScheduledItem.objects.create(event=self.event, name='Clash', location=self.stage,
+                                     start_time=self.item.start_time + timedelta(minutes=15))
+        ScheduledItem.objects.create(event=self.event, name='Way later', start_time=self.item.start_time + timedelta(days=30))
+        found = {c['key']: c for c in checks(self.event)}
+        self.assertEqual(found['overlaps']['state'], 'problem')
+        self.assertIn('Clash', found['overlaps']['text'])
+        self.assertIn('Way later', found['dates']['text'])
+        self.assertEqual(found['review']['state'], 'problem')
+        self.assertLess(score(list(found.values())), 100)
+        data = C.load(self.owner, 'attention', {})
+        self.assertTrue(any(r['key'] == 'overlaps' for r in data['rows']))
+        stranger = User.objects.create_user('s2', 's2@example.com', 'pw')
+        self.assertEqual(C.load(stranger, 'attention', {})['rows'], [])

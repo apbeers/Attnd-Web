@@ -60,6 +60,7 @@
     store.set('sessionStorage', 'attnd.agent.open', '1');
     fitSheet();
     if (focus !== false) input.focus();
+    try { if (!chatIds().length) brief(); } catch (e) { /* still starting up: the end of this file briefs */ }
   }
   function close() {
     panel.hidden = true;
@@ -694,8 +695,25 @@
     });
   }
 
+  // Stage I: an empty chat opens with the "What needs attention" briefing under the greeting (not a run).
+  var briefed = false;  // (var: open() may run before this line during start-up)
+  async function brief() {
+    const hello = $('[data-agent-hello]');
+    if (briefed || !hello || log.querySelector('.agent__brief')) return;
+    briefed = true;
+    try {
+      const [item] = await fetchCards('attention', [{}]);
+      if (!item || !$('[data-agent-hello]')) return;
+      const box = document.createElement('div');
+      box.className = 'agent__component agent__brief';
+      box.appendChild(makeCard(item));
+      hello.after(box);
+      window.attndReveal?.(box, 'in');
+    } catch (e) { briefed = false; }
+  }
   function cardBox() {
     $('[data-agent-hello]')?.remove();
+    log.querySelector('.agent__brief')?.remove();
     const box = document.createElement('div');
     box.className = 'agent__component';
     log.appendChild(box);
@@ -1017,7 +1035,7 @@
   // remembers its parent ids ({event_id}) and reloads as a whole when something of that event changes, so new
   // rows appear and deleted ones go. Toolbars add things (Add location, Add schedule item…) in the overlay.
   const KINDS = { event_tile: 'Events', event_new_form: 'Events', event_overview: 'Overview', event_stats: 'Overview',
-                  live_on_phone: 'Overview', needs_review: 'Overview', event_header: 'Overview', event_form: 'Overview',
+                  live_on_phone: 'Overview', needs_review: 'Overview', event_readiness: 'Overview', event_header: 'Overview', event_form: 'Overview',
                   object_history: 'History', location_row: 'Locations', location_form: 'Locations',
                   schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Notifications',
                   notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics',
@@ -1028,7 +1046,7 @@
                   prospect_settings_form: 'Prospects' };
   const ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
                  'History', 'Prospects'];
-  const SECTION_ORDER = ['event_tile', 'event_overview', 'event_lifecycle', 'sharing_kit', 'event_exports',
+  const SECTION_ORDER = ['event_tile', 'event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports',
                          'notification_form', 'notification_row', 'app_layout', 'website_watching',
                          'event_context_form', 'event_flyer', 'object_history', 'event_versions',
                          'prospect_run_row', 'prospect_row'];
@@ -1481,7 +1499,7 @@
     // Every event and "New event" too, so the whole console is reachable from here.
     try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
     const parent = { event_id: eventId };
-    for (const name of ['event_overview', 'event_lifecycle', 'sharing_kit', 'event_exports', 'changeset_review',
+    for (const name of ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'changeset_review',
                         'location_row', 'schedule_item_row', 'notification_form', 'notification_row',
                         'event_team', 'event_metrics', 'app_layout', 'website_watching', 'event_context_form',
                         'event_flyer', 'object_history', 'event_versions']) {
@@ -1578,6 +1596,7 @@
     }
   })();
   if (root.dataset.openOnLoad) { delete root.dataset.openOnLoad; if (panel.hidden) open(); }  // the click that loaded us
+  if (!chatIds().length && (full || !panel.hidden)) brief();
   window.attndAgentReady = true;  // agent-loader.js: later clicks reach the handlers above directly
   if (window.attndAgentPending) { const b = window.attndAgentPending; window.attndAgentPending = null; b.click(); }
 })();

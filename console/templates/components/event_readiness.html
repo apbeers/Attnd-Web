@@ -1,0 +1,15 @@
+{% load console_tags %}{# event_readiness (stage I): a score and the checks, each with its fix. #}<div class="stack component component--event_readiness">
+  <div class="readiness__head">
+    <div class="readiness__score{% if d.score >= 85 %} is-good{% elif d.score >= 60 %} is-fair{% endif %}" role="img" aria-label="Ready: {{ d.score }} out of 100" data-live="readiness-{{ d.event_id }}">{{ d.score }}</div>
+    <div><h3 class="title-4">{% if d.problems %}{{ d.problems }} thing{{ d.problems|pluralize }} to fix{% else %}Looks ready{% endif %}</h3>
+      <p class="small muted">{{ d.name }}{% if d.draft %} · draft{% endif %}</p></div>
+  </div>
+  <ul class="list readiness__list">{% for c in d.checks %}
+    <li class="readiness__row readiness__row--{{ c.state }}">
+      <span class="status-mark status-mark--{% if c.state == 'problem' %}warning{% elif c.state == 'ok' %}success{% else %}info{% endif %}" aria-hidden="true">{% if c.state == 'problem' %}!{% elif c.state == 'ok' %}✓{% else %}•{% endif %}</span>
+      <span class="grow small">{{ c.text }}</span>
+      {% if c.url and c.link %}<a class="button button--ghost button--small" href="{{ c.url }}">{{ c.link }}</a>{% endif %}
+    </li>{% endfor %}
+  </ul>
+  {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+</div>

@@ -25,6 +25,8 @@ component, read_page is the fallback.
 - Ids: show / get_component return the components' JSON with every id (list_events gives your events); for pages \
 without a component read_page, whose links carry ids ("→ /console/events/12/locations/34/").
 - For edits pass only the fields that should change; leave the others null (null = keep the current value).
+- "What should I do?", "what needs my attention?": show("attention", [{}]); "is my event ready (to publish)?": \
+show("event_readiness", [{"event_id": …}]); then one sentence on the most important fix.
 - A request that changes 2 or more things (shift every Saturday set, tag all food trucks, hide the parking spots): \
 find the items, then call propose_changes once with every change (each a write tool + its arguments): the person \
 sees old → new, unticks any and applies them in one go (one Undo). Never make such changes one by one.
