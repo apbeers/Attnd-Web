@@ -598,6 +598,15 @@ class VersionTests(StudioTestCase):
         self.assertIn('publish_website', [a['name'] for a in data['actions']])
         versions = C.load(self.owner, 'website_versions', {'event_id': self.event.pk})
         self.assertTrue(any(a['name'] == 'restore_website_version' for r in versions['rows'] for a in r['actions']))
+        # Publish and the status sit above the preview; Full screen preview opens a dialog with Desktop | Mobile and
+        # Publish too (owner, Nov 21, 2026).
+        html = page.content.decode()
+        self.assertLess(html.index('Not published'), html.index('<iframe'))
+        self.assertLess(html.index('Publish'), html.index('<iframe'))
+        self.assertIn('Full screen preview', html)
+        dialog = html[html.index('data-site-full'):]
+        self.assertIn('data-site-size="mobile"', dialog)
+        self.assertIn('Publish', dialog[:dialog.index('</dialog>')])
 
 
 class ReportTests(StudioTestCase):

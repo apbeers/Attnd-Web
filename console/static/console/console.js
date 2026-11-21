@@ -90,6 +90,20 @@
     } catch (e) { /* offline: the next page load has it */ }
   };
 
+  // The Website tab's full screen preview: Desktop | Mobile. In the chat, Publish inside it closes the dialog first,
+  // so the chat's confirm card is in view.
+  document.addEventListener('click', (e) => {
+    const dialogAction = e.target.closest && e.target.closest('[data-site-full] form button, [data-site-full] [data-act]');
+    if (dialogAction && dialogAction.closest('.agent__card')) setTimeout(() => dialogAction.closest('dialog')?.close(), 0);
+  }, true);
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-site-size]');
+    if (!b) return;
+    const dialog = b.closest('[data-site-full]');
+    dialog.querySelectorAll('[data-site-size]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    dialog.querySelector('[data-site-stage]').dataset.siteStage = b.dataset.siteSize;
+  });
+
   // Native dialogs: [data-dialog-open="#id"] opens <dialog id> as a modal (the browser traps focus and Esc closes);
   // [data-dialog-close] inside closes it; a click on the backdrop closes it too. Focus goes back to the opener.
   document.addEventListener('click', (e) => {

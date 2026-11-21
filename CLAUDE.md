@@ -753,7 +753,7 @@ hosts the site.
   feed lists Studio runs as tasks `studio-<id>` (`_studio_tasks`, `?ids=`); Retry = `studio:run_retry` (JSON task).
   **Components** (`console/components/catalog_website.py`, audience `studio` = `studio.access.has_studio_access`):
   `website_overview` (sandboxed signed preview iframe of the draft only when the draft has a home page, live / draft
-  versions, the address only once published (never the raw sites host of a draft), Publish / Unpublish; no design box:
+  versions, the address only once published (never the raw sites host of a draft), Publish / Unpublish above the preview, **Full screen preview** (a native `<dialog>` over the viewport with the same signed draft, Desktop | Mobile 390×844 frame, Publish inside too; Esc closes; in the chat Publish closes it so the confirm card shows); no design box:
   changes are asked for in the chat; without a built version a **"No website yet"** empty state with **Build from your
   current website** (`bring_into_studio` with the event's source URL, shown only when it has one) and **Start from
   scratch** (`start_website_from_scratch`, `studio:start`: `design` with `studio.views.starter_instruction(event)`), both
