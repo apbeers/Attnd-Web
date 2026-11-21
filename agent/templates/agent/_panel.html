@@ -57,6 +57,7 @@
           <input type="file" class="visually-hidden" data-agent-file accept="application/pdf,image/*,text/plain,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         <label class="visually-hidden" for="agent-input">Ask Attnd</label>
         <textarea id="agent-input" name="goal" rows="1" maxlength="4000" placeholder="What should Attnd do?" data-agent-input></textarea>
+        <button type="button" class="agent__icon agent__mic" data-agent-mic aria-label="Speak" aria-pressed="false" hidden>{% icon "mic" %}</button>
         <button type="submit" class="agent__icon agent__send" data-agent-send aria-label="Send">{% icon "send" %}</button>
         <button type="button" class="agent__icon agent__stop" data-agent-stop aria-label="Stop" hidden>{% icon "stop" %}</button>
       </form>

@@ -179,9 +179,9 @@ PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
 ]
 # Browser features the site never uses are switched off (attnd.middleware.SecurityHeadersMiddleware). The console's
-# map may ask for the location; nothing else may use the camera, microphone, payment or USB.
+# map may ask for the location and Ask Attnd's voice input the microphone; nothing may use the camera, payment or USB.
 PERMISSIONS_POLICY = os.getenv('PERMISSIONS_POLICY', 'accelerometer=(), camera=(), geolocation=(self), gyroscope=(), '
-                               'magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=(), '
+                               'magnetometer=(), microphone=(self), payment=(), usb=(), interest-cohort=(), '
                                'browsing-topics=()')
 
 TESTING = len(sys.argv) > 1 and sys.argv[1] == 'test'

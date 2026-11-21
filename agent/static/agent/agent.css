@@ -233,3 +233,9 @@
 
 /* a file dragged over the chat (stage I3) */
 .agent__panel.is-dropping { outline: 2px dashed var(--color-brand); outline-offset: -6px; }
+
+/* voice input (stage I8) */
+.agent__mic.is-listening { color: var(--color-on-brand); background: var(--color-danger); border-radius: 50%;
+  animation: agent-listen 1.2s ease-in-out infinite; }
+@keyframes agent-listen { 50% { box-shadow: 0 0 0 6px var(--color-danger-soft); } }
+@media (prefers-reduced-motion: reduce) { .agent__mic.is-listening { animation: none; } }

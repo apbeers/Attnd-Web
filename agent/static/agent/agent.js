@@ -634,6 +634,34 @@
     e.target.value = '';
     if (file) attachFile(file);
   });
+  // Stage I8: speak instead of typing (the browser's own Web Speech API; hidden where it isn't available).
+  (function voice() {
+    const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const mic = $('[data-agent-mic]');
+    if (!Rec || !mic) return;
+    mic.hidden = false;
+    let rec = null;
+    let base = '';
+    const stop = () => { rec?.stop(); };
+    mic.addEventListener('click', () => {
+      if (rec) { stop(); return; }
+      rec = new Rec();
+      rec.lang = document.documentElement.lang || navigator.language || 'en-US';
+      rec.interimResults = true;
+      rec.continuous = false;
+      base = input.value ? input.value.replace(/\s*$/, ' ') : '';
+      rec.onresult = (e) => {
+        input.value = base + [...e.results].map((r) => r[0].transcript).join('');
+        fitInput();
+      };
+      rec.onend = () => { rec = null; mic.setAttribute('aria-pressed', 'false'); mic.classList.remove('is-listening'); input.focus(); };
+      rec.onerror = (e) => { if (e.error === 'not-allowed') bubble('error', 'Allow the microphone for this site to speak to Ask Attnd.'); };
+      mic.setAttribute('aria-pressed', 'true');
+      mic.classList.add('is-listening');
+      try { rec.start(); } catch (e) { rec = null; }
+    });
+  })();
+
   // Stage I3: drop a file anywhere on the panel / full-screen chat, or paste one (a screenshot, a copied file).
   panel.addEventListener('dragover', (e) => {
     if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); panel.classList.add('is-dropping'); }
