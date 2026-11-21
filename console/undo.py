@@ -176,7 +176,10 @@ def finalize(rec, label, reverses=None, via=''):
         entry = _undo_entry(rec, operations, label, reverses)
     deleted = [{'model': 'events.event', 'pk': row['pk'], 'op': 'delete', 'before': row, 'event': row['pk']}
                for row in rec.deleted_events]
-    history.record(rec.user, operations + deleted, entry, via)
+    if entry is not None and getattr(entry, 'grouped', False) and not deleted:
+        history.regroup(rec.user, entry, via)  # one History entry for the whole edit, like its one Undo
+    else:
+        history.record(rec.user, operations + deleted, entry, via)
     return entry
 
 
@@ -207,8 +210,42 @@ def _operations(rec):
     return operations
 
 
+GROUP_SECONDS = 120  # §4 autosave: edits of the same rows this close together are one Undo step
+
+
+def _grouped(rec, operations, reverses):
+    """The person's previous entry, when this save only updates the very rows it updated a moment ago (autosave
+    while typing): merged into it (its `before`, the newest `after`), so one Undo takes the whole edit back."""
+    from console.models import UndoEntry
+    if reverses is not None or any(o['op'] != 'update' for o in operations):
+        return None
+    prev = (UndoEntry.objects.filter(user=rec.user, used_at__isnull=True, reverses__isnull=True,
+                                     created_at__gte=timezone.now() - timedelta(seconds=GROUP_SECONDS))
+            .order_by('-created_at').first())
+    if prev is None or any(o['op'] != 'update' for o in prev.operations):
+        return None
+    if {(o['model'], o['pk']) for o in prev.operations} != {(o['model'], o['pk']) for o in operations}:
+        return None
+    by_row = {(o['model'], o['pk']): o for o in prev.operations}
+    for o in operations:
+        old = by_row[(o['model'], o['pk'])]
+        fields = list(dict.fromkeys(old.get('fields', []) + o.get('fields', [])))
+        after = {**old.get('after', {}), **o.get('after', {})}
+        # fields typed back to what they were are no change at all
+        fields = [f for f in fields if not same(old['before']['fields'].get(f), after.get(f))]
+        old.update(fields=fields, after={f: after[f] for f in fields})
+    prev.operations = [o for o in prev.operations if o.get('fields')] or prev.operations
+    prev.expires_at = timezone.now() + LIFETIME
+    prev.save(update_fields=['operations', 'expires_at'])
+    prev.grouped = True
+    return prev
+
+
 def _undo_entry(rec, operations, label, reverses):
     from console.models import UndoEntry
+    grouped = _grouped(rec, operations, reverses)
+    if grouped is not None:
+        return grouped
     event_id = next((o['event'] for o in operations if o.get('event')), None)
     from events.models import Event
     if event_id and not Event.objects.filter(pk=event_id).exists():

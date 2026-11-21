@@ -112,6 +112,7 @@ def publish(site, version, user):
         site.published_by = user
         site.save(update_fields=['published', 'published_at', 'published_by'])
         apply_look(site, version)
+    _attendees_now(event)
     return site
 
 
@@ -119,19 +120,29 @@ def unpublish(site):
     with transaction.atomic(), content.batch_changes(site.event):
         site.published = None
         site.save(update_fields=['published'])
+    _attendees_now(site.event)
     return site
+
+
+def _attendees_now(event):
+    """The website's address (bundle `event.website_url`) reaches attendees at once, without the app content's
+    Publish (§4: events.drafts overlays it live); its app look waits for Publish changes like other edits."""
+    from events import drafts
+    drafts.sync(event.pk)
 
 
 def suspend(site, reason):
     with content.batch_changes(site.event):
         site.suspended, site.suspended_reason = True, reason[:256]
         site.save(update_fields=['suspended', 'suspended_reason'])
+    _attendees_now(site.event)
 
 
 def reinstate(site):
     with content.batch_changes(site.event):
         site.suspended, site.suspended_reason = False, ''
         site.save(update_fields=['suspended', 'suspended_reason'])
+    _attendees_now(site.event)
 
 
 def switch_plan(event, plan):

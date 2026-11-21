@@ -351,7 +351,7 @@ def _run_refresh(job):
     _geocode_new_locations(event, changes)
     cs = diff.save_changeset(event, job, changes, notes=data.get('notes', ''))
 
-    auto_applied = 0
+    auto_applied, joined_draft = 0, False
     if event.update_mode != Event.UPDATE_REVIEW and cs.status == ChangeSet.PENDING and not pasted:
         decisions = diff.default_decisions(cs, minor_only=event.update_mode == Event.UPDATE_MINOR)
         # Even in automatic mode, removals wait for a person (default_decisions already leaves out
@@ -359,7 +359,15 @@ def _run_refresh(job):
         decisions = {cid: d for cid, d in decisions.items()
                      if cs.changes.filter(pk=cid).exclude(op=Change.OP_DELETE).exists()}
         if decisions:
+            # §4: automatic mode keeps publishing straight to attendees only while the event has no unpublished
+            # changes of a person; otherwise the website's changes join that draft and wait for their Publish.
+            from events import drafts
+            straight = drafts.enabled(event) and drafts.published(event) is not None and not drafts.has_changes(event)
             auto_applied = diff.apply_changeset(cs, decisions, user=None, partial_ok=True)
+            if auto_applied and straight:
+                drafts.publish(Event.objects.get(pk=event.pk))
+            elif auto_applied and drafts.enabled(event):
+                joined_draft = True
 
     from scrape import watch
     if watched:
@@ -371,7 +379,9 @@ def _run_refresh(job):
     Event.objects.filter(pk=event.pk).update(last_refreshed_at=timezone.now())
     pending = cs.changes.filter(status='pending').count()
     if auto_applied:
-        steps(f'Applying {_plural(auto_applied, "change")}…', done=f'Applied {_plural(auto_applied, "change")} automatically')
+        steps(f'Applying {_plural(auto_applied, "change")}…',
+              done=f'Applied {_plural(auto_applied, "change")} automatically'
+              + (': they joined your unpublished changes (Publish to send them)' if joined_draft else ''))
     if pending:
         steps.finish(f'Found {_plural(pending, "change")}: waiting for your review', state='waiting')
     else:

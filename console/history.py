@@ -91,6 +91,24 @@ def record(user, operations, undo_entry=None, via=''):
     return out
 
 
+def regroup(user, undo_entry, via=''):
+    """§4 autosave: the History entries of a grouped Undo step follow its merged operations (one per row)."""
+    from console.models import HistoryRecord
+    records = {(r.log_entry.content_type.model_class()._meta.label_lower, r.log_entry.object_id): r
+               for r in HistoryRecord.objects.filter(undo=undo_entry).select_related('log_entry__content_type')}
+    now = timezone.now()
+    for op in undo_entry.operations:
+        record_ = records.get((op['model'], str(op['pk'])))
+        if record_ is None:
+            record(user, [op], undo_entry, via)
+            continue
+        entry = record_.log_entry
+        entry.action_time, entry.change_message = now, change_message(op)
+        entry.save(update_fields=['action_time', 'change_message'])
+        record_.values = _values(op)
+        record_.save(update_fields=['values'])
+
+
 # ---------------------------------------------------------------------------
 # The readable timeline (console History page, item details, the chat's object_history card)
 # ---------------------------------------------------------------------------

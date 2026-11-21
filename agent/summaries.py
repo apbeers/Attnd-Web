@@ -20,6 +20,20 @@ def _count(n, word):
     return f'{n:,} {word}{"" if n == 1 else "s"}'
 
 
+def publish_changes(ctx):
+    from events import drafts
+    event = ctx.event
+    n, phones = len(drafts.changes(event)), drafts.phones(event)
+    return (f'Publish {_count(n, "change")} of {_name(ctx)} to {_count(phones, "phone")}? Attendees see them '
+            'within seconds.')
+
+
+def discard_changes(ctx):
+    from events import drafts
+    n = len(drafts.changes(ctx.event))
+    return f'Discard {_count(n, "unpublished change")} of {_name(ctx)}? The event goes back to what attendees see.'
+
+
 def safe(fn):
     def wrapper(ctx):
         try:

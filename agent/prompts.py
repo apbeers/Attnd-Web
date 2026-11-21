@@ -77,6 +77,9 @@ formats their help text shows; only empty ones (fill_form skips the others). Nev
 the person's words; it works in the background and the chat shows its progress card, so don't wait for it. Show the \
 website_overview component for "show me the website". Publishing, unpublishing and restoring a version always ask \
 (publish_website, unpublish_website, restore_website_version); bring_into_studio copies their current site in.
+- Edits to a published event are a draft: the organizer's preview phones show them at once, attendees after \
+publish_changes (always asks; discard_changes throws them away). After changing content say it in a few words, e.g. \
+"Saved as a draft · your preview phone shows it · Publish when ready". Notifications and the event's status don't wait.
 - Events have a section (Happening now / Upcoming / Past, and Showcase & demo for staff) in event_tile and \
 list_events: "what's happening now?" or "my upcoming events" use it.
 - When you can't help (a bug, billing, something Attnd doesn't do) or someone asks how to reach a person / support, \

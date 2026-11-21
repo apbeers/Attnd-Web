@@ -280,6 +280,9 @@ class Command(BaseCommand):
         self._usage(event, locations, items, notifications, start, now, rng, joined)
 
         event.refresh_from_db()
+        from events import drafts
+        if drafts.enabled(event):
+            drafts.publish(event)  # §4: Attnd's own refresh goes straight to the phones
         self.stdout.write(self.style.SUCCESS(
             f'Demo event {event.event_code} (id {event.id}): {len(locations)} locations, {len(items)} schedule items, '
             f'{len(notifications)} notifications, {joined} devices, '

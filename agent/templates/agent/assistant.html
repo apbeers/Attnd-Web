@@ -24,6 +24,7 @@
         <p class="muted">Events, overviews, locations, the schedule and notifications open here at full size. Tap one for its details.</p>
       </div>{% endfor %}
     </div>
+    {% if agent_event and agent_event.status != 'draft' %}<div class="publish-bar-slot canvas__publish" data-publish-bar="{% url 'console:event_changes' agent_event.id %}?bar=1" aria-live="polite"></div>{% endif %}
     <div class="canvas__overlay" data-canvas-overlay role="dialog" aria-modal="true" aria-labelledby="canvas-overlay-title" hidden>
       <div class="canvas__overlay-head">
         <button type="button" class="crumbs__back" data-overlay-back aria-label="Back">{% icon "arrow-left" %}</button>

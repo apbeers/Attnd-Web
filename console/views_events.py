@@ -22,6 +22,7 @@ from django.template.loader import render_to_string
 from django import forms
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from attnd.links import join_url, qr_png
 from console.recent_auth import recent_auth_required, require as require_recent_auth
@@ -1114,6 +1115,54 @@ _SCREEN = P('string', 'The app screen: home (the Home tab), event_info (the even
                                                    'updates_tab', 'onboarding'])
 _MATCH = P('string', "Only for one category or tag: 'category:<category>' (places of that category; schedule items "
            "at them) or 'tag:<tag>'. null = the whole screen. Only item_detail and place_detail.", nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Unpublished changes (batch 6 §4): the rows are the draft; attendees see the last Publish
+# ---------------------------------------------------------------------------
+
+@agent_action('unpublished_changes', "What changed in an event since its last Publish (field by field, draft → what "
+              "attendees see), and how many phones would get it.", kind='read')
+@event_view
+def event_changes(request, event):
+    if request.GET.get('bar'):  # the sticky bar on every event page (console.js fetches it)
+        from console import components as C
+        data = C.load(request.user, 'unpublished_changes', {'event_id': event.pk})
+        return HttpResponse(C.render('unpublished_changes', data, request, surface='page', part='bar')
+                            if data['count'] else '')
+    return render(request, 'console/changes_unpublished.html', _ctx(event, 'overview'))
+
+
+@agent_action('publish_changes', "Publish an event's unpublished changes to the attendees' phones (they see them "
+              "within seconds). Notifications and the event's status never wait for this.", confirm=True,
+              summary=S.publish_changes, title='Published the changes')
+@event_view
+@require_POST
+def event_publish_changes(request, event):
+    from events import drafts
+    n = len(drafts.changes(event))
+    drafts.publish(event, request.user)
+    text = f'Published {n} change{"" if n == 1 else "s"} to the attendees\u2019 phones.' if n else 'Published.'
+    if _wants_json(request):
+        return JsonResponse({'saved': True, 'message': text})
+    messages.success(request, text)
+    return redirect(request.POST.get('next') if url_has_allowed_host_and_scheme(request.POST.get('next'), None)
+                    else reverse('console:event', args=[event.pk]))
+
+
+@agent_action('discard_changes', "Throw away an event's unpublished changes: the draft goes back to what attendees "
+              "see (undoable).", confirm=True, summary=S.discard_changes, title='Discarded the unpublished changes')
+@event_view
+@require_POST
+def event_discard_changes(request, event):
+    from events import drafts
+    n = len(drafts.changes(event))
+    drafts.discard(event, request.user)
+    text = f'Discarded {n} unpublished change{"" if n == 1 else "s"}.'
+    if _wants_json(request):
+        return JsonResponse({'saved': True, 'message': text})
+    messages.success(request, text)
+    return redirect(reverse('console:event', args=[event.pk]))
 
 
 class LiveActivityForm(forms.Form):

@@ -458,6 +458,7 @@ def location_form(user, event_id=None, location_id=None, event=None, location=No
                          submit=[{'label': 'Save', 'style': 'primary'},
                                  {'label': 'Save & add another', 'style': 'outline', 'name': 'save_add', 'value': '1'}],
                          locked=locked)
+        data['edit_autosave'] = bool(loc.pk)  # §4: edits save as you go; a new place still has its Add bar
     actions = []
     if loc.pk:
         if loc.locked_fields:
@@ -550,6 +551,7 @@ def schedule_item_form(user, event_id=None, item_id=None, event=None, item=None,
                          submit=[{'label': 'Save', 'style': 'primary'},
                                  {'label': 'Save & add another', 'style': 'outline', 'name': 'save_add', 'value': '1'}],
                          locked=locked)
+        data['edit_autosave'] = bool(it.pk)
     actions = []
     if it.pk:
         if it.locked_fields:
@@ -695,6 +697,7 @@ def event_form(user, event_id=None, event=None, form=None):
                   _context_details(form, locked)]
         data = form_json(form, layout, action=reverse('console:event_edit', args=[event.pk]),
                          submit=[{'label': 'Save', 'style': 'primary'}], locked=locked)
+        data['edit_autosave'] = True
     return {'id': event.pk, 'name': event.name, 'title': f'{event.name}: details', 'form': data}
 
 

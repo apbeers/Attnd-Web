@@ -60,6 +60,9 @@ class BundleTests(V2Base):
         self.assertEqual(self.get(url, HTTP_IF_NONE_MATCH=first['ETag']).status_code, 304)
         self.loc.name = 'Main Stage'
         self.loc.save()
+        self.assertEqual(self.get(url, HTTP_IF_NONE_MATCH=first['ETag']).status_code, 304)  # §4: a draft change
+        from events import drafts
+        drafts.publish(self.event)
         second = self.get(url, HTTP_IF_NONE_MATCH=first['ETag'])
         self.assertEqual(second.status_code, 200)
         self.assertNotEqual(second['ETag'], first['ETag'])

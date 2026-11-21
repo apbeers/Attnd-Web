@@ -91,6 +91,7 @@
       </nav>
       <div>{% block event_content %}{% endblock %}</div>
     </div>
+    {% if event.status != 'draft' %}<div class="publish-bar-slot" data-publish-bar="{% url 'console:event_changes' event.id %}?bar=1" aria-live="polite"></div>{% endif %}
   {% else %}
     {% block content %}{% endblock %}
   {% endif %}

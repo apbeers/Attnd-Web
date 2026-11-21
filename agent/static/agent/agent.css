@@ -364,3 +364,6 @@
 /* Scrolled up while new lines arrive: a pill back to the newest (agent.js stick) */
 .agent__newpill { align-self: center; position: relative; z-index: 2; margin-top: calc(-1 * var(--space-6, 2.5rem)); margin-bottom: var(--space-2); box-shadow: var(--shadow-md, 0 4px 14px rgb(0 0 0 / .15)); }
 .agent__newpill[hidden] { display: none; }
+
+/* §4: the unpublished-changes bar at the bottom of the canvas */
+.canvas__publish { position: sticky; bottom: var(--space-3); margin: var(--space-3) var(--space-4) 0; }

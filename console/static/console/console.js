@@ -560,6 +560,102 @@
   }
   setInterval(phonesTick, 10000);
 
+  // §4: edit forms save as you type (a pause of ~1.5 s, or leaving a field): the same view as Save, answered as
+  // JSON (console.middleware with X-Attnd-Component). "Saving… · Saved · Undo"; errors go under their field and
+  // nothing invalid is saved; Cmd/Ctrl+S saves now; leaving with a save pending asks first. New things keep Add.
+  const editTimers = new WeakMap();
+  const editBusy = new Set();
+  function editStatus(form, html) {
+    const line = form.querySelector('[data-autosave-edit-status]');
+    if (line) line.innerHTML = html;
+  }
+  function scheduleEdit(form, ms) {
+    clearTimeout(editTimers.get(form));
+    form.dataset.dirty = '1';
+    editTimers.set(form, setTimeout(() => saveEdit(form), ms));
+  }
+  async function saveEdit(form) {
+    clearTimeout(editTimers.get(form));
+    if (editBusy.has(form)) { form.dataset.again = '1'; return; }
+    if (!form.dataset.dirty) return;
+    delete form.dataset.dirty;
+    editBusy.add(form);
+    editStatus(form, '<span class="spinner" aria-hidden="true"></span> Saving…');
+    const csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+    try {
+      const r = await fetch(form.getAttribute('action') || location.href, {
+        method: 'POST', body: new FormData(form), credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-CSRFToken': csrf ? csrf.value : '',
+                   'X-Attnd-Component': form.dataset.formComponent || '' } });
+      const d = await r.json().catch(() => ({}));
+      form.querySelectorAll('[data-autosave-error]').forEach((x) => x.remove());
+      if (d.invalid && d.html) {
+        const fresh = new DOMParser().parseFromString(d.html, 'text/html');
+        const names = [];
+        fresh.querySelectorAll('.field__error').forEach((err) => {
+          const field = err.closest('.field');
+          const input = field && field.querySelector('[name]');
+          const mine = input && form.querySelector(`[name="${CSS.escape(input.name)}"]`);
+          const box = mine && (mine.closest('.field') || mine.parentElement);
+          if (!box) return;
+          const note = err.cloneNode(true);
+          note.dataset.autosaveError = '';
+          box.appendChild(note);
+          names.push(field.querySelector('.field__label')?.textContent.trim() || input.name);
+        });
+        editStatus(form, `<span class="tone-danger">Not saved: check ${names.join(', ') || 'the form'}.</span>`);
+      } else if (d.saved) {
+        const undo = d.undo ? ` · <button type="button" class="link-button small" data-autosave-undo="${d.undo}">Undo</button>` : '';
+        editStatus(form, `<span class="status-mark status-mark--success" aria-hidden="true">✓</span> Saved${undo}`);
+        document.dispatchEvent(new CustomEvent('attnd:saved', { detail: { form } }));
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      form.dataset.dirty = '1';
+      editStatus(form, '<span class="tone-danger">Couldn\u2019t save. Trying again when you type.</span>');
+    } finally {
+      editBusy.delete(form);
+      if (form.dataset.again) { delete form.dataset.again; saveEdit(form); }
+    }
+  }
+  document.addEventListener('input', (e) => {
+    const form = e.target.closest && e.target.closest('form[data-autosave-edit]');
+    if (form && e.target.name && e.target.type !== 'file') scheduleEdit(form, 1500);
+  });
+  document.addEventListener('change', (e) => {
+    const form = e.target.closest && e.target.closest('form[data-autosave-edit]');
+    if (form && e.target.name) scheduleEdit(form, e.target.type === 'file' ? 50 : 300);
+  });
+  document.addEventListener('focusout', (e) => {
+    const form = e.target.closest && e.target.closest('form[data-autosave-edit]');
+    if (form && form.dataset.dirty) scheduleEdit(form, 150);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 's') return;
+    const form = document.activeElement?.closest?.('form[data-autosave-edit]')
+      || document.querySelector('form[data-autosave-edit]');
+    if (!form) return;
+    e.preventDefault();
+    form.dataset.dirty = '1';
+    saveEdit(form);
+  });
+  window.addEventListener('beforeunload', (e) => {
+    const pending = [...document.querySelectorAll('form[data-autosave-edit]')].some((f) => f.dataset.dirty || editBusy.has(f));
+    if (pending) { e.preventDefault(); e.returnValue = ''; }
+  });
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest && e.target.closest('[data-autosave-undo]');
+    if (!b) return;
+    const form = b.closest('form');
+    const csrf = form?.querySelector('[name=csrfmiddlewaretoken]') || document.querySelector('[name=csrfmiddlewaretoken]');
+    try {
+      const r = await fetch(`/console/undo/${b.dataset.autosaveUndo}/`, { method: 'POST', credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-CSRFToken': csrf ? csrf.value : '' } });
+      if (r.ok) location.reload();  // the form shows the values from before
+    } catch (err) { /* keep the line */ }
+  });
+
   // §4: the "N unpublished changes · Review · Discard · Publish" bar (event pages, the chat's canvas): fetched, so
   // pages don't pay for the diff; again after every save (attnd:saved) and every 30 s while visible.
   async function publishBars() {

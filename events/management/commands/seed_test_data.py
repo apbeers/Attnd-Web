@@ -211,6 +211,11 @@ class Command(BaseCommand):
                     event=event,
                 )
 
+        from events import drafts  # §4: the App Review samples' refresh goes straight to the phones
+        for code in [e['event_code'] for e in self.EVENTS]:
+            ev = Event.objects.filter(event_code=code).first()
+            if ev is not None and drafts.enabled(ev):
+                drafts.publish(ev)
         self.stdout.write(self.style.SUCCESS('Test data seeded successfully.'))
 
     def _get_or_create_fixture_user(self):

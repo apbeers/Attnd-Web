@@ -217,3 +217,26 @@ def live_activity_settings(user, event_id=None, event=None, form=None):
                      action=reverse('console:event_live_activity', args=[event.pk]))
     data.update(autosave=True, no_ai=True)
     return {'event_id': event.pk, 'name': f'Live Activity · {event.name}', 'form': data}
+
+
+@component('unpublished_changes', 'Unpublished changes', "What changed in an event since its last Publish (the draft: "
+           "the organizer's preview phones see it; attendees see the last Publish): field-level rows draft → "
+           "published, how many phones, Publish (asks) and Discard (asks).",
+           actions=(('publish_changes', 'Publish'), ('discard_changes', 'Discard')),
+           page=lambda ids: reverse('console:event_changes', args=[ids['event_id']]))
+def unpublished_changes(user, event_id=None, event=None):
+    from events import drafts
+    event = editable_event(user, event_id, event)
+    rows = drafts.changes(event) if event.status != 'draft' else []
+    phones = drafts.phones(event)
+    n = len(rows)
+    return {'event_id': event.pk, 'name': f'Unpublished changes · {event.name}', 'count': n, 'rows': rows[:200],
+            'phones': phones, 'draft_event': event.status == 'draft',
+            'summary': f'{n} unpublished change{"" if n == 1 else "s"}',
+            'review_url': reverse('console:event_changes', args=[event.pk]),
+            'actions': [{'name': 'discard_changes', 'style': 'ghost',
+                         'confirm_text': f'Discard {n} unpublished change{"" if n == 1 else "s"}? The event goes back '
+                                         'to what attendees see.'},
+                        {'name': 'publish_changes', 'style': 'primary',
+                         'confirm_text': f'Publish {n} change{"" if n == 1 else "s"} to {phones} '
+                                         f'phone{"" if phones == 1 else "s"}?'}] if n else []}

@@ -389,6 +389,8 @@ class BundleAndJoinTests(TestCase):
         self.assertEqual(set(theme), {'light', 'dark'})
         self.event.theme_apps = False
         self.event.save()
+        from events import drafts
+        drafts.publish(self.event)  # §4: the look is published with the content
         self.assertIsNone(self.bundle()['event']['theme'])
         Event.objects.filter(pk=self.event.pk).update(theme={}, theme_apps=True)
         self.event.refresh_from_db()

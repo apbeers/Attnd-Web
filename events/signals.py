@@ -1,6 +1,6 @@
 """Bump Event.content_version whenever attendee-visible content changes."""
 
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 from events.content import maybe_bump
@@ -14,6 +14,15 @@ _EVENT_BOOKKEEPING = {'content_version', 'content_updated_at', 'last_refreshed_a
                       'cover_cost_usd'}  # (theme_web: the website only; the apps' theme_apps does change the bundle)
 
 
+@receiver(pre_save, sender=Event)
+def _event_before(sender, instance, raw=False, **kwargs):
+    """§4: remember what attendees see without a Publish (status, paid, listing), to tell after the save."""
+    if raw or not instance.pk:
+        return
+    from events.drafts import BYPASS_EVENT_FIELDS
+    instance._bypass_before = Event.objects.filter(pk=instance.pk).values(*BYPASS_EVENT_FIELDS).first()
+
+
 @receiver(post_save, sender=Event)
 def _event_saved(sender, instance, created, update_fields=None, **kwargs):
     if created:
@@ -21,6 +30,13 @@ def _event_saved(sender, instance, created, update_fields=None, **kwargs):
     if update_fields and set(update_fields) <= _EVENT_BOOKKEEPING:
         return
     maybe_bump(instance.pk)
+    from events import drafts
+    before = getattr(instance, '_bypass_before', None)
+    if before and any(before.get(f) != getattr(instance, f) for f in drafts.BYPASS_EVENT_FIELDS):
+        if instance.status != Event.STATUS_DRAFT and not drafts.published(instance):
+            drafts.publish(instance, push=False)  # its first Publish (draft → published)
+        else:
+            drafts.sync(instance.pk)  # status, paid, listing: straight to attendees
 
 
 @receiver([post_save, post_delete], sender=Location)
@@ -33,6 +49,8 @@ def _content_changed(sender, instance, **kwargs):
 def _notification_saved(sender, instance, update_fields=None, **kwargs):
     if instance.sent:
         maybe_bump(instance.event_id)
+        from events import drafts
+        drafts.sync(instance.event_id)  # §4: sent notifications never wait for Publish
 
 
 @receiver(post_save, sender=Location)

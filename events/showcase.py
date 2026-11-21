@@ -178,6 +178,9 @@ def load(spec, now=None, owner=None):
                              ('Schedule tip', 'Like the sets you want and we’ll remind you 15 minutes before.', 20)):
         when = now - timedelta(minutes=ago)
         Notification.objects.create(event=event, title=title, body=body, send_time=when, sent=True, sent_at=when)
+    from events import drafts
+    if drafts.enabled(event):
+        drafts.publish(Event.objects.get(pk=event.pk))  # §4: Attnd's own refresh goes straight to the phones
     return event
 
 

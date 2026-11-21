@@ -497,6 +497,21 @@ class EventRevision(models.Model):
         return f'{self.event} v{self.content_version}: {self.summary}'
 
 
+class PublishedBundle(models.Model):
+    """What attendees see (batch 6 §4): the event's content as of its last Publish. The database rows are the draft
+    the console edits (preview phones see it live); `events/drafts.py` publishes, diffs and discards."""
+    event = models.OneToOneField(Event, on_delete=models.CASCADE, related_name='published')
+    # The content_version attendees get (publish, and changes that bypass the draft: notifications, status).
+    version = models.PositiveIntegerField()
+    source = models.JSONField()  # content.snapshot + the app look, for the diff and Discard
+    bundles = models.JSONField()  # {"<X-Attnd-Sections>": bundle} built at publish time
+    published_at = models.DateTimeField(default=dj_tz.now)
+    published_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def __str__(self):
+        return f'{self.event} published v{self.version}'
+
+
 class EventInvite(models.Model):
     """A team invitation for an email with no account yet. It becomes an EventMember when someone
     signs up or signs in with that email (console.accounts.claim_invites)."""

@@ -32,7 +32,7 @@ from events import layout as screen_layout
 from events import usage
 from events.apis import (ApiKeyRequired, _leave, _not_found, ci_device_refused, demo_event, is_ci_request, live_events,
                          lookup_event, nearby_events, register_device)
-from events.models import Device, is_ci_device
+from events.models import Device, Event, is_ci_device
 
 API_VERSION = 2
 
@@ -49,11 +49,12 @@ def _etag(event, sections=0):
     return _etag_for(event.id, event.content_version, sections)
 
 
-def _etag_for(event_id, content_version, sections=0):
+def _etag_for(event_id, content_version, sections=0, audience=''):
     # API-024: apps that send X-Attnd-Sections get a body with the layout for that catalogue version, so the
     # version is part of the ETag (an app update with a newer catalogue never gets a 304 for the older body).
+    # §4: the draft (preview phones) has ETags of its own (`d`); attendees keep the plain ones.
     suffix = f'-s{sections}' if sections else ''
-    return f'"e{event_id}-v{content_version}{suffix}"'
+    return f'"e{event_id}-v{content_version}{audience}{suffix}"'
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -114,6 +115,21 @@ def _bundle_bytes(event, request, sections=0):
     return body
 
 
+def _is_preview(request, event_id):
+    device_id = (request.headers.get('X-Device-Id') or '')[:128]
+    return bool(device_id) and Device.objects.previews().filter(id=device_id, event_id=event_id).exists()
+
+
+def _published_bytes(event, pb, request, sections=0):
+    key = f'bundle:pub:{event.id}:{pb.version}:{pb.published_at.timestamp():.0f}:s{sections}'
+    body = cache.get(key)
+    if body is None:
+        from events import drafts
+        body = json.dumps(drafts.attendee_bundle(event, pb, sections, request), cls=DjangoJSONEncoder).encode()
+        cache.set(key, body, BUNDLE_CACHE_SECONDS)
+    return body
+
+
 def _touch_device(request, event_id=None, version=None):
     device_id = request.headers.get('X-Device-Id')
     if not device_id or (is_ci_request(request) and not is_ci_device(device_id)):
@@ -136,25 +152,37 @@ class BundleV2(ApiKeyRequired, View):
     ci_scope = 'event'
 
     def get(self, request, event_id):
-        events = live_events().filter(id=event_id)
+        from events import drafts
         sections = screen_layout.sections_header(request)
+        # §4: preview phones get the draft (the rows as they are now, also of a draft event; ETag `…d`); attendees the
+        # published copy (PublishedBundle) when the event has one, else the rows (as before).
+        preview = _is_preview(request, event_id)
+        events = (Event.objects if preview else live_events()).filter(id=event_id)
+        audience = 'd' if preview else ''
         etag = version = None
         if_none_match = request.headers.get('If-None-Match')
         if if_none_match:
             # The usual poll: answer 304 from the version alone, without loading the event or its content.
-            version = events.values_list('content_version', flat=True).first()
+            version = None if preview else drafts.attendee_version(event_id)
+            if version is None:
+                version = events.values_list('content_version', flat=True).first()
             if version is None:
                 return JsonResponse({'error': 'Not found'}, status=404)
-            etag = _etag_for(event_id, version, sections)
+            etag = _etag_for(event_id, version, sections, audience)
         if etag is not None and if_none_match == etag:
             resp = HttpResponse(status=304)
         else:
-            event = events.first()
+            event = (events if preview else events.select_related('published')).first()
             if event is None:
                 return JsonResponse({'error': 'Not found'}, status=404)
-            etag = _etag(event, sections)
-            version = event.content_version
-            resp = HttpResponse(_bundle_bytes(event, request, sections), content_type='application/json')
+            pb = None if preview else (getattr(event, 'published', None) or drafts.ensure(event))
+            if pb is not None:
+                version = pb.version
+                resp = HttpResponse(_published_bytes(event, pb, request, sections), content_type='application/json')
+            else:
+                version = event.content_version
+                resp = HttpResponse(_bundle_bytes(event, request, sections), content_type='application/json')
+            etag = _etag_for(event_id, version, sections, audience)
         resp['ETag'] = etag
         resp['Cache-Control'] = 'no-cache'
         _touch_device(request, event_id, version)
@@ -166,10 +194,14 @@ class JoinV2(ApiKeyRequired, View):
     ci_scope = 'event'
 
     def post(self, request, event_id):
-        event = live_events().filter(id=event_id).first()
-        if event is None:
-            return JsonResponse({'error': 'Not found'}, status=404)
         body = _body(request)
+        event = live_events().filter(id=event_id).first()
+        if event is None:  # §4: a preview phone may join a draft event (its token says whose)
+            from events import preview
+            draft = Event.objects.filter(id=event_id, status=Event.STATUS_DRAFT).first()
+            if draft is None or preview.read_token(body.get('preview_token'), draft) is None:
+                return JsonResponse({'error': 'Not found'}, status=404)
+            event = draft
         device_id = body.pop('device_id', '')
         if not device_id:
             return JsonResponse({'error': 'device_id is required'}, status=400)
@@ -204,7 +236,7 @@ class ChangesV2(ApiKeyRequired, View):
 
     def get(self, request, event_id):
         from events import preview
-        version = live_events().filter(id=event_id).values_list('content_version', flat=True).first()
+        version = Event.objects.filter(id=event_id).values_list('content_version', flat=True).first()
         if version is None:
             return JsonResponse({'error': 'Not found'}, status=404)
         since = request.GET.get('since', '')

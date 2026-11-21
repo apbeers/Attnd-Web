@@ -393,13 +393,23 @@ def jitter_ms(n_devices):
     return 10000
 
 
+def _preview_devices(event):
+    return Device.objects.real().filter(event=event).exclude(preview_by__isnull=True, preview_until__isnull=True)
+
+
+def notify_previews(event):
+    """§4: a draft change reaches only the event's preview phones (no random wait)."""
+    data = {'type': 'content_updated', 'content_version': event.content_version, 'jitter_ms': 0}
+    return deliver(event, data=data, silent=True, devices=_preview_devices(event))
+
+
 def notify_content_updated(event):
     """The silent `content_updated` push: attendees with `jitter_ms` scaled to the event, preview phones with 0."""
     attendees = Device.objects.attendees()
     n = attendees.filter(event=event).exclude(push_token='').count()
     data = {'type': 'content_updated', 'content_version': event.content_version}
     result = deliver(event, data={**data, 'jitter_ms': jitter_ms(n)}, silent=True, devices=attendees)
-    previews = Device.objects.real().filter(event=event).exclude(preview_by__isnull=True, preview_until__isnull=True)
+    previews = _preview_devices(event)
     if previews.exclude(push_token='').exists():
         more = deliver(event, data={**data, 'jitter_ms': 0}, silent=True, devices=previews)
         result = SendResult(delivered=result.delivered + more.delivered, failed=result.failed + more.failed,
@@ -449,11 +459,17 @@ def _send_content_push(event_id):
         _timers.pop(event_id, None)
         _last_sent[event_id] = time.monotonic()
     try:
-        event = Event.objects.filter(pk=event_id).exclude(status=Event.STATUS_DRAFT).first()
-        if event is not None:
-            notify_content_updated(event)
-            from events import plan_suggestions
-            plan_suggestions.schedule(event_id)  # API-021: rewrite them once the edits settle (background)
+        event = Event.objects.filter(pk=event_id).first()
+        if event is None:
+            return
+        from events.models import PublishedBundle
+        published = PublishedBundle.objects.filter(event=event).values_list('version', flat=True).first()
+        if event.status == Event.STATUS_DRAFT or (published is not None and published < event.content_version):
+            notify_previews(event)  # §4: a draft change: only the preview phones (attendees wait for Publish)
+            return
+        notify_content_updated(event)
+        from events import plan_suggestions
+        plan_suggestions.schedule(event_id)  # API-021: rewrite them once the edits settle (background)
     except Exception:
         logger.exception('Content push for event %s failed', event_id)
     finally:

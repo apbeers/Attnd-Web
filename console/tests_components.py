@@ -66,6 +66,7 @@ class ComponentTestCase(TestCase):
             'event_theme_editor': {'event_id': self.event.pk},
             'ai_credit_meter': {},  # credit/
             'live_activity_settings': {'event_id': self.event.pk},
+            'unpublished_changes': {'event_id': self.event.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -84,6 +85,7 @@ class ComponentTestCase(TestCase):
             'event_theme': 'Generate with AI', 'app_screens': 'What each screen of the apps shows', 'event_theme_editor': 'Where the colours show',
             'ai_credit_meter': 'used this month',
             'live_activity_settings': 'Urgent announcements always show',
+            'unpublished_changes': "attendees can't open it yet",
         }
 
     def request(self, user=None):

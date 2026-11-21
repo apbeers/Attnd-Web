@@ -157,6 +157,25 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   writes (drag-to-reorder) and deleting a whole event. Expired entries are purged by `run_scheduled_tasks`. Tests:
   `console/tests_undo.py`.
 - **Live editing:** every attendee-visible change bumps `content_version` and schedules a silent push (`events.push.content_changed`: the first change at once, later ones within 15 s grouped into one follow-up; API-026); it goes to every joined device with a push token, `subscribed` or not (API-007), attendees with `jitter_ms` scaled to the event (< 100 phones 1 s, < 1,000 5 s, else 10 s), preview phones with 0. **Preview phones** (API-026, `events/preview.py`): the QR card's **Preview on my phone** QR / Open as preview = the join link + a signed token (person + event, 7 days); `join/` with `preview_token` marks `Device.preview_until` / `preview_by` (not an attendee: `Device.objects.attendees()` for every count, no free spot; ≤ 3 live per event); `GET events/<id>/changes/?since=` long-polls ≤ 25 s for them only (DB connection released while sleeping; ≤ 2 waiting per process, shared with Ask Attnd's long-poll in `events/longpoll.py`; over a cap `retry_after: 15`); Remove on the card (`remove_preview_phone`). `bundle/` records `Device.last_version`, so the card's live line says "Updated on 31 of 37 phones" (attendee phones seen in the last day, `console:event_phones`, polled every 10 s). Attendee live connections need an async server (ROADMAP). Open apps refresh on that push, on resume and pull-to-refresh, and poll every 60 s only without a push token (5 min safety poll with one). App layout autosaves. The "Live on your phone" panel (QR) replaces the old phone mock-up; `_phone_preview.html` (`console.views_events._preview_html`) is now only Studio's app-look preview.
+- **Draft and Publish** (batch 6 §4, owner Nov 21, 2026; `events/drafts.py`): the database rows are the **draft**
+  (every console save, Ask Attnd change, chat card, AI review); the organizer's preview phones (API-026) see it live
+  (draft-only pushes reach only them, `push.notify_previews`; preview phones may even join a draft event). Attendees
+  get the **published copy** (`PublishedBundle`: version, `source` = `content.snapshot` + the app look, `bundles` per
+  catalogue version built at Publish on `SITE_URL`'s origin) until **Publish changes** (`publish_changes`, always asks:
+  "Publish 5 changes to 214 phones?"), then the usual `content_updated` push. **Bypass** (never wait): sent
+  notifications, the event's status / paid / listing, the Studio website's address (`drafts.sync` moves the attendees'
+  version; `attendee_bundle` overlays them live). An event that becomes published gets its first copy; `bundle/` makes
+  one lazily for an event without it, and the release phase runs `publish_snapshots`. **Bar** "N unpublished changes ·
+  Review · Discard · Publish" sticky on every event page and the canvas (`console:event_changes?bar=1`, fetched by
+  console.js, refreshed on `attnd:saved` and every 30 s), **Review** = the field rows (`unpublished_changes`
+  component), **Discard** restores the published copy (`discard_changes`, asks, undoable). Website watching in
+  **auto** mode publishes straight only while nobody has unpublished changes, else its changes join the draft (the
+  task's step says so). The apps' contract is unchanged; ETags: attendees as before, preview phones end in `d`.
+  **Autosave**: edit forms of places, schedule items and the event's details (`data-autosave-edit`) save ~1.5 s after
+  typing or on leaving a field through the same view (JSON via `X-Attnd-Component`), "Saving… · ✓ Saved · Undo",
+  errors under their field and nothing invalid saved, Cmd/Ctrl+S saves now, leaving with a save pending asks; saves of
+  the same rows within 2 minutes are one Undo step and one History entry (`undo._grouped`, `history.regroup`).
+  Creating stays explicit (Add / Save & add another), as do always-ask actions. Tests: `events/tests_drafts.py`.
 - **Theme** (Nov 21, 2026, owner: Layla-like): a soft lavender tint on a light base, large rounded cards (`--radius-lg`
   18px, soft violet shadows), pill buttons, badges and chips (`.chip`), bold section titles (system font stack, no web
   fonts), tabs as text with an underline indicator, breadcrumbs with a back arrow on event pages (`.crumbs` in

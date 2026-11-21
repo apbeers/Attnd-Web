@@ -47,6 +47,8 @@ class PerfBase(TestCase):
         self.event.refresh_from_db()
         self.client = Client()
         self.url = f'/api/v2/events/{self.event.id}/bundle/'
+        from events import drafts
+        drafts.publish(self.event, push=False)  # §4: what attendees get (built once, here)
 
     def get(self, path, **extra):
         return self.client.get(path, secure=True, **AUTH, **extra)
@@ -85,6 +87,8 @@ class BundlePerfTests(PerfBase):
         loc = self.locations[0]
         loc.name = 'Renamed'
         loc.save()  # bumps content_version
+        from events import drafts
+        drafts.publish(self.event)  # §4: attendees get it after Publish
         second = self.get(self.url).json()
         self.assertGreater(second['content_version'], first['content_version'])
         self.assertIn('Renamed', [loc['name'] for loc in second['locations']])

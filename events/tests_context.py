@@ -149,6 +149,8 @@ class BundleTests(TestCase):
         self.item.context = {'price': '$5'}
         self.item.save()
         self.assertGreater(Event.objects.get(pk=self.event.pk).content_version, version)
+        from events import drafts
+        drafts.publish(self.event)  # §4: attendees see edits after Publish
         again = self.get(f'/api/v2/events/{self.event.id}/bundle/', HTTP_IF_NONE_MATCH=etag)
         self.assertEqual(again.status_code, 200)
         self.assertEqual(again.json()['schedule'][0]['context'], {'price': '$5'})
