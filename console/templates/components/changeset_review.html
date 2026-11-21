@@ -6,12 +6,12 @@ Discard always ask (in the chat through the confirm gate, on pages with the brow
   <form method="post" action="{{ d.action }}" class="stack stack--tight"{% if surface == 'chat' %} data-component-form data-confirm-action="apply_ai_changes"{% endif %}>{% csrf_token %}
     <ul class="list list--boxed review-list">
     {% for ch in d.changes %}{% if ch.pending %}<li class="review-change review-change--{{ ch.op }}">
-      <label class="review-change__head"><input type="checkbox" name="accept_{{ ch.id }}" {% if not ch.conflict %}checked{% endif %}>
+      <label class="review-change__head"><input type="checkbox" name="accept_{{ ch.id }}" {% if not ch.all_conflict %}checked{% endif %}>
         <span class="badge badge--{% if ch.op == 'create' %}success{% elif ch.op == 'delete' %}danger{% else %}info{% endif %}">{% if ch.op == 'create' %}New{% elif ch.op == 'delete' %}Remove{% else %}Change{% endif %}</span>
         <strong>{{ ch.title|default:ch.entity }}</strong> <span class="small muted">{{ ch.entity }}</span>
         {% if ch.conflict %}<span class="badge badge--warning" title="You edited this by hand">Your edit</span>{% endif %}</label>
       {% if ch.fields %}<ul class="review-fields">{% for f in ch.fields %}<li>
-        {% if ch.op == 'update' and surface != 'chat' %}<input type="checkbox" name="field_{{ ch.id }}_{{ f.name }}" {% if not f.conflict %}checked{% endif %} aria-label="Keep {{ f.label }}">{% endif %}
+        {% if ch.op == 'update' %}<input type="checkbox" name="field_{{ ch.id }}_{{ f.name }}" {% if not f.conflict %}checked{% endif %} aria-label="Keep {{ f.label }}">{% endif %}
         <span class="small strong">{{ f.label }}:</span>
         {% if ch.op == 'update' %}<span class="diff-old small">{{ f.old|default:"(empty)"|truncatechars:160 }}</span> → {% endif %}<span class="diff-new small">{{ f.new|default:"(empty)"|truncatechars:160 }}</span></li>{% endfor %}</ul>{% endif %}
     </li>{% endif %}{% endfor %}

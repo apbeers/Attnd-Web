@@ -173,10 +173,22 @@ def build_apply_changes(args, ctx):
     if cs is None:
         return data
     wanted = {int(i) for i in (args.get('accept_change_ids') or []) if str(i).isdigit()}
+    # Fields a person edited by hand (the change's conflict_fields) are never taken unless they were ticked on the
+    # card (accept_fields) or the person asked to replace their own edits (replace_my_edits, P0 #7).
+    raw = args.get('accept_fields')
+    ticked = {str(k): set(v or []) for k, v in raw.items()} if isinstance(raw, dict) else {}
+    replace = bool(args.get('replace_my_edits'))
     for ch in cs.changes.filter(status=Change.PENDING, pk__in=wanted):
-        data[f'accept_{ch.id}'] = 'on'
-        if ch.op == Change.OP_UPDATE:
-            for f in ch.data:
+        if ch.op != Change.OP_UPDATE:
+            data[f'accept_{ch.id}'] = 'on'
+            continue
+        if str(ch.id) in ticked:
+            fields = [f for f in ch.data if f in ticked[str(ch.id)]]
+        else:
+            fields = [f for f in ch.data if replace or f not in (ch.conflict_fields or [])]
+        if fields:
+            data[f'accept_{ch.id}'] = 'on'
+            for f in fields:
                 data[f'field_{ch.id}_{f}'] = 'on'
     if args.get('notify_attendees'):
         data['notify_attendees'] = 'on'

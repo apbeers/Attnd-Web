@@ -30,7 +30,16 @@ def _review_args(action, post):
     if action != 'apply_ai_changes':
         return {}
     ids = sorted(int(k.split('_', 1)[1]) for k in post if k.startswith('accept_') and k.split('_', 1)[1].isdigit())
-    return {'accept_change_ids': ids, 'notify_attendees': bool(post.get('notify_attendees'))}
+    fields = {}
+    for k in post:  # field_<change id>_<field>: the card's per-field ticks
+        if k.startswith('field_'):
+            cid, _, name = k[6:].partition('_')
+            if cid.isdigit() and int(cid) in ids:
+                fields.setdefault(cid, []).append(name)
+    out = {'accept_change_ids': ids, 'notify_attendees': bool(post.get('notify_attendees'))}
+    if fields:
+        out['accept_fields'] = fields
+    return out
 
 
 def _expand_reviews(user, event_id=None, **_):
@@ -64,6 +73,7 @@ def changeset_review(user, event_id=None, changeset_id=None, event=None, changes
         changes.append({
             'id': ch.pk, 'op': ch.op, 'entity': ch.get_entity_display(), 'title': ch.label,
             'pending': ch.status == Change.PENDING, 'conflict': bool(ch.conflict_fields),
+            'all_conflict': bool(ch.conflict_fields) and set(ch.data) <= set(ch.conflict_fields),
             'fields': [{'name': f['name'], 'label': f['label'], 'old': str(f.get('old') or '')[:300], 'new': str(f.get('new') or '')[:300],
                         'conflict': f.get('conflict', False), 'image': f.get('is_image', False)} for f in row['fields']],
         })

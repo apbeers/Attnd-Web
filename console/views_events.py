@@ -1495,10 +1495,12 @@ def changesets(request, event):
                                                             jobs=event.ingest_jobs.all()[:10]))
 
 
-@agent_action('apply_ai_changes', 'Apply some of the AI\'s suggested changes of a review (all fields of each '
-              'accepted change).', confirm=True, summary=S.apply_changes, build=S.build_apply_changes,
+@agent_action('apply_ai_changes', "Apply some of the AI's suggested changes of a review. Fields the organizer "
+              'edited by hand ("Your edit") are kept unless replace_my_edits is true (only when they asked to '
+              'replace their own edits).', confirm=True, summary=S.apply_changes, build=S.build_apply_changes,
               params={'accept_change_ids': P('array', 'ids of the changes to accept (from the review page)',
                                              items={'type': 'integer'}),
+                      'replace_my_edits': P('boolean', 'Also take the AI value for fields edited by hand', nullable=True),
                       'notify_attendees': P('boolean', 'Also tell attendees their app was updated', nullable=True)},
               title='Applied AI suggestions')
 @agent_action('discard_ai_changes', 'Discard every pending AI suggestion of a review.', confirm=True,

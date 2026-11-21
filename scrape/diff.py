@@ -449,6 +449,10 @@ def apply_changeset(changeset, decisions, user=None, partial_ok=False):
                         ch.save(update_fields=['status'])
                     continue
                 fields = decision.get('fields')
+                if fields is None and ch.op == Change.OP_UPDATE and ch.conflict_fields:
+                    fields = [f for f in ch.data if f not in ch.conflict_fields]  # hand edits stay (P0 #7)
+                    if not fields:
+                        continue
                 if partial_ok and fields is not None and ch.op == Change.OP_UPDATE:
                     _keep_the_rest_for_review(ch, fields)
                 if _apply_one(event, owner, ch, fields, ref_ids):
