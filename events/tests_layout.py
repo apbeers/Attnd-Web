@@ -24,12 +24,13 @@ class CatalogueTests(SimpleTestCase):
         for screen in L.SCREENS:
             self.assertEqual(L.clean_sections(L.DEFAULTS[screen], screen), L.DEFAULTS[screen], screen)
         # The same lists as ScreenLayout.defaults in the iOS app (today's screens).
+        # ask_about stays in the catalogue (saved layouts validate) but no default shows it (Nov 21, 2026).
         self.assertEqual(types(L.DEFAULTS['item_detail']),
-                         ['header', 'about', 'performers', 'good_to_know', 'links', 'place_link', 'ask_about'])
+                         ['header', 'about', 'performers', 'good_to_know', 'links', 'place_link'])
         self.assertEqual(types(L.DEFAULTS['place_detail']),
-                         ['header', 'walk_map', 'ask_about', 'about', 'hours', 'good_to_know', 'menu', 'links',
-                          'at_this_location'])
-        self.assertEqual(types(L.DEFAULTS['map_overlay']), ['now_playing', 'selected_place'])
+                         ['header', 'walk_map', 'about', 'hours', 'good_to_know', 'menu', 'links', 'at_this_location'])
+        self.assertIn('ask_about', L.CATALOGUE['item_detail'])
+        self.assertEqual(types(L.DEFAULTS['map_overlay']), ['status', 'update_banner', 'now_playing', 'selected_place'])
         for preset, home in L.HOME_BY_PRESET.items():
             self.assertEqual(L.clean_sections(home, 'home'), home, preset)
 
@@ -38,7 +39,10 @@ class CatalogueTests(SimpleTestCase):
             for name, spec in types_.items():
                 for need in spec['needs']:
                     self.assertTrue(need in L.FACTS or need in L.STATES, f'{screen}.{name}: {need}')
-                self.assertEqual(spec['since'], 1)
+                self.assertIn(spec['since'], (1, 2))
+        new = {(s, n) for s, t in L.CATALOGUE.items() for n, spec in t.items() if spec['since'] == 2}
+        self.assertTrue({('home', 'my_schedule'), ('schedule_tab', 'timeline'), ('onboarding', 'welcome')} <= new)
+        self.assertEqual(L.CATALOGUE_VERSION, 2)
 
     def test_clean_section(self):
         self.assertEqual(L.clean_section({'type': ' HEADER ', 'show': ['tags', 'nope', 'tags']}, 'item_detail'),
@@ -97,8 +101,8 @@ class AutomaticLayoutTests(TestCase):
 
     def test_sections_without_data_are_left_out(self):
         a = self.auto()
-        self.assertEqual(types(a['item_detail']['sections']), ['header', 'place_link', 'ask_about'])
-        self.assertEqual(types(a['place_detail']['sections']), ['header', 'walk_map', 'ask_about'])
+        self.assertEqual(types(a['item_detail']['sections']), ['header', 'place_link'])
+        self.assertEqual(types(a['place_detail']['sections']), ['header', 'walk_map'])
         self.assertEqual(types(a['event_info']['sections']), ['header'])
         self.assertEqual(types(a['options_event']['sections']), ['header'])
         self.assertNotIn('overrides', a['place_detail'])
@@ -111,8 +115,8 @@ class AutomaticLayoutTests(TestCase):
         ScheduledItem.objects.create(event=self.event, user=self.user, location=self.stage, name='Band',
                                      start_time=self.start, context={'price': '$5'})
         a = self.auto(website='https://sites.example/fair/')
-        self.assertEqual(types(a['item_detail']['sections']), ['header', 'good_to_know', 'place_link', 'ask_about'])
-        self.assertEqual(types(a['place_detail']['sections']), ['header', 'walk_map', 'ask_about', 'hours', 'at_this_location'])
+        self.assertEqual(types(a['item_detail']['sections']), ['header', 'good_to_know', 'place_link'])
+        self.assertEqual(types(a['place_detail']['sections']), ['header', 'walk_map', 'hours', 'at_this_location'])
         self.assertEqual(types(a['event_info']['sections']), ['header', 'about', 'faq', 'getting_there'])
         self.assertEqual(types(a['options_event']['sections']), ['header', 'website', 'event_info_link'])
         self.assertIn('website', types(a['home']['sections']))
@@ -141,13 +145,56 @@ class AutomaticLayoutTests(TestCase):
         ScheduledItem.objects.create(event=self.event, user=self.user, location=self.stage, name='Band',
                                      start_time=self.start)
         self.assertEqual(types(self.auto('festival')['home']['sections']),
-                         ['header', 'urgent', 'countdown', 'plan_today', 'liked', 'whats_on', 'map'])
+                         ['header', 'urgent', 'update_banner', 'countdown', 'my_schedule', 'whats_on', 'map'])
         self.assertEqual(types(self.auto('standard')['home']['sections']),
-                         ['header', 'urgent', 'countdown', 'plan_today', 'liked', 'map', 'whats_on',
+                         ['header', 'urgent', 'update_banner', 'countdown', 'my_schedule', 'map', 'whats_on',
                           'places'])
         intimate = self.auto('intimate')['home']['sections']
-        self.assertEqual(types(intimate), ['header', 'urgent', 'countdown', 'whats_on', 'places'])
-        self.assertEqual(intimate[3]['title'], 'Agenda')
+        self.assertEqual(types(intimate), ['header', 'urgent', 'update_banner', 'countdown', 'whats_on', 'places'])
+        self.assertEqual(intimate[4]['title'], 'Agenda')
+
+    def test_catalogue_versions(self):
+        """v1 apps get plan_today + liked where v2 has my_schedule, and none of the v2 screens or types."""
+        ScheduledItem.objects.create(event=self.event, user=self.user, location=self.stage, name='Band',
+                                     start_time=self.start)
+        locs, items = self.lists()
+        v1 = L.resolve_layout(self.event, locs, items, 1, 'festival')
+        v2 = L.resolve_layout(self.event, locs, items, 2, 'festival')
+        self.assertEqual(v1['catalogue'], 1)
+        self.assertEqual(types(v1['screens']['home']['sections']),
+                         ['header', 'urgent', 'countdown', 'plan_today', 'liked', 'whats_on', 'map'])
+        self.assertEqual(types(v1['screens']['map_overlay']['sections']), ['now_playing', 'selected_place'])
+        for screen in ('schedule_tab', 'places_tab', 'updates_tab', 'onboarding'):
+            self.assertNotIn(screen, v1['screens'])
+            self.assertIn(screen, v2['screens'])
+        self.assertEqual(types(v2['screens']['home']['sections'])[:5],
+                         ['header', 'urgent', 'update_banner', 'countdown', 'my_schedule'])
+        # an organizer's saved plan_today + liked become one my_schedule on v2
+        self.event.layout_config = L.clean_config({'screens': {'home': {'sections': [
+            {'type': 'header'}, {'type': 'liked'}, {'type': 'plan_today'}]}}})
+        self.assertEqual(types(L.resolve_layout(self.event, locs, items, 2)['screens']['home']['sections']),
+                         ['header', 'my_schedule'])
+
+    def test_tab_defaults_follow_the_display_styles(self):
+        ScheduledItem.objects.create(event=self.event, user=self.user, location=self.stage, name='Band',
+                                     start_time=self.start)
+        locs, items = self.lists()
+        a = L.automatic(self.event, locs, items, styles={'schedule_style': 'now_next', 'locations_style': 'list'})
+        self.assertEqual(types(a['schedule_tab']['sections']), ['status', 'update_banner', 'happening_now', 'up_next'])
+        places = a['places_tab']['sections']
+        self.assertEqual(types(places), ['status', 'update_banner', 'all_places'])
+        self.assertNotIn('image', places[2]['show'])
+        a = L.automatic(self.event, locs, items, styles={'schedule_style': 'by_location', 'locations_style': 'grouped'})
+        self.assertEqual(types(a['schedule_tab']['sections'])[-1], 'by_place')
+        self.assertEqual(types(a['places_tab']['sections'])[-1], 'by_category')
+
+    def test_v2_section_fields(self):
+        s = L.clean_section({'type': 'featured', 'ids': [3, 'x', 3, True, 5]}, 'schedule_tab')
+        self.assertEqual(s, {'type': 'featured', 'ids': [3, 5]})
+        w = L.clean_section({'type': 'welcome', 'title': 'Hi', 'text': ' Welcome! ', 'image': 'http://x/y.png'},
+                            'onboarding')
+        self.assertEqual(w, {'type': 'welcome', 'title': 'Hi', 'text': 'Welcome!'})
+        self.assertNotIn('ids', L.clean_section({'type': 'faq', 'ids': [1]}, 'home'))
 
     def test_organizer_screens_win_and_the_catalogue_filter(self):
         locs, items = self.lists()

@@ -138,6 +138,8 @@ class Event(CoordinatesMixin, models.Model):
     # API-024: the organizer's screen layouts (events/layout.py `clean_config`: {"screens": {screen: {sections,
     # overrides?}}}); screens not listed use the automatic layout.
     layout_config = models.JSONField(default=dict, blank=True)
+    # The Live Activity's content choices (events/live_activity.py `clean`; {} = the defaults).
+    live_activity = models.JSONField(default=dict, blank=True)
     accent_color = models.CharField(max_length=7, blank=True, help_text='#RRGGBB')
     logo_url = models.URLField(max_length=1024, blank=True)
     # Our own copy of an outside logo_url (attnd/images.py: self-hosted, re-encoded); logo_source_url = the logo_url it

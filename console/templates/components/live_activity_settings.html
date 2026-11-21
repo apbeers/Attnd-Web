@@ -1,0 +1,6 @@
+{% load console_tags %}{# live_activity_settings: the Lock Screen Live Activity's choices; saves as you change it. #}<div class="stack component component--live_activity_settings">
+  <h2 class="{% if surface == 'chat' %}title-4{% else %}title-3{% endif %}">{% icon "phone" "tone-brand" %} Live Activity</h2>
+  <p class="small muted">What attendees' Lock Screen (iPhone) follows when they turn on Follow on Lock Screen. Urgent announcements always show there, whatever you choose.</p>
+  <p class="small muted" data-autosave-status role="status" aria-live="polite"></p>
+  {% include 'components/_form.html' with form=d.form %}
+</div>

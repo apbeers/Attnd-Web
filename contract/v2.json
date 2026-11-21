@@ -163,6 +163,15 @@
         "website_url": "string"
       },
       "layout": "null",
+      "live_activity": {
+        "buttons": [
+          "string"
+        ],
+        "follows": "string",
+        "location_id": "null",
+        "stale_text": "null",
+        "urgent": "boolean"
+      },
       "locations": [
         {
           "address": "string",
@@ -426,6 +435,15 @@
           "options_event": "string",
           "place_detail": "string"
         }
+      },
+      "live_activity": {
+        "buttons": [
+          "string"
+        ],
+        "follows": "string",
+        "location_id": "null",
+        "stale_text": "null",
+        "urgent": "boolean"
       },
       "locations": [
         {

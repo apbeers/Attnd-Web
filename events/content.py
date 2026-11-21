@@ -157,7 +157,7 @@ def bundle(event, request=None, sections=0):
     """`sections`: the layout catalogue version the app draws (X-Attnd-Sections, API-024; 0 = none: no layout,
     no Home tab)."""
     from events import layout as screen_layout
-    from events import plan_suggestions
+    from events import live_activity, plan_suggestions
     from events.display import event_stats, resolve_display
 
     locations = list(event.location_set.filter(hidden=False).order_by('sort_order', 'name'))
@@ -192,9 +192,11 @@ def bundle(event, request=None, sections=0):
         'tickets': None,  # API-017: ticketing parked (git branch parked/tickets), always null
         # API-021: "Plan your day" examples written for this event (stored, re-checked; else the deterministic ones)
         'plan_suggestions': plan_suggestions.for_bundle(event, locations, items),
+        # The Live Activity's content choices (always; the defaults when the organizer chose nothing)
+        'live_activity': live_activity.for_bundle(event, locations),
         # API-024: the screens' sections (null for apps that don't send X-Attnd-Sections)
         'layout': screen_layout.resolve_layout(event, locations, items, sections, display['resolved_preset'],
-                                               event_row.get('website_url')),
+                                               event_row.get('website_url'), display),
     }
 
 

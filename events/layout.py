@@ -21,13 +21,14 @@ The iOS rules (``Attnd/ScreenLayout.swift``) mirror ``CATALOGUE``, ``DEFAULTS`` 
 
 import re
 
-CATALOGUE_VERSION = 1
+CATALOGUE_VERSION = 2  # 2 (Nov 21, 2026): tab lists, Updates, banners, onboarding, my_schedule
 MAX_SECTIONS = 24
 MAX_OVERRIDES = 8
 MAX_TITLE = 60
 MAX_LIMIT = 20
 
-SCREENS = ['home', 'event_info', 'item_detail', 'place_detail', 'map_overlay', 'options_event']
+SCREENS = ['home', 'event_info', 'item_detail', 'place_detail', 'map_overlay', 'options_event',
+           'schedule_tab', 'places_tab', 'updates_tab', 'onboarding']  # the last four: catalogue 2
 
 SCREEN_LABELS = {
     'home': 'Home tab',
@@ -36,10 +37,22 @@ SCREEN_LABELS = {
     'place_detail': 'Place',
     'map_overlay': 'Map',
     'options_event': 'Options',
+    'schedule_tab': 'Schedule tab',
+    'places_tab': 'Places tab',
+    'updates_tab': 'Updates tab',
+    'onboarding': 'Welcome cards',
 }
 
 ITEM_HEADER_PARTS = ['time', 'status', 'tags']
 PLACE_HEADER_PARTS = ['image', 'category', 'tags', 'address', 'distance', 'now_next']
+# Catalogue 2: the parts of a row in the Schedule / Places tab lists (all on unless `show` picks).
+ITEM_ROW_PARTS = ['time', 'place', 'tags', 'walk', 'progress', 'add']
+PLACE_ROW_PARTS = ['image', 'category', 'now_next', 'distance', 'events']
+# Section fields of their own (catalogue 2): `ids` (featured items / places, a pinned update) and the welcome card's
+# `text` and `image`.
+IDS_TYPES = {'featured', 'pinned'}
+MAX_IDS = 20
+MAX_TEXT = 300
 
 
 def _t(label, since=1, needs=(), parts=(), help=''):
@@ -92,9 +105,50 @@ CATALOGUE = {
     'map_overlay': {
         'now_playing': _t('Now playing strip', needs=['now_playing']),
         'selected_place': _t('Card of the tapped pin'),
+        'status': _t('Demo / ended badges', since=2),
+        'update_banner': _t('Newest update banner', since=2, needs=['updates']),
+    },
+    'schedule_tab': {
+        'status': _t('Demo / ended badges', since=2),
+        'update_banner': _t('Newest update banner', since=2, needs=['updates']),
+        'my_schedule': _t('My schedule (plan and likes)', since=2),
+        'happening_now': _t('Happening now', since=2, needs=['schedule'], parts=ITEM_ROW_PARTS),
+        'up_next': _t('Up next', since=2, needs=['schedule'], parts=ITEM_ROW_PARTS),
+        'featured': _t('Featured (you pick)', since=2, needs=['schedule'], parts=ITEM_ROW_PARTS),
+        'timeline': _t('Full schedule: timeline', since=2, needs=['schedule'], parts=ITEM_ROW_PARTS),
+        'by_day': _t('Full schedule: by day', since=2, needs=['schedule'], parts=ITEM_ROW_PARTS),
+        'by_place': _t('Full schedule: by place', since=2, needs=['schedule'], parts=ITEM_ROW_PARTS),
+    },
+    'places_tab': {
+        'status': _t('Demo / ended badges', since=2),
+        'update_banner': _t('Newest update banner', since=2, needs=['updates']),
+        'featured': _t('Featured (you pick)', since=2, needs=['locations'], parts=PLACE_ROW_PARTS),
+        'nearby': _t('Near you', since=2, needs=['pins'], parts=PLACE_ROW_PARTS),
+        'by_category': _t('All places: by category', since=2, needs=['locations'], parts=PLACE_ROW_PARTS),
+        'all_places': _t('All places', since=2, needs=['locations'], parts=PLACE_ROW_PARTS),
+    },
+    'updates_tab': {
+        'status': _t('Demo / ended badges', since=2),
+        'urgent': _t('Urgent announcements first', since=2, needs=['urgent']),
+        'pinned': _t('A pinned update (you pick)', since=2, needs=['updates']),
+        'latest': _t('Latest updates', since=2, needs=['updates']),
+        'earlier': _t('Earlier updates', since=2, needs=['updates']),
+        'faq': _t('FAQ highlights', since=2, needs=['context.faq']),
+        'getting_there': _t('Getting there', since=2, needs=['context.getting_there']),
+    },
+    'onboarding': {
+        'intro': _t('What you can do', since=2),
+        'welcome': _t('Your welcome card (title, text, image)', since=2),
+        'location': _t('Location permission', since=2),
+        'notifications': _t('Notifications permission', since=2),
+        'lock_screen': _t('Follow on the Lock Screen', since=2),
+        'plan': _t('Plan your day (on-device AI)', since=2, needs=['model_available']),
     },
     'home': {
         'header': _t('Event header'),
+        'status': _t('Demo / ended badges', since=2),
+        'update_banner': _t('Newest update banner', since=2, needs=['updates']),
+        'my_schedule': _t('My schedule (plan and likes)', since=2),
         'urgent': _t('Urgent announcement', needs=['urgent']),
         'countdown': _t('Countdown to the start', needs=['before_start']),
         'now_next': _t('Now and next', needs=['schedule']),
@@ -130,7 +184,8 @@ CONDITION_LABELS = {
 
 # Sections drawn whatever the data (the apps also draw them every time).
 _ALWAYS = {'header', 'place_link', 'ask_about', 'selected_place', 'plan_today', 'liked', 'urgent', 'now_playing',
-           'countdown'}
+           'countdown', 'my_schedule', 'status', 'update_banner', 'intro', 'welcome', 'location', 'notifications',
+           'lock_screen', 'plan'}
 
 
 def _s(type_, **kw):
@@ -141,26 +196,39 @@ def _s(type_, **kw):
 
 # The apps' built-in layouts: today's screens (the iOS defaults are the same lists).
 DEFAULTS = {
+    # `ask_about` stays in the catalogue (saved layouts validate) but no default shows it (Nov 21, 2026).
     'item_detail': [_s('header', show=ITEM_HEADER_PARTS), _s('about'), _s('performers'), _s('good_to_know'),
-                    _s('links'), _s('place_link'), _s('ask_about')],
-    'place_detail': [_s('header', show=PLACE_HEADER_PARTS), _s('walk_map'), _s('ask_about'), _s('about'), _s('hours'),
+                    _s('links'), _s('place_link')],
+    'place_detail': [_s('header', show=PLACE_HEADER_PARTS), _s('walk_map'), _s('about'), _s('hours'),
                      _s('good_to_know'), _s('menu'), _s('links'), _s('at_this_location')],
     'event_info': [_s('header', show=['website']), _s('about'), _s('faq'), _s('amenities'), _s('getting_there'),
                    _s('accessibility'), _s('policies'), _s('weather_plan'), _s('links')],
     'options_event': [_s('header'), _s('website'), _s('event_info_link')],
-    'map_overlay': [_s('now_playing'), _s('selected_place')],
-    'home': [_s('header'), _s('urgent'), _s('countdown'), _s('plan_today'),
-             _s('liked'), _s('map'), _s('updates', limit=3), _s('faq', limit=3), _s('getting_there'), _s('about')],
+    'map_overlay': [_s('status'), _s('update_banner'), _s('now_playing'), _s('selected_place')],
+    # Catalogue 2 writes my_schedule; an app on catalogue 1 gets plan_today + liked in its place (resolve_layout).
+    'home': [_s('header'), _s('urgent'), _s('update_banner'), _s('countdown'), _s('my_schedule'),
+             _s('map'), _s('updates', limit=3), _s('faq', limit=3), _s('getting_there'), _s('about')],
+    'schedule_tab': [_s('status'), _s('update_banner'), _s('timeline')],
+    'places_tab': [_s('status'), _s('update_banner'), _s('all_places')],
+    'updates_tab': [_s('status'), _s('urgent'), _s('latest'), _s('earlier')],
+    'onboarding': [_s('intro'), _s('location'), _s('notifications'), _s('plan')],
 }
 
+# Catalogue 2: today's display.schedule_style / locations_style as the tabs' default sections.
+SCHEDULE_BY_STYLE = {'timeline': ['timeline'], 'by_day': ['by_day'], 'by_location': ['by_place'],
+                     'now_next': ['happening_now', 'up_next']}
+PLACES_BY_STYLE = {'cards': ('all_places', PLACE_ROW_PARTS),
+                   'list': ('all_places', [p for p in PLACE_ROW_PARTS if p != 'image']),
+                   'grouped': ('by_category', PLACE_ROW_PARTS)}
+
 HOME_BY_PRESET = {
-    'festival': [_s('header'), _s('urgent'), _s('countdown'),
-                 _s('plan_today'), _s('liked'), _s('whats_on', limit=6), _s('map'), _s('updates', limit=3),
+    'festival': [_s('header'), _s('urgent'), _s('update_banner'), _s('countdown'),
+                 _s('my_schedule'), _s('whats_on', limit=6), _s('map'), _s('updates', limit=3),
                  _s('faq', limit=3), _s('getting_there')],
-    'standard': [_s('header'), _s('urgent'), _s('countdown'),
-                 _s('plan_today'), _s('liked'), _s('map'), _s('whats_on', limit=6), _s('places', limit=8),
+    'standard': [_s('header'), _s('urgent'), _s('update_banner'), _s('countdown'),
+                 _s('my_schedule'), _s('map'), _s('whats_on', limit=6), _s('places', limit=8),
                  _s('updates', limit=3), _s('faq', limit=3), _s('getting_there'), _s('about')],
-    'intimate': [_s('header'), _s('urgent'), _s('countdown'), _s('whats_on', limit=12, title='Agenda'),
+    'intimate': [_s('header'), _s('urgent'), _s('update_banner'), _s('countdown'), _s('whats_on', limit=12, title='Agenda'),
                  _s('places', limit=8), _s('about'), _s('links'), _s('faq', limit=3), _s('getting_there')],
 }
 
@@ -210,6 +278,20 @@ def clean_section(raw, screen):
     limit = raw.get('limit')
     if isinstance(limit, int) and not isinstance(limit, bool):
         out['limit'] = min(max(limit, 1), MAX_LIMIT)
+    if name in IDS_TYPES:  # catalogue 2: the organizer's picks (ids of items, places or updates, in order)
+        ids = raw.get('ids')
+        if isinstance(ids, list):
+            picked = list(dict.fromkeys(i for i in ids if isinstance(i, int) and not isinstance(i, bool) and i > 0))
+            if picked:
+                out['ids'] = picked[:MAX_IDS]
+    if name == 'welcome':  # catalogue 2: the organizer's own welcome card
+        text = raw.get('text')
+        if isinstance(text, str) and text.strip():
+            text = text.strip()
+            out['text'] = text if len(text) <= MAX_TEXT else text[:MAX_TEXT - 1] + '…'
+        image = raw.get('image')
+        if isinstance(image, str) and image.startswith('https://') and len(image) <= 500 and ' ' not in image:
+            out['image'] = image
     when = raw.get('when')
     if isinstance(when, str):
         when = [when]
@@ -345,10 +427,19 @@ def _is_food(text):
     return any(w in text for w in FOOD_WORDS)
 
 
-def automatic(event, locations, items, preset='standard', website_url=None):
-    """The automatic layout for every screen."""
+def automatic(event, locations, items, preset='standard', website_url=None, styles=None):
+    """The automatic layout for every screen (`styles`: the resolved display, for the tabs' default lists)."""
     facts = data_facts(event, locations, items, website_url)
+    styles = styles or {}
     screens = {}
+    sched = SCHEDULE_BY_STYLE.get(styles.get('schedule_style'), SCHEDULE_BY_STYLE['timeline'])
+    screens['schedule_tab'] = {'sections': _keep([_s('status'), _s('update_banner')] + [_s(t) for t in sched],
+                                                 'schedule_tab', facts['event'])}
+    kind, parts = PLACES_BY_STYLE.get(styles.get('locations_style'), PLACES_BY_STYLE['cards'])
+    places = [_s('status'), _s('update_banner'), _s(kind, show=parts if parts != PLACE_ROW_PARTS else None)]
+    screens['places_tab'] = {'sections': _keep(places, 'places_tab', facts['event'])}
+    screens['updates_tab'] = {'sections': [dict(x) for x in DEFAULTS['updates_tab']]}
+    screens['onboarding'] = {'sections': [dict(x) for x in DEFAULTS['onboarding']]}
     for screen in ('event_info', 'options_event', 'map_overlay'):
         screens[screen] = {'sections': _keep(DEFAULTS[screen], screen, facts['event'])}
     screens['item_detail'] = {'sections': _keep(DEFAULTS['item_detail'], 'item_detail', facts['item'])}
@@ -389,19 +480,36 @@ def automatic(event, locations, items, preset='standard', website_url=None):
     return screens
 
 
-def resolve_layout(event, locations, items, sections=0, preset='standard', website_url=None):
+def for_version(secs, screen, version):
+    """A screen's sections as an app on catalogue `version` draws them: types newer than it dropped; on catalogue 1
+    `my_schedule` becomes `plan_today` + `liked`, from 2 on those two become one `my_schedule` (as iOS maps them)."""
+    out, types = [], set()
+    for s in secs:
+        group = [s]
+        if screen == 'home' and version < 2 and s['type'] == 'my_schedule':
+            group = [_s('plan_today'), _s('liked')]
+        elif screen == 'home' and version >= 2 and s['type'] in ('plan_today', 'liked'):
+            group = [_s('my_schedule')]
+        for x in group:
+            if x['type'] not in types and CATALOGUE[screen][x['type']]['since'] <= version:
+                types.add(x['type'])
+                out.append(dict(x))
+    return out
+
+
+def resolve_layout(event, locations, items, sections=0, preset='standard', website_url=None, styles=None):
     """``bundle.layout`` for an app that draws catalogue version ``sections`` (None below version 1)."""
     if not sections or sections < 1:
         return None
     version = min(sections, CATALOGUE_VERSION)
-    screens = automatic(event, locations, items, preset, website_url)
+    screens = automatic(event, locations, items, preset, website_url, styles)
     source = {screen: 'automatic' for screen in screens}
     for screen, spec in (clean_config(event.layout_config).get('screens') or {}).items():
         screens[screen] = spec
         source[screen] = 'organizer'
 
     def allowed(secs, screen):
-        return [s for s in secs if CATALOGUE[screen][s['type']]['since'] <= version]
+        return for_version(secs, screen, version)
 
     out = {}
     for screen in SCREENS:
@@ -418,7 +526,7 @@ def resolve_layout(event, locations, items, sections=0, preset='standard', websi
         if overrides:
             entry['overrides'] = overrides
         out[screen] = entry
-    return {'catalogue': version, 'source': source, 'screens': out}
+    return {'catalogue': version, 'source': {k: v for k, v in source.items() if k in out}, 'screens': out}
 
 
 def sections_header(request):

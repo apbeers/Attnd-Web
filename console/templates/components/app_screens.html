@@ -30,11 +30,14 @@
               </div>
               {% if r.when %}<p class="small muted screens-row__when">Shows only: {{ r.when|lower }}</p>{% endif %}
               {% if r.parts %}<fieldset class="cluster screens-row__parts"><legend class="small muted">Shows</legend>{% for p in r.parts %}<label class="check small"><input type="checkbox" name="show_{{ r.type }}" value="{{ p.name }}"{% if p.on %} checked{% endif %}> {{ p.label }}</label>{% endfor %}</fieldset>{% endif %}
-              <details class="screens-row__more"><summary class="small">Heading{% if r.limited %} and size{% endif %}</summary>
+              <details class="screens-row__more"><summary class="small">Heading{% if r.limited %} and size{% endif %}{% if r.choices %} and picks{% endif %}{% if r.welcome %}, text and image{% endif %}</summary>
                 <div class="cluster">
                   <label class="field small">Own heading <input type="text" name="title_{{ r.type }}" value="{{ r.title }}" maxlength="60" placeholder="{{ r.label }}"></label>
                   {% if r.limited %}<label class="field small">How many <input type="number" name="limit_{{ r.type }}" value="{{ r.limit }}" min="1" max="20" inputmode="numeric"></label>{% endif %}
                 </div>
+                {% if r.welcome %}<label class="field small">Text <textarea name="text_{{ r.type }}" maxlength="300" rows="3">{{ r.text }}</textarea></label>
+                <label class="field small">Image address (https) <input type="url" name="image_{{ r.type }}" value="{{ r.image }}" maxlength="500" placeholder="https://"></label>{% endif %}
+                {% if r.choices %}<fieldset class="stack stack--tight screens-row__picks"><legend class="small muted">Pick (up to 20, in this order)</legend>{% for c in r.choices %}<label class="check small"><input type="checkbox" name="ids_{{ r.type }}" value="{{ c.id }}"{% if c.on %} checked{% endif %}> {{ c.name }}</label>{% endfor %}</fieldset>{% endif %}
               </details>
             </li>{% endfor %}
           </ol>

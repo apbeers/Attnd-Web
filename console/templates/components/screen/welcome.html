@@ -1,0 +1,1 @@
+{# welcome: the organizer's welcome card #}<div class="pv-card"><p class="pv-text"><strong>{{ s.title|default:x.name }}</strong></p><p class="pv-text">{{ s.text|default:"Your own welcome text"|truncatechars:120 }}</p>{% if s.image %}<p class="pv-muted">With your image</p>{% endif %}</div>

@@ -1108,10 +1108,53 @@ def _screen_types():
 
 _SCREEN = P('string', 'The app screen: home (the Home tab), event_info (the event\'s info page), item_detail (every '
             'schedule item), place_detail (every place), map_overlay (the map\'s Now playing strip and pin card), '
-            'options_event (the event rows in Options)', enum=['home', 'event_info', 'item_detail', 'place_detail',
-                                                              'map_overlay', 'options_event'])
+            'options_event (the event rows in Options), schedule_tab / places_tab / updates_tab (the tabs\' lists), '
+            'onboarding (the welcome cards)', enum=['home', 'event_info', 'item_detail', 'place_detail',
+                                                   'map_overlay', 'options_event', 'schedule_tab', 'places_tab',
+                                                   'updates_tab', 'onboarding'])
 _MATCH = P('string', "Only for one category or tag: 'category:<category>' (places of that category; schedule items "
            "at them) or 'tag:<tag>'. null = the whole screen. Only item_detail and place_detail.", nullable=True)
+
+
+class LiveActivityForm(forms.Form):
+    follows = forms.ChoiceField(label='What it follows', widget=forms.RadioSelect, required=False)
+    location_id = forms.TypedChoiceField(label='Which place', coerce=int, required=False, empty_value=None)
+    buttons = forms.MultipleChoiceField(label='Buttons', widget=forms.CheckboxSelectMultiple, required=False)
+    stale_text = forms.CharField(label='When it can\'t update', max_length=60, required=False,
+                                 help_text='Shown when the phone hasn\'t had news for a while. Empty = "Open Attnd to update".')
+
+    def __init__(self, *args, event=None, **kwargs):
+        from events import live_activity as LA
+        super().__init__(*args, **kwargs)
+        self.fields['follows'].choices = list(LA.FOLLOWS.items())
+        self.fields['buttons'].choices = list(LA.BUTTONS.items())
+        self.fields['location_id'].choices = [('', 'Pick a place')] + [
+            (loc.pk, loc.name) for loc in event.location_set.order_by('sort_order', 'name')] if event else []
+
+
+@agent_action('update_live_activity', "What the Lock Screen Live Activity follows by default (my_schedule, everything "
+              "or one place: location_id), which buttons it shows (add, skip, map) and its stale text. Urgent "
+              "announcements always show (a safety rule).", form=LiveActivityForm, prefill=True,
+              title='Saved the Live Activity settings')
+@event_view
+@require_POST
+def event_live_activity(request, event):
+    from events import live_activity as LA
+    form = LiveActivityForm(request.POST, event=event)
+    if not form.is_valid():
+        if _wants_json(request):
+            return JsonResponse({'saved': False, 'error': 'Check the Live Activity settings.'}, status=400)
+        messages.error(request, 'Check the Live Activity settings.')
+        return redirect(reverse('console:display', args=[event.pk]) + '#live-activity')
+    d = form.cleaned_data
+    raw = {'follows': d['follows'] or 'my_schedule', 'location_id': d['location_id'], 'buttons': d['buttons'],
+           'stale_text': d['stale_text']}
+    event.live_activity = LA.stored(raw, set(event.location_set.values_list('pk', flat=True)))
+    event.save(update_fields=['live_activity'])
+    if _wants_json(request):
+        return JsonResponse({'saved': True, 'message': 'Saved the Live Activity settings.'})
+    messages.success(request, 'Saved the Live Activity settings.')
+    return redirect(reverse('console:display', args=[event.pk]) + '#live-activity')
 
 
 @agent_action('update_screen_layout', 'Which sections an app screen shows and in which order (API-024). sections is a '
@@ -1164,7 +1207,8 @@ def event_screens(request, event):
     website = _website_url(event)
     preset = resolve_display(event, event_stats(event, locations), sections=LAYOUT_CATALOGUE)['resolved_preset']
     screens = copy.deepcopy(L.clean_config(event.layout_config).get('screens') or {})
-    current = screens.get(screen) or L.automatic(event, locations, items, preset, website)[screen]
+    display = resolve_display(event, event_stats(event, locations), sections=LAYOUT_CATALOGUE)
+    current = screens.get(screen) or L.automatic(event, locations, items, preset, website, display)[screen]
     label = L.SCREEN_LABELS[screen]
 
     def find(spec):
@@ -1222,6 +1266,11 @@ def event_screens(request, event):
                 limit = (request.POST.get(f'limit_{t}') or '').strip()
                 if limit.isdigit():
                     s['limit'] = int(limit)
+                if t in L.IDS_TYPES:  # catalogue 2: featured / pinned picks
+                    s['ids'] = [int(i) for i in request.POST.getlist(f'ids_{t}') if i.isdigit()]
+                if t == 'welcome':
+                    s['text'] = request.POST.get(f'text_{t}', '')
+                    s['image'] = (request.POST.get(f'image_{t}') or '').strip()
                 if old.get(t, {}).get('when'):
                     s['when'] = old[t]['when']
                 raw.append(s)
@@ -1235,7 +1284,7 @@ def event_screens(request, event):
     event.save(update_fields=['layout_config'])
     if _wants_json(request):
         spec = (event.layout_config.get('screens') or {}).get(screen) or \
-            L.automatic(event, locations, items, preset, website)[screen]
+            L.automatic(event, locations, items, preset, website, display)[screen]
         shown = (find(spec) or spec) if match else spec
         html = render_to_string('components/_screen_preview.html', {
             'p': preview(event, screen, shown['sections'], locations, items, match, website), 'screen': screen})

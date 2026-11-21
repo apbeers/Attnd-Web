@@ -72,6 +72,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-022 | Place images found automatically: `locations[].image_credit` (credit / licence of a photo Attnd found and stores itself, or null) | additive (new key) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-023 | Per-event colour themes: `event.theme` in `bundle/` (`{light, dark}` × `primary` / `secondary` / `tertiary` hex, contrast-adjusted; `null` without a theme or when the organizer turned it off for the apps). Made by the AI import, edited in the console; used on the website now. **Apps: later, not in this change** (iOS built Nov 21, 2026) | additive (new key, `bundle/` only) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: tint, card wash, progress; the Live Activity's full theme, light / dark × primary / secondary / tertiary, 24c2b1c) · ⬜ prod | ⬜ (later) |
 | API-024 | Server-driven screens: `layout` in `bundle/` (per screen an ordered list of sections from a closed catalogue, overrides per category / tag, on-device conditions) for apps that send `X-Attnd-Sections: <catalogue version>` (ETag `-s<version>`); `home` in `display.tabs` for those apps; console App layout → Screens editor, Ask Attnd `update_screen_layout` | additive (new key, new optional request header, new `display.tabs` value only for apps that send the header) | ✅ dev (6630ce5, 3d4e0b9) · ⬜ prod | ✅ dev (8bd7bd3, 0f25083; TestFlight 2.0.161) | ⬜ (later) |
+| API-027 | Screens catalogue 2 (`X-Attnd-Sections: 2`): `my_schedule`, banners as sections (`status`, `update_banner`), new screens `schedule_tab`, `places_tab`, `updates_tab`, `onboarding`, section fields `ids` / `text` / `image`; `ask_about` out of the defaults; bundle `live_activity` (follows, buttons, urgent, stale text) | additive (new header value, new keys, new object) | 🚧 built · ⬜ prod | ⬜ | ⬜ (parked) |
 | API-026 | Faster live updates: the first change pushed at once (later ones grouped), `jitter_ms` in `content_updated` scaled to the event's size; organizer preview phones (`preview_token` on `join/`, `GET events/<id>/changes/` long-poll, `preview` in the join answer); `bundle/` records the version a device fetched | additive (new optional request field, new response and push keys, new endpoint) | 🚧 built · ⬜ prod | ⬜ | ⬜ (parked) |
 | API-025 | Free limit: an unpaid event takes 20 different devices on `join/`; a new device beyond it gets `409 {error: "event_full_free", message, limit}` (rejoin always works; paid, DEMO, App Review sample and showcase events exempt) | additive (new error answer on an existing endpoint, for unpaid events only) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
@@ -81,6 +82,21 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-027: Screens catalogue 2 and the Live Activity's content choices
+**Why:** the owner approved more server-driven screens (tab lists, Updates, banners, onboarding, Live Activity
+choices) on Nov 21, 2026; the iOS app's My schedule merges `plan_today` + `liked`.
+**Server (attnd-web):** `events/layout.py` `CATALOGUE_VERSION = 2`: new types with `since: 2` (see `API_V2.md` → Layout,
+catalogue 2), `for_version()` serves each app its catalogue (1: `my_schedule` → `plan_today` + `liked`, no new screens;
+2: `plan_today` / `liked` → one `my_schedule`), tab defaults from `display.schedule_style` / `locations_style`,
+`ids` / `text` / `image` section fields, `ask_about` dropped from the defaults (still valid). Console Screens editor:
+the new screens with previews, picks for `featured` / `pinned`, the welcome card's text and image.
+`events/live_activity.py` + `Event.live_activity`: bundle `live_activity` (always; defaults), console App layout →
+**Live Activity** (autosave; Ask Attnd `update_live_activity`). Tests: `events/tests_layout.py`.
+**iOS:** send `X-Attnd-Sections: 2`; draw the new screens / types / fields per `API_V2.md` (unknown → skip; a screen
+missing → built-in); keep urgent (12 h), offline and screenshot mode fixed; use `live_activity` for the default
+follow mode, the buttons and the stale text (urgent block always on).
+**Android:** parked.
 
 ### API-026: Faster live updates and the organizer's preview phone
 **Why:** organizers edit with the app open on their phone and want to see changes at once; attendees should get them

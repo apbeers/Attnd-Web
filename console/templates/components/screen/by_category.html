@@ -1,0 +1,1 @@
+{# by_category: a list of places (catalogue 2) #}<p class="pv-heading">{{ s.title|default:"By category" }}</p>{% for p in x.places|slice:":3" %}<p class="pv-row">{{ p }}</p>{% empty %}<p class="pv-muted">Places appear here</p>{% endfor %}

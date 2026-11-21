@@ -8,10 +8,11 @@ section type (``components/screen/<type>.html``) from the same JSON the apps get
 from django.urls import reverse
 from django.utils import timezone
 
-from console.components import component, get, resolve_actions
+from console.components import component, form_json, get, resolve_actions
 from console.components.catalog import _tz, editable_event
 
-LIMITED = {'home': {'liked', 'whats_on', 'places', 'updates', 'faq'}, 'event_info': {'faq'}}
+LIMITED = {'home': {'liked', 'whats_on', 'places', 'updates', 'faq', 'my_schedule'}, 'event_info': {'faq'},
+           'schedule_tab': {'happening_now', 'up_next'}, 'places_tab': {'nearby'}, 'updates_tab': {'latest', 'faq'}}
 
 
 def _subjects(event):
@@ -101,13 +102,26 @@ def preview(event, screen, sections, locations, items, match='', website_url=Non
     shown = L.visible(screen, sections, facts)
     if not subject['description']:
         subject['description'] = subject['context']['about']
+    names = _pick_names(event, screen, locations, items)
     return {'subject': subject,
-            'sections': [{'title': '', 'show': [], 'limit': None, **s, 'label': L.CATALOGUE[screen][s['type']]['label']}
+            'sections': [{'title': '', 'show': [], 'limit': None, **s, 'label': L.CATALOGUE[screen][s['type']]['label'],
+                          'picked': [names[i] for i in s.get('ids') or [] if i in names]}
                          for s in shown],
             'hidden': [L.CATALOGUE[screen][s['type']]['label'] for s in sections if s not in shown]}
 
 
-def _rows(screen, sections):
+def _pick_names(event, screen, locations, items):
+    """{id: name} of what a `featured` / `pinned` section of this screen picks from."""
+    if screen == 'schedule_tab':
+        return {i.id: i.name for i in items}
+    if screen == 'places_tab':
+        return {loc.id: loc.name for loc in locations}
+    if screen == 'updates_tab':
+        return dict(event.notification_set.filter(sent=True).order_by('-send_time').values_list('id', 'title')[:60])
+    return {}
+
+
+def _rows(screen, sections, choices=None):
     from events import layout as L
     on_types = [s['type'] for s in sections]
     rows = []
@@ -120,6 +134,10 @@ def _rows(screen, sections):
             'title': s.get('title', ''), 'limit': s.get('limit') or '',
             'limited': s['type'] in LIMITED.get(screen, set()),
             'when': ', '.join(L.CONDITION_LABELS.get(c, c) for c in s.get('when') or []),
+            # catalogue 2: what a featured / pinned section picks, and the welcome card's own text
+            'choices': [{'id': k, 'name': v, 'on': k in (s.get('ids') or [])} for k, v in (choices or {}).items()]
+            if s['type'] in L.IDS_TYPES else [],
+            'welcome': s['type'] == 'welcome', 'text': s.get('text', ''), 'image': s.get('image', ''),
         })
     return rows
 
@@ -133,14 +151,15 @@ def screens_json(event, locations=None, items=None):
     website = _website_url(event)
     preset = resolve_display(event, event_stats(event, locations), sections=L.CATALOGUE_VERSION)['resolved_preset']
     stored = L.clean_config(event.layout_config).get('screens') or {}
-    auto = L.automatic(event, locations, items, preset, website)
+    display = resolve_display(event, event_stats(event, locations), sections=L.CATALOGUE_VERSION)
+    auto = L.automatic(event, locations, items, preset, website, display)
     action = reverse('console:event_screens', args=[event.pk])
     comp = get('app_screens')
     out = []
     for screen in L.SCREENS:
         spec = stored.get(screen) or auto[screen]
         blocks = [{'match': '', 'label': 'Every ' + {'item_detail': 'schedule item', 'place_detail': 'place'}.get(screen, 'time'),
-                   'rows': _rows(screen, spec['sections']),
+                   'rows': _rows(screen, spec['sections'], _pick_names(event, screen, locations, items)),
                    'preview': preview(event, screen, spec['sections'], locations, items, '', website)}]
         for o in spec.get('overrides') or []:
             kind, value = o['match'].split(':', 1)
@@ -179,3 +198,22 @@ def app_screens(user, event_id=None, event=None):
     tabs = clean_overrides(event.display_config).get('tabs') or []
     return {'event_id': event.pk, 'name': f'Screens · {event.name}', 'screens': screens_json(event),
             'home_on': 'home' in tabs, 'display_url': reverse('console:display', args=[event.pk])}
+
+
+@component('live_activity_settings', 'Live Activity', "What the Lock Screen Live Activity follows by default (my "
+           "schedule, everything, or one place), which buttons it shows, and its text when it can't update. Urgent "
+           'announcements always show. Saves as you change it.', actions=(),
+           page=lambda ids: reverse('console:display', args=[ids['event_id']]) + '#live-activity')
+def live_activity_settings(user, event_id=None, event=None, form=None):
+    from console.views_events import LiveActivityForm
+    from events import live_activity as LA
+    event = editable_event(user, event_id, event)
+    current = LA.clean(event.live_activity)
+    form = form or LiveActivityForm(event=event, initial={
+        'follows': current['follows'], 'location_id': current['location_id'], 'buttons': current['buttons'],
+        'stale_text': current['stale_text'] or ''})
+    data = form_json(form, [('choices', 'follows'), ('show_if', 'follows:location', 'la-place', ['location_id']),
+                            'buttons', 'stale_text'],
+                     action=reverse('console:event_live_activity', args=[event.pk]))
+    data.update(autosave=True, no_ai=True)
+    return {'event_id': event.pk, 'name': f'Live Activity · {event.name}', 'form': data}

@@ -55,6 +55,7 @@ urlpatterns = [
          name='notification_action'),
 
     path('events/<int:event_id>/display/', v.display_settings, name='display'),
+    path('events/<int:event_id>/live-activity/', v.event_live_activity, name='event_live_activity'),
     path('events/<int:event_id>/screens/', v.event_screens, name='event_screens'),  # API-024
     path('events/<int:event_id>/limit/', v.event_limit_request, name='event_limit_request'),  # API-025
     path('events/<int:event_id>/paid/', v.event_paid, name='event_paid'),  # staff

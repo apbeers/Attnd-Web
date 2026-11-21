@@ -65,6 +65,7 @@ class ComponentTestCase(TestCase):
             'app_screens': {'event_id': self.event.pk},  # API-024
             'event_theme_editor': {'event_id': self.event.pk},
             'ai_credit_meter': {},  # credit/
+            'live_activity_settings': {'event_id': self.event.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -82,6 +83,7 @@ class ComponentTestCase(TestCase):
             'attention': 'What needs attention', 'usage_answer': 'numbers', 'event_rollover': 'Make the copy', 'first_run': 'Get started',
             'event_theme': 'Generate with AI', 'app_screens': 'What each screen of the apps shows', 'event_theme_editor': 'Where the colours show',
             'ai_credit_meter': 'used this month',
+            'live_activity_settings': 'Urgent announcements always show',
         }
 
     def request(self, user=None):

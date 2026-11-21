@@ -612,11 +612,53 @@ Catalogue version 1:
 | `map_overlay` | `now_playing`, `selected_place` |
 | `home` | `header`, `urgent`, `countdown`, `now_next`, `plan_today`, `liked`, `whats_on`, `map`, `places`, `updates`, `faq`, `getting_there`, `about`, `links`, `flyer`, `website` (the automatic Home layout leaves `now_next` out since Nov 21, 2026: `whats_on` covers it; organizers can still add it) |
 
+Catalogue version 2 (API-027, Nov 21, 2026; send `X-Attnd-Sections: 2`). An app on 1 gets none of this: its home
+shows `plan_today` + `liked` where 2 has `my_schedule`, and the four new screens are left out.
+
+| Screen | Section types (new in 2; default order first) |
+|---|---|
+| `home` | adds `my_schedule` (the attendee's plan and likes in one list; replaces `plan_today` + `liked`, which an app on 2 maps to `my_schedule`, once), `update_banner` (the newest update of the last day, dismissible), `status` (Demo event / Event ended badges). Default: `header`, `urgent`, `update_banner`, `countdown`, `my_schedule`, … |
+| `map_overlay` | adds `status`, `update_banner` (default: `status`, `update_banner`, `now_playing`, `selected_place`) |
+| `schedule_tab` | `status`, `update_banner`, `my_schedule`, `happening_now`, `up_next`, `featured`, `timeline`, `by_day`, `by_place`. Default: `status`, `update_banner`, then the list for `display.schedule_style` (`timeline` → `timeline`, `by_day` → `by_day`, `by_location` → `by_place`, `now_next` → `happening_now`, `up_next`). List types take `show` parts `time`, `place`, `tags`, `walk`, `progress`, `add` (all when missing) and `limit` |
+| `places_tab` | `status`, `update_banner`, `featured`, `nearby`, `by_category`, `all_places`. Default: `status`, `update_banner`, then `all_places` (`locations_style` `cards`: every part; `list`: without `image`) or `by_category` (`grouped`). List types take `show` parts `image`, `category`, `now_next`, `distance`, `events` |
+| `updates_tab` | `status`, `urgent` (urgent announcements first), `pinned`, `latest`, `earlier`, `faq`, `getting_there`. Default: `status`, `urgent`, `latest`, `earlier` |
+| `onboarding` | the first-join cards: `intro` (the app's "what you can do"), `welcome` (the organizer's card), `location`, `notifications`, `lock_screen`, `plan` (on-device AI only). Default: `intro`, `location`, `notifications`, `plan` |
+
+New section fields in 2:
+- `ids` (`featured` on `schedule_tab` / `places_tab`, `pinned` on `updates_tab`): schedule item, location or
+  notification ids in the organizer's order (≤ 20). Skip ids the bundle doesn't have; with none left the section
+  draws nothing.
+- `welcome`: `title` (as for every section), `text` (≤ 300 characters), `image` (an absolute `https` URL, ≤ 500).
+
+```json
+{"type": "featured", "ids": [12, 31], "show": ["time", "place"], "title": "Don't miss"}
+{"type": "welcome", "title": "Welcome to Prairie Fest", "text": "Gates open at 10. Water is free at every stage.", "image": "https://…/welcome.jpg"}
+```
+
+Safety rules stay on the device whatever the layout says: an urgent announcement shows for 12 h (`urgent` / the
+banner), the offline notice is fixed, screenshot modes use the built-in layouts. `ask_about` stays in the catalogue
+(saved layouts keep validating) but no automatic layout lists it any more (Nov 21, 2026).
+
 Client rules: drop unknown screens, types, parts and conditions; a type appears once per screen (the first); at most
 24 sections per screen; a screen with nothing valid left, or no `layout`, uses the built-in layout; screenshot modes
 always use the built-in layouts. The server builds an **automatic** layout from what the event has (sections nothing
 could fill are left out, food places with menus lead with the menu, tags whose items have performers lead with the
 performers, Home per preset) and replaces whole screens with the organizer's (console App layout → Screens).
+
+### Live Activity (`live_activity`)
+Always in `bundle/` (the defaults when the organizer chose nothing; console App layout → Live Activity):
+```json
+"live_activity": {"follows": "my_schedule", "location_id": null, "buttons": ["add", "skip", "map"], "urgent": true, "stale_text": null}
+```
+- `follows`: what the Live Activity follows by default: `my_schedule` (the plan, else likes, else everything: today's
+  rule), `everything` (every item of the day), `location` (only the items at `location_id`; an id the bundle doesn't
+  have → `my_schedule`). Unknown → `my_schedule`.
+- `buttons`: which buttons show, in this order, from `add` (add to My schedule / like), `skip`, `map`; `[]` = none.
+  Unknown names are dropped.
+- `urgent`: always `true` (a safety rule: the urgent block always shows).
+- `stale_text`: the text when the activity is stale (≤ 60 characters), `null` = the app's own ("Open Attnd to update").
+
+Older apps ignore the key. Changing it bumps `content_version` like other content.
 
 ---
 
