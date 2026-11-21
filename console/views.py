@@ -61,6 +61,13 @@ class SignUpView(View):
         }, status=status)
 
     def get(self, request):
+        if request.user.is_authenticated:  # already signed in: the console (a trial claim goes through it)
+            claim = request.GET.get('claim', '').strip()
+            if claim and _claim_trial_event(request.user, claim):
+                event = Event.objects.filter(event_code=claim).first()
+                if event is not None:
+                    return redirect('console:event', event_id=event.pk)
+            return redirect('console:dashboard')
         return self._render(request, SignUpForm(), request.GET.get('claim', ''))
 
     def post(self, request):

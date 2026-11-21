@@ -22,12 +22,12 @@
 
 <nav class="site-nav">
   <div class="wrap">
-    <a class="brand" href="/">attnd<span>.</span></a>
+    <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
     <div class="site-nav__links">
       <a href="#features">Features</a>
       {% if SIGNUPS_OPEN %}<a href="#try-it">Try it free</a>{% endif %}
       <a href="#download">Download</a>
-      <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
+      {% if user.is_authenticated %}<a href="{% url 'console:dashboard' %}">Console</a>{% else %}<a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>{% endif %}
       {% if SIGNUPS_OPEN %}<a class="button button--primary button--small" href="{% url 'console:signup' %}">Create an event</a>
       {% else %}<a class="button button--primary button--small" href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Invite only</a>{% endif %}
     </div>
@@ -37,7 +37,7 @@
         <a href="#features">Features</a>
         {% if SIGNUPS_OPEN %}<a href="#try-it">Try it free</a>{% endif %}
         <a href="#download">Download</a>
-        <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
+        {% if user.is_authenticated %}<a href="{% url 'console:dashboard' %}">Console</a>{% else %}<a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>{% endif %}
         {% if SIGNUPS_OPEN %}<a href="{% url 'console:signup' %}">Create an event</a>{% else %}<a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Invite only</a>{% endif %}
       </div>
     </details>
@@ -166,7 +166,7 @@
         address the invite was sent to.</p>
       <div class="cluster cluster--center">
         <a href="{% url 'console:signup' %}" class="button button--primary">I have an invite</a>
-        <a href="{% url 'login' %}" class="button button--ghost">Sign in</a>
+        {% if user.is_authenticated %}<a href="{% url 'console:dashboard' %}" class="button button--ghost">Console</a>{% else %}<a href="{% url 'login' %}" class="button button--ghost">Sign in</a>{% endif %}
       </div>
       <p class="muted small">Going to an event? You don't need an invite: get the free app below and scan the event's QR code.</p>
     </div>

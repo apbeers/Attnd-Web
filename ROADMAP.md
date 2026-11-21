@@ -73,7 +73,7 @@ Built on `develop` in this order; ticked as it ships.
   watching, event details, flyer, sharing kit, lifecycle, restore, CSV) ✅, Prospects on the canvas (staff) ✅, Chat as
   default ✅, reload without jumps ✅, A-fix architecture corrections ✅ except splitting agent.js into modules
   (chat, cards, canvas, overlay, fill: ~1,500 lines in one closure today; do it with stage H's lazy-loaded Ask Attnd).
-- [ ] **B. Sign-in flow**: signed in → console; logo → /home/; no prompts during a session.
+- [x] **B. Sign-in flow** ✅: signed in → console; logo → /home/; no prompts during a session.
 - [ ] **C. All AI on Anthropic** (official SDK; OpenAI only for Studio images).
 - [ ] **D. Place images in our own store** (event pages, venue site, Wikimedia; API-022 `image_credit`).
 - [ ] **E. Packages**: latest everything, psycopg 3 + pooling, Python 3.15.2.

@@ -37,7 +37,13 @@ EMAIL_LIMITED = 'We’ve sent several codes already. Please wait 15 minutes, or 
 
 
 class SignInView(auth_views.LoginView):
-    """Django's LoginView, with failed attempts limited per email and per IP."""
+    """Django's LoginView, with failed attempts limited per email and per IP. Signed-in people go on to the console
+    (sessions last until local midnight: never a sign-in prompt during one)."""
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_authenticated and twofactor.pending_step(request) is None:
+            return redirect(self.get_success_url())
+        return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         self.ip = client_ip(request)

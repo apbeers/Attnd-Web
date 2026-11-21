@@ -13,7 +13,7 @@
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="{% url 'console:dashboard' %}">attnd<span>.</span></a>
+  <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
   <a class="topbar__link" href="{% url 'console:dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %}>{% icon "list" %} Your events</a>
   <div class="topbar__actions">
     <a class="button button--primary button--small" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>

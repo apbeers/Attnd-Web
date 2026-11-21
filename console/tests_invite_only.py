@@ -142,7 +142,7 @@ class InviteOnlyHomepageTests(TestCase):
                                         content_type='application/json', secure=True)
         self.assertEqual(response.status_code, 202)
         enqueue.assert_called_once()
-        self.assertIn('id="scrape-form"', self.client.get('/', secure=True).content.decode())
+        self.assertIn('id="scrape-form"', self.client.get('/home/', secure=True).content.decode())
 
 
 @override_settings(SIGNUPS_OPEN=True)

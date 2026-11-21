@@ -17,7 +17,7 @@
 <main class="join-page">
   <div class="join-card{% if kind == 'ios' %} join-card--single{% endif %}">
     <section class="join-info">
-      <a class="brand" href="/">attnd<span>.</span></a>
+      <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
       {% with t=event.timing %}
         {% if t == 'now' and event.status != 'archived' %}<div class="join-status"><span class="pill pill--live"><i></i>Happening now</span></div>
         {% elif t == 'ended' or event.status == 'archived' %}<div class="join-status"><span class="pill">This event has ended</span></div>{% endif %}
