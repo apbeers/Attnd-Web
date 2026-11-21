@@ -1,0 +1,13 @@
+{% load console_tags humanize %}{# usage_answer (stage I9): activity per hour as inline SVG bars, joins, most liked. #}<div class="stack component component--usage_answer">
+  <h3 class="title-4">{% icon "chart" %} {{ d.name }}: numbers</h3>
+  {% if not d.has_data %}<p class="small muted">No app activity yet. Numbers appear once attendees open the event.</p>{% else %}
+  <p class="small"><strong>{{ d.joins|intcomma }}</strong> joined{% if d.busiest %} · busiest hour {{ d.day }}: <strong>{{ d.busiest.label }}</strong> ({{ d.busiest.count|intcomma }} interactions){% endif %}</p>
+  {% if d.bars %}<figure class="usage-bars">
+    <svg viewBox="0 0 {{ d.width }} 60" preserveAspectRatio="none" role="img" aria-label="Interactions per hour on {{ d.day }}, busiest {{ d.busiest.label }}">
+      {% for b in d.bars %}<rect x="{{ b.x }}" y="{{ b.y }}" width="8" height="{{ b.h }}" rx="1.5" class="usage-bars__bar{% if b.label == d.busiest.label %} is-peak{% endif %}"><title>{{ b.label }}: {{ b.count }}</title></rect>{% endfor %}
+    </svg>
+    <figcaption class="usage-bars__axis small muted"><span>{{ d.first }}</span><span>{{ d.day }}</span><span>{{ d.last }}</span></figcaption>
+  </figure>{% endif %}
+  {% if d.liked %}<ul class="list readiness__list">{% for r in d.liked %}<li class="readiness__row small"><span class="grow">{{ r.name }}</span><span class="nowrap">{% icon "heart" "tone-danger" %} {{ r.likes|intcomma }}</span></li>{% endfor %}</ul>{% endif %}
+  {% endif %}
+</div>

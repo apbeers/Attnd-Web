@@ -60,6 +60,7 @@ class ComponentTestCase(TestCase):
             'event_versions': {'event_id': self.event.pk}, 'event_exports': {'event_id': self.event.pk},
             'change_preview': {'event_id': self.event.pk, 'proposal_id': self.proposal.pk},
             'event_readiness': {'event_id': self.event.pk}, 'attention': {},
+            'usage_answer': {'event_id': self.event.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -74,7 +75,7 @@ class ComponentTestCase(TestCase):
             'event_flyer': 'No flyer yet', 'sharing_kit': 'PRAIRIE', 'event_lifecycle': 'Now:',
             'event_versions': 'No saved versions yet', 'event_exports': 'CSV files',
             'change_preview': 'Move sets later', 'event_readiness': 'to fix',
-            'attention': 'What needs attention',
+            'attention': 'What needs attention', 'usage_answer': 'numbers',
         }
 
     def request(self, user=None):
@@ -307,3 +308,22 @@ class ReadinessTests(ComponentTestCase):
         self.assertTrue(any(r['key'] == 'overlaps' for r in data['rows']))
         stranger = User.objects.create_user('s2', 's2@example.com', 'pw')
         self.assertEqual(C.load(stranger, 'attention', {})['rows'], [])
+
+
+class UsageAnswerTests(ComponentTestCase):
+    def test_hourly_bars_busiest_hour_and_likes(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from events.models import UsageCount
+        tz = ZoneInfo(self.event.timezone or 'UTC')
+        day = datetime(2026, 11, 14, tzinfo=tz)
+        for hour, n in ((18, 5), (19, 40), (21, 3)):
+            UsageCount.objects.create(event=self.event, bucket=day.replace(hour=hour), metric='tab_view', count=n)
+        UsageCount.objects.create(event=self.event, bucket=day.replace(hour=21), metric='location_heart', detail=str(self.stage.pk), count=7)
+        data = C.load(self.owner, 'usage_answer', {'event_id': self.event.pk})
+        self.assertEqual(data['busiest'], {'label': '7 PM', 'count': 40})
+        self.assertEqual([b['count'] for b in data['bars']], [5, 40, 0, 10])
+        self.assertEqual(data['liked'][0], {'kind': 'place', 'name': self.stage.name, 'likes': 7})
+        html = C.render('usage_answer', data, surface='chat')
+        self.assertIn('<svg', html)

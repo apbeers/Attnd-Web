@@ -833,3 +833,10 @@ body:has(.assistant) .task-toast { top: 9rem; bottom: auto; right: 2.5rem; }
 .lock-preview__text { display: flex; flex-direction: column; min-width: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
 .lock-preview__app { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--text-xs); color: var(--color-muted); text-transform: uppercase; letter-spacing: .02em; }
 .lock-preview__now { text-transform: none; }
+
+/* usage_answer bars (stage I9) */
+.usage-bars { margin: 0; }
+.usage-bars svg { display: block; width: 100%; height: 5rem; }
+.usage-bars__bar { fill: var(--color-brand-line, var(--color-brand-soft)); }
+.usage-bars__bar.is-peak { fill: var(--color-brand); }
+.usage-bars__axis { display: flex; justify-content: space-between; }

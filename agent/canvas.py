@@ -15,7 +15,7 @@ KINDS = {
     'event_tile': 'Events', 'event_overview': 'Overview', 'event_readiness': 'Overview', 'event_lifecycle': 'Overview', 'sharing_kit': 'Overview',
     'event_exports': 'Overview', 'changeset_review': 'Review', 'location_row': 'Locations',
     'schedule_item_row': 'Schedule', 'notification_form': 'Notifications', 'notification_row': 'Notifications',
-    'event_team': 'Team', 'event_metrics': 'Metrics', 'app_layout': 'Settings', 'website_watching': 'Settings',
+    'event_team': 'Team', 'event_metrics': 'Metrics', 'usage_answer': 'Metrics', 'app_layout': 'Settings', 'website_watching': 'Settings',
     'event_context_form': 'Settings', 'event_flyer': 'Settings', 'object_history': 'History',
     'event_versions': 'History', 'prospect_run_row': 'Prospects', 'prospect_row': 'Prospects',
 }
@@ -23,7 +23,7 @@ ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications
          'History', 'Prospects']
 EVENT_SECTIONS = ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'changeset_review',
                   'location_row', 'schedule_item_row', 'notification_form', 'notification_row', 'event_team',
-                  'event_metrics', 'app_layout', 'website_watching', 'event_context_form', 'event_flyer',
+                  'event_metrics', 'usage_answer', 'app_layout', 'website_watching', 'event_context_form', 'event_flyer',
                   'object_history', 'event_versions']
 EMPTY = {'location_row': 'No locations yet. Add stages, booths, food, anywhere attendees go.',
          'schedule_item_row': 'No schedule items yet.', 'notification_row': 'No notifications sent or scheduled yet.',

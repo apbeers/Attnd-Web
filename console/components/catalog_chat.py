@@ -146,3 +146,61 @@ def attention(user):
             rows.append({**check, 'event': event.name, 'event_id': event.pk})
     rows.sort(key=lambda r: 0 if r['state'] == PROBLEM else 1)
     return {'rows': rows[:8], 'more': max(0, len(rows) - 8), 'events': len(events)}
+
+
+def _hourly(event):
+    """(day label, [{hour, label, count, pct}], busiest) for the latest event day with app activity, in its zone."""
+    from django.db.models import Sum
+
+    from console.usage import INTERACTIONS
+    from events.models import UsageCount
+    tz = _tz(event)
+    rows = (UsageCount.objects.filter(event=event, metric__in=INTERACTIONS).values_list('bucket')
+            .annotate(n=Sum('count')).values_list('bucket', 'n'))
+    by_day = defaultdict(lambda: defaultdict(int))
+    for bucket, n in rows:
+        local = bucket.astimezone(tz)
+        by_day[local.date()][local.hour] += n
+    if not by_day:
+        return '', [], None
+    day = max(by_day)
+    hours = by_day[day]
+    first, last = min(hours), max(hours)
+    peak = max(hours.values()) or 1
+    bars = []
+    for h in range(first, last + 1):
+        label = f'{(h % 12) or 12} {"AM" if h < 12 else "PM"}'
+        pct = round(100 * hours.get(h, 0) / peak)
+        height = max(1, round(pct * 0.56)) if hours.get(h) else 0
+        i = h - first
+        bars.append({'hour': h, 'label': label, 'count': hours.get(h, 0), 'pct': pct,
+                     'x': i * 10 + 1, 'y': 58 - height, 'h': height})
+    best = max(bars, key=lambda b: b['count'])
+    return day.strftime('%a %b %-d'), bars, best
+
+
+@component('usage_answer', 'Numbers', 'The event\'s numbers for questions like "how many people liked the taco '
+           'trucks?" or "busiest hour yesterday?": activity per hour on the latest day with data (a bar chart, the '
+           'busiest hour), joins, and the most liked places and items with their likes.',
+           page=lambda ids: reverse('console:usage', args=[ids['event_id']]),
+           chat_only='The chat\'s and canvas Metrics tab\'s answer card (the Usage page has the full charts).')
+def usage_answer(user, event_id=None, event=None):
+    from console.usage import net_hearts
+    from events.models import Location, ScheduledItem, UsageCount
+    event = editable_event(user, event_id, event)
+    day, bars, best = _hourly(event)
+    hearts = net_hearts(event)
+    liked = []
+    for kind, model in (('place', Location), ('item', ScheduledItem)):
+        names = dict(model.objects.filter(event=event, pk__in=hearts[kind if kind == 'item' else 'location'])
+                     .values_list('id', 'name'))
+        for pk, n in hearts['item' if kind == 'item' else 'location'].items():
+            if pk in names:
+                liked.append({'kind': kind, 'name': names[pk], 'likes': n})
+    liked.sort(key=lambda r: (-r['likes'], r['name']))
+    from django.db.models import Sum
+    joins = UsageCount.objects.filter(event=event, metric='join').aggregate(n=Sum('count'))['n'] or 0
+    return {'event_id': event.pk, 'name': event.name, 'day': day, 'bars': bars, 'width': len(bars) * 10,
+            'first': bars[0]['label'] if bars else '', 'last': bars[-1]['label'] if bars else '',
+            'busiest': {'label': best['label'], 'count': best['count']} if best and best['count'] else None,
+            'joins': joins, 'liked': liked[:8], 'has_data': bool(bars or liked or joins)}
