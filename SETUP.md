@@ -19,7 +19,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
 | 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15). AI on Claude Sonnet 5.5 (step 18). |
 | 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026): moved to git branch `parked/tickets` (API-017), organizers use Eventbrite for now. The setup steps live on that branch. Optional: drop dev's orphan `tickets_*` tables (step 16). |
-| 17. Prospects (staff) | ✅ No setup: it uses the existing `OPENAI_API_KEY` (OpenAI's web search tool, ~$0.01 per search + tokens). The schedule is off until turned on in `/console/prospects/settings/`. Optional: `PROSPECT_MODEL`, `PROSPECT_DAILY_SPEND_CAP_USD` (default 5), `PROSPECT_RUN_MAX_MINUTES` (step 17). |
+| 17. Prospects (staff) | ✅ No setup: it uses `ANTHROPIC_API_KEY` (Claude Sonnet's web search, ~$0.01 per search + tokens; stage C). The schedule is off until turned on in `/console/prospects/settings/`. Optional: `PROSPECT_MODEL`, `PROSPECT_DAILY_SPEND_CAP_USD` (default 5), `PROSPECT_RUN_MAX_MINUTES` (step 17). |
 | 18. Ask Attnd (console agent) | ✅ Runs on Anthropic's Claude Haiku 5.5 (`ANTHROPIC_API_KEY` set on dev and production, Nov 21, 2026; Studio on Claude Sonnet 5.5, step 18). Without the key it uses the existing `OPENAI_API_KEY` (gpt-5-mini → gpt-5). Optional: `AGENT_PROVIDER`, `AGENT_ANTHROPIC_MODEL`, `AGENT_DAILY_SPEND_CAP_USD` (default 2 per person per UTC day), `AGENT_MAX_STEPS` (40). |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
@@ -811,7 +811,7 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
 - **Put:** Heroku (both apps). Also put the **dev** value in the `ATTND_API_KEY` repo secret in Attnd-iOS and Attnd-Android, and in your local dev config (step 5). Get it with `heroku config:get API_KEY -a attnd-dev | pbcopy`.
 - **If leaked:** set a new value and update the GitHub secrets. To block a leaked value permanently, add its SHA-256 to `REVOKED_API_KEY_SHA256` in `events/apis.py`.
 
-**`OPENAI_API_KEY`**: AI event import and refresh.
+**`OPENAI_API_KEY`**: only Studio's image generation since stage C (Nov 21, 2026); AI import, refresh, tags, vision, prospects and Ask Attnd run on Claude (`ANTHROPIC_API_KEY`).
 - **Create:** [platform.openai.com](https://platform.openai.com) → **API keys → Create new secret key**. Name it "Attnd server", pick the project, and set permissions to "Restricted" with Model capabilities = Write. Optionally set a monthly budget under Settings → Limits.
 - **Put:** both Heroku apps. Use one key for both, or create a separate "Attnd dev" key to keep spending apart.
 - **If leaked:** revoke it on the same page and create a new one.
@@ -920,7 +920,7 @@ Revoke it any time with `heroku authorizations` / `heroku authorizations:revoke 
 
 ## 17. Prospects (staff sales dashboard): nothing to set up
 
-`/console/prospects/` (staff and superusers only) finds events in a region that suit the app with OpenAI's web
+`/console/prospects/` (staff and superusers only) finds events in a region that suit the app with Claude's web
 search tool, reads their pages for organizer contacts and can make testing-only copies of them. It uses the existing
 `OPENAI_API_KEY` (web search must be allowed for the key's project; it is by default). Optional settings:
 ```bash
@@ -937,7 +937,7 @@ Done Nov 21, 2026 (owner): `ANTHROPIC_API_KEY` is set on **attnd-dev and attnd-w
 Anthropic:
 - **Ask Attnd** (`agent/`): the official `anthropic` SDK with `claude-haiku-5-5` ($0.10 / $0.50 per million input /
   output tokens, cache reads a tenth); `AGENT_PROVIDER` defaults to `anthropic` when the key is set (`openai` to switch
-  back). A request Claude declines continues on OpenAI (`AGENT_REFUSAL_MODEL`, gpt-5-mini), so keep `OPENAI_API_KEY`.
+  back). A request Claude Haiku declines continues on Claude Sonnet (`AGENT_REFUSAL_MODEL`).
 - **Studio** (`studio/`): `STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5` ($2 / $10) on both apps; dev also has
   `STUDIO_AI_PROVIDER=anthropic`, production's is `auto` (Anthropic because the key is set). Images and vision stay on
   OpenAI.

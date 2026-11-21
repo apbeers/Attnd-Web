@@ -1,5 +1,5 @@
 """
-Tests for AI import / refresh. OpenAI, httpx and Google Places are mocked — no network calls.
+Tests for AI import / refresh. Claude (attnd.testing.fake_claude), httpx and Google Places are mocked — no network calls.
 """
 
 import json
@@ -12,11 +12,12 @@ from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone as django_timezone
 
+from attnd.testing import fake_claude
 from events.content import restore
 from events.models import Event, EventRevision, Location, ScheduledItem
 from scrape import diff, jobs
 from scrape.models import Change, ChangeSet, IngestJob
-from scrape.service import _model_kwargs, _normalize, scrape_event
+from scrape.service import _normalize, scrape_event
 
 
 def _sample_data(**overrides):
@@ -51,14 +52,6 @@ def _sample_data(**overrides):
     }
     base.update(overrides)
     return base
-
-
-def _mock_openai_response(data: dict):
-    choice = MagicMock()
-    choice.message.content = json.dumps(data)
-    resp = MagicMock()
-    resp.choices = [choice]
-    return resp
 
 
 class RunJobsInline:
@@ -171,31 +164,26 @@ class TrialImportTests(RunJobsInline, TestCase):
 
 class ServiceTests(TestCase):
     @patch("scrape.service._crawl", return_value="Some event page text")
-    @patch("scrape.service.OpenAI")
-    def test_scrape_event_returns_normalized_dict(self, mock_openai_cls, _crawl):
-        mock_openai_cls.return_value.chat.completions.create.return_value = _mock_openai_response(_sample_data())
-        data = scrape_event("https://example.com")
+    def test_scrape_event_returns_normalized_dict(self, _crawl):
+        with fake_claude(_sample_data()):
+            data = scrape_event("https://example.com")
         self.assertEqual(data["name"], "Test County Fair")
         self.assertEqual(len(data["schedule"]), 2)
 
     @patch("scrape.service._crawl", return_value="text")
-    @patch("scrape.service.OpenAI")
-    def test_refresh_sends_current_state(self, mock_openai_cls, _crawl):
-        create = mock_openai_cls.return_value.chat.completions.create
-        create.return_value = _mock_openai_response(_sample_data())
-        scrape_event(urls=["https://example.com"], current={"event": {"name": "X"}, "locations": [], "schedule": []})
-        messages = create.call_args.kwargs["messages"]
-        self.assertIn("REFRESHING", messages[0]["content"])
-        self.assertIn("CURRENT DATA", messages[1]["content"][0]["text"])
+    def test_refresh_sends_current_state(self, _crawl):
+        with fake_claude(_sample_data()) as claude:
+            scrape_event(urls=["https://example.com"], current={"event": {"name": "X"}, "locations": [], "schedule": []})
+        self.assertIn("REFRESHING", claude.last["system"][0]["text"])
+        self.assertIn("CURRENT DATA", claude.last["messages"][0]["content"][0]["text"])
+        self.assertEqual(claude.last["model"], "claude-haiku-5-5")
 
-    @patch("scrape.service.OpenAI")
-    def test_attachments_are_sent_as_image_and_file_parts(self, mock_openai_cls):
-        create = mock_openai_cls.return_value.chat.completions.create
-        create.return_value = _mock_openai_response(_sample_data())
-        scrape_event(attachments=[{"name": "a.png", "mime": "image/png", "data": b"x"},
-                                  {"name": "b.pdf", "mime": "application/pdf", "data": b"y"}])
-        types = [p["type"] for p in create.call_args.kwargs["messages"][1]["content"]]
-        self.assertEqual(types, ["image_url", "file"])
+    def test_attachments_are_sent_as_image_and_document_blocks(self):
+        with fake_claude(_sample_data()) as claude:
+            scrape_event(attachments=[{"name": "a.png", "mime": "image/png", "data": b"x"},
+                                      {"name": "b.pdf", "mime": "application/pdf", "data": b"y"}])
+        types = [p["type"] for p in claude.last["messages"][0]["content"]]
+        self.assertEqual(types, ["image", "document"])
 
     @patch("scrape.service._crawl", return_value="")
     def test_empty_crawl_raises_value_error(self, _crawl):
@@ -203,12 +191,8 @@ class ServiceTests(TestCase):
             scrape_event("https://example.com")
 
     @patch("scrape.service._crawl", return_value="text")
-    @patch("scrape.service.OpenAI")
-    def test_bad_openai_json_raises_value_error(self, mock_openai_cls, _crawl):
-        choice = MagicMock()
-        choice.message.content = "not json"
-        mock_openai_cls.return_value.chat.completions.create.return_value = MagicMock(choices=[choice])
-        with self.assertRaises(ValueError):
+    def test_bad_json_raises_value_error(self, _crawl):
+        with fake_claude("not json"), self.assertRaises(ValueError):
             scrape_event("https://example.com")
 
     def test_normalize_accepts_legacy_nested_items_and_zero_coords(self):
@@ -220,9 +204,16 @@ class ServiceTests(TestCase):
         self.assertEqual(data["schedule"][0]["location_name"], "Stage")
         self.assertIsNone(data["schedule"][0]["start_time"])
 
-    def test_model_kwargs(self):
-        self.assertEqual(_model_kwargs("gpt-5-mini"), {"reasoning_effort": "low"})
-        self.assertEqual(_model_kwargs("gpt-4o-mini"), {"temperature": 0})
+    def test_a_schema_the_api_refuses_falls_back_to_json_in_the_prompt(self):
+        import anthropic
+        import httpx
+        refused = anthropic.BadRequestError('The compiled grammar is too large for this schema', response=httpx.Response(
+            400, request=httpx.Request('POST', 'https://api.anthropic.com/v1/messages')), body=None)
+        with fake_claude(refused, _sample_data()) as claude:
+            data = scrape_event(text="Fair on Saturday")
+        self.assertEqual(data["name"], "Test County Fair")
+        self.assertNotIn("format", claude.last["output_config"])
+        self.assertIn("matching this JSON schema", claude.last["system"][0]["text"])
 
 
 # ---------------------------------------------------------------------------

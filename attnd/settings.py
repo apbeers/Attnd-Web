@@ -379,7 +379,8 @@ SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '').strip().lower() in ('1', 'true', 'y
 # Studio is for admins (staff and superusers) only. These emails (comma-separated, default none) are an explicit
 # override that also get Studio.
 STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', '').split(',') if e.strip()]
-# AI: auto = Anthropic when ANTHROPIC_API_KEY is set, else OpenAI (the existing OPENAI_API_KEY).
+# AI: auto = Anthropic when ANTHROPIC_API_KEY is set, else OpenAI. OpenAI stays only for Studio's images (and Studio's
+# optional OpenAI text provider); everything else runs on Claude (stage C).
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 STUDIO_AI_PROVIDER = os.getenv('STUDIO_AI_PROVIDER', 'auto').strip().lower()
 STUDIO_OPENAI_MODEL = os.getenv('STUDIO_OPENAI_MODEL', 'gpt-5.5')
@@ -387,7 +388,6 @@ STUDIO_OPENAI_FALLBACK_MODEL = os.getenv('STUDIO_OPENAI_FALLBACK_MODEL', 'gpt-5'
 STUDIO_ANTHROPIC_MODEL = os.getenv('STUDIO_ANTHROPIC_MODEL', 'claude-sonnet-5-5')  # owner, Nov 21, 2026
 STUDIO_IMAGE_MODEL = os.getenv('STUDIO_IMAGE_MODEL', 'gpt-image-2')
 STUDIO_IMAGE_FALLBACK_MODEL = os.getenv('STUDIO_IMAGE_FALLBACK_MODEL', 'gpt-image-1')
-STUDIO_VISION_MODEL = os.getenv('STUDIO_VISION_MODEL', '') or os.getenv('OPENAI_MODEL', 'gpt-5-mini')
 # AI spend per event per UTC day (all Studio calls: chat, images, asset descriptions). 0 = no Studio AI.
 # $10: a full import (a 10-25 page site rebuilt in one run) costs roughly $2-4 with gpt-5.5 and prompt caching, up
 # to ~$6 on Claude, so $5 left little or nothing for the chat turns that follow it on the same day.
@@ -412,28 +412,24 @@ STUDIO_PRICES = {
     'image': 0.25,
 }
 
-# Prospects (prospects/, staff only): find events in a region that suit the app (OpenAI web search), read their
-# pages for organizer contacts, and make testing-only copies of them. Runs by hand or on its own schedule.
-PROSPECT_MODEL = os.getenv('PROSPECT_MODEL', 'gpt-5.5')
-PROSPECT_FALLBACK_MODEL = os.getenv('PROSPECT_FALLBACK_MODEL', 'gpt-5')  # only when PROSPECT_MODEL is unavailable
+# Prospects (prospects/, staff only): find events in a region that suit the app (Claude Sonnet with web search), read
+# their pages for organizer contacts (Claude Haiku scores them), and make testing-only copies. By hand or scheduled.
+PROSPECT_MODEL = os.getenv('PROSPECT_MODEL', 'claude-sonnet-5-5')  # the search (Haiku has no web search)
+PROSPECT_SCORE_MODEL = os.getenv('PROSPECT_SCORE_MODEL', 'claude-haiku-5-5')  # fit score + contacts
 PROSPECT_DAILY_SPEND_CAP_USD = float(os.getenv('PROSPECT_DAILY_SPEND_CAP_USD', '5'))  # all runs per UTC day
 PROSPECT_RUN_MAX_MINUTES = int(os.getenv('PROSPECT_RUN_MAX_MINUTES', '20'))  # wall clock per run
-PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # OpenAI's web_search tool: $10 per 1,000 calls (+ its content as input tokens)
+PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # Anthropic's web search: $10 per 1,000 searches (+ results as input tokens)
 
 # Ask Attnd (agent/): the console's AI agent. Every tool runs the real console view as the signed-in person.
-# Provider (agent/providers.py, separate from Studio's STUDIO_AI_PROVIDER): anthropic (default when ANTHROPIC_API_KEY
-# is set; the official SDK, AGENT_ANTHROPIC_MODEL) or openai (AGENT_MODEL / AGENT_FALLBACK_MODEL below).
-AGENT_PROVIDER = os.getenv('AGENT_PROVIDER', '').strip().lower() or ('anthropic' if ANTHROPIC_API_KEY else 'openai')
+# Claude only (stage C, agent/providers.py; the official SDK, AGENT_ANTHROPIC_MODEL).
 # Claude everywhere outside Ask Attnd's loop and Studio (attnd/claude.py): Haiku for imports, website checks, tags,
 # vision, form fills and scores; Sonnet where Haiku can't (web search).
 AI_MODEL = os.getenv('AI_MODEL', 'claude-haiku-5-5')
 AI_SMART_MODEL = os.getenv('AI_SMART_MODEL', 'claude-sonnet-5-5')
 AGENT_ANTHROPIC_MODEL = os.getenv('AGENT_ANTHROPIC_MODEL', 'claude-haiku-5-5')  # owner, Nov 21, 2026
 PLAN_SUGGESTIONS_MODEL = os.getenv('PLAN_SUGGESTIONS_MODEL', 'claude-haiku-5-5')  # API-021 (events/plan_suggestions.py)
-# A run Claude declines (stop_reason refusal) continues on this model (agent/loop.py _refusal_fallback).
-AGENT_REFUSAL_MODEL = os.getenv('AGENT_REFUSAL_MODEL', 'gpt-5-mini')
-AGENT_MODEL = os.getenv('AGENT_MODEL', 'gpt-5-mini')  # owner, Nov 21, 2026: the cheaper model (was gpt-5.5)
-AGENT_FALLBACK_MODEL = os.getenv('AGENT_FALLBACK_MODEL', 'gpt-5')  # only when AGENT_MODEL is unavailable
+# A run Claude Haiku declines (stop_reason refusal) continues once on this model (agent/loop.py _refusal_fallback).
+AGENT_REFUSAL_MODEL = os.getenv('AGENT_REFUSAL_MODEL', 'claude-sonnet-5-5')
 AGENT_DAILY_SPEND_CAP_USD = float(os.getenv('AGENT_DAILY_SPEND_CAP_USD', '2'))  # per person per UTC day
 AGENT_MAX_STEPS = int(os.getenv('AGENT_MAX_STEPS', '40'))  # model calls per run
 AGENT_RUN_MAX_MINUTES = int(os.getenv('AGENT_RUN_MAX_MINUTES', '15'))  # wall clock per run (waiting doesn't count)
@@ -595,7 +591,7 @@ FCM_SERVICE_ACCOUNT_JSON = os.getenv('FCM_SERVICE_ACCOUNT_JSON', '')
 # ---------------------------------------------------------------------------
 # AI event import (see scrape/)
 # ---------------------------------------------------------------------------
-OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
+# (Claude Haiku: AI_MODEL above, through attnd/claude.py.)
 # Run AI jobs in a background thread of the web dyno when no worker dyno is running.
 INGEST_RUN_INLINE = os.getenv('INGEST_RUN_INLINE', '1') not in ('0', 'false', 'False', '')
 

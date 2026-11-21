@@ -170,7 +170,7 @@ def tools_for(user, run=None):
 
 
 def _provider(name=None, model=None):
-    """Ask Attnd's provider (agent/providers.py): Claude Haiku 5.5 on Anthropic by default, or OpenAI. `name` /
+    """Ask Attnd's provider (agent/providers.py): Claude Haiku 5.5 (Sonnet for the refusal fallback). `name` /
     `model` restore a paused run's provider."""
     from agent import providers
     return providers.get_provider(name=name, model=model)
@@ -334,9 +334,9 @@ def _deadline(run):
 
 
 def _refusal_fallback(run, messages, refused):
-    """Claude declined (no server-side fallback on Haiku): this run continues on OpenAI (AGENT_REFUSAL_MODEL) from
-    the same context block, told what the run already did."""
-    provider = _provider('openai', settings.AGENT_REFUSAL_MODEL)
+    """Claude Haiku declined (it has no server-side fallback): this run continues on Claude Sonnet
+    (AGENT_REFUSAL_MODEL) from the same context block, told what the run already did."""
+    provider = _provider('anthropic', settings.AGENT_REFUSAL_MODEL)
     from agent.providers import first_text
     done = [s.text for s in run.steps.exclude(kind=AgentStep.KIND_NOTE).order_by('seq') if s.text][-20:]
     text = first_text(messages)
@@ -368,7 +368,7 @@ def _loop(run, provider, messages):
         try:
             turn = provider.chat(SYSTEM_PROMPT, messages, tools)
         except Refused as exc:
-            if provider.name != 'anthropic':
+            if provider.model == settings.AGENT_REFUSAL_MODEL:  # the fallback declined too
                 raise StopRun('The AI declined this request. Try rephrasing it.')
             provider, messages = _refusal_fallback(run, messages, exc)
             continue

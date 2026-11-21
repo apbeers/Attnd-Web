@@ -1,8 +1,7 @@
 """Ask Attnd's model providers.
 
-Ask Attnd runs on Anthropic's Messages API with the official SDK (`AGENT_PROVIDER`, default `anthropic` when
-`ANTHROPIC_API_KEY` is set) and Claude Haiku 5.5, or on OpenAI through Studio's provider (`studio.ai`). Studio's own
-provider choice is separate (`STUDIO_AI_PROVIDER`).
+Ask Attnd runs on Anthropic's Messages API with the official SDK and Claude Haiku 5.5 (stage C: no OpenAI); a run
+Haiku declines continues on Claude Sonnet. Studio's own provider choice is separate (`STUDIO_AI_PROVIDER`).
 
 The Anthropic provider has the loop interface of `studio.ai` (start / chat / add_turn / add_results / state /
 restore / effort), so `agent.loop` drives both the same way; we host the tool loop ourselves (tools run our views).
@@ -16,7 +15,7 @@ Request rules for claude-haiku-5-5 (see the model's migration notes):
   message, after the system breakpoint;
 - every assistant content block goes back unchanged (thinking blocks included) and the history is append-only;
 - `stop_reason` is checked before content: refusal → `Refused` (no server-side fallback on Haiku; the loop moves
-  the run to OpenAI), max_tokens → one retry with a larger cap, pause_turn → continued.
+  the run to Claude Sonnet, AGENT_REFUSAL_MODEL), max_tokens → one retry with a larger cap, pause_turn → continued.
 """
 
 import logging
@@ -37,7 +36,7 @@ _strict_refused = set()
 
 
 class Refused(AIError):
-    """The model declined (stop_reason refusal). The loop retries the run on the OpenAI provider."""
+    """The model declined (stop_reason refusal). The loop retries the run once on Claude Sonnet (AGENT_REFUSAL_MODEL)."""
 
     def __init__(self, message, category=''):
         super().__init__(message)
@@ -45,25 +44,17 @@ class Refused(AIError):
 
 
 def provider_name():
-    choice = (settings.AGENT_PROVIDER or '').strip().lower()
-    if choice in ('anthropic', 'openai'):
-        return choice
-    return 'anthropic' if settings.ANTHROPIC_API_KEY else 'openai'
+    return 'anthropic'  # stage C: all of Ask Attnd on Claude (OpenAI only makes Studio's images)
 
 
 def get_provider(name=None, model=None):
-    """The provider for a run. `name` / `model` restore a paused run's provider (or the refusal fallback)."""
-    name = name or provider_name()
-    if name == 'anthropic':
-        if not settings.ANTHROPIC_API_KEY:
-            raise AIError('AGENT_PROVIDER is anthropic but ANTHROPIC_API_KEY is not set.')
-        return ClaudeProvider(model=model or settings.AGENT_ANTHROPIC_MODEL, effort=settings.AGENT_EFFORT)
-    from studio import ai
-    import os
-    if not os.getenv('OPENAI_API_KEY'):
-        raise AIError('No AI key is configured on the server (ANTHROPIC_API_KEY or OPENAI_API_KEY).')
-    return ai.OpenAIProvider(model=model or settings.AGENT_MODEL, fallback_model=settings.AGENT_FALLBACK_MODEL,
-                             effort=settings.AGENT_EFFORT, parallel_tool_calls=False)
+    """The provider for a run: Claude (AGENT_ANTHROPIC_MODEL; `model` = the refusal fallback's Sonnet, or a paused
+    run's model). Paused runs from before stage C that were on OpenAI continue on Claude."""
+    if not settings.ANTHROPIC_API_KEY:
+        raise AIError('No AI key is configured on the server (ANTHROPIC_API_KEY).')
+    if model and not model.startswith('claude'):
+        model = None
+    return ClaudeProvider(model=model or settings.AGENT_ANTHROPIC_MODEL, effort=settings.AGENT_EFFORT)
 
 
 UNSUPPORTED_KEYWORDS = ('minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'minLength',

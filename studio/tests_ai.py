@@ -215,7 +215,8 @@ class AgentTests(StudioTestCase):
 
 class ProviderTests(StudioTestCase):
     @override_settings(ANTHROPIC_API_KEY='sk-ant-test', STUDIO_AI_PROVIDER='auto')
-    def test_anthropic_over_urllib(self):
+    def test_anthropic_on_the_sdk(self):
+        from types import SimpleNamespace
         self.assertIsInstance(ai.get_provider(), ai.AnthropicProvider)
         reply = {'model': 'claude-sonnet-5-5', 'stop_reason': 'tool_use', 'usage': {'input_tokens': 100, 'output_tokens': 20},
                  'content': [{'type': 'thinking', 'thinking': '', 'signature': 'sig'},
@@ -224,47 +225,42 @@ class ProviderTests(StudioTestCase):
                               'input': {'path': 'index.html', 'content': '<p>x</p>'}}]}
         sent = {}
 
-        class Response(io.BytesIO):
+        class Stream:
+            def __init__(self, data):
+                self.data = data
+
             def __enter__(self):
-                return self
+                return SimpleNamespace(get_final_message=lambda: SimpleNamespace(
+                    model_dump=lambda **kw: self.data))
 
             def __exit__(self, *a):
                 return False
 
-        def fake_urlopen(request, timeout):
-            sent['request'] = request
-            return Response(json.dumps(reply).encode())
+        class Api:
+            class messages:
+                @staticmethod
+                def stream(**kwargs):
+                    sent.update(kwargs)
+                    return Stream(sent.get('_reply', reply))
 
         provider = ai.get_provider()
         messages = provider.start('hello')
-        with mock.patch('urllib.request.urlopen', fake_urlopen):
+        with mock.patch('attnd.claude.client', return_value=Api()):
             turn = provider.chat('SYSTEM', messages, agent.TOOLS)
-        request = sent['request']
-        body = json.loads(request.data)
-        self.assertEqual(request.full_url, 'https://api.anthropic.com/v1/messages')
-        self.assertEqual(request.headers['X-api-key'], 'sk-ant-test')
-        self.assertEqual(body['model'], 'claude-sonnet-5-5')
-        self.assertEqual(body['fallbacks'], 'default')
-        self.assertNotIn('temperature', body)
-        self.assertNotIn('thinking', body)
-        self.assertEqual(body['tools'][0]['input_schema']['required'], ['path', 'content'])
+        self.assertEqual(sent['model'], 'claude-sonnet-5-5')
+        self.assertEqual(sent['extra_body'], {'fallbacks': 'default'})
+        self.assertEqual(sent['extra_headers']['anthropic-beta'], 'server-side-fallback-2026-07-01')
+        self.assertNotIn('temperature', sent)
+        self.assertNotIn('thinking', sent)
+        self.assertEqual(sent['tools'][0]['input_schema']['required'], ['path', 'content'])
         self.assertEqual((turn.text, turn.calls[0].name, turn.calls[0].args['path']), ('Writing it.', 'write_file', 'index.html'))
         provider.add_turn(messages, turn)
         provider.add_results(messages, [(turn.calls[0], 'ok')])
         self.assertEqual(messages[1]['content'][0]['type'], 'thinking')  # blocks go back unchanged
         self.assertEqual(messages[2]['content'][0], {'type': 'tool_result', 'tool_use_id': 'tu1', 'content': 'ok'})
-
-    @override_settings(ANTHROPIC_API_KEY='sk-ant-test')
-    def test_anthropic_refusal(self):
-        class Response(io.BytesIO):
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-        with mock.patch('urllib.request.urlopen', return_value=Response(b'{"stop_reason": "refusal", "content": []}')):
-            with self.assertRaises(ai.AIError):
-                ai.AnthropicProvider().chat('s', [], [])
+        sent['_reply'] = {'stop_reason': 'refusal', 'content': []}
+        with mock.patch('attnd.claude.client', return_value=Api()), self.assertRaises(ai.AIError):
+            ai.AnthropicProvider().chat('s', [], [])
 
     @override_settings(ANTHROPIC_API_KEY='', STUDIO_AI_PROVIDER='auto')
     def test_no_key_is_a_clear_error(self):

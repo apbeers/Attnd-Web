@@ -82,7 +82,7 @@ Accounts and services:
   untick it with the next profile); App Attest.
 - App Store Connect: Attnd (id1470627406), App Clip, TestFlight.
 - Google Play Console: `com.arcu.attnd` (upload key, Play App Signing), publishing service account.
-- OpenAI (server key: AI import, website watching, Studio, image generation, since Nov 19, 2026 the staff
+- OpenAI (server key; since Nov 21, 2026 (stage C) only Studio's image generation. Before: AI import, website watching, Studio, the staff
   Prospects dashboard's web search tool: billed per search call on the same key/project, and since Nov 20, 2026
   **Ask Attnd**, the console's AI agent for every organizer (`agent/`, `AGENT_MODEL` gpt-5.5, capped per person per
   day by `AGENT_DAILY_SPEND_CAP_USD`): it sends console page text (event content, team member emails, organizer
@@ -90,7 +90,7 @@ Accounts and services:
   privacy policy / organizer terms should mention the AI assistant as a processor).
 - Anthropic (Nov 21, 2026): the Anthropic Console account and two API keys (`ANTHROPIC_API_KEY` on attnd-dev and
   attnd-web). **Ask Attnd** runs on Claude Haiku 5.5 (`AGENT_PROVIDER`, the official `anthropic` SDK) and **Studio** on
-  Claude Sonnet 5.5 (`STUDIO_ANTHROPIC_MODEL`, Studio's urllib provider); like OpenAI before it, Ask Attnd it receives console page text (event content, team emails,
+  Claude Sonnet 5.5 (`STUDIO_ANTHROPIC_MODEL`); since stage C also AI import, website watching, tags, asset vision, form fills, plan suggestions and prospects (Sonnet web search); like OpenAI before it, Ask Attnd it receives console page text (event content, team emails,
   notes) as the signed-in organizer, so the privacy policy / organizer terms should name Anthropic as a processor.
 - Prospects data (staff sales pipeline, `prospects/`): organizer contact details scraped from public event pages,
   with do-not-contact flags. Moves with the database; outreach from the LLC must identify the LLC and its physical

@@ -20,7 +20,7 @@ class AgentRun(models.Model):
     status = models.CharField(max_length=24, choices=STATUS_CHOICES, default=RUNNING)
     provider = models.CharField(max_length=16, blank=True)
     model = models.CharField(max_length=64, blank=True)
-    previous_response_id = models.CharField(max_length=128, blank=True)  # OpenAI's chain position
+    previous_response_id = models.CharField(max_length=128, blank=True)  # (OpenAI's chain position: unused since stage C)
     state = models.JSONField(default=dict, blank=True)  # conversation items + pending results while paused
     cost_usd = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     input_tokens = models.PositiveIntegerField(default=0)

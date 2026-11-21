@@ -2,7 +2,7 @@
 Event scraping service.
 
 Crawls a URL with httpx + BeautifulSoup (BFS, max 2 deep / 10 pages), then
-sends the combined text to OpenAI to extract a structured Event + Locations
+sends the combined text to Claude (Haiku, structured output) to extract a structured Event + Locations
 payload.  No browser required — works on Heroku and any plain Python env.
 """
 
@@ -18,12 +18,11 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
-from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# JSON schema sent to OpenAI as response_format (strict structured output)
+# JSON schema for Claude's structured output (attnd/claude.structured)
 # ---------------------------------------------------------------------------
 
 def _nullable(t, description):
@@ -354,26 +353,15 @@ def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int =
 MAX_CONTENT_CHARS = 200_000
 
 
-def _model_kwargs(model: str) -> dict:
-    """Reasoning models reject temperature; older chat models reject reasoning_effort."""
-    if model.startswith(("gpt-5", "o1", "o3", "o4")):
-        return {"reasoning_effort": "low"}
-    return {"temperature": 0}
-
-
 def _extract(content: str, current: dict | None = None, attachments: list | None = None,
              instructions: str = "") -> dict:
     """
-    Send source text (+ optional image/PDF attachments) to OpenAI and return the parsed dict.
+    Send source text (+ optional image/PDF attachments) to Claude and return the parsed dict.
 
     current      existing event data (for refreshes) — enables existing_id matching
     attachments  list of {"name", "mime", "data": bytes}
     Raises ValueError if the response cannot be used.
     """
-    import base64
-
-    from django.conf import settings
-
     if len(content) > MAX_CONTENT_CHARS:
         logger.warning("Content truncated: %d → %d chars", len(content), MAX_CONTENT_CHARS)
     trimmed = content[:MAX_CONTENT_CHARS]
@@ -389,38 +377,24 @@ def _extract(content: str, current: dict | None = None, attachments: list | None
         parts.append({"type": "text", "text": "Organizer instructions:\n" + instructions[:4000]})
     if trimmed.strip():
         parts.append({"type": "text", "text": "SOURCES:\n\n" + trimmed})
+    from attnd import claude
     for att in attachments or []:
-        b64 = base64.b64encode(att["data"]).decode()
         mime = att.get("mime") or "application/octet-stream"
-        if mime.startswith("image/"):
-            parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
+        if mime.startswith("image/") and mime in ("image/png", "image/jpeg", "image/webp", "image/gif"):
+            parts.append(claude.image_block(att["data"], mime))
         elif mime == "application/pdf":
-            parts.append({"type": "file", "file": {"filename": att.get("name") or "flyer.pdf",
-                                                   "file_data": f"data:{mime};base64,{b64}"}})
+            parts.append(claude.document_block(att["data"], mime, att.get("name") or "flyer.pdf"))
     if not parts:
         raise ValueError("Nothing to read — add a URL, a file or some text.")
 
-    model = getattr(settings, "OPENAI_MODEL", "gpt-5-mini")
-    logger.info("Sending %d chars + %d attachments to OpenAI (%s)", len(trimmed), len(attachments or []), model)
-    client = OpenAI()
-    response = client.chat.completions.create(
-        model=model,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "event_extraction", "strict": True, "schema": EVENT_SCHEMA},
-        },
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": parts},
-        ],
-        **_model_kwargs(model),
-    )
-
-    raw = response.choices[0].message.content or ""
+    model = claude.fast_model()
+    logger.info("Sending %d chars + %d attachments to Claude (%s)", len(trimmed), len(attachments or []), model)
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"The AI returned an unreadable response: {raw[:200]}") from exc
+        data, cost = claude.structured(system=system, content=parts, schema=EVENT_SCHEMA, model=model,
+                                       effort="medium", max_tokens=48000, timeout=600.0)
+    except claude.ClaudeError as exc:
+        raise ValueError(f"The AI couldn't read those sources ({exc}). Please try again.") from exc
+    logger.info("Extraction cost $%s", cost)
     if not isinstance(data, dict) or not data.get("name"):
         raise ValueError("The AI could not find an event in those sources.")
     data = _normalize(data)
@@ -611,7 +585,7 @@ def _far(lat, lng, ref_lat, ref_lng, limit_km=50):
 
 def _enrich_with_places(data: dict, api_key: str) -> dict:
     """
-    Enrich the OpenAI-extracted event dict with accurate coordinates and
+    Enrich the AI-extracted event dict with accurate coordinates and
     addresses from Google Places / Geocoding API.
     """
     event_name = data.get("name", "")
@@ -753,23 +727,13 @@ def suggest_tags(event_info: dict, entries: list[dict], vocabulary: list[str]) -
 
     Returns {"tag_vocabulary": [...], "tags": {("location"|"item", id): [tags]}} for the ids that were asked
     about (anything else the model returns is ignored). Raises ValueError on an unusable response."""
-    from django.conf import settings
-
-    model = getattr(settings, "OPENAI_MODEL", "gpt-5-mini")
+    from attnd import claude
     payload = {"event": event_info, "tag_vocabulary": vocabulary, "things_to_tag": entries}
-    response = OpenAI().chat.completions.create(
-        model=model,
-        response_format={"type": "json_schema",
-                         "json_schema": {"name": "event_tags", "strict": True, "schema": TAGS_SCHEMA}},
-        messages=[{"role": "system", "content": TAGS_PROMPT},
-                  {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-        **_model_kwargs(model),
-    )
-    raw = response.choices[0].message.content or ""
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"The AI returned an unreadable response: {raw[:200]}") from exc
+        data, _cost = claude.structured(system=TAGS_PROMPT, content=json.dumps(payload, ensure_ascii=False),
+                                        schema=TAGS_SCHEMA, effort="low", max_tokens=8000)
+    except claude.ClaudeError as exc:
+        raise ValueError(f"The AI returned no tags ({exc}).") from exc
     if not isinstance(data, dict):
         raise ValueError("The AI returned no tags.")
     wanted = {(e["kind"], e["id"]) for e in entries}

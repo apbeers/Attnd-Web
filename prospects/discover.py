@@ -3,12 +3,12 @@ organizer contacts published there.
 
 A run has two steps:
 
-A. Search: the OpenAI Responses API with its built-in web search tool (``{"type": "web_search"}``) lists upcoming
+A. Search: Claude Sonnet with Anthropic's web search tool (``web_search_20260209``; Haiku can't search) lists upcoming
    events in the region within the horizon that match the themes (a few themes per call), as JSON candidates.
 B. Verify + enrich each candidate we don't know yet (dedupe keys, and not already an Attnd event's source): fetch its
    page with Studio's SSRF-guarded fetch (``studio.importer.fetch``: public hosts only, every redirect checked,
-   size cap) plus up to two "about / contact / sponsors / vendors" pages on the same site, then one structured-output
-   call scores the fit (0–100) and lists the organizer contacts found on those pages.
+   size cap) plus up to two "about / contact / sponsors / vendors" pages on the same site, then one Claude Haiku
+   structured-output call scores the fit (0–100) and lists the organizer contacts found on those pages.
 
 Contacts are checked here, never trusted from the model: each needs a ``source_url`` that is one of the pages we
 fetched, and an email or phone number is kept only when it appears on that page. Nothing is ever guessed. Attnd
@@ -100,11 +100,8 @@ def _http_url(value):
 
 
 # ---------------------------------------------------------------------------
-# OpenAI (Responses API) + cost
+# Claude (search: Sonnet with web search; scoring: Haiku with structured output) + cost
 # ---------------------------------------------------------------------------
-
-_unavailable_models = set()
-
 
 def spent_today():
     start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -116,11 +113,8 @@ def budget_left():
     return Decimal(str(settings.PROSPECT_DAILY_SPEND_CAP_USD)) - spent_today()
 
 
-def call_cost(model, usage, searches=0):
-    from studio.ai import token_cost
-    cached = getattr(getattr(usage, 'input_tokens_details', None), 'cached_tokens', 0) or 0
-    cost = token_cost(model, getattr(usage, 'input_tokens', 0) or 0, getattr(usage, 'output_tokens', 0) or 0, cached)
-    return cost + Decimal(str(settings.PROSPECT_WEB_SEARCH_CALL_USD)) * searches
+def search_cost(searches):
+    return Decimal(str(settings.PROSPECT_WEB_SEARCH_CALL_USD)) * searches
 
 
 def parse_json(text):
@@ -137,46 +131,40 @@ def parse_json(text):
 
 
 def respond(instructions, user_input, schema, name, web_search=None):
-    """One Responses API call with a strict JSON schema (and the web search tool when given).
-    Returns (data, cost, model). Falls back to PROSPECT_FALLBACK_MODEL only when the model is unavailable."""
-    from openai import BadRequestError, NotFoundError, OpenAI
-
-    from studio.ai import REASONING_PREFIXES, model_unavailable
-    model = settings.PROSPECT_MODEL
-    if model in _unavailable_models and settings.PROSPECT_FALLBACK_MODEL:
-        model = settings.PROSPECT_FALLBACK_MODEL
-    client = OpenAI(timeout=600)
-    fmt = {'format': {'type': 'json_schema', 'name': name, 'schema': schema, 'strict': True}}
-    for _ in range(3):
-        kwargs = {'reasoning': {'effort': 'low'}} if model.startswith(REASONING_PREFIXES) else {}
-        if web_search:
-            kwargs['tools'] = [web_search]
-            kwargs['tool_choice'] = 'auto'
+    """One Claude call. With `web_search` (a web_search_20260209 tool): Claude Sonnet searches the web (Haiku can't)
+    and answers with JSON matching `schema` (in words: the reply follows the searches); pause_turn is resumed. Without:
+    Claude Haiku with structured output. Returns (data, cost, model)."""
+    from attnd import claude
+    if not web_search:
         try:
-            if fmt:
-                kwargs['text'] = fmt
-            response = client.responses.create(model=model, instructions=instructions, input=user_input,
-                                               store=False, **kwargs)
+            data, cost = claude.structured(system=instructions, content=user_input, schema=schema,
+                                           model=settings.PROSPECT_SCORE_MODEL, effort='low', max_tokens=8000)
+        except claude.ClaudeError as exc:
+            raise RuntimeError(str(exc)) from exc
+        return data, cost, settings.PROSPECT_SCORE_MODEL
+    model = settings.PROSPECT_MODEL
+    system = (instructions + '\n\nWhen you are done searching, reply with ONE JSON object only (no prose), matching '
+              'this JSON schema:\n' + json.dumps(schema, separators=(',', ':')))
+    messages = [{'role': 'user', 'content': user_input}]
+    cost, searches, response = Decimal('0'), 0, None
+    for _ in range(4):  # the server-side search loop may pause (pause_turn): resend to continue
+        try:
+            response, call = claude.message(system=system, messages=messages, model=model, effort='medium',
+                                            max_tokens=16000, tools=[web_search], timeout=600.0)
+        except claude.ClaudeError as exc:
+            raise RuntimeError(str(exc)) from exc
+        cost += call
+        used = getattr(getattr(response.usage, 'server_tool_use', None), 'web_search_requests', 0) or 0
+        searches += used
+        if response.stop_reason != 'pause_turn':
             break
-        except (NotFoundError, BadRequestError) as exc:
-            fallback = settings.PROSPECT_FALLBACK_MODEL
-            if model_unavailable(exc) and fallback and model != fallback:
-                logger.warning('Prospect model %s unavailable (%s); using %s', model, exc, fallback)
-                _unavailable_models.add(model)
-                model = fallback
-                continue
-            if fmt and 'format' in str(exc).lower():
-                # A model that can't combine the tool with a JSON schema: ask for JSON in words instead.
-                fmt = {}
-                instructions += '\n\nReply with one JSON object only, matching this JSON schema: ' + json.dumps(schema)
-                continue
-            raise
-    else:  # pragma: no cover - three refusals in a row
-        raise RuntimeError('The AI request failed.')
-    output = list(getattr(response, 'output', None) or [])
-    searches = sum(1 for item in output if getattr(item, 'type', '') == 'web_search_call')
-    cost = call_cost(model, getattr(response, 'usage', None), searches)
-    return parse_json(getattr(response, 'output_text', '') or ''), cost, model
+        messages = [messages[0], {'role': 'assistant', 'content': [b.model_dump(mode='json', exclude_none=True)
+                                                                   if hasattr(b, 'model_dump') else b
+                                                                   for b in response.content]}]
+    if response is None or response.stop_reason == 'refusal':
+        raise RuntimeError('The AI declined the search.')
+    text = '\n'.join(b.text for b in response.content if getattr(b, 'type', '') == 'text')
+    return parse_json(text), cost + search_cost(searches), model
 
 
 # ---------------------------------------------------------------------------
@@ -429,7 +417,7 @@ class Runner:
         user = (f'Region: {region}\nDate range: {self.today.isoformat()} to {self.until.isoformat()}\n'
                 f'Kinds of events: {", ".join(themes)}\n'
                 f'Find up to {min(15, self.max_new)} upcoming events.')
-        tool = {'type': 'web_search', 'search_context_size': 'medium',
+        tool = {'type': 'web_search_20260209', 'name': 'web_search', 'max_uses': 8,
                 'user_location': {'type': 'approximate', 'country': 'US', 'timezone': self.conf.timezone}}
         data, cost, model = respond(SEARCH_PROMPT, user, SEARCH_SCHEMA, 'event_candidates', web_search=tool)
         self.spend(cost)

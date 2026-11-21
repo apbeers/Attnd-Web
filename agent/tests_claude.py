@@ -55,7 +55,7 @@ def api_error(cls, status, text):
     return cls(text, response=httpx2.Response(status, request=request), body=None)
 
 
-@override_settings(ANTHROPIC_API_KEY='sk-ant-test', AGENT_PROVIDER='anthropic', AGENT_ANTHROPIC_MODEL='claude-haiku-5-5',
+@override_settings(ANTHROPIC_API_KEY='sk-ant-test', AGENT_ANTHROPIC_MODEL='claude-haiku-5-5',
                    AGENT_EFFORT='medium')
 class ClaudeProviderTests(AgentTestCase):
     def run_claude(self, responses, run=None, fallback=None, **kwargs):
@@ -76,8 +76,7 @@ class ClaudeProviderTests(AgentTestCase):
         provider = providers.get_provider()
         self.assertIsInstance(provider, providers.ClaudeProvider)
         self.assertEqual(provider.model, 'claude-haiku-5-5')
-        with override_settings(AGENT_PROVIDER='openai'), mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk'}):
-            self.assertEqual(providers.get_provider().name, 'openai')
+        self.assertEqual(providers.get_provider(model='gpt-5-mini').model, 'claude-haiku-5-5')  # old paused runs: Claude
 
     def test_request_shape(self):
         run, client = self.run_claude([message([{'type': 'text', 'text': 'Hello!'}], stop='end_turn')],
@@ -171,20 +170,19 @@ class ClaudeProviderTests(AgentTestCase):
         self.assertEqual(str(cost), '0.6')
         self.assertEqual(token_cost('claude-haiku-5-5', 1_000_000, 0, 1_000_000), token_cost('claude-haiku-5-5', 100_000, 0))
 
-    def test_refusal_falls_back_to_openai(self):
-        fallback = FakeProvider(['Done on OpenAI.'])
+    def test_refusal_falls_back_to_sonnet(self):
         refusal = Message.model_validate({
             'id': 'm', 'type': 'message', 'role': 'assistant', 'model': 'claude-haiku-5-5', 'stop_reason': 'refusal',
             'stop_sequence': None, 'content': [], 'stop_details': {'type': 'refusal', 'category': 'general_harms',
                                                                     'explanation': None},
             'usage': {'input_tokens': 10, 'output_tokens': 0}})
         with mock.patch('agent.loop._provider', wraps=loop._provider) as spy:
-            run, client = self.run_claude([refusal], fallback=fallback)
+            run, client = self.run_claude([refusal, message([{'type': 'text', 'text': 'Done on Sonnet.'}], stop='end_turn')])
         self.assertEqual(run.status, AgentRun.DONE)
-        self.assertEqual(run.summary, 'Done on OpenAI.')
-        self.assertEqual(run.provider, 'openai')
-        spy.assert_any_call('openai', 'gpt-5-mini')
-        self.assertIn('CONTEXT (facts from the server)', fallback.first)  # the same context, on the other provider
+        self.assertEqual(run.summary, 'Done on Sonnet.')
+        spy.assert_any_call('anthropic', 'claude-sonnet-5-5')
+        self.assertEqual(client.requests[1]['model'], 'claude-sonnet-5-5')
+        self.assertIn('CONTEXT (facts from the server)', json.dumps(client.requests[1]['messages']))
 
     def test_max_tokens_retries_with_a_larger_cap(self):
         run, client = self.run_claude([

@@ -1,4 +1,4 @@
-"""Prospects (staff only): access, discovery with OpenAI and HTTP mocked, schedule, testing-only events, CSV."""
+"""Prospects (staff only): access, discovery with Claude and HTTP mocked, schedule, testing-only events, CSV."""
 
 from datetime import timedelta
 from decimal import Decimal
@@ -150,7 +150,7 @@ class DiscoveryTests(Base):
         self.assertEqual(run.status, 'done', run.error)
         self.assertEqual((run.found, run.new, run.updated, run.skipped), (1, 1, 0, 0))
         self.assertEqual(run.cost_usd, Decimal('0.02'))
-        self.assertEqual(fake.calls[0]['web_search']['type'], 'web_search')
+        self.assertEqual(fake.calls[0]['web_search']['type'], 'web_search_20260209')
         self.assertIn('art walks', fake.calls[0]['input'])
         self.assertIn('## SOURCE: https://deepellumarts.org/contact/', fake.calls[1]['input'])  # followed one link
         p = Prospect.objects.get()
@@ -233,29 +233,25 @@ class DiscoveryTests(Base):
         """Private addresses are refused by Studio's fetch (the guard is not mocked here)."""
         self.assertIsNone(discover.fetch_page('http://127.0.0.1/admin'))
 
-    @mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test'})
-    def test_respond_counts_web_searches_and_falls_back_only_when_unavailable(self):
-        import httpx
-        from openai import NotFoundError
-        request = httpx.Request('POST', 'https://api.openai.com/v1/responses')
-        not_found = NotFoundError('The model `gpt-5.5` does not exist or you do not have access to it.', body=None,
-                                  response=httpx.Response(404, request=request))
-        reply = SimpleNamespace(
-            output=[SimpleNamespace(type='web_search_call'), SimpleNamespace(type='web_search_call'),
-                    SimpleNamespace(type='message')],
-            output_text='```json\n{"candidates": []}\n```',
-            usage=SimpleNamespace(input_tokens=1_000_000, output_tokens=0, input_tokens_details=None))
-        client = mock.MagicMock()
-        client.responses.create.side_effect = [not_found, reply]
-        discover._unavailable_models.clear()
-        with mock.patch('openai.OpenAI', return_value=client):
-            data, cost, model = discover.respond('I', 'U', discover.SEARCH_SCHEMA, 'x', web_search={'type': 'web_search'})
-        discover._unavailable_models.clear()
-        self.assertEqual((data, model), ({'candidates': []}, 'gpt-5'))
-        self.assertEqual(cost, Decimal('1.25') + Decimal('0.02'))  # gpt-5 input price + 2 searches
-        kwargs = client.responses.create.call_args.kwargs
-        self.assertEqual(kwargs['tools'], [{'type': 'web_search'}])
-        self.assertEqual(kwargs['text']['format']['type'], 'json_schema')
+    def test_respond_searches_on_sonnet_and_scores_on_haiku(self):
+        from attnd.testing import fake_claude
+        usage = SimpleNamespace(input_tokens=1_000_000, output_tokens=0, cache_read_input_tokens=0,
+                                cache_creation_input_tokens=0, server_tool_use=SimpleNamespace(web_search_requests=2))
+        paused = SimpleNamespace(stop_reason='pause_turn', usage=usage,
+                                 content=[SimpleNamespace(type='server_tool_use', model_dump=lambda **k: {'type': 'server_tool_use'})])
+        done = SimpleNamespace(stop_reason='end_turn', usage=usage,
+                               content=[SimpleNamespace(type='text', text='Found them:\n```json\n{"candidates": []}\n```')])
+        tool = {'type': 'web_search_20260209', 'name': 'web_search'}
+        with fake_claude(paused, done) as claude:
+            data, cost, model = discover.respond('I', 'U', discover.SEARCH_SCHEMA, 'x', web_search=tool)
+        self.assertEqual((data, model), ({'candidates': []}, 'claude-sonnet-5-5'))
+        self.assertEqual(cost, Decimal('4') + Decimal('0.04'))  # 2 × Sonnet input $2 / MTok + 4 searches
+        self.assertEqual(claude.calls[0]['tools'], [tool])
+        self.assertEqual(claude.calls[1]['messages'][-1]['role'], 'assistant')  # pause_turn resumed
+        with fake_claude({'is_event': True}) as claude:
+            data, cost, model = discover.respond('I', 'U', discover.ENRICH_SCHEMA, 'prospect')
+        self.assertEqual(model, 'claude-haiku-5-5')
+        self.assertEqual(claude.last['output_config']['format']['type'], 'json_schema')
 
     def test_name_and_url_keys(self):
         self.assertEqual(discover.url_key('https://WWW.Example.com/Events/Walk/?utm=1#x'), 'example.com/events/walk')

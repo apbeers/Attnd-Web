@@ -1,4 +1,4 @@
-"""Studio's AI provider layer: OpenAI (the existing SDK) and Anthropic (Messages API over urllib), images,
+"""Studio's AI provider layer: OpenAI (the existing SDK) and Anthropic (the official SDK), images (OpenAI),
 vision descriptions, cost logging and the per-event daily spend cap.
 
 Both chat providers expose the same small interface for the agent loop (studio/agent.py):
@@ -16,8 +16,6 @@ gpt-5.5), Anthropic through the Messages API.
 import base64
 import json
 import logging
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
@@ -256,12 +254,11 @@ class OpenAIProvider:
             messages.append({'type': 'function_call_output', 'call_id': call.id, 'output': text})
 
 
-ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
 
 class AnthropicProvider:
-    """Claude through the Messages API with urllib (no SDK dependency). Thinking is adaptive by default on the current
-    models; effort high; refusals fall back server-side (`fallbacks: "default"`)."""
+    """Claude through the official `anthropic` SDK (Messages API, streamed: long turns). Thinking is adaptive by
+    default on the current models; effort high; refusals fall back server-side (`fallbacks: "default"`, beta)."""
     name = 'anthropic'
 
     def __init__(self, effort=None):
@@ -278,17 +275,21 @@ class AnthropicProvider:
         pass
 
     def _post(self, body):
-        request = urllib.request.Request(ANTHROPIC_URL, data=json.dumps(body).encode(), method='POST', headers={
-            'x-api-key': settings.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01',
-            'anthropic-beta': 'server-side-fallback-2026-07-01', 'content-type': 'application/json'})
+        """One streamed Messages call; returns the final message as a plain dict (blocks go back unchanged)."""
+        import anthropic
+
+        from attnd import claude
         try:
-            with urllib.request.urlopen(request, timeout=600) as response:
-                return json.loads(response.read())
-        except urllib.error.HTTPError as exc:
-            detail = exc.read()[:500].decode('utf-8', 'replace')
-            raise AIError(f'The AI request failed ({exc.code}): {detail}') from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
+            api = claude.client(timeout=600.0)
+            extra = {k: body.pop(k) for k in ('fallbacks',) if k in body}
+            with api.messages.stream(**body, extra_body=extra,
+                                     extra_headers={'anthropic-beta': 'server-side-fallback-2026-07-01'}) as stream:
+                final = stream.get_final_message()
+        except anthropic.APIStatusError as exc:
+            raise AIError(f'The AI request failed ({exc.status_code}): {str(getattr(exc, "message", exc))[:500]}') from exc
+        except anthropic.APIError as exc:
             raise AIError(f'Could not reach the AI service: {exc}') from exc
+        return final.model_dump(mode='json', exclude_none=True)
 
     def chat(self, system, messages, tools):
         body = {
@@ -370,20 +371,17 @@ def generate_image(prompt, size='portrait', references=()):
 
 
 def describe_image(part):
-    """Vision: {description, alt, tags, colors} for one image content part; returns (result, usage)."""
-    from openai import OpenAI
-
+    """Vision (Claude Haiku, structured output): {description, alt, tags, colors} for one image or SVG text block;
+    returns (result, usage)."""
+    from attnd import claude
     from studio.assets import DESCRIBE_SCHEMA
-    model = settings.STUDIO_VISION_MODEL
-    kwargs = {'reasoning_effort': 'low'} if model.startswith(('gpt-5', 'o3', 'o4')) else {}
-    response = OpenAI(timeout=120).chat.completions.create(
-        model=model,
-        response_format={'type': 'json_schema',
-                         'json_schema': {'name': 'asset', 'strict': True, 'schema': DESCRIBE_SCHEMA}},
-        messages=[{'role': 'system', 'content': 'You describe images an event organizer uploaded for their event '
-                                                'website, so a designer can reuse them. Be factual and brief.'},
-                  {'role': 'user', 'content': [part]}], **kwargs)
-    usage = response.usage
-    result = json.loads(response.choices[0].message.content or '{}')
-    return result, {'model': model, 'input': getattr(usage, 'prompt_tokens', 0) or 0,
-                    'output': getattr(usage, 'completion_tokens', 0) or 0}
+    meta = {}
+    try:
+        result, _cost = claude.structured(
+            system='You describe images an event organizer uploaded for their event website, so a designer can reuse '
+                   'them. Be factual and brief.', content=[part, {'type': 'text', 'text': 'Describe this.'}],
+            schema=DESCRIBE_SCHEMA, effort='low', max_tokens=800, meta=meta)
+    except claude.ClaudeError as exc:
+        raise AIError(str(exc)) from exc
+    return result, {'model': meta.get('model', claude.fast_model()), 'input': meta.get('input', 0),
+                    'output': meta.get('output', 0), 'cached': meta.get('cached', 0)}

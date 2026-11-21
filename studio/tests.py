@@ -479,13 +479,13 @@ class AssetTests(StudioTestCase):
         with self.captureOnCommitCallbacks(execute=False):
             asset = create_asset(self.event, png_bytes(), 'photo.png')
         result = {'description': 'A red square', 'alt': 'Red square', 'tags': ['Logo', 'red'], 'colors': ['#ff0000', 'bad']}
-        with mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'k'}), \
-                mock.patch('studio.ai.describe_image', return_value=(result, {'model': 'gpt-5-mini', 'input': 1000,
-                                                                              'output': 100})):
+        from attnd.testing import fake_claude
+        with fake_claude(result) as claude:
             describe(asset.pk)
+        self.assertEqual(claude.last['messages'][0]['content'][0]['type'], 'image')  # Claude Haiku's vision
         asset.refresh_from_db()
         self.assertEqual((asset.description, asset.tags, asset.colors), ('A red square', ['logo', 'red'], ['#ff0000']))
-        self.assertEqual(StudioUsage.objects.get().kind, 'describe')
+        self.assertEqual((StudioUsage.objects.get().kind, StudioUsage.objects.get().provider), ('describe', 'anthropic'))
 
     def test_edit_delete_and_flyer(self):
         from studio.assets import create_asset

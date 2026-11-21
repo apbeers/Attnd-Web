@@ -663,23 +663,8 @@ class EndpointTests(AgentTestCase):
 
 
 class ProviderTests(TestCase):
-    @override_settings(ANTHROPIC_API_KEY='', STUDIO_AI_PROVIDER='auto', AGENT_MODEL='gpt-5.5')
-    @mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-test'})
-    def test_openai_strict_tools_no_parallel_writes_and_effort(self):
-        provider = loop._provider()
-        self.assertEqual(provider.model, 'gpt-5.5')
-        provider.effort = 'low'
-        client = mock.MagicMock()
-        client.responses.create.return_value = SimpleNamespace(
-            id='resp_1', status='completed', output=[], output_text='Hello',
-            usage=SimpleNamespace(input_tokens=10, output_tokens=2, input_tokens_details=SimpleNamespace(cached_tokens=0)))
-        with mock.patch('openai.OpenAI', return_value=client):
-            provider.chat('sys', provider.start('hi'), loop.FIXED_TOOLS)
-        kwargs = client.responses.create.call_args.kwargs
-        self.assertFalse(kwargs['parallel_tool_calls'])
-        self.assertEqual(kwargs['reasoning'], {'effort': 'low'})
-        self.assertTrue(all(t['strict'] for t in kwargs['tools']))
-        self.assertEqual(provider.state()['previous_id'], 'resp_1')
-        again = loop._provider()
-        again.restore(provider.state())
-        self.assertEqual(again.previous_id, 'resp_1')
+    @override_settings(ANTHROPIC_API_KEY='')
+    def test_without_an_anthropic_key_runs_say_so(self):
+        from studio.ai import AIError
+        with self.assertRaisesMessage(AIError, 'ANTHROPIC_API_KEY'):
+            loop._provider()

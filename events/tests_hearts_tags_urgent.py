@@ -158,8 +158,7 @@ class TagTests(Base):
         self.assertEqual(data['schedule'][0]['tags'], ['food', 'tacos', 'demo', 'a', 'b', 'c'])  # at most 6
 
     @patch('scrape.service._crawl', return_value='page text')
-    @patch('scrape.service.OpenAI')
-    def test_ai_import_tags_locations_and_items(self, openai, _crawl):
+    def test_ai_import_tags_locations_and_items(self, _crawl):
         from scrape.diff import create_event_from_extraction
         from scrape.service import EVENT_SCHEMA, scrape_event
         self.assertIn('tags', EVENT_SCHEMA['properties']['locations']['items']['required'])
@@ -175,11 +174,10 @@ class TagTests(Base):
                           'end_time': None, 'location_name': 'Main Stage', 'tags': ['live-music', 'Country']}],
             'removed_location_ids': [], 'removed_item_ids': [],
         }
-        choice = MagicMock()
-        choice.message.content = json.dumps(reply)
-        openai.return_value.chat.completions.create.return_value = MagicMock(choices=[choice])
-        data = scrape_event('https://fest.example')
-        prompt = openai.return_value.chat.completions.create.call_args.kwargs['messages'][0]['content']
+        from attnd.testing import fake_claude
+        with fake_claude(reply) as claude:
+            data = scrape_event('https://fest.example')
+        prompt = claude.last['system'][0]['text']
         self.assertIn('controlled vocabulary', prompt)
         event, _ = create_event_from_extraction(data, self.owner, status=Event.STATUS_DRAFT, public=False)
         self.assertEqual(event.location_set.get().tags, ['live music', 'kid-friendly'])
@@ -435,18 +433,17 @@ class UrgentTests(Base):
 
 
 class SuggestTagsTests(TestCase):
-    @patch('scrape.service.OpenAI')
-    def test_only_the_ids_asked_about_are_returned(self, openai):
+    def test_only_the_ids_asked_about_are_returned(self):
+        from attnd.testing import fake_claude
         from scrape.service import suggest_tags
-        choice = MagicMock()
-        choice.message.content = json.dumps({'tag_vocabulary': ['food'], 'tagged': [
+        answer = {'tag_vocabulary': ['food'], 'tagged': [
             {'kind': 'location', 'id': 1, 'tags': ['food', 'bbq']},
             {'kind': 'item', 'id': 99, 'tags': ['made up']},
-            {'kind': 'item', 'id': 2, 'tags': 'not a list'}]})
-        openai.return_value.chat.completions.create.return_value = MagicMock(choices=[choice])
-        out = suggest_tags({'name': 'Fair'}, [{'kind': 'location', 'id': 1, 'name': 'BBQ'},
-                                              {'kind': 'item', 'id': 2, 'name': 'Band'}], ['food'])
+            {'kind': 'item', 'id': 2, 'tags': 'not a list'}]}
+        with fake_claude(answer) as claude:
+            out = suggest_tags({'name': 'Fair'}, [{'kind': 'location', 'id': 1, 'name': 'BBQ'},
+                                                  {'kind': 'item', 'id': 2, 'name': 'Band'}], ['food'])
         self.assertEqual(out, {'tag_vocabulary': ['food'], 'tags': {('location', 1): ['food', 'bbq']}})
-        request = openai.return_value.chat.completions.create.call_args.kwargs
-        self.assertTrue(request['response_format']['json_schema']['strict'])
-        self.assertIn('"tag_vocabulary": ["food"]', request['messages'][1]['content'])
+        request = claude.last
+        self.assertEqual(request['output_config']['format']['type'], 'json_schema')
+        self.assertIn('"tag_vocabulary": ["food"]', request['messages'][0]['content'])
