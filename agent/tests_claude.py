@@ -90,7 +90,10 @@ class ClaudeProviderTests(AgentTestCase):
             self.assertNotIn(banned, body)
         self.assertEqual(body['output_config'], {'effort': 'medium'})
         self.assertEqual(body['tool_choice'], {'type': 'auto', 'disable_parallel_tool_use': True})
-        self.assertTrue(all(t.get('strict') for t in body['tools']))
+        strict = {t['name'] for t in body['tools'] if t.get('strict')}
+        self.assertEqual(strict, providers.STRICT_TOOLS & {t['name'] for t in body['tools']})  # the API's limits
+        self.assertEqual(body['tools'][0]['name'], 'read_page')
+        self.assertTrue(body['tools'][0]['strict'])
         self.assertTrue(all(t['input_schema']['additionalProperties'] is False for t in body['tools']))
         # The stable system prompt carries the breakpoint (tools + system cached); nothing volatile in it.
         self.assertEqual(body['system'], [{'type': 'text', 'text': SYSTEM_PROMPT, 'cache_control': {'type': 'ephemeral'}}])
@@ -137,10 +140,11 @@ class ClaudeProviderTests(AgentTestCase):
             'n': {'type': ['integer', 'null'], 'minimum': 1, 'maximum': 5},
             'list': {'type': 'array', 'items': {'type': ['string', 'null'], 'enum': ['x']}, 'maxItems': 3}}}
         out = providers.claude_schema(schema)
-        self.assertEqual(out['properties']['when']['enum'], ['now', 'later', None])
+        self.assertEqual(out['properties']['when']['anyOf'], [{'type': 'string', 'enum': ['now', 'later']}, {'type': 'null'}])
+        self.assertNotIn('type', out['properties']['when'])
         self.assertEqual(out['properties']['kind']['enum'], ['a'])
         self.assertNotIn('minimum', out['properties']['n'])
-        self.assertEqual(out['properties']['list']['items']['enum'], ['x', None])
+        self.assertEqual(out['properties']['list']['items']['anyOf'], [{'type': 'string', 'enum': ['x']}, {'type': 'null'}])
         self.assertNotIn('maxItems', out['properties']['list'])
         self.assertEqual(schema['properties']['when']['enum'], ['now', 'later'])  # the original is unchanged
         # Every real tool: no nullable enum without null.
@@ -148,8 +152,8 @@ class ClaudeProviderTests(AgentTestCase):
 
         def walk(node):
             if isinstance(node, dict):
-                if 'enum' in node and isinstance(node.get('type'), list) and 'null' in node['type']:
-                    self.assertIn(None, node['enum'])
+                if 'enum' in node:  # never next to a type list
+                    self.assertIsInstance(node.get('type'), str)
                 for v in node.values():
                     walk(v)
             elif isinstance(node, list):

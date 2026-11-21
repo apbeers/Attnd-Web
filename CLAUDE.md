@@ -266,8 +266,10 @@ on Save does; there is no second copy of any business logic.
   `STUDIO_AI_PROVIDER`): `AGENT_PROVIDER` = `anthropic` (default when `ANTHROPIC_API_KEY` is set) → `ClaudeProvider`,
   the official `anthropic` SDK, Messages API with our own tool loop, `AGENT_ANTHROPIC_MODEL` `claude-haiku-5-5`
   (owner, Nov 21, 2026): no `thinking` (adaptive is the default), `output_config.effort` low/medium, no
-  temperature/top_p/top_k, no prefill, strict tools (a 400 about strict schemas → resent without `strict`, remembered
-  per process), `tool_choice` auto + `disable_parallel_tool_use`, cache breakpoints on the stable system prompt
+  temperature/top_p/top_k, no prefill, `strict` only on Ask Attnd's own small tools (`STRICT_TOOLS`: found on dev, the API
+  takes ≤ 20 strict tools and the ~80 form-derived write schemas are a "compiled grammar too large"; the views validate
+  writes; a 400 about strict → resent without, remembered per process), schemas adapted by `claude_schema` (a nullable
+  enum becomes `anyOf` [the enum, null]; min/max/length/pattern dropped), `tool_choice` auto + `disable_parallel_tool_use`, cache breakpoints on the stable system prompt
   (tools + system) and on the newest message, every assistant block (thinking included) passed back unchanged,
   append-only history; `stop_reason` checked first: `refusal` → the run continues on OpenAI
   (`AGENT_REFUSAL_MODEL` gpt-5-mini, `loop._refusal_fallback`, from the same context block + what was done),

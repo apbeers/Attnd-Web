@@ -30,6 +30,7 @@ logger = logging.getLogger('attnd.agent')
 MAX_TOKENS = 16000
 MAX_TOKENS_RETRY = 32000
 MAX_CONTINUATIONS = 3
+STRICT_TOOLS = {'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show', 'get_component'}
 
 # Strict schemas the API refused once (too complex): this process sends tools without `strict` from then on.
 _strict_refused = set()
@@ -71,7 +72,7 @@ UNSUPPORTED_KEYWORDS = ('minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaxi
 
 def claude_schema(schema):
     """A tool schema as Anthropic's strict mode accepts it (a copy): an enum on a nullable type also lists null
-    (the API checks every enum value against the declared type), and numeric / length / pattern constraints are
+    (as anyOf: the API checks every enum value against the declared type), and numeric / length / pattern constraints are
     dropped (not supported; our views validate anyway)."""
     if isinstance(schema, list):
         return [claude_schema(s) for s in schema]
@@ -79,9 +80,29 @@ def claude_schema(schema):
         return schema
     out = {k: claude_schema(v) for k, v in schema.items() if k not in UNSUPPORTED_KEYWORDS}
     kind = out.get('type')
-    if 'enum' in out and isinstance(kind, list) and 'null' in kind and None not in out['enum']:
-        out['enum'] = [*out['enum'], None]
+    if 'enum' in out and isinstance(kind, list):
+        # A nullable enum: the API reads a type list on an enum as one type ("Enum value 'new' does not match
+        # declared type ['string', 'null']"), so it becomes anyOf: the enum of that type, or null.
+        values = [v for v in out.pop('enum') if v is not None]
+        out.pop('type')
+        branches = [{'type': t, 'enum': [v for v in values if _is(t, v)]} for t in kind if t != 'null']
+        branches = [b for b in branches if b['enum']]
+        if 'null' in kind:
+            branches.append({'type': 'null'})
+        out['anyOf'] = branches
     return out
+
+
+def _is(kind, value):
+    if kind == 'string':
+        return isinstance(value, str)
+    if kind == 'integer':
+        return isinstance(value, int) and not isinstance(value, bool)
+    if kind == 'number':
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if kind == 'boolean':
+        return isinstance(value, bool)
+    return True
 
 
 def _block_dict(block):
@@ -142,11 +163,14 @@ class ClaudeProvider:
         return self._client
 
     def tools(self, tools):
+        """Strict mode only for Ask Attnd's own small tools (STRICT_TOOLS). Found on dev: the API takes at most 20
+        strict tools, and with the console's ~80 form-derived write schemas strict even "compiled grammar is too
+        large". The writes are validated by their views (form errors go back to the model) anyway."""
         strict = self.model not in _strict_refused
         out = []
         for t in tools:
             tool = {'name': t['name'], 'description': t['description'][:1000], 'input_schema': claude_schema(t['parameters'])}
-            if strict and t.get('strict'):
+            if strict and t.get('strict') and t['name'] in STRICT_TOOLS:
                 tool['strict'] = True
             out.append(tool)
         return out
