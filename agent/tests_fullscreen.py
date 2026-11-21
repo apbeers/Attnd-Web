@@ -1,6 +1,7 @@
 """Ask Attnd full screen (/console/assistant/), follow-up suggestions, the thinking line's stage text."""
 
 from django.contrib.auth.models import User
+from django.test import TestCase
 from django.urls import reverse
 
 from agent import registry
@@ -91,3 +92,27 @@ class StageTextTests(AgentTestCase):
         steps = self.client.get(reverse('agent:run', args=[run.pk]), secure=True).json()['steps']
         self.assertEqual(steps[0]['stage'], 'Reading the overview…')
         self.assertEqual(run.status, AgentRun.DONE)
+
+
+class TalkToAPersonTests(TestCase):
+    """Batch 5 (owner, Nov 21, 2026): Talk to a person comes after a 👎 (with its note), not above the composer or as a
+    standing chip; the contact endpoint and the /contact command stay."""
+
+    def test_not_standing(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        from agent import views
+        from agent.models import AgentRun
+        root = Path(settings.BASE_DIR)
+        self.assertNotIn('data-agent-person', (root / 'agent/templates/agent/_panel.html').read_text())
+        js = (root / 'agent/static/agent/agent.js').read_text()
+        self.assertIn("key: 'contact'", js)
+        self.assertIn('notHelpful(row, r)', js)
+        user = User.objects.create_user('p', 'p@example.com', 'pw')
+        run = AgentRun.objects.create(user=user, goal='x', status=AgentRun.DONE,
+                                      suggestions=['Show the schedule', 'Talk to a person'])
+        self.assertEqual(views.suggestions(run), ['Show the schedule'])
+        from django.urls import reverse
+        self.assertTrue(reverse('agent:contact'))

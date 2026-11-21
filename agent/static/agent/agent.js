@@ -370,13 +370,15 @@
   function showSuggestions(list) {
     suggestBox.textContent = '';
     suggestBox.hidden = !list.length;
+    // "Talk to a person" is offered after a 👎 (with its note), never as a standing chip (owner, Nov 21, 2026).
+    list = list.filter((text) => !/^talk to a person$/i.test(text.trim()));
+    suggestBox.hidden = !list.length;
     list.forEach((text) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'agent__chip';
       chip.textContent = text;
       chip.addEventListener('click', () => {
-        if (/^talk to a person$/i.test(text.trim())) { talkToPerson(); return; }  // stage I18: no model call
         input.value = text; fitInput(); form.requestSubmit();
       });
       suggestBox.appendChild(chip);
@@ -415,14 +417,38 @@
         const on = b.getAttribute('aria-pressed') !== 'true';
         try {
           await post(runUrl(r.id, 'feedback/'), { value: on ? value : '' });
-          row.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+          row.querySelectorAll('.agent__feedback-button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
           b.setAttribute('aria-pressed', String(on));
           window.attndReveal?.(b, 'pulse');
+          row.querySelector('.agent__feedback-more')?.remove();
+          if (on && value === '-1') notHelpful(row, r);
         } catch (e) { /* not important enough to show an error */ }
       });
       row.appendChild(b);
     });
     msg.after(row);
+  }
+  // After a 👎: what went wrong (stored with the feedback) and, from there, Talk to a person.
+  function notHelpful(row, r) {
+    const more = document.createElement('form');
+    more.className = 'agent__feedback-more stack stack--tight';
+    more.innerHTML = '<label class="small" for="agent-fb-' + r.id + '">What went wrong? <span class="muted">(optional)</span></label>'
+      + '<textarea id="agent-fb-' + r.id + '" rows="2" maxlength="500"></textarea>'
+      + '<div class="cluster cluster--tight"><button class="button button--secondary button--small">Send note</button>'
+      + '<button type="button" class="link-button small" data-feedback-person>Talk to a person</button></div>';
+    const note = more.querySelector('textarea');
+    more.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await post(runUrl(r.id, 'feedback/'), { value: '-1', note: note.value });
+        more.innerHTML = '<p class="small muted">Thanks, that helps. <button type="button" class="link-button small" data-feedback-person>Talk to a person</button></p>';
+        more.querySelector('[data-feedback-person]').addEventListener('click', () => talkToPerson(note.value));
+      } catch (err) { /* keep the form */ }
+    });
+    more.querySelector('[data-feedback-person]').addEventListener('click', () => talkToPerson(note.value));
+    row.appendChild(more);
+    window.attndReveal?.(more, 'in');
+    note.focus();
   }
   function finished() {
     if (run.summary) addFeedback(answerOnce(run.summary), run);
@@ -681,6 +707,7 @@
     { key: 'notify', label: 'Send a notification', component: 'notification_form', event: true },
     { key: 'numbers', label: 'Numbers (likes, busiest hour)', component: 'usage_answer', event: true },
     { key: 'new', label: 'New event', component: 'event_new_form', ids: () => ({}) },
+    { key: 'contact', label: 'Talk to a person', person: true },
   ];
   const menu = document.createElement('ul');
   menu.className = 'agent__commands';
@@ -717,6 +744,7 @@
     input.value = '';
     fitInput();
     drawMenu();
+    if (c.person) { talkToPerson(); return; }
     try {
       const ids = c.event ? { event_id: eventId } : c.ids();
       const [item] = await fetchCards(c.component, [ids]);
@@ -789,7 +817,7 @@
 
   // Stage I18: "Talk to a person": a short form in the chat; the message goes to the Attnd team by email with this
   // chat's run id and page (never anything secret), and the reply comes by email.
-  function talkToPerson() {
+  function talkToPerson(prefill) {
     if (log.querySelector('.agent__contact')) { log.querySelector('.agent__contact textarea').focus(); return; }
     const box = document.createElement('form');
     box.className = 'agent__contact stack stack--tight';
@@ -798,6 +826,7 @@
       + '<div class="cluster"><button class="button button--primary button--small">Send</button>'
       + '<button type="button" class="button button--ghost button--small" data-cancel>Cancel</button></div>';
     const text = box.querySelector('textarea');
+    if (typeof prefill === 'string') text.value = prefill;
     text.placeholder = run?.error || run?.summary ? 'What went wrong, or what you need…' : 'What do you need help with?';
     box.querySelector('[data-cancel]').addEventListener('click', () => box.remove());
     box.addEventListener('submit', async (e) => {
@@ -814,7 +843,6 @@
     box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     text.focus();
   }
-  $('[data-agent-person]')?.addEventListener('click', talkToPerson);
 
   // Stage I8: speak instead of typing (the browser's own Web Speech API; hidden where it isn't available).
   (function voice() {

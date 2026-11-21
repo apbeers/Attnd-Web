@@ -641,8 +641,9 @@ on Save does; there is no second copy of any business logic.
   - **First-run walkthrough** (`first_run`): import → review → layout → publish → share as progress chips for people
     with ≤ 2 events, shown instead of the briefing until finished or skipped (`console:walkthrough_skip`,
     `ConsolePreference.walkthrough_done`).
-  - **Talk to a person** (`agent:contact`): a form in the chat (also the "Talk to a person" suggestion chip) that
-    emails `ADMIN_EMAILS` with the person's email as Reply-To, the run id, its request and outcome, the page and event;
+  - **Talk to a person** (`agent:contact`): offered only after a 👎 on an answer (with a "What went wrong?" note
+    stored as `feedback_note`), and by the `/contact` command; never a standing button or suggestion chip (owner,
+    Nov 21, 2026). A form in the chat that emails `ADMIN_EMAILS` with the person's email as Reply-To, the run id, its request and outcome, the page and event;
     3 per person per hour.
 - **Quality harness** (stage I, `agent/harness.py`): scripted requests (add a location, shift every set 30 min, send an
   urgent notification, an ambiguous day, a password question, a prompt injection in a location's description), each

@@ -37,7 +37,7 @@ STRICT_TOOLS = {'search_everything', 'remember', 'propose_changes', 'read_page',
 _strict_refused = set()
 
 
-FRIENDLY_ERROR = 'Ask Attnd couldn’t finish that. Try again, or Talk to a person.'
+FRIENDLY_ERROR = 'Ask Attnd couldn’t finish that. Try again in a moment.'
 
 
 class ProviderError(AIError):
