@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
 from agent import views as agent_views
@@ -6,7 +7,7 @@ from console import views, views_events as v, views_undo
 app_name = 'console'
 urlpatterns = [
     path('', v.dashboard, name='dashboard'),
-    path('signup/', views.SignUpView.as_view(), name='signup'),
+    path('signup/', login_not_required(views.SignUpView.as_view()), name='signup'),
     path('account/', views.account, name='account'),
     path('tasks/', v.tasks_feed, name='tasks'),
     path('chat-default/', v.chat_default, name='chat_default'),

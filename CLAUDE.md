@@ -575,6 +575,17 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
   - Lockouts: `python manage.py reset_2fa <email>` removes every second factor (authenticator, passkeys, emailed and recovery codes) and signs the account out everywhere; superusers can also delete a device or passkey in the admin. Tests that sign in as staff use `console.testing.TwoFactorClient`; `console/tests_passkeys.py` drives a software authenticator.
 - **Content Security Policy** (Django's built-in `ContentSecurityPolicyMiddleware`, `CSP_POLICY` in settings): `default-src 'self'`; scripts from self + a per-request nonce (+ Google Maps hosts when `GOOGLE_MAPS_BROWSER_KEY` is set, per Google's Maps JS CSP guidance); `img-src` self, `data:`, `blob:`, `https:` (organizer image URLs, Cloudinary, map tiles); `style-src` allows inline styles; `frame-ancestors 'none'`, `base-uri`/`form-action 'self'`, `object-src 'none'`; violations go to `/csp-report/` and are logged (`attnd.csp`). `CSP_MODE=enforce|report|off`. Rules for templates: every inline `<script>` gets `nonce="{{ csp_nonce }}"` (or move it to a static file), and **no inline event handlers** (`onclick=` …): use `data-confirm="…"`, `data-autosubmit`, `data-copy="…"` (handled in `console.js`) or `addEventListener`. `console/tests_security.py` checks every template.
 - **Sessions last until local midnight** (`console/session_expiry.py`, owner Nov 21, 2026: "everyone just signs in once per day"): `console/static/console/tz.js` (on the sign-in, sign-up and two-factor pages, the homepage and every console page) stores the browser's zone (`Intl…timeZone`) in the `attnd_tz` cookie (zone name only, a year, `SameSite=Lax`). Every successful sign-in (password, passkey, a new account: the `user_logged_in` signal; the second step keeps it, `cycle_key` carries the expiry) calls `request.session.set_expiry(<next local midnight>)`, or the midnight after when the next one is under an hour away (11:30 PM → the following night). The zone is validated with zoneinfo (unknown, missing, path-like → `America/Chicago`). An explicit expiry overrides `SESSION_EXPIRE_AT_BROWSER_CLOSE` (off) and is always shorter than `SESSION_COOKIE_AGE` (two weeks, unchanged). Tests: `console/tests_session_expiry.py`.
+- **Hosts, passwords, headers, keys** (stage G): `ALLOWED_HOSTS` is only our own hostnames (`SITE_URL`'s host, + `www`
+  for attnd.app, the Studio sites host; `ALLOWED_HOSTS_EXTRA` adds more), never `.herokuapp.com`. Passwords hash with
+  **scrypt** first (old PBKDF2 hashes still work and are upgraded at sign-in). Every page but Studio's sites sends
+  `Permissions-Policy` (`PERMISSIONS_POLICY`; camera, microphone, payment, USB off; geolocation self). `SECRET_KEY`
+  rotation: set the new key and put the old one in `SECRET_KEY_FALLBACKS` for two weeks (SETUP.md). Ask Attnd:
+  `agent_start_user` limits requests per person (30 / 10 min), chat buttons' quiet runs `agent_quiet_runs`, and
+  attachments are checked by their first bytes (PDF, PNG, JPEG, WebP, GIF, HEIC, UTF-8 text), not their name.
+- **Sign-in required by default** (stage F2): Django's `LoginRequiredMiddleware`; public views are marked with
+  `attnd.public.public()` / `public_include()` (the API, join and shared-plan links, the home page, sign-in, sign-up,
+  password reset, passkey endpoints, well-known files, health, CSP reports, Studio's sites) and
+  `attnd/tests_public.py` lists every one of them.
 - **Admin** lives at `ADMIN_URL_PATH` (default `manage-attnd/`); `/admin/` is a 404. Link to it with `{% url 'admin:index' %}`.
 
 ## Data Models (`events/models.py`)
@@ -703,6 +714,9 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `SECRET_KEY` | Yes | Django secret key (startup fails without it unless `DEBUG`/`CI`) |
+| `SECRET_KEY_FALLBACKS` | No | Comma-separated old secret keys while rotating `SECRET_KEY` (remove after two weeks) |
+| `ALLOWED_HOSTS_EXTRA` | No | Comma-separated extra hostnames to serve (default: only `SITE_URL`'s host, www for attnd.app, `SITES_HOST`) |
+| `PERMISSIONS_POLICY` | No | The Permissions-Policy header (default switches off camera, microphone, payment, USB…) |
 | `DEBUG` | No | Set to any truthy value to enable debug mode |
 | `API_KEY` | Yes | Static bearer token for mobile API auth |
 | `STATIC_API_KEY_ENABLED` | No | Default `1`; `0` on production after the first release (SETUP 4d) turns `API_KEY` off |

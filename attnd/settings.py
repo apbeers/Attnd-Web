@@ -80,6 +80,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Every view needs a sign-in unless it is marked public (attnd/public.py; the list: attnd/tests_public.py).
+    'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'console.middleware.TwoFactorMiddleware',
     # Ask Attnd's chat cards (console.middleware): a form with errors comes back as just that component; a saved one
