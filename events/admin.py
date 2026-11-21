@@ -2,8 +2,8 @@
 Organizers manage their events in the console (/console/), never here."""
 from django.contrib import admin
 
-from events.models import (Device, Event, EventInvite, EventMember, Location, Notification, ScheduledItem,
-                           generate_event_code)
+from events.models import (Device, Event, EventInvite, EventMember, Location, Notification, PlaceImageAttempt,
+                           ScheduledItem, generate_event_code)
 
 
 class HistoryAdmin(admin.ModelAdmin):
@@ -110,3 +110,10 @@ class EventInviteAdmin(HistoryAdmin):
     list_display = ['email', 'event', 'role', 'created_at']
     search_fields = ['email', 'event__name']
     raw_id_fields = ['event', 'invited_by']
+
+
+@admin.register(PlaceImageAttempt)
+class PlaceImageAttemptAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'event', 'location', 'source', 'result', 'cost_usd')
+    list_filter = ('result', 'source')
+    readonly_fields = [f.name for f in PlaceImageAttempt._meta.fields]

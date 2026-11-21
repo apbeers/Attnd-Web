@@ -392,6 +392,13 @@ STUDIO_IMAGE_FALLBACK_MODEL = os.getenv('STUDIO_IMAGE_FALLBACK_MODEL', 'gpt-imag
 # $10: a full import (a 10-25 page site rebuilt in one run) costs roughly $2-4 with gpt-5.5 and prompt caching, up
 # to ~$6 on Claude, so $5 left little or nothing for the chat turns that follow it on the same day.
 STUDIO_DAILY_SPEND_CAP_USD = float(os.getenv('STUDIO_DAILY_SPEND_CAP_USD', '10'))
+
+# Place images found automatically (stage D, events/place_images.py): on for new places (not in tests), checked by
+# Claude Haiku's vision, a cost cap over every look per UTC day.
+PLACE_IMAGES_ENABLED = os.getenv('PLACE_IMAGES_ENABLED', '1') != '0'
+PLACE_IMAGES_ON_CREATE = PLACE_IMAGES_ENABLED and not TESTING
+PLACE_IMAGES_DAILY_CAP_USD = float(os.getenv('PLACE_IMAGES_DAILY_CAP_USD', '1'))
+PLACE_IMAGES_MIN_CONFIDENCE = 0.75
 STUDIO_MAX_STEPS = int(os.getenv('STUDIO_MAX_STEPS', '24'))
 STUDIO_IMPORT_MAX_STEPS = int(os.getenv('STUDIO_IMPORT_MAX_STEPS', '40'))  # model calls of an import run
 STUDIO_RUN_MAX_MINUTES = int(os.getenv('STUDIO_RUN_MAX_MINUTES', '25'))  # wall clock per run (stops, keeps the work)

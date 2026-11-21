@@ -218,6 +218,15 @@ class Location(CoordinatesMixin, models.Model):
     website = models.URLField(max_length=1024, null=True, blank=True)
     image = models.ImageField(upload_to=get_file_path, blank=True, null=True)
     image_url = models.URLField(max_length=1024, blank=True, null=True)
+    # Place images found automatically (stage D, events/place_images.py): where it came from, the credit and licence
+    # (Wikimedia), when. `image_auto` = the current image was found by Attnd (an organizer's image never is);
+    # `image_never_refetch` = the organizer removed a found one (never look again).
+    image_auto = models.BooleanField(default=False)
+    image_source_url = models.URLField(max_length=1024, blank=True)
+    image_credit = models.CharField(max_length=300, blank=True)  # API-022: in the bundle
+    image_license = models.CharField(max_length=120, blank=True)
+    image_fetched_at = models.DateTimeField(null=True, blank=True)
+    image_never_refetch = models.BooleanField(default=False)
     latitude = models.DecimalField(max_digits=24, decimal_places=20, null=True, blank=True)
     longitude = models.DecimalField(max_digits=24, decimal_places=20, null=True, blank=True)
     address = models.CharField(max_length=512, blank=True)
@@ -482,3 +491,18 @@ class UsageCount(models.Model):
 
     def __str__(self):
         return f'{self.event_id} {self.bucket:%Y-%m-%d %H:%M} {self.metric}:{self.detail} {self.platform} = {self.count}'
+
+
+class PlaceImageAttempt(models.Model):
+    """One look for a place image (stage D, events/place_images.py): what was tried, what came of it, what it cost
+    (the daily cap sums these)."""
+    location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    source = models.CharField(max_length=24, blank=True)  # event_page / venue / wikimedia
+    result = models.CharField(max_length=16)  # found / none / error / skipped
+    cost_usd = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+    detail = models.CharField(max_length=500, blank=True)
+
+    def __str__(self):
+        return f'{self.location_id}: {self.result} ({self.source})'

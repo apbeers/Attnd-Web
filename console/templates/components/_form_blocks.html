@@ -8,6 +8,13 @@
       <button type="button" class="button button--outline button--small" data-fill-go>{% icon "stars" %} Fill from this website?</button>
       <span class="small muted" data-fill-status role="status" aria-live="polite"></span>
     </div>
+{% elif r.name == 'found_image' %}<div class="found-image field">
+      <img src="{{ r.src }}" alt="" width="96" height="64" loading="lazy">
+      <p class="small"><span class="badge badge--info badge--pill">{% icon "stars" %} Found automatically</span>
+        {% if r.credit %}<span class="muted">{{ r.credit }}</span>{% endif %}
+        {% if r.source %}· <a href="{{ r.source }}" target="_blank" rel="noopener noreferrer">Source</a>{% endif %}<br>
+        <span class="muted">Replace it, remove it, or upload your own below.</span></p>
+    </div>
 {% elif r.name == 'studio_import' %}<label class="check field" for="{{ uid }}studio_import"><input type="checkbox" id="{{ uid }}studio_import" name="studio_import" value="1" checked>
         Also rebuild the website in Attnd Studio <span class="badge badge--neutral badge--pill">Beta</span>
         <span class="field__help">Studio copies every page, image, font and PDF of the website and the AI builds a matching site.</span></label>

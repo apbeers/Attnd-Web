@@ -383,10 +383,14 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
 ### Location
 ```json
 { "id": 5, "name": "…", "snippet": "…", "description": "…", "category": "Food" | null,
-  "website": "https://…" | null, "image_url": "https://…" | null, "address": "…",
+  "website": "https://…" | null, "image_url": "https://…" | null, "image_credit": "…" | null, "address": "…",
   "latitude": 32.74 | null, "longitude": -97.36 | null, "sort_order": 0,
   "tags": ["food", "bbq", "kid-friendly"] }
 ```
+- `image_credit` (API-022): set when Attnd found the location's photo automatically (its venue website, the event's
+  pages or Wikimedia Commons), e.g. `"Jane Doe · CC BY-SA 4.0 · Wikimedia Commons"` or `"Photo: venue.example"`;
+  `null` for the organizer's own images and when there is no image. Show it small on or under the image where the
+  image is shown large (location detail). Missing (older servers) = `null`.
 - `tags` (API-010): see Tags below. Missing in responses from servers before API-010: default `[]`.
 - `context` (API-018): see Context. Missing = `null`.
 

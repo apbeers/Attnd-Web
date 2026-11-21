@@ -172,6 +172,7 @@
           },
           "description": "string",
           "id": "integer",
+          "image_credit": "null",
           "image_url": "string",
           "latitude": "number",
           "longitude": "number",

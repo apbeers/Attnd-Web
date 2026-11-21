@@ -562,6 +562,11 @@ def location_edit(request, event, location_id=None):
               fixed={'action': 'toggle_hidden'}, title='Hid / showed a location')
 @agent_action('unlock_location', 'Let AI refreshes update a location\'s hand-edited fields again.',
               fixed={'action': 'unlock'}, title='Unlocked a location')
+@agent_action('find_location_image', 'Look for a photo of a location (its venue website, the event\'s pages, Wikimedia '
+              'Commons), checked by AI; replaces an image Attnd found before, never one the organizer added.',
+              fixed={'action': 'find_image'}, title='Looked for a location photo')
+@agent_action('remove_location_image', 'Remove the photo Attnd found for a location; Attnd never looks again for it.',
+              fixed={'action': 'remove_image'}, title='Removed a found photo')
 @event_view
 @require_POST
 def location_action(request, event, location_id):
@@ -577,6 +582,27 @@ def location_action(request, event, location_id):
         loc.locked_fields = []
         loc.save(update_fields=['locked_fields'])
         messages.info(request, 'AI refreshes may update this location again.')
+    elif action == 'find_image':
+        from events import place_images
+        if loc.image and not loc.image_auto or not place_images.enabled():
+            messages.error(request, 'Attnd only looks for photos of places without an image of your own.'
+                           if loc.image else 'Finding photos isn’t available right now.')
+        else:
+            loc.image_never_refetch = False
+            result = place_images.find_for(loc, force=True)
+            if result == 'found':
+                messages.success(request, f'Found a photo of “{loc.name}”.')
+            elif result == 'skipped':
+                messages.error(request, 'Attnd has looked for enough photos today. Try again tomorrow.')
+            else:
+                messages.info(request, f'No good photo of “{loc.name}” found. You can add your own.')
+    elif action == 'remove_image' and loc.image_auto:
+        loc.image = None
+        loc.image_auto = False
+        loc.image_credit = loc.image_license = loc.image_source_url = ''
+        loc.image_never_refetch = True
+        loc.save()
+        messages.success(request, f'Removed the photo of “{loc.name}”. Attnd won’t look for another.')
     return redirect(request.POST.get('next') or reverse('console:locations', args=[event.pk]))
 
 

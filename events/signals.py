@@ -31,3 +31,12 @@ def _content_changed(sender, instance, **kwargs):
 def _notification_saved(sender, instance, update_fields=None, **kwargs):
     if instance.sent:
         maybe_bump(instance.event_id)
+
+
+@receiver(post_save, sender=Location)
+def _location_created(sender, instance, created, raw=False, **kwargs):
+    """Stage D: a new place without an image gets one looked for in the background (events.place_images)."""
+    if created and not raw:
+        from events import place_images
+        if place_images.wanted(instance):
+            place_images.schedule(instance.pk)

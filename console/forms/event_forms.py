@@ -261,6 +261,12 @@ class LocationForm(AssistantContextMixin, TagsFieldMixin, StyledFormMixin, forms
     def save(self, commit=True):
         self._save_tags()
         self._save_context()
+        loc = self.instance
+        if loc.image_auto and {'image', 'image_url'} & set(self.changed_data):
+            # The organizer's own image (or the found one cleared): no credit, and never look again when cleared.
+            loc.image_never_refetch = not loc.image and not self.cleaned_data.get('image_url')
+            loc.image_auto = False
+            loc.image_credit = loc.image_license = loc.image_source_url = ''
         return super().save(commit)
 
 

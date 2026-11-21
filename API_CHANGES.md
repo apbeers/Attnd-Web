@@ -69,6 +69,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-019 | App Clip push topic: optional `app_clip` boolean in `POST events/<id>/join/` and `POST devices/` bodies; iOS sends `true` from the App Clip; the server sends clip devices' pushes (alerts, urgent, silent `content_updated`, Live Activity updates) on the clip's APNs topic | additive (new optional request field) | ✅ dev (4ff0467) · ⬜ prod | ✅ (c07ec37, local, not pushed yet) | n/a (no App Clip) |
 | API-020 | Retire the v1 events API: `SUPPORTED_API_VERSIONS` default `2`, `/api/v1/events/…` → `410` `update_required`; `/api/v1/attest/` unchanged | breaking for v1 only (no current app uses v1) | ✅ dev · ⬜ prod (needs a release + owner go-ahead) | — (uses v2) | — (uses v2) |
 | API-021 | "Plan your day" suggestions written for each event: `plan_suggestions` in `bundle/` (≤ 4 `{text, kind: plan\|question}`; Claude Haiku 5.5 in the background, deterministic fallback from the event's real days, categories and tags) | additive (new key, `bundle/` only) | ✅ dev · ⬜ prod | ⬜ | ⬜ |
+| API-022 | Place images found automatically: `locations[].image_credit` (credit / licence of a photo Attnd found and stores itself, or null) | additive (new key) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -76,6 +77,22 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-022: Place images in our own store, with credit
+**Why:** imports used Google Places photo links, which expire and which Google's terms don't let us keep; many places
+had no image at all.
+**Server (attnd-web):** `events/place_images.py`. A new location without an image (AI import, by hand, Ask Attnd) gets
+one looked for in the background: images on the event's own pages that name the place, the place's website
+(og:image; the website found with Google Places' `websiteUri`, never its photos), then Wikimedia Commons near the pin
+or by name (author + licence kept). Each candidate is ≥ 600 px wide, not a logo / map / icon, not another place's
+picture, and confirmed by Claude Haiku's vision; it is re-encoded (JPEG, ≤ 2000 px, no EXIF / GPS) and stored as the
+location's own image (Cloudinary), so `image_url` points at our storage. Organizer images and locked images are never
+touched; console **Remove photo** never looks again, **Replace photo** / **Find a photo** look now; a daily cost cap.
+`manage.py find_place_images` backfills and replaces old Google photo links. The bundle adds `image_credit` (string or
+`null`, only for found photos).
+**iOS / Android (later):** decode `image_credit` leniently (missing → `null`). When set, show it small (caption
+style, secondary colour) under or over the bottom of the location's large image (location detail; optional on cards).
+No other change.
 
 ### API-021: "Plan your day" suggestions from the server
 **Why:** the apps made their "Plan your day" examples on the phone from tags and weekdays, which often didn't fit: a

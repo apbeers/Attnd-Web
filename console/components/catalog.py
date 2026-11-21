@@ -356,10 +356,19 @@ def _pin_map(event, loc=None):
             'has_pin': bool(loc is not None and loc.has_coordinates)}
 
 
+def _found_image(loc):
+    """Stage D: 'Found automatically · credit' above the image fields when Attnd found the current photo."""
+    if not (loc.pk and loc.image_auto and loc.image):
+        return None
+    return ('block', 'found_image', {'src': loc.image.url, 'credit': loc.image_credit,
+                                     'source': loc.image_source_url, 'license': loc.image_license})
+
+
 @component('location_form', 'Location form', 'Add or edit a location: name, category, summary, description, tags, '
            'address and map pin, website, image, hidden, details for the assistant. Without location_id: a new one.',
            ids=('event_id',), optional_ids=('location_id',),
-           actions=(('unlock_location', 'Let AI update it again'), ('delete_location', 'Delete')),
+           actions=(('unlock_location', 'Let AI update it again'), ('find_location_image', 'Find a photo'),
+                    ('remove_location_image', 'Remove photo'), ('delete_location', 'Delete')),
            page=lambda ids: (reverse('console:location_edit', args=[ids['event_id'], ids['location_id']])
                              if ids.get('location_id') else reverse('console:location_new', args=[ids['event_id']])))
 def location_form(user, event_id=None, location_id=None, event=None, location=None, form=None):
@@ -380,7 +389,7 @@ def location_form(user, event_id=None, location_id=None, event=None, location=No
             ('grid', 'latitude', 'longitude'),
             ('block', 'pin_map', _pin_map(event, loc)),
             'website', ('block', 'fill_site', {'url': reverse('console:location_fill', args=[event.pk])}),
-            ('grid', 'image', 'image_url'), 'hidden', _context_details(form, locked),
+            _found_image(loc), ('grid', 'image', 'image_url'), 'hidden', _context_details(form, locked),
         ]
         data = form_json(form, [r for r in layout if r], action=url,
                          submit=[{'label': 'Save', 'style': 'primary'},
@@ -390,6 +399,11 @@ def location_form(user, event_id=None, location_id=None, event=None, location=No
     if loc.pk:
         if loc.locked_fields:
             actions.append({'name': 'unlock_location', 'style': 'secondary', 'icon': 'unlock'})
+        if loc.image_auto and loc.image:
+            actions += [{'name': 'find_location_image', 'label': 'Replace photo', 'style': 'outline', 'icon': 'stars'},
+                        {'name': 'remove_location_image', 'label': 'Remove photo', 'style': 'outline'}]
+        elif not loc.image and not loc.image_url:
+            actions.append({'name': 'find_location_image', 'label': 'Find a photo', 'style': 'outline', 'icon': 'stars'})
         actions.append({'name': 'delete_location', 'style': 'danger', 'confirm_text': 'Delete this location?'})
         for a in actions:  # back to this page afterwards, like the page's own buttons
             a['fields'] = {'next': url}

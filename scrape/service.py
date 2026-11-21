@@ -501,30 +501,6 @@ def _geocode(query: str, api_key: str) -> tuple[float, float, str, None] | None:
         return None
 
 
-_PLACES_PHOTO_URL = "https://places.googleapis.com/v1/{name}/media"
-
-
-def _places_photo_uri(photo_name: str, api_key: str) -> str | None:
-    """
-    Resolve a Places API photo resource name to a public image URL.
-    Uses skipHttpRedirect=true so we get JSON back instead of a redirect.
-    """
-    try:
-        resp = httpx.get(
-            _PLACES_PHOTO_URL.format(name=photo_name),
-            params={"key": api_key, "maxHeightPx": 600, "skipHttpRedirect": "true"},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        uri = resp.json().get("photoUri")
-        if uri:
-            logger.debug("Places photo resolved: %s", uri[:80])
-        return uri
-    except Exception as exc:
-        logger.warning("Places photo fetch failed for %r: %s", photo_name, exc)
-        return None
-
-
 def _places_text_search(
     query: str,
     api_key: str,
@@ -549,7 +525,7 @@ def _places_text_search(
             json=body,
             headers={
                 "X-Goog-Api-Key": api_key,
-                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.photos",
+                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location",
             },
             timeout=8,
         )
@@ -560,12 +536,9 @@ def _places_text_search(
         place = places[0]
         loc = place.get("location", {})
         address = place.get("formattedAddress", "")
-        # Attempt to fetch first photo
-        photo_url = None
-        photos = place.get("photos", [])
-        if photos:
-            photo_url = _places_photo_uri(photos[0]["name"], api_key)
-        return loc.get("latitude", 0), loc.get("longitude", 0), address, photo_url
+        # (No Google photos: their terms forbid storing them and the links expire; place images come from
+        # events/place_images.py.)
+        return loc.get("latitude", 0), loc.get("longitude", 0), address, None
     except Exception as exc:
         logger.warning("Places text search failed for %r: %s", query, exc)
         return None
@@ -613,7 +586,7 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
     for loc in data.get("locations", []):
         if loc.get("existing_id") and not loc.get("_needs_geocode"):
             continue  # matched to an existing location; keep its stored pin
-        if loc.get("latitude") is not None and loc.get("longitude") is not None and loc.get("image_url"):
+        if loc.get("latitude") is not None and loc.get("longitude") is not None:
             continue
         loc_name = loc.get("name", "")
         loc_address = loc.get("address", "")
@@ -633,8 +606,6 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
                 loc["latitude"], loc["longitude"] = lat, lng
             if address and not loc_address:
                 loc["address"] = address
-            if photo_url and not loc.get("image_url"):
-                loc["image_url"] = photo_url
         else:
             # Unknown pins stay null; the apps fall back to the event's pin rather than 0,0
             logger.warning("  Could not geocode location %r", loc_name)

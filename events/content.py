@@ -127,6 +127,7 @@ def location_v2(location, request=None):
         'category': location.category or None,
         'website': location.website or None,
         'image_url': app_image_url(_abs(request, location.resolved_image_url), 'location'),
+        'image_credit': (location.image_credit or None) if location.image_auto else None,  # API-022
         'address': location.address,
         'latitude': _coord(location.latitude),
         'longitude': _coord(location.longitude),

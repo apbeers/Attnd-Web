@@ -620,6 +620,17 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
   bundle request; `clean()` drops weekdays the event doesn't have, kid texts without family-tagged items, long or
   duplicate texts. New AI ones bump `content_version` once. The bundle's `plan_suggestions` = the stored ones while
   they all still fit, else `fallback()` from the event's real days, parts of the day, categories and tags.
+- **Place images** (API-022, `events/place_images.py`): a new location without an image gets a photo found in the
+  background (one worker thread, after commit, `events/signals.py`): the event's own pages (images whose alt / caption /
+  file name name the place), the place's website (og:image; the site from `Location.website` or Google Places'
+  `websiteUri`, never Places photos), Wikimedia Commons (near the pin or by name, author + licence). ≥ 600 px, no logos /
+  maps / icons, no duplicate of another place's picture, Claude Haiku's vision must confirm it (≥ 0.75); Studio's
+  SSRF-guarded `fetch`; Pillow re-encode (JPEG ≤ 2000 px, no EXIF / GPS) into `Location.image` with `image_auto`,
+  `image_source_url`, `image_credit` (in the bundle), `image_license`. Never touches organizer or locked images; the
+  location form shows "Found automatically · credit" with **Replace photo** / **Remove photo** (`image_never_refetch`)
+  / **Find a photo** (agent actions `find_location_image`, `remove_location_image`; undoable). Every look is a
+  `PlaceImageAttempt` (cost); `PLACE_IMAGES_DAILY_CAP_USD` (default 1) caps all of them per UTC day.
+  `manage.py find_place_images [--event CODE]` backfills and drops old Google Places photo links.
 - **Tags** (API-010) on locations and schedule items are always normalised by `events.models.normalize_tags` (lower case, ≤ 8 × 32 chars; `save()` and the bundle apply it). The AI keeps one small vocabulary per event (`scrape/tags.py` folds spelling variants); `manage.py backfill_tags` tags old events (only things with < 2 tags, never locked ones).
 
 ## API Authentication
@@ -777,6 +788,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
 | `AGENT_EFFORT` | No | Ask Attnd's reasoning effort, one for every call of a run and the whole conversation (so the prompt cache holds), default `medium`. Replaces `AGENT_PLANNING_EFFORT` (still read as a fallback) and `AGENT_STEP_EFFORT` (ignored) |
 | `AGENT_MAX_ATTACHMENT_MB` | No | Files attached in the Ask Attnd chat, default `15` |
+| `PLACE_IMAGES_ENABLED` / `PLACE_IMAGES_DAILY_CAP_USD` | No | Place images found automatically (API-022), default on (needs `ANTHROPIC_API_KEY`) / `1` USD per UTC day for every look |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |
 | `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60), `STUDIO_FORM_IP` (10/600, form posts per IP per site), `STUDIO_FORM_SITE` (300/3600), `STUDIO_REPORT_IP` (5/3600), `SCRAPE_IP` (5/3600, homepage trial imports), `ATTEST_NONCE_IP` (30/60, attestation challenges) |

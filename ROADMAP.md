@@ -75,7 +75,7 @@ Built on `develop` in this order; ticked as it ships.
   (chat, cards, canvas, overlay, fill: ~1,500 lines in one closure today; do it with stage H's lazy-loaded Ask Attnd).
 - [x] **B. Sign-in flow** ✅: signed in → console; logo → /home/; no prompts during a session.
 - [x] **C. All AI on Anthropic** ✅ (official SDK; OpenAI only for Studio images).
-- [ ] **D. Place images in our own store** (event pages, venue site, Wikimedia; API-022 `image_credit`).
+- [x] **D. Place images in our own store** (event pages, venue site, Wikimedia; API-022 `image_credit`).
 - [ ] **E. Packages**: latest everything, psycopg 3 + pooling, Python 3.15.2.
 - [ ] **F. Django built-ins**: database cache, LoginRequiredMiddleware, Postgres search, GeneratedField / humanize,
   django.tasks with our own DB-backed worker (last).
