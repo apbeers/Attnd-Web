@@ -289,8 +289,9 @@ def event_lifecycle(user, event_id=None, event=None):
             actions.append({'name': 'archive_event', 'style': 'outline', 'confirm_text': 'End the event? Attendees see it as ended.'})
         if event.public:
             actions.append({'name': 'unlist_event', 'style': 'outline'})
-        elif event.paid or user.is_staff or user.is_superuser:  # going live is invite-only (API-025)
-            actions.append({'name': 'list_event_nearby', 'style': 'outline', 'confirm_text': 'List it in nearby events for everyone?'})
+        else:  # going live is invite-only (API-025): unpaid events get it disabled with the way to remove the limit
+            from console.components.catalog import nearby_action
+            actions.append(nearby_action(user, event, style='outline', confirm_text='List it in nearby events for everyone?'))
     if user.is_staff or user.is_superuser:
         actions.append({'name': 'mark_event_paid', 'style': 'outline', 'label': 'Mark unpaid' if event.paid else 'Mark paid',
                         'params': {'paid': '' if event.paid else '1'},

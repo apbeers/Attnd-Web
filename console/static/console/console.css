@@ -955,3 +955,4 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .pv-carousel { display: flex; gap: 6px; }
 .pv-carousel span { flex: 1; height: 38px; border-radius: var(--radius); background: var(--color-brand-soft); }
 .screens-row__when { margin: 0 0 0 2rem; }
+.action-disabled { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }

@@ -399,7 +399,17 @@ def act(request):
     except (ValueError, AttributeError):
         posted = None
     # The very button offered now: the same action and the same values (remove *this* member, not another one)
-    offered = [a for a in data.get('actions', []) if a['name'] == action_name and a.get('params', {}) == posted]
+    def offered_in(d):
+        return [a for a in d.get('actions', []) if a['name'] == action_name and a.get('params', {}) == posted
+                and not a.get('disabled')]
+    offered = offered_in(data)
+    if not offered:  # a composite (event_overview): the button belongs to one of its parts
+        for part in data.get('parts') or []:
+            if offered_in(part) and part.get('component') in C.registry():
+                name, comp = part['component'], C.get(part['component'])
+                ids = C.clean_ids(comp, {**ids, **(part.get('ids') or {})})
+                data, offered = part, offered_in(part)
+                break
     if not offered:
         return _error('That button isn\'t available here (any more).', status=409)
     action = registry.writes_for(request.user).get(action_name)

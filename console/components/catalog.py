@@ -154,10 +154,22 @@ def event_header(user, event_id=None, event=None):
             actions.append({'name': 'publish_event', 'label': 'Make live again' if event.status == 'archived'
                             else 'Publish', 'style': 'success', 'icon': 'broadcast'})
         else:
-            actions.append({'name': 'unlist_event' if event.public else 'list_event_nearby'})
+            if event.public:
+                actions.append({'name': 'unlist_event'})
+            else:
+                actions.append(nearby_action(user, event))
             actions.append({'name': 'unpublish_event', 'style': 'ghost'})
     return {'id': event.pk, 'name': event.name, 'code': event.event_code, 'badges': status_badges(event),
             'public': event.public, 'url': reverse('console:event', args=[event.pk]), 'actions': actions}
+
+
+def nearby_action(user, event, **extra):
+    """List in nearby events: only for paid events (API-025: going live is invite-only); an unpaid event shows the
+    button disabled with "Paid events only · Remove the limit", never a button that can't be acted on."""
+    if event.paid or user.is_staff or user.is_superuser:
+        return {'name': 'list_event_nearby', **extra}
+    return {'name': 'list_event_nearby', **extra, 'disabled': True, 'note': 'Paid events only',
+            'note_link': {'label': 'Remove the limit', 'url': reverse('console:event', args=[event.pk]) + '#free-limit'}}
 
 
 def _audience(event):

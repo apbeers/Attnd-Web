@@ -1,7 +1,7 @@
 {% load console_tags %}{# event_lifecycle: publish / draft / end, nearby listing, transfer, delete (always ask). #}<div class="stack component component--event_lifecycle">
   {% if surface == 'chat' %}<h3 class="title-4">{% icon "broadcast" %} {{ d.name }}</h3>{% endif %}
   <p class="small">Now: <strong>{{ d.status }}</strong> · {% if d.public %}listed in nearby events{% else %}unlisted (code, QR or link only){% endif %}</p>
-  {% if d.limit.limited %}<div class="stack stack--tight free-limit">
+  {% if d.limit.limited %}<div class="stack stack--tight free-limit" id="free-limit">
     <p class="small"><strong>{{ d.limit.used }} of {{ d.limit.limit }} free spots used</strong> · a demo event takes {{ d.limit.limit }} phones{% if d.limit.full %}; new phones can’t join until the limit is removed{% endif %}.</p>
     <meter class="meter" min="0" max="{{ d.limit.limit }}" value="{{ d.limit.used }}" aria-label="Free spots used">{{ d.limit.used }} of {{ d.limit.limit }}</meter>
     {% if d.limit_form %}<details class="small"><summary>Remove the limit and go live</summary>
