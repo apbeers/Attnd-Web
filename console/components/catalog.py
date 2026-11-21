@@ -62,10 +62,8 @@ def status_badges(e):
         out.append(badge('Archived', 'muted', "Attendees see an 'event has ended' banner"))
     else:
         out.append(badge('Live', 'success', 'Published: attendees can join'))
-    if e.paid:
-        out.append(badge('Paid', 'neutral', 'Paid: no demo banner in the app'))
-    else:
-        out.append(badge('Demo', 'neutral', 'Not paid yet: attendees see a Demo event badge'))
+    if e.paid:  # (no "Demo" badge in the console any more, owner Nov 21, 2026: unpaid events show their free spots)
+        out.append(badge('Paid', 'neutral', 'Paid: going live, no phone limit'))
     timing = e.timing
     if timing == 'now' and e.status != 'archived':
         out.append(badge('Happening now', 'live', 'The event is on right now', live=True))
@@ -103,10 +101,46 @@ def annotated_events(user):
             .order_by('-start_time'))
 
 
+# Your events in sections (owner, Nov 21, 2026): the dashboard, the canvas Events tab, the chat and the agent's
+# list_events use the same rules. Showcase events and DEMO go into a folded last section, for staff only.
+SECTIONS = [('now', 'Happening now'), ('upcoming', 'Upcoming'), ('past', 'Past'), ('showcase', 'Showcase & demo')]
+SECTION_LABELS = dict(SECTIONS)
+PAST_SHOWN = 6  # past events folded after this many ("Show all past events")
+
+
+def is_showcase(event):
+    from django.conf import settings
+    code = (getattr(settings, 'DEMO_EVENT_CODE', '') or '').upper()
+    return bool(event.showcase or (code and (event.event_code or '').upper() == code))
+
+
+def event_section(event, user=None):
+    """'now', 'upcoming', 'past' or (staff only) 'showcase', by the event's own start and end."""
+    if user is not None and (user.is_staff or user.is_superuser) and is_showcase(event):
+        return 'showcase'
+    if not event.start_time:
+        return 'upcoming'
+    return {'now': 'now', 'ended': 'past'}.get(event.timing, 'upcoming')
+
+
+def sectioned(events, user=None):
+    """[(section, [events])] in section order, empty sections left out: Happening now and Upcoming soonest first,
+    Past most recent first, Showcase & demo by name."""
+    groups = {key: [] for key, _ in SECTIONS}
+    for e in events:
+        groups[event_section(e, user)].append(e)
+    far = timezone.now() + timedelta(days=36500)
+    groups['now'].sort(key=lambda e: e.start_time or far)
+    groups['upcoming'].sort(key=lambda e: e.start_time or far)
+    groups['past'].sort(key=lambda e: e.effective_end, reverse=True)
+    groups['showcase'].sort(key=lambda e: e.name.lower())
+    return [(key, groups[key]) for key, _ in SECTIONS if groups[key]]
+
+
 def upcoming_and_past(events):
-    now = timezone.now()
-    upcoming = [e for e in events if (e.end_time or e.start_time) >= now - timedelta(days=1)]
-    return upcoming, [e for e in events if e not in upcoming]
+    """(kept for older callers) upcoming and live / past."""
+    parts = dict(sectioned(events))
+    return parts.get('now', []) + parts.get('upcoming', []), parts.get('past', [])
 
 
 def event_url(ids):
@@ -118,8 +152,8 @@ def event_url(ids):
 # ---------------------------------------------------------------------------
 
 def _expand_events(user, **ids):
-    upcoming, past = upcoming_and_past(list(annotated_events(user)))
-    return [{'event_id': e.pk, 'event': e} for e in upcoming + past]
+    return [{'event_id': e.pk, 'event': e} for _, events in sectioned(list(annotated_events(user)), user)
+            for e in events]
 
 
 @component('event_tile', 'Event', 'One of your events: dates, code, status, counts (the console home list). Without '
@@ -129,9 +163,13 @@ def event_tile(user, event_id=None, event=None):
         event = annotated_events(user).filter(pk=event_id or event.pk).first()
         if event is None:
             raise Http404
+    section = event_section(event, user)
     return {
         'id': event.pk, 'name': event.name, 'url': reverse('console:event', args=[event.pk]),
-        'start': fmt(event.start_time, 'D M j, Y'), 'code': event.event_code, 'badges': status_badges(event),
+        # The Your events section (Happening now / Upcoming / Past / Showcase & demo): canvas and chat group by it.
+        'group': section, 'section': SECTION_LABELS[section],
+        'start': fmt(event.start_time, 'D M j, Y') if event.start_time else 'No date yet', 'code': event.event_code,
+        'badges': status_badges(event),
         'counts': {'locations': event.n_locations, 'items': event.n_items, 'joined': event.n_devices,
                    'to_review': event.n_pending},
     }

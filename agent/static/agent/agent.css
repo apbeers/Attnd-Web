@@ -335,3 +335,16 @@
 .agent__still-here { position: absolute; right: 0; bottom: calc(100% + var(--space-2)); padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm); white-space: nowrap; color: var(--color-on-brand); background: var(--color-brand); border-radius: 999px; }
 @media (prefers-reduced-motion: reduce) { .agent__launcher.is-pulsing { animation: none; } }
+
+/* Folding groups (Your events: Happening now / Upcoming / Past / Showcase & demo; notifications Scheduled / Sent) */
+.agent__group-toggle { display: inline-flex; align-items: center; gap: .35rem; padding: 0; font: inherit; color: inherit;
+  letter-spacing: inherit; text-transform: inherit; background: none; border: 0; cursor: pointer; }
+.agent__group-toggle::before { content: "▾"; font-size: .8em; transition: transform .15s ease; }
+.agent__group-toggle[aria-expanded="false"]::before { transform: rotate(-90deg); }
+[data-folded~="now"] > [data-group="now"], [data-folded~="upcoming"] > [data-group="upcoming"],
+[data-folded~="past"] > [data-group="past"], [data-folded~="showcase"] > [data-group="showcase"],
+[data-folded~="scheduled"] > [data-group="scheduled"], [data-folded~="sent"] > [data-group="sent"],
+[data-folded~="past"] > .agent__group-more,
+[data-folded]:not([data-all-past]) > [data-more] { display: none; }
+[data-all-past] > .agent__group-more { display: none; }
+@media (prefers-reduced-motion: reduce) { .agent__group-toggle::before { transition: none; } }

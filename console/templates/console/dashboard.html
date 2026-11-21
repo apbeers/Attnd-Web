@@ -10,7 +10,7 @@
     <a href="{% url 'console:job' job.pk %}">View</a>
   </div>
 {% endfor %}
-{% if not upcoming and not past %}
+{% if not sections %}
   <div class="panel panel--empty stack">
     <div>{% icon "stars" "icon--xl tone-brand" %}</div>
     <h2 class="title-2">Create your first event</h2>
@@ -18,16 +18,17 @@
     <div><a class="button button--primary button--large" href="{% url 'console:event_new' %}">Create an event</a></div>
   </div>
 {% endif %}
-{% if upcoming %}
-<section class="section">
-  <h2 class="eyebrow">Upcoming &amp; live</h2>
-  <div class="grid grid--cards">{% for e in upcoming %}{% component "event_tile" event=e %}{% endfor %}</div>
+{% comment %} Your events in sections (owner, Nov 21, 2026; console.components.catalog.sectioned, the same rules as the
+canvas and the chat): Happening now, Upcoming, Past (6, then "Show all past events"), Showcase & demo (staff, folded). {% endcomment %}
+{% for sec in sections %}
+<section class="section events-section" id="events-{{ sec.key }}">
+  {% if sec.folded %}<details><summary class="eyebrow">{{ sec.label }} · {{ sec.events|length }}</summary>
+  <div class="grid grid--cards">{% for e in sec.events %}{% component "event_tile" event=e %}{% endfor %}</div></details>
+  {% else %}<h2 class="eyebrow">{{ sec.label }} · {{ sec.events|length }}</h2>
+  <div class="grid grid--cards">{% for e in sec.shown %}{% component "event_tile" event=e %}{% endfor %}</div>
+  {% if sec.more %}<details class="events-more"><summary class="button button--ghost button--small">Show all past events ({{ sec.events|length }})</summary>
+    <div class="grid grid--cards">{% for e in sec.more %}{% component "event_tile" event=e %}{% endfor %}</div></details>{% endif %}
+  {% endif %}
 </section>
-{% endif %}
-{% if past %}
-<section class="section">
-  <h2 class="eyebrow">Past</h2>
-  <div class="grid grid--cards">{% for e in past %}{% component "event_tile" event=e %}{% endfor %}</div>
-</section>
-{% endif %}
+{% endfor %}
 {% endblock %}

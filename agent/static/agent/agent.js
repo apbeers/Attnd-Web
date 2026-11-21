@@ -1046,23 +1046,74 @@
     return card;
   }
 
-  // Lists with groups (notifications: "Scheduled · 2" first, then "Sent · 5") get a small heading per group.
-  const GROUPS = { scheduled: 'Scheduled', sent: 'Sent' };
+  // Lists with groups get a small heading per group that folds it (notifications: "Scheduled · 2", then "Sent · 5";
+  // Your events: Happening now / Upcoming / Past / Showcase & demo, agent/canvas.py has the same rules). On the canvas
+  // only Showcase & demo starts folded and Past shows 6 with "Show all past events"; in the chat column every
+  // section but Happening now starts folded.
+  const GROUPS = { scheduled: 'Scheduled', sent: 'Sent', now: 'Happening now', upcoming: 'Upcoming', past: 'Past',
+                   showcase: 'Showcase & demo' };
+  const PAST_SHOWN = 6;
   function appendGrouped(into, items) {
     const counts = {};
     items.forEach((i) => { if (i.group) counts[i.group] = (counts[i.group] || 0) + 1; });
+    const onCanvas = !!into.closest('[data-canvas]');
+    const eventsList = items.some((i) => i.group in { now: 1, upcoming: 1, past: 1, showcase: 1 });
+    const folded = new Set(onCanvas ? ['showcase'] : eventsList ? ['upcoming', 'past', 'showcase'] : []);
+    if (eventsList && !onCanvas && !counts.now) folded.delete(Object.keys(counts).find((g) => g !== 'showcase'));
+    into.dataset.folded = [...folded].filter((g) => counts[g]).join(' ');
     let current = null;
+    let seen = 0;
+    const morePast = () => {
+      if (current !== 'past' || seen <= PAST_SHOWN) return;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'button button--ghost button--small agent__group-more';
+      b.dataset.showAllPast = '';
+      b.textContent = `Show all past events (${seen})`;
+      into.appendChild(b);
+    };
     items.forEach((item) => {
       if (item.group && item.group !== current && GROUPS[item.group]) {
+        morePast();
         current = item.group;
+        seen = 0;
         const h = document.createElement('h4');
         h.className = 'eyebrow agent__group';
-        h.textContent = `${GROUPS[item.group]} · ${counts[item.group]}`;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'agent__group-toggle';
+        b.dataset.groupToggle = item.group;
+        b.setAttribute('aria-expanded', String(!folded.has(item.group)));
+        b.textContent = `${GROUPS[item.group]} · ${counts[item.group]}`;
+        h.appendChild(b);
         into.appendChild(h);
       }
-      into.appendChild(makeCard(item));
+      seen += 1;
+      const card = makeCard(item);
+      if (item.group) card.dataset.group = item.group;
+      if (onCanvas && item.group === 'past' && seen > PAST_SHOWN) card.dataset.more = '';
+      into.appendChild(card);
     });
+    morePast();
   }
+  document.addEventListener('click', (e) => {
+    const toggle = e.target.closest('[data-group-toggle]');
+    if (toggle) {
+      const box = toggle.closest('[data-folded]');
+      if (!box) return;
+      const set = new Set((box.dataset.folded || '').split(' ').filter(Boolean));
+      const g = toggle.dataset.groupToggle;
+      if (set.has(g)) set.delete(g); else set.add(g);
+      box.dataset.folded = [...set].join(' ');
+      toggle.setAttribute('aria-expanded', String(!set.has(g)));
+      return;
+    }
+    const more = e.target.closest('[data-show-all-past]');
+    if (more) {
+      more.closest('[data-folded]')?.setAttribute('data-all-past', '');
+      more.remove();
+    }
+  });
 
   // Stage I: an empty chat opens with the "What needs attention" briefing under the greeting (not a run).
   var briefed = false;  // (var: open() may run before this line during start-up)

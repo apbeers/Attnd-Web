@@ -35,7 +35,11 @@ EMPTY = {'location_row': 'No locations yet. Add stages, booths, food, anywhere a
          'event_tile': 'No events yet.', 'prospect_row': 'No open prospects. Run a discovery from its settings.',
          'prospect_run_row': 'No discovery runs yet.'}
 HEADINGS = {'prospect_run_row': 'Latest runs', 'prospect_row': 'Open prospects, best fit first'}
-GROUPS = {'scheduled': 'Scheduled', 'sent': 'Sent'}
+GROUPS = {'scheduled': 'Scheduled', 'sent': 'Sent', 'now': 'Happening now', 'upcoming': 'Upcoming', 'past': 'Past',
+          'showcase': 'Showcase & demo'}
+# Groups folded at first on the canvas (agent.js has the same rule): the showcase section; past events after 6.
+FOLDED = {'showcase'}
+PAST_SHOWN = 6
 
 
 def _cards(request, name, parent):
@@ -53,15 +57,24 @@ def _section(request, name, parent):
     for item in items:
         if item.get('group'):
             groups[item['group']] = groups.get(item['group'], 0) + 1
-    rows, current = [], None
+    rows, current, seen = [], None, {}
     for item in items:
         group = item.get('group')
         if group and group != current and group in GROUPS:
+            if current == 'past' and seen.get('past', 0) > PAST_SHOWN:
+                rows.append({'more_past': seen['past']})
             current = group
-            rows.append({'heading': f'{GROUPS[group]} · {groups[group]}'})
-        rows.append({'card': item, 'ids': json.dumps(item['ids'], separators=(',', ':')),
+            rows.append({'heading': f'{GROUPS[group]} · {groups[group]}', 'group': group,
+                         'folded': group in FOLDED})
+        seen[group] = seen.get(group, 0) + 1
+        rows.append({'card': item, 'ids': json.dumps(item['ids'], separators=(',', ':')), 'group': group or '',
+                     'more': group == 'past' and seen[group] > PAST_SHOWN,
                      'detail_ids': json.dumps(item['detail_ids'], separators=(',', ':'))})
+    if current == 'past' and seen.get('past', 0) > PAST_SHOWN:
+        rows.append({'more_past': seen['past']})
+    folded = ' '.join(g for g in FOLDED if g in groups)
     return {'name': name, 'parent': json.dumps(parent, separators=(',', ':')), 'rows': rows, 'items': items,
+            'folded': folded,
             'next_offset': len(items) if len(items) < total else None, 'total': total,
             'row_list': name.endswith('_row'), 'heading': HEADINGS.get(name, ''), 'empty': EMPTY.get(name, 'Nothing here yet.')}
 

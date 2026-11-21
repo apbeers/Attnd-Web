@@ -227,5 +227,5 @@ class PagePerfTests(PerfBase):
         org = TwoFactorClient()
         org.force_login(member_user)
         resp = org.get('/console/', secure=True)
-        event = next(e for e in resp.context['upcoming'] + resp.context['past'] if e.pk == self.event.pk)
+        event = next(e for e in [e for s in resp.context['sections'] for e in s['events']] if e.pk == self.event.pk)
         self.assertEqual((event.n_locations, event.n_items, event.n_devices, event.n_pending), (18, 51, 30, 0))

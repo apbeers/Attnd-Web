@@ -174,7 +174,7 @@ def dashboard(request):
         return redirect('console:job', job_id=job.pk)
     if error:
         messages.error(request, error)
-    from console.components.catalog import annotated_events, upcoming_and_past
+    from console.components.catalog import PAST_SHOWN, SECTION_LABELS, annotated_events, sectioned
     running = IngestJob.objects.filter(created_by=request.user, kind=IngestJob.KIND_CREATE,
                                        status__in=[IngestJob.QUEUED, IngestJob.RUNNING])
     preview = request.GET.get('onboarding') == '1' and (request.user.is_staff or request.user.is_superuser)
@@ -186,8 +186,10 @@ def dashboard(request):
     if (landing := _chat_landing(request)) is not None:
         return landing
     # Each event is the event_tile component (console/components); the counts are correlated subqueries.
-    upcoming, past = upcoming_and_past(list(annotated_events(request.user)))
-    return render(request, 'console/dashboard.html', {'upcoming': upcoming, 'past': past, 'running_jobs': running})
+    sections = [{'key': key, 'label': SECTION_LABELS[key], 'events': events, 'shown': events[:PAST_SHOWN] if key == 'past' else events,
+                 'more': events[PAST_SHOWN:] if key == 'past' else [], 'folded': key == 'showcase'}
+                for key, events in sectioned(list(annotated_events(request.user)), request.user)]
+    return render(request, 'console/dashboard.html', {'sections': sections, 'running_jobs': running})
 
 
 @agent_action('create_event_with_ai', 'Create a new event with the AI import from its website(s), an attached '
