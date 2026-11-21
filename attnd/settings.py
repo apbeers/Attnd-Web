@@ -6,6 +6,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = bool(os.getenv('DEBUG'))
 
 SECRET_KEY = os.getenv('SECRET_KEY', '')
+# Key rotation (stage G): put the old key here (comma-separated) when setting a new SECRET_KEY; sessions, password
+# reset links and signed values made with it keep working until they expire. Remove it after two weeks.
+SECRET_KEY_FALLBACKS = [k.strip() for k in os.getenv('SECRET_KEY_FALLBACKS', '').split(',') if k.strip()]
 if not SECRET_KEY:
     if DEBUG or os.getenv('CI'):
         SECRET_KEY = 'insecure-dev-only-secret-key'
@@ -30,7 +33,9 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 if DEBUG:
     ALLOWED_HOSTS = ['*']
 else:
-    ALLOWED_HOSTS = ['.herokuapp.com', '.attnd.app']
+    # Only our own hostnames (stage G): the site's host from SITE_URL (+ www for attnd.app) and the Studio sites host
+    # are added below, once they are known; ALLOWED_HOSTS_EXTRA (comma-separated) adds others.
+    ALLOWED_HOSTS = [h.strip().lower() for h in os.getenv('ALLOWED_HOSTS_EXTRA', '').split(',') if h.strip()]
 
 # Local runs (manage.py runserver/test, health checks from inside the dyno). This used to also switch off
 # the HTTPS redirect and secure cookies everywhere, because this list always contains localhost; local
@@ -69,6 +74,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     # gzip for the API's JSON and the HTML pages (after WhiteNoise, which serves static files pre-compressed).
     'attnd.middleware.CompressionMiddleware',
+    'attnd.middleware.SecurityHeadersMiddleware',
     # Django's session middleware + Ask Attnd's internal requests (they use the person's session, never saved).
     'agent.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -149,8 +155,23 @@ STORAGES = {
 
 # Tests render templates without running collectstatic first
 import sys  # noqa: E402
+# Passwords (stage G): scrypt first (memory-hard); existing PBKDF2 hashes keep working and are upgraded at sign-in.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
+# Browser features the site never uses are switched off (attnd.middleware.SecurityHeadersMiddleware). The console's
+# map may ask for the location; nothing else may use the camera, microphone, payment or USB.
+PERMISSIONS_POLICY = os.getenv('PERMISSIONS_POLICY', 'accelerometer=(), camera=(), geolocation=(self), gyroscope=(), '
+                               'magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=(), '
+                               'browsing-topics=()')
+
 TESTING = len(sys.argv) > 1 and sys.argv[1] == 'test'
 if TESTING:
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher'] + PASSWORD_HASHERS  # fast tests
     STORAGES['staticfiles']['BACKEND'] = 'django.contrib.staticfiles.storage.StaticFilesStorage'
     # No collectstatic in tests: WhiteNoise finds files through the finders on demand instead of scanning
     # STATIC_ROOT at startup (which warned "No directory at: …/staticfiles/").
@@ -205,6 +226,7 @@ RATE_LIMITS = {
     'place_search_user': _rate('place_search_user', '60/600'),  # the location form's address searches per person
     'location_fill_user': _rate('location_fill_user', '30/3600'),  # "Fill from this website?" per person, 1 hour
     'agent_quiet_runs': _rate('agent_quiet_runs', '60/3600'),  # chat buttons that start a quiet run, per person
+    'agent_start_user': _rate('agent_start_user', '30/600'),  # Ask Attnd requests started per person, 10 minutes
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
@@ -339,8 +361,13 @@ _HEROKU_SITES_HOSTS = {'attnd.app': 'attnd-web-7a02b020850d.herokuapp.com',
                        'dev.attnd.app': 'attnd-dev-7ab893f37020.herokuapp.com'}
 SITES_HOST = os.getenv('SITES_HOST', '').strip().lower().rstrip('/') or (
     '127.0.0.1:8000' if DEBUG else _HEROKU_SITES_HOSTS.get(_site.hostname or '', ''))
-if SITES_HOST and '*' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(SITES_HOST.split(':')[0])  # a bought sites domain isn't under .attnd.app/.herokuapp.com
+if '*' not in ALLOWED_HOSTS:
+    if _site.hostname:
+        ALLOWED_HOSTS.append(_site.hostname)  # attnd.app / dev.attnd.app
+        if _site.hostname == 'attnd.app':
+            ALLOWED_HOSTS.append('www.attnd.app')
+    if SITES_HOST:
+        ALLOWED_HOSTS.append(SITES_HOST.split(':')[0])  # the Studio sites host (today the app's herokuapp.com name)
 SITES_ORIGIN = f"{'http' if DEBUG and SITES_HOST.startswith(('127.0.0.1', 'localhost')) else 'https'}://{SITES_HOST}"
 # Console origins allowed to frame hosted pages (the editor's preview); nobody else may frame them.
 STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))

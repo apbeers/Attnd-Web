@@ -79,7 +79,7 @@ Built on `develop` in this order; ticked as it ships.
 - [ ] **E. Packages**: latest everything, psycopg 3 + pooling, Python 3.15.2.
 - [ ] **F. Django built-ins**: database cache, LoginRequiredMiddleware, Postgres search, GeneratedField / humanize,
   django.tasks with our own DB-backed worker (last).
-- [ ] **G. Security**: ALLOWED_HOSTS, Scrypt, Permissions-Policy, SECRET_KEY_FALLBACKS, Ask Attnd rate limit + magic bytes.
+- [x] **G. Security** ✅: ALLOWED_HOSTS, Scrypt, Permissions-Policy, SECRET_KEY_FALLBACKS, Ask Attnd rate limit + magic bytes.
 - [ ] **H. Performance**: deferred head scripts, lazy Ask Attnd, cached root files, sized images, polling back-off.
 - [ ] **I. Chat-first additions** (Tiers 1–3: preview-before-apply, briefing / readiness, paste anything, server-side
   conversation, quality harness, live ops, notification drafting, voice, numbers, command bar, preferences, roll over,

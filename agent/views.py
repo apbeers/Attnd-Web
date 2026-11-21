@@ -17,6 +17,36 @@ ALLOWED_TYPES = ('application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'im
                  'text/csv')
 
 
+def sniff(head):
+    """What a file really is, from its first bytes (attachments are checked by magic bytes, not their name)."""
+    if head.startswith(b'%PDF-'):
+        return 'application/pdf'
+    if head.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'image/png'
+    if head.startswith(b'\xff\xd8\xff'):
+        return 'image/jpeg'
+    if head[:4] == b'RIFF' and head[8:12] == b'WEBP':
+        return 'image/webp'
+    if head[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    if head[4:8] == b'ftyp' and head[8:12] in (b'heic', b'heix', b'mif1', b'msf1', b'hevc', b'heim', b'heis'):
+        return 'image/heic'
+    if b'\x00' not in head:
+        try:
+            head.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                head[:-3].decode('utf-8')  # (a multi-byte character cut at 64 bytes)
+            except UnicodeDecodeError:
+                return None
+        return 'text'
+    return None
+
+
+def _matches(kind, declared):
+    return kind == declared or (kind == 'text' and declared in ('text/plain', 'text/csv'))
+
+
 def _error(message, status=400):
     return JsonResponse({'error': message}, status=status)
 
@@ -182,6 +212,10 @@ def start(request):
                              'run': run_json(active)}, status=409)
     if loop.budget_left(request.user) <= 0:
         return _error(loop.budget_message(), status=429)
+    from attnd.ratelimit import RateLimit
+    limit = RateLimit('agent_start_user')
+    if limit.hit(request.user.pk) > limit.limit:
+        return _error('That is a lot of requests in a few minutes. Wait a moment and try again.', status=429)
     page = (request.POST.get('page') or '').strip()
     if not page.startswith('/console/'):
         page = ''
@@ -313,7 +347,10 @@ def attach(request):
     limit = settings.AGENT_MAX_ATTACHMENT_MB * 1024 * 1024
     if upload.size > limit:
         return _error(f'Files must be under {settings.AGENT_MAX_ATTACHMENT_MB} MB.')
-    if (upload.content_type or '') not in ALLOWED_TYPES:
+    head = upload.read(64)
+    upload.seek(0)
+    kind = sniff(head)
+    if (upload.content_type or '') not in ALLOWED_TYPES or kind is None or not _matches(kind, upload.content_type):
         return _error('Attach a PDF, an image (PNG, JPEG, WebP, GIF, HEIC) or a text/CSV file.')
     if AgentAttachment.objects.filter(user=request.user, run__isnull=True).count() >= 10:
         return _error('Send your request first (at most 10 files waiting).')

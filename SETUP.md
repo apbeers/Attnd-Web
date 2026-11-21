@@ -947,3 +947,21 @@ heroku config:set -a attnd-web ANTHROPIC_API_KEY=sk-ant-… STUDIO_ANTHROPIC_MOD
 ```
 To be done in the Anthropic Console: a monthly spend limit as a second cap behind `AGENT_DAILY_SPEND_CAP_USD` /
 `STUDIO_DAILY_SPEND_CAP_USD`, and no training on customer data (docs/LLC_MIGRATION.md).
+
+
+## Rotating SECRET_KEY (stage G, Nov 21, 2026)
+
+Sessions, password-reset links and signed values keep working during a rotation: the old key goes into
+`SECRET_KEY_FALLBACKS` while the new one becomes `SECRET_KEY`, and it is removed after two weeks.
+
+```bash
+heroku config:get SECRET_KEY -a attnd-web > /tmp/old_key
+heroku config:set SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')" SECRET_KEY_FALLBACKS="$(cat /tmp/old_key)" -a attnd-web
+rm /tmp/old_key
+```
+
+Two weeks later:
+
+```bash
+heroku config:unset SECRET_KEY_FALLBACKS -a attnd-web
+```

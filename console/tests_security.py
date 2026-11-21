@@ -430,3 +430,55 @@ class ContentSecurityPolicyTests(TestCase):
             if re.search(r'href\s*=\s*["\']\s*javascript:', text, re.I):
                 problems.append(f'{path.relative_to(root)}: javascript: URL')
         self.assertEqual(problems, [])
+
+
+class StageGTests(TestCase):
+    def test_permissions_policy_and_scrypt(self):
+        from django.conf import settings
+        response = self.client.get('/', secure=True)
+        self.assertIn('camera=()', response['Permissions-Policy'])
+        self.assertEqual(settings.PASSWORD_HASHERS[1], 'django.contrib.auth.hashers.ScryptPasswordHasher')
+        from django.contrib.auth.hashers import ScryptPasswordHasher
+        self.assertEqual(ScryptPasswordHasher.algorithm, 'scrypt')
+
+    def test_allowed_hosts_are_our_own(self):
+        from django.conf import settings
+        self.assertNotIn('.herokuapp.com', settings.ALLOWED_HOSTS)
+        self.assertNotIn('.attnd.app', settings.ALLOWED_HOSTS)
+
+    def test_agent_attachments_are_checked_by_their_bytes(self):
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        user = User.objects.create_user('att', 'att@example.com', 'pw')
+        self.client.force_login(user)
+        url = reverse('agent:attach')
+        fake = SimpleUploadedFile('flyer.pdf', b'MZ\x90\x00 not a pdf', content_type='application/pdf')
+        self.assertEqual(self.client.post(url, {'file': fake}, secure=True).status_code, 400)
+        real = SimpleUploadedFile('flyer.pdf', b'%PDF-1.7\n...', content_type='application/pdf')
+        self.assertEqual(self.client.post(url, {'file': real}, secure=True).status_code, 201)
+        png_as_text = SimpleUploadedFile('a.txt', b'\x89PNG\r\n\x1a\n....', content_type='text/plain')
+        self.assertEqual(self.client.post(url, {'file': png_as_text}, secure=True).status_code, 400)
+
+    def test_starting_ask_attnd_runs_is_rate_limited(self):
+        from django.contrib.auth.models import User
+        from django.core.cache import cache
+        from django.test import override_settings
+        cache.clear()
+        user = User.objects.create_user('rl', 'rl@example.com', 'pw')
+        self.client.force_login(user)
+        rates = dict(settings_rates())
+        rates['agent_start_user'] = (1, 600)
+        with override_settings(RATE_LIMITS=rates):
+            from unittest import mock
+            with mock.patch('agent.loop.spawn'):
+                first = self.client.post(reverse('agent:start'), {'goal': 'hi'}, secure=True)
+                from agent.models import AgentRun
+                AgentRun.objects.filter(user=user).update(status=AgentRun.DONE)
+                second = self.client.post(reverse('agent:start'), {'goal': 'hi again'}, secure=True)
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(second.status_code, 429)
+
+
+def settings_rates():
+    from django.conf import settings
+    return settings.RATE_LIMITS

@@ -30,3 +30,22 @@ class CompressionMiddleware(GZipMiddleware):
         if etag is not None:
             response.headers['ETag'] = etag
         return response
+
+
+class SecurityHeadersMiddleware:
+    """Permissions-Policy on our own pages (stage G; settings.PERMISSIONS_POLICY). Studio's hosted sites set their
+    own headers (studio.middleware answers them before this runs)."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.conf import settings
+        response = self.get_response(request)
+        policy = getattr(settings, 'PERMISSIONS_POLICY', '')
+        sites = (getattr(settings, 'SITES_HOST', '') or '').split(':')[0]
+        if sites and request.get_host().split(':')[0] == sites:
+            return response  # Studio's hosted sites: their own headers
+        if policy and 'Permissions-Policy' not in response:
+            response['Permissions-Policy'] = policy
+        return response
