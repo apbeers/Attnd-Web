@@ -369,7 +369,9 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
   "content_version": 15,
   "join_url": "https://attnd.app/join/FWFM2026/",
   "website_url": "https://sites.attnd-example.com/fw-fair/" | null,
-  "tickets_url": null
+  "tickets_url": null,
+  "theme": {"light": {"primary": "#B23A1E", "secondary": "#F2A65A", "tertiary": "#1F7A8C"},
+            "dark": {"primary": "#F4895F", "secondary": "#7A3B24", "tertiary": "#4FB3C4"}} | null
 }
 ```
 - `tickets_url` (API-017): always `null` (ticketing parked, see Tickets).
@@ -379,6 +381,17 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
   attnd.app (`SITES_HOST`), so never send credentials or the device id to it.
 - `status == "archived"`: show an "This event has ended" banner. The content is still viewable.
 - `context` (API-018, `bundle/` only): see Context.
+- `theme` (API-023, `bundle/` only): see Theme. `lookup/` and `nearby/` event objects have no `theme` key.
+
+### Theme (API-023)
+The event's own colours, for light and dark mode, or `null` (no theme, or the organizer turned "Use custom theme in
+the apps" off): use your defaults then (`accent_color`, else the brand purple). Each mode has three `#RRGGBB` colours:
+- `primary`: the tint: buttons, selected tabs and chips, links. Already adjusted so white or near-black text on it is
+  readable (≥ 4.5:1); pick whichever of the two contrasts more.
+- `secondary`: soft surfaces: selected rows, chips, backgrounds (use it at low opacity or mixed with the background).
+- `tertiary`: highlights: progress, badges, the end of a gradient from `primary`; ≥ 3:1 on the page.
+Pick `light` or `dark` by the system appearance. **Decode leniently**: ignore unknown keys; a missing mode or role, or
+a value that isn't `#RRGGBB`, means use your defaults for it. A change bumps `content_version` like any content change.
 
 ### Location
 ```json

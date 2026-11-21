@@ -12,7 +12,8 @@ class IngestJob(models.Model):
 
     KIND_CREATE = 'create'
     KIND_REFRESH = 'refresh'
-    KIND_CHOICES = [(KIND_CREATE, 'Create event'), (KIND_REFRESH, 'Refresh event')]
+    KIND_THEME = 'theme'  # API-023: pick the event's colours with the AI (events.theme_ai)
+    KIND_CHOICES = [(KIND_CREATE, 'Create event'), (KIND_REFRESH, 'Refresh event'), (KIND_THEME, 'Pick colours')]
 
     QUEUED, RUNNING, DONE, FAILED = 'queued', 'running', 'done', 'failed'
     STATUS_CHOICES = [(QUEUED, 'Queued'), (RUNNING, 'Running'), (DONE, 'Done'), (FAILED, 'Failed')]

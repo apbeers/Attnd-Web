@@ -228,3 +228,9 @@ Built Nov 20, 2026 (`agent/`, CLAUDE.md → Ask Attnd). Later:
 The server sends `plan_suggestions` in every bundle (API_CHANGES.md → API-021). iOS and Android: show them as the
 "Plan your day" examples when present (plan → make the plan, question → ask it), else keep the local examples.
 
+## API-023 in the apps (not started; web done Nov 21, 2026)
+The bundle's `event.theme` carries each event's colours (light and dark × primary / secondary / tertiary, already
+contrast-adjusted; `null` without a theme or when the organizer turned "Use custom theme in the apps" off;
+API_CHANGES.md → API-023). iOS and Android: decode it leniently and, when set, use it instead of `accent_color` for
+the event's tint (primary), soft surfaces (secondary) and highlights (tertiary), following the system's light / dark
+mode; `null` → today's behaviour (`accent_color`, else the brand purple).

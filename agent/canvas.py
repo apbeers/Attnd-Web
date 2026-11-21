@@ -16,7 +16,7 @@ KINDS = {
     'event_exports': 'Overview', 'event_rollover': 'Overview', 'changeset_review': 'Review', 'location_row': 'Locations',
     'schedule_item_row': 'Schedule', 'notification_form': 'Notifications', 'notification_row': 'Notifications',
     'event_team': 'Team', 'event_metrics': 'Metrics', 'usage_answer': 'Metrics', 'app_layout': 'Settings', 'website_watching': 'Settings',
-    'event_context_form': 'Settings', 'event_flyer': 'Settings', 'object_history': 'History',
+    'event_context_form': 'Settings', 'event_flyer': 'Settings', 'object_history': 'History', 'event_theme': 'Overview',
     'event_versions': 'History', 'prospect_run_row': 'Prospects', 'prospect_row': 'Prospects',
 }
 ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
@@ -104,6 +104,7 @@ ROUTES = [
     (r'^/console/events/(?P<event_id>\d+)/team/$', 'event_team', 'Team'),
     (r'^/console/events/(?P<event_id>\d+)/usage/$', 'event_metrics', 'Metrics'),
     (r'^/console/events/(?P<event_id>\d+)/display/$', 'app_layout', 'Settings'),
+    (r'^/console/events/(?P<event_id>\d+)/theme/$', 'event_theme', 'Overview'),
     (r'^/console/events/(?P<event_id>\d+)/changes/$', 'changeset_review', 'Review'),
     (r'^/console/events/(?P<event_id>\d+)/$', 'event_overview', 'Overview'),
     (r'^/console/new/$', 'event_new_form', None),

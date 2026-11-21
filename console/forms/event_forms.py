@@ -476,3 +476,66 @@ class NotificationEditForm(StyledFormMixin, forms.Form):
 class TeamInviteForm(StyledFormMixin, forms.Form):
     email = forms.EmailField(label='Email')
     role = forms.ChoiceField(label='Role', choices=EventMember.ROLE_CHOICES, initial=EventMember.ROLE_CONTRIBUTOR)
+
+
+class EventThemeForm(forms.Form):
+    """API-023: the event's six colours (light and dark × primary, secondary, tertiary) as exact hex codes. The
+    console draws a colour picker next to each field (console.js) and a contrast note under it (events.theme.checks)."""
+
+    ROLE_HELP = {'primary': 'Buttons, active chips and links', 'secondary': 'Soft tints: selected rows, chips, the page glow',
+                 'tertiary': 'Highlights: tab underlines, hovers, gradients'}
+
+    light_primary = forms.CharField(label='Light · Primary', max_length=7)
+    dark_primary = forms.CharField(label='Dark · Primary', max_length=7)
+    light_secondary = forms.CharField(label='Light · Secondary', max_length=7)
+    dark_secondary = forms.CharField(label='Dark · Secondary', max_length=7)
+    light_tertiary = forms.CharField(label='Light · Tertiary', max_length=7)
+    dark_tertiary = forms.CharField(label='Dark · Tertiary', max_length=7)
+
+    def __init__(self, *args, theme=None, **kwargs):
+        from events import theme as T
+        current = T.normalize(theme) or T.default_theme()
+        kwargs.setdefault('initial', {f'{m}_{r}': current[m][r] for m in T.MODES for r in T.ROLES})
+        super().__init__(*args, **kwargs)
+        checks = T.checks(current)
+        for mode in T.MODES:
+            for role in T.ROLES:
+                f = self.fields[f'{mode}_{role}']
+                f.widget.attrs.update({'data-hex': '', 'pattern': '#?[0-9A-Fa-f]{6}', 'maxlength': '7', 'size': '8',
+                                       'spellcheck': 'false', 'autocomplete': 'off', 'inputmode': 'text'})
+                note = checks[mode][role]['note']
+                f.help_text = self.ROLE_HELP[role] + (f'. {note}' if note else '.')
+
+    def _clean_hex(self, name):
+        from events.theme import clean_hex
+        value = clean_hex(self.cleaned_data.get(name))
+        if not value:
+            raise forms.ValidationError('Enter a colour as #RRGGBB, e.g. #431F86.')
+        return value
+
+    def clean(self):
+        data = super().clean()
+        for name in list(self.fields):
+            if name in data:
+                try:
+                    data[name] = self._clean_hex(name)
+                except forms.ValidationError as e:
+                    self.add_error(name, e)
+        return data
+
+    def to_theme(self):
+        from events import theme as T
+        d = self.cleaned_data
+        return {m: {r: d[f'{m}_{r}'] for r in T.ROLES} for m in T.MODES}
+
+
+class EventThemeSwitchesForm(forms.Form):
+    theme_web = forms.BooleanField(label='Use custom theme on the website', required=False,
+                                   help_text='The console’s event pages and the join and shared-plan pages')
+    theme_apps = forms.BooleanField(label='Use custom theme in the apps', required=False,
+                                    help_text='Sent to the iPhone and Android apps (they adopt it in a later update)')
+
+
+class ThemeGenerateForm(StyledFormMixin, forms.Form):
+    instruction = forms.CharField(label='Anything to keep in mind?', required=False, max_length=300,
+                                  help_text='Optional: “warmer”, “match our logo”, “more contrast”…')

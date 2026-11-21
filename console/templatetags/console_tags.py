@@ -199,3 +199,23 @@ def named(actions, names):
     """A component's actions picked by name ("save_snapshot" or "apply,discard"), never by position."""
     wanted = {n.strip() for n in (names or '').split(',') if n.strip()}
     return [a for a in actions or [] if a.get('name') in wanted]
+
+
+@register.simple_tag(takes_context=True)
+def event_theme_style(context):
+    """API-023: the event's colour theme as a nonce'd <style> overriding console.css's tokens, on the event's own
+    pages (the event shell and the Ask Attnd full screen for an event) while it has a theme and "Use custom theme on
+    the website" is on. Your events, Account, Studio, Diagnostics and Prospects keep Attnd's purple."""
+    from django.utils.html import escape
+    from events import theme as T
+    from events.models import Event
+    event = context.get('event') if context.get('section') and context.get('section') != 'studio' else None
+    event = event or context.get('agent_event')
+    if not isinstance(event, Event) or not event.theme_web:
+        return ''
+    css = T.css(event.theme)
+    if not css:
+        return ''
+    nonce = context.get('csp_nonce')
+    nonce = '' if nonce is None else str(nonce)  # (a LazyNonce is falsy until first used: str() makes it)
+    return mark_safe(f'<style nonce="{escape(nonce)}" data-event-theme="{event.pk}">{css}</style>')

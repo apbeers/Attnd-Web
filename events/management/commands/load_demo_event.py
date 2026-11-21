@@ -243,6 +243,11 @@ class Command(BaseCommand):
             status=Event.STATUS_PUBLISHED, paid=True, public=True, logo_url='', accent_color='',
             source_urls=[SITE], refresh_schedule=Event.REFRESH_WATCH, update_mode=Event.UPDATE_AUTO,
             display_config={'preset': 'festival', 'secondary_pane': 'now_next'}, locked_fields=[],
+            # API-023: a fixed colour theme (Texas sunset), on for the website and the apps.
+            theme={'light': {'primary': '#B23A1E', 'secondary': '#F2A65A', 'tertiary': '#1F7A8C'},
+                   'dark': {'primary': '#F4895F', 'secondary': '#7A3B24', 'tertiary': '#4FB3C4'},
+                   'source': 'manual', 'reason': 'Texas sunset: rust, peach and river teal.'},
+            theme_web=True, theme_apps=True,
         )
         event = Event.objects.filter(event_code=code.upper()).first()
         if event is None:

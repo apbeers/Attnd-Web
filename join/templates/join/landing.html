@@ -1,5 +1,5 @@
 {% load static tz %}<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-scheme="auto">
 <head>
   <meta charset="utf-8">
   {% include 'home/_icons.html' %}
@@ -12,6 +12,7 @@
   {% if app_store_id %}<meta name="apple-itunes-app" content="app-id={{ app_store_id }}, app-clip-bundle-id={{ clip_bundle_id }}, app-clip-display=card">{% endif %}
   <meta name="theme-color" content="#431f86">
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
+  {% if theme_css %}<style nonce="{{ csp_nonce }}" data-event-theme="{{ event.id }}">{{ theme_css|safe }}</style>{% endif %}
 </head>
 <body>
 <main class="join-page">

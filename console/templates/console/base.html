@@ -15,6 +15,7 @@
   {% if GOOGLE_MAPS_BROWSER_KEY %}<script src="{% static 'console/maps.js' %}" defer></script>{% endif %}
   <meta name="theme-color" content="#431f86">
   {% block head %}{% endblock %}
+  {% event_theme_style %}
 </head>
 <body>
 <header class="topbar">

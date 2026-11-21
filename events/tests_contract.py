@@ -86,7 +86,10 @@ class ApiContractTests(TestCase):
             name='Contract Fair', event_code='CONTRACT', description='Desc', address='1 Main St',
             latitude=32.75, longitude=-97.33, start_time=start, end_time=start + timedelta(hours=8),
             timezone='America/Chicago', user=user, public=True, paid=True, accent_color='#FF6600',
-            logo_url='https://example.com/logo.png', plan=Event.PLAN_STUDIO)
+            logo_url='https://example.com/logo.png', plan=Event.PLAN_STUDIO,
+            # API-023: a colour theme, so event.theme is an object in the bundle sample.
+            theme={'light': {'primary': '#B23A1E', 'secondary': '#F2A65A', 'tertiary': '#1F7A8C'},
+                   'dark': {'primary': '#F4895F', 'secondary': '#7A3B24', 'tertiary': '#4FB3C4'}})
         # API-016: a published Attnd Studio site, so event.website_url is a string in the sample.
         from studio import publishing
         site = publishing.ensure_site(self.event, user)

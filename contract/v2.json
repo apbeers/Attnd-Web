@@ -143,6 +143,18 @@
         "paid": "boolean",
         "start_time": "string",
         "status": "string",
+        "theme": {
+          "dark": {
+            "primary": "string",
+            "secondary": "string",
+            "tertiary": "string"
+          },
+          "light": {
+            "primary": "string",
+            "secondary": "string",
+            "tertiary": "string"
+          }
+        },
         "tickets_url": "null",
         "timezone": "string",
         "website_url": "string"

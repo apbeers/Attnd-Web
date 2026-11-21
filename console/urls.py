@@ -51,6 +51,9 @@ urlpatterns = [
          name='notification_action'),
 
     path('events/<int:event_id>/display/', v.display_settings, name='display'),
+    path('events/<int:event_id>/theme/', v.event_theme, name='event_theme'),
+    path('events/<int:event_id>/theme/switches/', v.event_theme_switches, name='event_theme_switches'),
+    path('events/<int:event_id>/theme/generate/', v.event_theme_generate, name='event_theme_generate'),
     path('events/<int:event_id>/changes/', v.changesets, name='changesets'),
     path('events/<int:event_id>/history/', v.history, name='history'),
     path('events/<int:event_id>/team/', v.team, name='team'),

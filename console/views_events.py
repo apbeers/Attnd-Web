@@ -26,8 +26,8 @@ from attnd.links import join_url, qr_png
 from agent import summaries as S
 from agent.registry import agent_action, param as P
 
-from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, LocationForm,
-                                       NotificationEditForm,
+from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, EventThemeForm,
+                                       EventThemeSwitchesForm, LocationForm, NotificationEditForm, ThemeGenerateForm,
                                        NotificationForm, DuplicateEventForm, PasteImportForm, RefreshForm, ScheduledItemForm, SourcesForm,
                                        TeamInviteForm)
 from events import push
@@ -224,6 +224,8 @@ def task_json(job):
         title = f'Importing {event_name}' if job.status != IngestJob.DONE else f'Imported {event_name}'
     elif job.trigger == IngestJob.TRIGGER_WATCH:
         title = f'Website changed: updating {event_name}'
+    elif job.kind == IngestJob.KIND_THEME:
+        title = f'Picking colours for {event_name}' if job.status != IngestJob.DONE else f'Picked colours for {event_name}'
     elif job.trigger == IngestJob.TRIGGER_PASTE:
         title = f'Reading {job.upload_name or "what you pasted"} into {event_name}'
     else:
@@ -231,7 +233,11 @@ def task_json(job):
     result, url = (job.result or {}), None
     summary = ''
     if job.status == IngestJob.DONE:
-        if job.kind == IngestJob.KIND_REFRESH:
+        if job.kind == IngestJob.KIND_THEME:
+            summary = {'site': 'From your website’s colours', 'default': 'Kept Attnd’s colours'}.get(
+                result.get('theme_source'), 'New colours are on')
+            url = reverse('console:event', args=[job.event_id]) + '#theme'
+        elif job.kind == IngestJob.KIND_REFRESH:
             pending, applied = result.get('pending', 0), result.get('auto_applied', 0)
             summary = ', '.join(filter(None, [
                 f'{applied} change{"s" if applied != 1 else ""} applied' if applied else '',
@@ -250,7 +256,8 @@ def task_json(job):
         # Friendly steps (scrape.jobs.Steps) the tray shows when a task is opened; a queued job has one.
         'steps': [{'text': st.get('text', ''), 'state': st.get('state', 'done')} for st in (job.steps or [])]
                  or ([{'text': 'Waiting to start…', 'state': 'running'}] if job.status == IngestJob.QUEUED else []),
-        'result_label': ('Review the changes' if url and '/changes/' in url else 'Open the event') if url else '',
+        'result_label': ('See the colours' if job.kind == IngestJob.KIND_THEME else 'Review the changes'
+                         if url and '/changes/' in url else 'Open the event') if url else '',
     }
 
 
@@ -886,6 +893,93 @@ def display_settings(request, event):
         return JsonResponse({'saved': False, 'errors': form.errors}, status=400)
     return render(request, 'console/display.html', _ctx(
         event, 'display', form=form, resolved=resolved, stats=stats, labels=LABELS))
+
+
+# ---------------------------------------------------------------------------
+# Colour theme (API-023)
+# ---------------------------------------------------------------------------
+
+def _theme_done(request, event, text):
+    if _wants_json(request):
+        return JsonResponse({'saved': True, 'message': text})
+    messages.success(request, text)
+    return redirect(reverse('console:event', args=[event.pk]) + '#theme')
+
+
+@agent_action('update_event_theme', "An event's colour theme as exact #RRGGBB codes: for light and for dark mode a "
+              'primary (buttons, active chips, links), a secondary (soft tints) and a tertiary (highlights, hovers). '
+              'Pass only what changes. Text contrast is adjusted automatically, so any colour is allowed. Saving '
+              'locks the theme against AI changes.', form=EventThemeForm, prefill=True, title='Saved the colours')
+@agent_action('reset_event_theme', "Remove an event's custom colours: back to Attnd's purple (undoable).",
+              fixed={'action': 'reset'}, title="Went back to Attnd's colours")
+@agent_action('event_theme_page', "An event's colour theme: the six colours, contrast notes and the two switches "
+              '(website / apps).', kind='read')
+@event_view
+def event_theme(request, event):
+    from events import theme as T
+    if request.method == 'POST' and request.POST.get('action') == 'reset':
+        event.theme = {}
+        event.locked_fields = [f for f in (event.locked_fields or []) if f != 'theme']
+        event.save(update_fields=['theme', 'locked_fields'])
+        return _theme_done(request, event, 'Back to Attnd’s colours.')
+    form = EventThemeForm(request.POST or None, theme=event.theme)
+    if request.method == 'POST' and form.is_valid():
+        colours = form.to_theme()
+        if colours == T.DEFAULT:
+            event.theme = {}
+        else:
+            kept = {k: v for k, v in (T.normalize(event.theme) or {}).items() if k == 'page_colors'}
+            event.theme = T.normalize({**colours, **kept, 'source': 'manual',
+                                       'made_at': timezone.now().isoformat(timespec='seconds')})
+        locked = list(event.locked_fields or [])
+        if 'theme' not in locked:
+            locked.append('theme')  # a person chose these: later AI work keeps them
+        event.locked_fields = locked
+        event.save(update_fields=['theme', 'locked_fields'])
+        return _theme_done(request, event, 'Saved the colours.' + (
+            ' They show on the website.' if event.theme_web and event.theme else ''))
+    if request.method == 'POST' and _wants_json(request):
+        return JsonResponse({'saved': False, 'errors': form.errors}, status=400)
+    return render(request, 'console/event_theme.html', _ctx(event, 'overview', form=form))
+
+
+@agent_action('set_event_theme_switches', 'Turn the event\'s custom colour theme on or off for the website (console '
+              'event pages, join and shared-plan pages) and for the apps, independently. Pass only what changes.',
+              form=EventThemeSwitchesForm, prefill='console:event_theme', title='Changed where the colours show')
+@event_view
+@require_POST
+def event_theme_switches(request, event):
+    form = EventThemeSwitchesForm(request.POST)
+    form.is_valid()  # (booleans: always valid)
+    web, apps = bool(form.cleaned_data.get('theme_web')), bool(form.cleaned_data.get('theme_apps'))
+    changed = [f for f, v in (('theme_web', web), ('theme_apps', apps)) if getattr(event, f) != v]
+    event.theme_web, event.theme_apps = web, apps
+    if changed:
+        event.save(update_fields=changed)
+    where = ' and '.join(filter(None, ['the website' if web else '', 'the apps' if apps else ''])) or 'nowhere'
+    return _theme_done(request, event, f'Custom colours: {where}.')
+
+
+@agent_action('generate_event_theme', "Pick the event's colours with the AI (from its website's colours, logo and "
+              'style), optionally with an instruction ("warmer", "match our logo", "more contrast"). Runs in the '
+              'background and replaces the current colours (undo by setting them back with update_event_theme).',
+              form=ThemeGenerateForm, json=True, title='Started picking colours')
+@event_view
+@require_POST
+def event_theme_generate(request, event):
+    form = ThemeGenerateForm(request.POST)
+    if not form.is_valid():
+        if _wants_json(request):
+            return JsonResponse({'error': ' '.join(e for errs in form.errors.values() for e in errs)}, status=400)
+        return redirect(reverse('console:event', args=[event.pk]) + '#theme')
+    job = IngestJob.objects.create(kind=IngestJob.KIND_THEME, trigger=IngestJob.TRIGGER_CONSOLE, event=event,
+                                   created_by=request.user, timezone=event.timezone,
+                                   instructions=form.cleaned_data.get('instruction', ''))
+    jobs.enqueue(job)
+    if _wants_json(request):
+        return JsonResponse({'task': task_json(job)}, status=202)
+    messages.info(request, 'Picking colours… they appear here in a few seconds.')
+    return redirect(reverse('console:event', args=[event.pk]) + '#theme')
 
 
 def _preview_html(event, resolved):

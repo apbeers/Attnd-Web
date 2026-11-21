@@ -1,0 +1,19 @@
+{% load console_tags %}{# event_theme (API-023): the event's colours for light and dark mode, a live preview, Generate with AI, Reset, and where the colours show. #}<div class="stack component component--event_theme">
+  <div class="cluster">
+    <h2 class="grow {% if surface == 'chat' %}title-4{% else %}title-3{% endif %}">{% icon "brush" "tone-brand" %} Colour theme</h2>
+    <span class="badge badge--pill {% if d.custom %}badge--primary{% else %}badge--neutral{% endif %}">{{ d.source }}</span>
+    {% if d.locked %}<span class="badge badge--pill badge--neutral" title="AI imports keep these colours">{% icon "lock" %} Kept by your team</span>{% endif %}
+  </div>
+  <p class="small muted">The event’s own colours: <strong>primary</strong> for buttons and links, <strong>secondary</strong> for soft tints, <strong>tertiary</strong> for highlights. Type exact hex codes or pick them; text contrast is adjusted automatically so everything stays readable.{% if d.reason %} <span class="muted">{{ d.reason }}</span>{% endif %}</p>
+  {% include 'components/_form.html' with form=d.form %}
+  <div class="theme-tools">
+    <div class="theme-tools__generate">{% include 'components/_form.html' with form=d.generate %}</div>
+    {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+  </div>
+  <div class="theme-switches">
+    <h3 class="eyebrow">Where the colours show</h3>
+    <p class="small muted" data-autosave-status role="status" aria-live="polite"></p>
+    {% include 'components/_form.html' with form=d.switches %}
+    {% if not d.custom %}<p class="small muted">{% icon "info" %} Until you choose colours, the website and the apps use Attnd’s purple.</p>{% endif %}
+  </div>
+</div>

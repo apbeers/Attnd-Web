@@ -1266,7 +1266,7 @@
                   schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Notifications',
                   notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics', usage_answer: 'Metrics',
                   event_map: 'Overview', event_lifecycle: 'Overview', sharing_kit: 'Overview', event_exports: 'Overview', event_rollover: 'Overview',
-                  changeset_review: 'Review', app_layout: 'Settings', website_watching: 'Settings',
+                  changeset_review: 'Review', app_layout: 'Settings', website_watching: 'Settings', event_theme: 'Overview',
                   event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
                   prospect_row: 'Prospects', prospect_detail: 'Prospects', prospect_run_row: 'Prospects',
                   prospect_settings_form: 'Prospects' };

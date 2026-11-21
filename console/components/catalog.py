@@ -255,15 +255,15 @@ def event_map(user, event_id=None, event=None):
 
 
 @component('event_overview', 'Event overview', "An event at a glance: header, AI updates to review, numbers, a map of "
-           'its locations, the QR to open it live on your phone.',
-           parts=('event_header', 'needs_review', 'event_stats', 'event_map', 'live_on_phone'),
+           'its locations, the QR to open it live on your phone, its colour theme.',
+           parts=('event_header', 'needs_review', 'event_stats', 'event_map', 'live_on_phone', 'event_theme'),
            page=event_url,
-           chat_only="A composite of the Overview page's own parts (header, review, numbers, map, QR).")
+           chat_only="A composite of the Overview page's own parts (header, review, numbers, map, QR, colours).")
 def event_overview(user, event_id=None, event=None):
     event = editable_event(user, event_id, event)
     from console.components import get
     parts = []
-    for name in ('event_header', 'needs_review', 'event_stats', 'event_map', 'live_on_phone'):
+    for name in ('event_header', 'needs_review', 'event_stats', 'event_map', 'live_on_phone', 'event_theme'):
         data = get(name).data(user, event=event)
         parts.append({**data, 'component': name, 'ids': {'event_id': event.pk}})  # (finish() resolves them)
     return {'id': event.pk, 'name': event.name, 'parts': parts}

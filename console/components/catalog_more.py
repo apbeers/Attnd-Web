@@ -118,6 +118,52 @@ def app_layout(user, event_id=None, event=None, form=None):
             'resolved': {'preset': str(resolved.get('resolved_preset', '')), 'tabs': ', '.join(resolved.get('tabs') or [])}}
 
 
+@component('event_theme', 'Colour theme', "The event's own colours (API-023): primary (buttons, links), secondary "
+           '(soft tints) and tertiary (highlights) for light and dark mode as exact hex codes with contrast notes, a '
+           'preview, Generate with AI, Reset to Attnd\'s colours, and switches for the website and the apps.',
+           actions=(('reset_event_theme', 'Reset to Attnd’s colours'),), ai_subject='colour theme',
+           page=lambda ids: reverse('console:event_theme', args=[ids['event_id']]))
+def event_theme(user, event_id=None, event=None, form=None):
+    from console.forms.event_forms import EventThemeForm, EventThemeSwitchesForm, ThemeGenerateForm
+    from events import theme as T
+    event = editable_event(user, event_id, event)
+    theme = T.normalize(event.theme)
+    form = form or EventThemeForm(theme=event.theme)
+    shown = theme or T.default_theme()
+    preview = []
+    for mode in T.MODES:
+        t = T.tokens(shown[mode], mode)
+        page = T.PAGE[mode]
+        preview.append({'mode': mode, 'label': 'Light' if mode == 'light' else 'Dark',
+                        'style': ';'.join(f'--pv-{k}:{v}' for k, v in (
+                            ('brand', t['--color-brand']), ('on', t['--color-on-brand']),
+                            ('text', t['--color-brand-text']), ('soft', t['--color-brand-soft']),
+                            ('line', t['--color-brand-line']), ('mid', t['--color-brand-mid']),
+                            ('bg', page['surface']), ('ink', page['text'])))})
+    colours = form_json(form, [('block', 'theme_preview', {'modes': preview}),
+                               ('grid', 'light_primary', 'dark_primary'), ('grid', 'light_secondary', 'dark_secondary'),
+                               ('grid', 'light_tertiary', 'dark_tertiary')],
+                        action=reverse('console:event_theme', args=[event.pk]),
+                        submit=[{'label': 'Save colours', 'style': 'primary'}])
+    switches = form_json(EventThemeSwitchesForm(initial={'theme_web': event.theme_web, 'theme_apps': event.theme_apps}),
+                         ['theme_web', 'theme_apps'], action=reverse('console:event_theme_switches', args=[event.pk]))
+    switches.update(autosave=True, no_ai=True)
+    generate = form_json(ThemeGenerateForm(), ['instruction'],
+                         action=reverse('console:event_theme_generate', args=[event.pk]),
+                         submit=[{'label': 'Generate with AI', 'style': 'outline', 'icon': 'stars'}])
+    generate['background'] = 'Picking colours…'
+    source = theme.get('source', '') if theme else ''
+    return {
+        'event_id': event.pk, 'name': f'Colours · {event.name}', 'form': colours, 'switches': switches,
+        'generate': generate, 'custom': bool(theme), 'locked': 'theme' in (event.locked_fields or []),
+        'source': {'ai': 'Picked by the AI', 'site': 'From your website’s colours', 'manual': 'Chosen by your team'
+                   }.get(source, 'Attnd’s colours'),
+        'reason': theme.get('reason', '') if theme else '',
+        'web': event.theme_web, 'apps': event.theme_apps,
+        'actions': [{'name': 'reset_event_theme', 'style': 'ghost'}] if theme else [],
+    }
+
+
 @component('website_watching', 'Website watching', "The event's source websites, whether Attnd watches them for "
            'changes (review / small fixes automatically / everything automatically) and Check for updates now.',
            page=lambda ids: reverse('console:event', args=[ids['event_id']]))

@@ -32,6 +32,16 @@
 {% elif r.name == 'accent' %}<div class="field"><span class="field__label">Accent colour</span>
         <div class="cluster"><input type="color" name="accent_color" value="{{ r.value }}" aria-label="Accent colour">
           <label class="check small"><input type="checkbox" name="accent_default"{% if r.default %} checked{% endif %}> Use Attnd’s default</label></div></div>
+{% elif r.name == 'theme_preview' %}<div class="theme-preview" data-theme-preview aria-label="Preview">{% for m in r.modes %}
+      <div class="theme-preview__mode theme-preview__mode--{{ m.mode }}" data-preview-mode="{{ m.mode }}" style="{{ m.style }}">
+        <span class="theme-preview__label">{{ m.label }}</span>
+        <span class="theme-preview__button">Button</span>
+        <span class="theme-preview__chip">Chip</span>
+        <span class="theme-preview__badge">Now</span>
+        <span class="theme-preview__link">A link</span>
+        <span class="theme-preview__tab">Tab</span>
+      </div>{% endfor %}
+    </div>
 {% elif r.name == 'urgent_warning' %}<div class="notice notice--error small" id="{{ uid }}urgent-warning" role="alert" data-show-if="urgent">
         {% icon "warning" %} <strong>Urgent goes to everyone in the event, right away:</strong>
         {{ d.urgent_reach }} device{{ d.urgent_reach|pluralize }}, including people who turned notifications off. It arrives

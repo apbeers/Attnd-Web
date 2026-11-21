@@ -189,7 +189,7 @@ def finish(comp, ids, data):
     for key, form in list(data.items()):  # every form: who it is (fill_form finds it) and Add with AI
         if isinstance(form, dict) and 'fields' in form and 'layout' in form:
             data[key] = dict(form, component=comp.name, ids_json=json.dumps(data['ids'], sort_keys=True, separators=(',', ':')),
-                             ai=None if form.get('background') else ai_offer(comp, data))
+                             ai=None if form.get('background') or form.get('no_ai') else ai_offer(comp, data))
     return data
 
 

@@ -169,6 +169,21 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   panels and stacks; fields in grids and clusters are free). Phones: the event sections are one scrolling row of pills.
 - **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs` (links use `aria-current="page"`), `data-table` (`--compact`), `code-block` (pre), `link-button`, `meter`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
 - **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. The tray is a button (`aria-expanded`) that opens a panel of running and recent tasks; each task expands to its **friendly steps** (`IngestJob.steps`, written by `scrape.jobs.Steps`: "Read 3 web pages", "Understood the event", "Found 12 locations and 34 schedule items", "Checked addresses on the map", "Found 4 changes: waiting for your review"; states running / done / failed / waiting, with status marks and a spinner), updated live from the same feed (`task_json.steps`, `result_label`); a finished task links to its result ("Open the event" / "Review the changes"). On the full-screen chat the tray sits at the canvas's top-right (away from the composer) and opens downward, and result links open on the canvas (`window.attndCanvasOpen`); Esc closes it. Web app manifest at `/console/manifest.webmanifest`.
+- **Colour theme** (API-023, owner Nov 21, 2026; component `event_theme` in `catalog_more.py`, on the Overview page
+  after the map, inside the `event_overview` composite (so the canvas Overview tab), and its own page
+  `console:event_theme`): the six colours as exact hex fields (`EventThemeForm`; console.js puts a colour picker next
+  to each `input[data-hex]` and keeps both in sync), a contrast note under each (`theme.checks`), a live preview per
+  mode (`--pv-*` properties on the preview), **Save colours** (`update_event_theme`, prefill; locks the theme, Undo),
+  **Generate with AI** (`generate_event_theme`: an `IngestJob` of kind `theme`, a background task with its step in the
+  tray, "See the colours"), **Reset to Attnd's colours** (`reset_event_theme`) and two autosaving switches "Use custom
+  theme on the website" / "Use custom theme in the apps" (`set_event_theme_switches`). Applying it:
+  `{% event_theme_style %}` in base.html emits a nonce'd `<style data-event-theme>` overriding the tokens in the
+  three places console.css defines them (`:root`, the dark media query, `:root[data-theme="dark"]`) on the event's own
+  pages (`event` + `section`, not Studio) and the full-screen chat with `?event=` (`agent_event`; another event's
+  tile reloads the page, so the block follows); Your events, Account, Studio, Diagnostics, Prospects keep the purple.
+  `--color-secondary` / `--color-tertiary` are new tokens (decorative; `--color-brand-mid` is the readable highlight).
+  The join and shared-plan pages (`join/landing.html`, `<html data-scheme="auto">`, the only pages with site.css's
+  dark mode) get `theme.site_css` (brand, `--brand-gradient` primary → tertiary, the QR panel from secondary).
 - **Likes** (API-009 hearts; the apps say "like", the heart icon stays): net likes (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted` (code and metric names keep "heart"; labels say "likes" / "liked"): Usage page, counts on the Locations and Schedule lists, "Most liked" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
 - **Maps and addresses** (`console/static/console/maps.js` with `GOOGLE_MAPS_BROWSER_KEY`, else console.js's
@@ -665,7 +680,7 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
 
 | Model | Key fields |
 |-------|------------|
-| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, content_version, source_urls, refresh_schedule (off/watch), update_mode, sources_checked_at, context (API-018), locked_fields; `user` = owner, null = unassigned (owner deleted; admins reassign from Team) |
+| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, theme + theme_web / theme_apps (API-023), content_version, source_urls, refresh_schedule (off/watch), update_mode, sources_checked_at, context (API-018), locked_fields; `user` = owner, null = unassigned (owner deleted; admins reassign from Team) |
 | `Location` | name, snippet, description, category, tags, context (API-018), sort_order, hidden, image/image_url, lat/lng (nullable), address, locked_fields — FK to Event |
 | `ScheduledItem` | name, description, start/end_time, tags, context (API-018), hidden, locked_fields — FK to Event, optional FK to Location |
 | `Notification` | title, body, send_time, priority (normal/urgent, API-011), sent, sent_at, delivered/failed counts — FK to Event |
@@ -705,6 +720,17 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
   / **Find a photo** (agent actions `find_location_image`, `remove_location_image`; undoable). Every look is a
   `PlaceImageAttempt` (cost); `PLACE_IMAGES_DAILY_CAP_USD` (default 1) caps all of them per UTC day.
   `manage.py find_place_images [--event CODE]` backfills and drops old Google Places photo links.
+- **Colour themes** (API-023, `events/theme.py`, `events/theme_ai.py`): `Event.theme` = `{light, dark}` × `primary`
+  (fills, links) / `secondary` (soft tints) / `tertiary` (highlights) as `#RRGGBB`, plus `source` (ai / site / manual /
+  default), `reason`, `page_colors`; `{}` = Attnd's purple. `normalize` validates it (a missing mode derived from the
+  other); `tokens` maps a mode to the console / site tokens with contrast guaranteed (WCAG 2.2 maths: the fill nudged in
+  lightness until white or near-black text on it is ≥ 4.5:1, link text ≥ 4.5:1 on the page and the soft tint,
+  highlights ≥ 3:1; never refused); `checks` gives the form's notes. The AI import's crawl counts its pages' colours
+  (`attnd/colors.py`, shared with Studio's importer) and the job's last step "Picked colours for the event" asks Claude
+  Haiku (structured output, the logo / flyer as an image), falling back to the website's main colour, else Attnd's;
+  a theme a person edited (`'theme'` in `locked_fields`) is kept. `theme_web` / `theme_apps` switch it on for the website
+  and the bundle (`event.theme`, adjusted colours or `null`); `theme_web` is bookkeeping (no `content_version` bump).
+  Backfill: `manage.py generate_themes [--event CODE] [--force]`; DEMO has a fixed one.
 - **Tags** (API-010) on locations and schedule items are always normalised by `events.models.normalize_tags` (lower case, ≤ 8 × 32 chars; `save()` and the bundle apply it). The AI keeps one small vocabulary per event (`scrape/tags.py` folds spelling variants); `manage.py backfill_tags` tags old events (only things with < 2 tags, never locked ones).
 
 ## API Authentication

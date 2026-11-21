@@ -20,6 +20,8 @@
   --color-brand-soft: #f0eafc;     /* tinted backgrounds: hover, selected rows, assistant bubbles */
   --color-brand-line: #d9ccf5;
   --color-on-brand: #fff;
+  --color-secondary: #b79cf2;      /* API-023 event themes: the soft supporting colour (decorative only) */
+  --color-tertiary: #7b4fd6;       /* API-023 event themes: the highlight (decorative; --color-brand-mid is the readable one) */
   --color-text: #1b1830;
   --color-muted: #6b6880;
   --color-border: #e6e2f0;
@@ -69,6 +71,7 @@
     color-scheme: dark;
     --color-brand: #6f47d6; --color-brand-dark: #5a35bd; --color-brand-mid: #9b7bef; --color-brand-text: #c4b0ff;
     --color-brand-soft: #2a2242; --color-brand-line: #45386b; --color-on-brand: #fff;
+    --color-secondary: #6f47d6; --color-tertiary: #9b7bef;
     --color-text: #ece9f6; --color-muted: #a49fbb; --color-border: #2f2a42; --color-control-border: #443d5c;
     --color-bg: #110e1a; --color-bg-tint: radial-gradient(1200px 600px at 100% -10%, #261b45 0%, rgba(38, 27, 69, 0) 60%), #110e1a;
     --color-surface: #1b1728; --color-surface-2: #221d32; --color-subtle: #262036; --color-overlay: rgba(27, 23, 40, .85);
@@ -90,6 +93,7 @@
   color-scheme: dark;
   --color-brand: #6f47d6; --color-brand-dark: #5a35bd; --color-brand-mid: #9b7bef; --color-brand-text: #c4b0ff;
   --color-brand-soft: #2a2242; --color-brand-line: #45386b; --color-on-brand: #fff;
+  --color-secondary: #6f47d6; --color-tertiary: #9b7bef;
   --color-text: #ece9f6; --color-muted: #a49fbb; --color-border: #2f2a42; --color-control-border: #443d5c;
   --color-bg: #110e1a; --color-bg-tint: radial-gradient(1200px 600px at 100% -10%, #261b45 0%, rgba(38, 27, 69, 0) 60%), #110e1a;
   --color-surface: #1b1728; --color-surface-2: #221d32; --color-subtle: #262036; --color-overlay: rgba(27, 23, 40, .85);
@@ -263,7 +267,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .chip { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .85rem; font: inherit; font-size: var(--text-sm);
   font-weight: 600; color: var(--color-brand-text); background: var(--color-surface); border: 1px solid var(--color-brand-line);
   border-radius: var(--radius-pill); text-decoration: none; cursor: pointer; }
-.chip:hover { background: var(--color-brand-soft); color: var(--color-brand-text); }
+.chip:hover { background: var(--color-brand-soft); color: var(--color-brand-text); border-color: var(--color-secondary); }
 .chip[aria-pressed=true], .chip[aria-current] { background: var(--color-brand); border-color: var(--color-brand); color: var(--color-on-brand); }
 
 /* Panels (cards): large rounded surfaces with soft shadows. --roomy adds padding, --flush removes it (lists). */
@@ -653,6 +657,33 @@ body:has(.assistant) .task-toast { top: 9rem; bottom: auto; right: 2.5rem; }
 .waterfall__bar--client { background: var(--color-warning); }
 .waterfall__bar--error { background: var(--color-danger); }
 .waterfall__server { position: absolute; top: 5px; bottom: 5px; min-width: 2px; background: var(--color-text); opacity: .45; border-radius: 1px; }
+
+/* Colour theme card (API-023, components/event_theme.html): colour + hex pairs, a live preview per mode drawn from
+   --pv-* custom properties on the preview itself (set from the event's adjusted colours, updated while typing). */
+.component--event_theme .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hex-field { display: flex; align-items: center; gap: var(--space-2); }
+.hex-field input[type=color] { flex: none; width: 2.6rem; height: 2.4rem; }
+.hex-field input[data-hex] { font-family: var(--font-mono); text-transform: uppercase; max-width: 9rem; }
+.theme-preview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.theme-preview__mode { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4);
+  color: var(--pv-ink); background: var(--pv-bg); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.theme-preview__label { flex-basis: 100%; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
+.theme-preview__button { padding: .3rem .85rem; font-size: var(--text-sm); font-weight: 650; color: var(--pv-on); background: var(--pv-brand); border-radius: var(--radius-pill); }
+.theme-preview__chip { padding: .25rem .75rem; font-size: var(--text-sm); font-weight: 600; color: var(--pv-text); background: var(--pv-soft);
+  border: 1px solid var(--pv-line); border-radius: var(--radius-pill); }
+.theme-preview__badge { padding: .1rem .55rem; font-size: var(--text-xs); font-weight: 700; color: var(--pv-on); background: var(--pv-brand); border-radius: var(--radius-pill); }
+.theme-preview__link { color: var(--pv-text); text-decoration: underline; text-underline-offset: .15em; font-size: var(--text-sm); }
+.theme-preview__tab { padding-bottom: .15rem; font-size: var(--text-sm); font-weight: 600; border-bottom: 3px solid var(--pv-mid); }
+.theme-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-5); padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border); }
+.theme-tools__generate { flex: 1 1 18rem; }
+.theme-tools__generate form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); }
+.theme-tools__generate .field { flex: 1 1 14rem; margin: 0; }
+.theme-tools .action-bar { position: static; padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; }
+.theme-switches { padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+@container component (max-width: 30rem) {
+  .component--event_theme .grid, .theme-preview { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* 8. Motion -------------------------------------------------------------------- */
 @keyframes spin { to { transform: rotate(360deg); } }

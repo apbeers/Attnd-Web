@@ -595,8 +595,58 @@
     });
   }
 
+  // Colour theme card (API-023): a colour picker beside every exact hex field, both kept in sync, and the card's
+  // preview follows what is typed (the saved theme is contrast-adjusted on the server; this is the raw choice).
+  const HEX = /^#?([0-9a-f]{6})$/i;
+  function hexRgb(h) { const m = HEX.exec(h || ''); if (!m) return null; const n = parseInt(m[1], 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+  function lum(c) { return c.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+    .reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0); }
+  function mixHex(a, b, w) { return '#' + a.map((v, i) => Math.round(v * w + b[i] * (1 - w)).toString(16).padStart(2, '0')).join(''); }
+  function updateThemePreview(form) {
+    const preview = form.querySelector('[data-theme-preview]');
+    if (!preview) return;
+    preview.querySelectorAll('[data-preview-mode]').forEach((box) => {
+      const mode = box.dataset.previewMode;
+      const get = (role) => hexRgb(form.querySelector(`[name$="${mode}_${role}"]`)?.value);
+      const p = get('primary'), s = get('secondary'), t = get('tertiary');
+      const bg = hexRgb(getComputedStyle(box).getPropertyValue('--pv-bg').trim()) || [255, 255, 255];
+      if (p) {
+        const hex = mixHex(p, p, 1);
+        box.style.setProperty('--pv-brand', hex);
+        box.style.setProperty('--pv-text', hex);
+        box.style.setProperty('--pv-on', lum(p) > 0.18 ? '#120f22' : '#ffffff');
+      }
+      if (s) { box.style.setProperty('--pv-soft', mixHex(s, bg, mode === 'dark' ? 0.24 : 0.14));
+        box.style.setProperty('--pv-line', mixHex(s, bg, mode === 'dark' ? 0.45 : 0.34)); }
+      if (t) box.style.setProperty('--pv-mid', mixHex(t, t, 1));
+    });
+  }
+  function enhanceHexFields(scope) {
+    scope.querySelectorAll('input[data-hex]:not([data-ready])').forEach((text) => {
+      text.dataset.ready = '1';
+      const wrap = document.createElement('div');
+      wrap.className = 'hex-field';
+      const pick = document.createElement('input');
+      pick.type = 'color';
+      const label = text.closest('.field')?.querySelector('.field__label')?.textContent.trim() || 'Colour';
+      pick.setAttribute('aria-label', `Pick ${label}`);
+      const m = HEX.exec(text.value);
+      pick.value = m ? '#' + m[1].toLowerCase() : '#431f86';
+      text.parentNode.insertBefore(wrap, text);
+      wrap.append(pick, text);
+      const form = text.closest('form');
+      pick.addEventListener('input', () => { text.value = pick.value.toUpperCase(); form && updateThemePreview(form); });
+      text.addEventListener('input', () => {
+        const ok = HEX.exec(text.value.trim());
+        if (ok) pick.value = '#' + ok[1].toLowerCase();
+        form && updateThemePreview(form);
+      });
+    });
+  }
+
   window.attndEnhance = function (scope) {
     scope = scope || document;
+    enhanceHexFields(scope);
     enhanceLockPreview(scope);
     enhanceTimeZones(scope);
     enhanceTabLists(scope);

@@ -178,6 +178,8 @@ def run_job(job_id, already_claimed=False):
             _run_create(job)
         elif job.kind == IngestJob.KIND_REFRESH:
             _run_refresh(job)
+        elif job.kind == IngestJob.KIND_THEME:
+            _run_theme(job)
         else:  # e.g. an old 'tickets' draft job (ticketing is parked on git branch parked/tickets)
             raise ValueError('This kind of job is no longer supported.')
     except ValueError as exc:
@@ -227,6 +229,8 @@ def _run_create(job):
         event.refresh_from_db()
     from scrape import watch
     watch.sync_pages(event, discovered=data.get('source_pages', []))
+    steps('Picking colours for the event…', done='Picked colours for the event')
+    _pick_theme(event, data.get('page_colors') or [])
     job.event = event
     steps.finish(f'Created “{event.name[:80]}” as a draft: check it, then publish' if event.status == Event.STATUS_DRAFT
                  else f'Created “{event.name[:80]}”')
@@ -254,6 +258,35 @@ def _run_create(job):
             job_finished(job)
         except Exception:
             logger.exception('Could not link test event %s to its prospect', event.pk)
+
+
+def _pick_theme(event, page_colors, instruction='', force=False):
+    """API-023: the new event's colour theme (Claude Haiku from its website's colours and logo, else a fallback).
+    Never fails the import."""
+    try:
+        from events import theme_ai
+        return theme_ai.apply(event, page_colors=page_colors, instruction=instruction, force=force)
+    except Exception:
+        logger.exception('Could not pick colours for event %s', event.pk)
+        return None
+
+
+def _run_theme(job):
+    """Generate with AI on the theme card (or Ask Attnd's generate_event_theme): a person asked, so a locked theme is
+    replaced too."""
+    steps = Steps(job)
+    event = job.event
+    steps('Picking colours for the event…', done='Picked colours for the event')
+    from events import theme_ai
+    theme = theme_ai.apply(event, instruction=job.instructions, force=True)  # (the import's website colours)
+    source = (theme or {}).get('source')
+    steps.finish('The AI wasn’t available: kept Attnd’s colours' if source == 'default' else
+                 'Used your website’s colours' if source == 'site' else '')
+    job.status = IngestJob.DONE
+    job.progress = ''
+    job.finished_at = timezone.now()
+    job.result = {'event_id': event.id, 'event_name': event.name, 'theme_source': source or ''}
+    job.save()
 
 
 def _bring_into_studio(job, event):

@@ -25,6 +25,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from bs4 import BeautifulSoup
 from django.conf import settings
 
+from attnd.colors import COLOR_RE, norm_color as _norm_color  # shared with the AI import's theme (API-023)
 from studio.models import StudioMessage, StudioRun
 
 logger = logging.getLogger(__name__)
@@ -227,20 +228,12 @@ def page_path(url, home_key, taken):
 # Capturing the site
 # ---------------------------------------------------------------------------
 
-COLOR_RE = re.compile(r'#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b|rgba?\([^)]{5,40}\)')
 FONT_FAMILY_RE = re.compile(r'font-family\s*:\s*([^;}{]+)', re.I)
 FONT_FACE_RE = re.compile(r'@font-face\s*{([^}]*)}', re.I | re.S)
 CSS_URL_RE = re.compile(r'url\(\s*([\'"]?)([^\'")]+?)\1\s*\)', re.I)
 CSS_IMPORT_RE = re.compile(r'@import\s+(?:url\(\s*)?[\'"]?([^\'")\s;]+)', re.I)
 KEEP_ATTRS = {'class', 'id', 'href', 'src', 'alt', 'title', 'aria-label', 'role', 'type', 'name', 'placeholder',
               'style', 'action', 'method', 'for', 'datetime'}
-
-
-def _norm_color(c):
-    c = c.lower()
-    if re.fullmatch(r'#[0-9a-f]{3}', c):
-        c = '#' + ''.join(ch * 2 for ch in c[1:])
-    return c
 
 
 def outline(soup):

@@ -293,11 +293,13 @@ def _link_priority(link: str) -> int:
     return 0 if any(w in lower for w in _PRIORITY_WORDS) else 1
 
 
-def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int = 60, on_page=None) -> str:
+def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int = 60, on_page=None,
+           colors=None) -> str:
     """
     BFS crawl starting at url.  Stays on the same origin, visits at most
     max_pages pages up to max_depth levels deep, returns combined text.
-    Stops early if max_seconds wall-clock time is exceeded.
+    Stops early if max_seconds wall-clock time is exceeded. `colors` (a Counter, optional) collects the colours
+    of the pages' inline styles and theme-color (API-023: the event's theme).
     """
     logger.info("Crawl starting: %s (max_depth=%d, max_pages=%d, max_seconds=%d)", url, max_depth, max_pages, max_seconds)
     visited: set[str] = set()
@@ -330,6 +332,9 @@ def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int =
                 continue
 
             html = resp.text
+            if colors is not None:
+                from attnd.colors import html_colors
+                html_colors(html, colors)
             text = _page_text(html)
             if text:
                 parts.append(f"## Source: {current_url}\n\n{text}")
@@ -450,13 +455,14 @@ def _normalize(data: dict) -> dict:
     return data
 
 
-def gather_sources(urls: list[str], crawl: bool = True, on_page=None) -> str:
+def gather_sources(urls: list[str], crawl: bool = True, on_page=None, colors=None) -> str:
     """Read the URLs. With crawl=False only the pages themselves (the website watcher re-reads just
     the pages that changed). `on_page(url)` is called for every page read (the task tray's step)."""
     parts = []
     for url in urls:
         try:
-            parts.append(_crawl(url, on_page=on_page) if crawl else _crawl(url, max_depth=0, max_pages=1, on_page=on_page))
+            parts.append(_crawl(url, on_page=on_page, colors=colors) if crawl
+                         else _crawl(url, max_depth=0, max_pages=1, on_page=on_page, colors=colors))
         except Exception as exc:  # one bad URL should not sink the rest
             logger.warning("Crawl failed for %s: %s", url, exc)
     return "\n\n---\n\n".join(p for p in parts if p)
@@ -639,7 +645,11 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
             done='Couldn’t read any web pages')
     logger.info("scrape_event: %d urls, %d chars text, %d attachments, refresh=%s",
                 len(urls), len(text), len(attachments or []), current is not None)
-    content = gather_sources(urls, crawl=crawl, on_page=on_page) if urls else ""
+    from collections import Counter
+
+    from attnd.colors import most_used_hex
+    page_colors = Counter()
+    content = gather_sources(urls, crawl=crawl, on_page=on_page, colors=page_colors) if urls else ""
     # Every web page that was read, so the website watcher can fingerprint them (scrape.watch).
     pages = list(dict.fromkeys(re.findall(r"^## Source: (https?://\S+)", content, flags=re.M)))
     if text:
@@ -658,6 +668,7 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
         say('Checking addresses on the map…', done='Checked addresses on the map')
         data = _enrich_with_places(data, google_api_key)
     data["source_pages"] = pages
+    data["page_colors"] = most_used_hex(page_colors)  # API-023: the event's theme starts from these
     return data
 
 

@@ -70,6 +70,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-020 | Retire the v1 events API: `SUPPORTED_API_VERSIONS` default `2`, `/api/v1/events/…` → `410` `update_required`; `/api/v1/attest/` unchanged | breaking for v1 only (no current app uses v1) | ✅ dev · ⬜ prod (needs a release + owner go-ahead) | — (uses v2) | — (uses v2) |
 | API-021 | "Plan your day" suggestions written for each event: `plan_suggestions` in `bundle/` (≤ 4 `{text, kind: plan\|question}`; Claude Haiku 5.5 in the background, deterministic fallback from the event's real days, categories and tags) | additive (new key, `bundle/` only) | ✅ dev · ⬜ prod | ⬜ | ⬜ |
 | API-022 | Place images found automatically: `locations[].image_credit` (credit / licence of a photo Attnd found and stores itself, or null) | additive (new key) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
+| API-023 | Per-event colour themes: `event.theme` in `bundle/` (`{light, dark}` × `primary` / `secondary` / `tertiary` hex, contrast-adjusted; `null` without a theme or when the organizer turned it off for the apps). Made by the AI import, edited in the console; used on the website now. **Apps: later, not in this change** | additive (new key, `bundle/` only) | 🚧 built · ⬜ prod | ⬜ (later) | ⬜ (later) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -77,6 +78,27 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-023: Per-event colour themes
+**Why:** every event looked Attnd-purple; organizers want their own colours (owner, Nov 21, 2026). Additive: one new
+key in `bundle/`. `accent_color` is unchanged (the apps keep using it until they adopt this).
+**Server (attnd-web):** `Event.theme` (`{light: {primary, secondary, tertiary}, dark: {…}, source, …}`) with two
+switches, `theme_web` and `theme_apps` (both on by default). `events/theme.py` validates it (upper-case `#RRGGBB`, a
+missing mode derived from the other) and guarantees contrast before anything draws it (WCAG 2.2: text ≥ 4.5:1,
+highlights ≥ 3:1; a colour is never refused, it is nudged in lightness). The AI import picks one (Claude Haiku from the
+website's colours, logo / flyer and the event's style; a deterministic theme from the website's main colour, else
+Attnd's, without the AI); organizers edit the six hex codes in the console's **Colour theme** card (an edit locks it
+against AI work), **Generate with AI** with an instruction, or reset it. The console's event pages, the Ask Attnd
+canvas and the join / shared-plan pages use it when "Use custom theme on the website" is on. The bundle's
+`event.theme` = the contrast-adjusted colours, or `null` without a theme or when "Use custom theme in the apps" is
+off; changing it (or that switch) bumps `content_version`, so apps get the usual `content_updated` push. Not in
+`lookup/` / `nearby/`. Tests: `events/tests_theme.py`.
+**iOS / Android (later; not in this change):** decode `event.theme` leniently (missing, `null`, a missing mode or role,
+a value that isn't `#RRGGBB` → treat the theme as absent, or derive the missing part from what is there; ignore
+unknown keys). When present, prefer it over `accent_color`: `primary` = the tint (buttons, selected tabs, links; text
+on it is readable as sent), `secondary` = soft tints (selected rows, chips, backgrounds at low opacity), `tertiary` =
+highlights (progress, badges, gradients' end); pick `light` or `dark` by the system appearance. `null` → keep today's
+behaviour (`accent_color`, else the brand purple).
 
 ### API-022: Place images in our own store, with credit
 **Why:** imports used Google Places photo links, which expire and which Google's terms don't let us keep; many places

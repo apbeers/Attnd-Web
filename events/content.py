@@ -181,6 +181,9 @@ def bundle(event, request=None):
     event_row = event_v2(event, request)
     event_row['context'] = ctx.for_bundle(ctx.EVENT, event.context, location_ids={loc.id for loc in locations})
     ctx.apply_budget(event_row['context'], location_rows, item_rows, label=f'event {event.pk}')
+    # API-023: the event's colour theme (contrast-adjusted), null without one or when it is off for the apps.
+    from events import theme as event_theme
+    event_row['theme'] = event_theme.for_bundle(event)
     return {
         'schema_version': 2,
         'content_version': event.content_version,

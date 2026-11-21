@@ -126,6 +126,12 @@ class Event(CoordinatesMixin, models.Model):
     display_config = models.JSONField(default=dict, blank=True)
     accent_color = models.CharField(max_length=7, blank=True, help_text='#RRGGBB')
     logo_url = models.URLField(max_length=1024, blank=True)
+    # API-023: the event's colour theme (events/theme.py): {light: {primary, secondary, tertiary}, dark: {…}, source:
+    # ai | site | manual | default, made_at, reason}. {} = Attnd's purple. Made by the AI import (events/theme_ai.py),
+    # edited in the console (an edit locks it); theme_web / theme_apps switch it on for the website and the apps.
+    theme = models.JSONField(default=dict, blank=True)
+    theme_web = models.BooleanField(default=True, db_default=True, help_text='Use the custom theme on the website')
+    theme_apps = models.BooleanField(default=True, db_default=True, help_text='Use the custom theme in the apps')
 
     # Sync — bumped on every content change so clients can cheaply detect updates
     content_version = models.PositiveIntegerField(default=1, db_default=1)

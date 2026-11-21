@@ -35,6 +35,8 @@
     {% component "event_stats" event=event part="numbers" %}
     <div class="panel">{% component "event_map" event=event %}</div>
 
+    <div class="panel" id="theme">{% component "event_theme" event=event %}</div>
+
     <div class="panel stack">
       <h2 id="sync-settings">{% icon "stars" "tone-brand" %} Keep it in sync with your website</h2>
       {% component "website_watching" event=event %}

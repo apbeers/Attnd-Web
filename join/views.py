@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.views import View
 from attnd.links import join_url, qr_svg, shared_plan_url
 
+from events import theme as event_theme
 from events.models import Event
 
 
@@ -69,6 +70,7 @@ def _landing(request, event, kind, extra=None):
         context = {
             'event': event, 'kind': kind,
             'join_url': join_url(event),  # exactly what the QR code encodes
+            'theme_css': event_theme.site_css(event),  # API-023
             'qr_url': reverse('join:join_qr', args=[event.event_code]),
             'ios_url': settings.IOS_APP_STORE_URL, 'android_url': play_url(event.event_code),
             'app_store_id': _app_store_id(),
