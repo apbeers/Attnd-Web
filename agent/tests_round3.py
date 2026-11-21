@@ -23,6 +23,8 @@ class AddWithAITests(AgentTestCase):
         forms = form_components()
         self.assertGreaterEqual(len(forms), 5)
         for comp in forms:
+            if comp.audience:
+                continue
             ids = {k: self.event.pk for k in comp.ids if k == 'event_id'}
             data = C.load(self.owner, comp.name, ids)
             offers = [f['ai'] for f in C.forms_of(data) if f.get('ai')]
@@ -221,3 +223,70 @@ class FillFormConfirmGateTests(AgentTestCase):
         self.assertIn("const inCard = (f) => !!(f && f.closest('.agent__card')", js)
         self.assertIn(".filter((f) => f.dataset.formIds === want && inCard(f))", js)
         self.assertIn('if (submit && inCard(form) && !form.dataset.confirmAction)', js)
+class ProspectComponentTests(AgentTestCase):
+    def setUp(self):
+        super().setUp()
+        from prospects.models import Prospect, ProspectContact, ProspectRun
+        self.staff = User.objects.create_user('staffer', 'staff@example.com', 'pw', is_staff=True)
+        self.prospect = Prospect.objects.create(name='River Days', city='Austin', fit_score=80)
+        self.contact = ProspectContact.objects.create(prospect=self.prospect, name='Ana', email='ana@example.org',
+                                                      source_url='https://river.example/contact')
+        self.dnc = ProspectContact.objects.create(prospect=self.prospect, name='Bo', email='bo@example.org',
+                                                  source_url='https://river.example/team', do_not_contact=True)
+        self.run_row = ProspectRun.objects.create(status=ProspectRun.DONE, found=3, new=1)
+
+    def test_staff_get_every_prospect_component(self):
+        rows = C.instances(self.staff, 'prospect_row', [{}])
+        self.assertEqual(rows[0][1]['name'], 'River Days')
+        detail = C.load(self.staff, 'prospect_detail', {'prospect_id': self.prospect.pk})
+        html = C.render('prospect_detail', detail, surface='chat')
+        self.assertIn('ana@example.org', html)
+        self.assertNotIn('bo@example.org', html)  # do not contact: never shown
+        self.assertIn('https://river.example/team', html)  # every contact keeps its source
+        create = next(a for a in detail['actions'] if a['name'] == 'create_test_event')
+        self.assertEqual(create['url'], reverse('prospects:detail', args=[self.prospect.pk]))
+        self.assertTrue(C.instances(self.staff, 'prospect_run_row', [{}]))
+        self.assertIn('form', C.load(self.staff, 'prospect_settings_form', {}))
+
+    def test_organizers_cannot_see_or_call_any_of_it(self):
+        from django.http import Http404
+
+        from agent.components import tool_definitions
+        for name in ('prospect_row', 'prospect_detail', 'prospect_run_row', 'prospect_settings_form'):
+            with self.assertRaises(Http404):
+                C.instances(self.owner, name, [{'prospect_id': self.prospect.pk}] if name == 'prospect_detail' else [{}])
+            response = self.client.get(reverse('agent:component_render'),
+                                       {'component': name, 'items': json.dumps([{'prospect_id': self.prospect.pk}])},
+                                       secure=True)
+            self.assertIn(response.status_code, (400, 404))
+            self.assertNotIn('River', response.content.decode())
+        show = next(t for t in tool_definitions(self.owner) if t['name'] == 'show')
+        self.assertFalse([n for n in show['parameters']['properties']['component']['enum'] if n.startswith('prospect')])
+        show_staff = next(t for t in tool_definitions(self.staff) if t['name'] == 'show')
+        self.assertIn('prospect_row', show_staff['parameters']['properties']['component']['enum'])
+        response = self.client.post(reverse('agent:component_act'), {
+            'component': 'prospect_detail', 'ids': json.dumps({'prospect_id': self.prospect.pk}),
+            'action': 'create_test_event', 'fields': '{}'}, secure=True)
+        self.assertIn(response.status_code, (400, 404))
+        from prospects.models import Prospect
+        self.assertIsNone(Prospect.objects.get(pk=self.prospect.pk).event_id)
+
+
+class ChatDefaultTests(AgentTestCase):
+    def test_chat_as_default_view(self):
+        dashboard = reverse('console:dashboard')
+        overview = reverse('console:event', args=[self.event.pk])
+        self.assertEqual(self.client.get(dashboard, secure=True).status_code, 200)
+        self.client.post(reverse('console:chat_default'), {'on': '1', 'next': dashboard}, secure=True)
+        response = self.client.get(dashboard, secure=True)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response['Location'].startswith(reverse('console:assistant')))
+        response = self.client.get(overview, secure=True)
+        self.assertIn(f'event={self.event.pk}', response['Location'])
+        self.assertEqual(self.client.get(overview + '?page=1', secure=True).status_code, 200)  # Exit lands on the page
+        self.assertEqual(self.client.get(dashboard, secure=True, HTTP_X_ATTND_AGENT='1/1').status_code, 200)
+        page = self.client.get(reverse('console:assistant') + f'?event={self.event.pk}&from={overview}', secure=True)
+        self.assertContains(page, 'page=1')
+        self.assertContains(page, 'aria-checked="true"')
+        self.client.post(reverse('console:chat_default'), {'on': '0'}, secure=True)
+        self.assertEqual(self.client.get(dashboard, secure=True).status_code, 200)

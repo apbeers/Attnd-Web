@@ -1,0 +1,5 @@
+{% load console_tags %}{# event_context_form: the event's Details for the assistant (API-018), saved through the event form. #}<div class="stack component component--event_context_form">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "chat" %} {{ d.name }}</h3>{% endif %}
+  <p class="small muted">Attendees’ phones answer questions from these details, even offline. Only add what attendees may see.{% if d.locked %} You’ve edited them, so AI updates only suggest changes.{% endif %}</p>
+  {% include 'components/_form.html' with form=d.form %}
+</div>

@@ -1,0 +1,8 @@
+{% load console_tags %}{# event_versions: earlier versions to restore as a whole (always asks), Save a snapshot. #}<div class="stack component component--event_versions">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "history" %} {{ d.name }}</h3>{% endif %}
+  {% if d.rows %}<ul class="list list--boxed">{% for r in d.rows %}<li class="team-row">
+    <span class="team-row__who"><strong>{{ r.summary }}</strong><span class="small muted">{{ r.when }} · {{ r.who }}</span></span>
+    <span class="cluster team-row__actions">{% include 'components/_actions.html' with actions=r.actions %}</span></li>{% endfor %}</ul>
+  {% else %}<p class="small muted">No saved versions yet. Attnd saves one before every AI update and every Ask Attnd change.</p>{% endif %}
+  <div class="cluster">{% for a in d.actions %}{% if a.name == 'save_snapshot' %}{% include 'components/_actions.html' with actions=d.actions|slice:":1" %}{% endif %}{% endfor %}</div>
+</div>

@@ -5,13 +5,24 @@
 {% block content %}
 <div class="assistant">
   <section class="canvas" data-canvas aria-label="What Ask Attnd shows">
-    <div class="tabs canvas__tabs" role="tablist" aria-label="Canvas" data-canvas-tabs hidden></div>
+    {# The canvas drawn on the server (agent/canvas.py, A21): agent.js adopts these tabs and cards. #}
+    <div class="tabs canvas__tabs" role="tablist" aria-label="Canvas" data-canvas-tabs{% if not canvas_tabs %} hidden{% else %} data-ssr{% endif %}>
+      {% for t in canvas_tabs %}<button type="button" class="tabs__tab" id="{{ t.id }}-tab" role="tab" aria-controls="{{ t.id }}" aria-selected="{{ t.active|yesno:'true,false' }}" tabindex="{{ t.active|yesno:'0,-1' }}" data-tab-label="{{ t.label }}">{{ t.text }}</button>{% endfor %}
+    </div>
     <div class="canvas__body" data-canvas-body>
+      {% for t in canvas_tabs %}<div class="canvas__pane" id="{{ t.id }}" role="tabpanel" aria-labelledby="{{ t.id }}-tab" data-tab="{{ t.label }}"{% if not t.active %} hidden{% endif %}>
+        <div class="canvas__grid">{% for sec in t.sections %}<section class="canvas__section" data-section="{{ sec.name }}" data-component="{{ sec.name }}" data-parent="{{ sec.parent }}">
+          {% if sec.heading %}<h3 class="title-4 canvas__heading">{{ sec.heading }}</h3>{% endif %}
+          <div class="canvas__cards{% if sec.row_list %} canvas__cards--rows{% endif %}">
+          {% for r in sec.rows %}{% if r.heading %}<h4 class="eyebrow agent__group">{{ r.heading }}</h4>{% else %}<div class="agent__card" data-component="{{ r.card.component }}" data-ids="{{ r.ids }}" data-keys="{{ r.card.keys|join:' ' }}" data-title="{{ r.card.label|default:r.card.title }}"{% if r.card.detail %} data-detail="{{ r.card.detail }}" data-detail-ids="{{ r.detail_ids }}"{% endif %}><div class="agent__card-body">{{ r.card.html|safe }}</div></div>{% endif %}
+          {% empty %}<p class="canvas__none muted">{{ sec.empty }}</p>{% endfor %}
+          </div></section>{% endfor %}</div>
+      </div>{% empty %}
       <div class="canvas__empty" data-canvas-empty>
         <div class="canvas__empty-mark">{% icon "stars" %}</div>
         <h2 class="title-3">What Ask Attnd shows appears here</h2>
         <p class="muted">Events, overviews, locations, the schedule and notifications open here at full size. Tap one for its details.</p>
-      </div>
+      </div>{% endfor %}
     </div>
     <div class="canvas__overlay" data-canvas-overlay role="dialog" aria-modal="true" aria-labelledby="canvas-overlay-title" hidden>
       <div class="canvas__overlay-head">

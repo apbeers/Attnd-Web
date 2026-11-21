@@ -209,6 +209,7 @@ class RegistryTests(AgentTestCase):
             ('console/team.html', 'leave'): 'leave_event',
             ('console/history.html', 'revision'): 'restore_version',
             ('console/changeset.html', 'discard'): 'discard_ai_changes',
+            ('components/changeset_review.html', ''): 'apply_ai_changes',
         }
         root = Path(settings.BASE_DIR)
         found = []

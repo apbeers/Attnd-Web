@@ -4,13 +4,10 @@
 {% block content %}
 {% include 'prospects/_nav.html' %}
 <div class="split">
-<form method="post" class="split__main panel stack">{% csrf_token %}
-  {% for field in form %}{% include 'console/_field.html' %}{% endfor %}
-  <button class="button button--primary">Save settings</button>
-</form>
+<div class="split__main panel">{% component "prospect_settings_form" form=form %}</div>
 <aside class="split__aside panel stack small">
   <h3 class="title-4">How a run works</h3>
-  <p>1. Web search ({{ model }}, OpenAI's web search tool) for upcoming events in the region within the look-ahead, a few themes per search.</p>
+  <p>1. Web search ({{ model }}, web search) for upcoming events in the region within the look-ahead, a few themes per search.</p>
   <p>2. For each event not seen before (and not already an Attnd event): read its page plus up to two about / contact / sponsor pages, score the fit and keep the organizer contacts published there. Emails and phone numbers are kept only when they are written on the page they came from.</p>
   <p>A run stops after {{ max_minutes }} minutes, at its cap of new events, or when today's AI budget (${{ cap|floatformat:2 }} over all runs, setting <span class="mono">PROSPECT_DAILY_SPEND_CAP_USD</span>) is used up. Runs never overlap.</p>
   <p><strong>Schedule:</strong> {% if conf.schedule_enabled %}on, every {{ conf.interval_days }} day(s){% if next_run %}; next run around {{ next_run|date:"M j, g:i A" }}{% endif %}{% else %}off{% endif %}. Heroku Scheduler's <span class="mono">run_scheduled_tasks</span> starts it.</p>

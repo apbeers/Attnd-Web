@@ -174,3 +174,11 @@ def history_message(entry):
     """A LogEntry's message for the admin's History page (console/history.py)."""
     from console.history import admin_message
     return admin_message(entry)
+
+
+@register.simple_tag(takes_context=True)
+def chat_default(context):
+    """Is "Chat as my default view" on for the signed-in person (the top bar's switch)?"""
+    from console.models import ConsolePreference
+    request = context.get('request')
+    return ConsolePreference.chat_first(getattr(request, 'user', None))

@@ -144,7 +144,7 @@ def _thread(run_id, resume):
 
 def tools_for(user):
     from agent import components
-    return (FIXED_TOOLS + components.tool_definitions()
+    return (FIXED_TOOLS + components.tool_definitions(user)
             + [registry.tool_definition(a) for a in registry.writes_for(user).values()])
 
 

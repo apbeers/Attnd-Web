@@ -1,0 +1,5 @@
+{% load console_tags %}{# app_layout: the event's look in the apps (display config); saves as you change it. #}<div class="stack component component--app_layout">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "phone" %} {{ d.name }}</h3>{% endif %}
+  <p class="small muted">Now: {{ d.resolved.preset }} · tabs {{ d.resolved.tabs }}. Changes reach open apps within seconds.</p>
+  {% include 'components/_form.html' with form=d.form %}
+</div>

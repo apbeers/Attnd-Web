@@ -85,9 +85,47 @@ def _job_from_form(form, **kwargs):
 # Dashboard & creation
 # ---------------------------------------------------------------------------
 
+def _chat_landing(request, event=None):
+    """"Chat as my default view": a signed-in landing opens the full-screen chat (not for Ask Attnd's own internal
+    requests, nor when the person came back from the chat with ?page=1)."""
+    from urllib.parse import urlencode
+
+    from console.models import ConsolePreference
+    if (request.method != 'GET' or request.GET.get('page') == '1' or request.headers.get('X-Attnd-Agent')
+            or not ConsolePreference.chat_first(request.user)):
+        return None
+    params = {'from': request.path}
+    if event is not None:
+        params['event'] = event.pk
+    return redirect(reverse('console:assistant') + '?' + urlencode(params))
+
+
+@agent_action('set_chat_default', 'Make the full-screen chat the default view when the person opens the console or '
+              'an event (or turn that off).', params={'on': P('boolean', 'true = chat first, false = the pages')},
+              title='Changed the default view')
+@require_POST
+@login_required
+def chat_default(request):
+    from console.models import ConsolePreference
+    on = request.POST.get('on') in ('1', 'true', 'on', 'True')
+    ConsolePreference.objects.update_or_create(user=request.user, defaults={'chat_default': on})
+    messages.success(request, 'The chat is now your default view.' if on else 'Pages are your default view again.')
+    if _wants_json(request):
+        return JsonResponse({'chat_default': on})
+    from django.utils.http import url_has_allowed_host_and_scheme
+    back = request.POST.get('next') or ''
+    if not (back.startswith('/console/') and url_has_allowed_host_and_scheme(back, {request.get_host()})):
+        back = reverse('console:dashboard')
+    if on and not back.startswith(reverse('console:assistant')):
+        return redirect(reverse('console:assistant') + (f'?event={request.POST["event_id"]}' if request.POST.get('event_id', '').isdigit() else ''))
+    return redirect(back)
+
+
 @agent_action('events_list', 'Your events (upcoming and past) with their codes and counts.', kind='read')
 @login_required
 def dashboard(request):
+    if (landing := _chat_landing(request)) is not None:
+        return landing
     # Each event is the event_tile component (console/components); the counts are correlated subqueries.
     from console.components.catalog import annotated_events, upcoming_and_past
     upcoming, past = upcoming_and_past(list(annotated_events(request.user)))
@@ -245,6 +283,8 @@ def manifest(request):
               kind='read')
 @event_view
 def event_overview(request, event):
+    if (landing := _chat_landing(request, event)) is not None:
+        return landing
     # The header, timing, numbers, most liked, AI updates to review and "Live on your phone" are components
     # (console/components: event_header, event_stats, needs_review, live_on_phone); the rest is this page's own.
     stats = event_stats(event)
@@ -398,8 +438,61 @@ def event_qr(request, event):
 
 @event_view
 def event_poster(request, event):
-    return render(request, 'console/poster.html', {'event': event,
-                                                   'join_url': join_url(event)})
+    paper = 'a4' if request.GET.get('paper') == 'a4' else 'letter'
+    layout = 'tent' if request.GET.get('layout') == 'tent' else 'poster'
+    return render(request, 'console/poster.html', {'event': event, 'join_url': join_url(event), 'paper': paper,
+                                                   'layout': layout, 'tent': layout == 'tent'})
+
+
+EXPORT_KINDS = ('schedule', 'locations', 'notifications', 'metrics')
+
+
+@event_view
+def export_csv(request, event, kind):
+    """An event's schedule, locations, notifications or metrics as CSV (formula-safe, like Prospects' export)."""
+    import csv
+    from prospects.views import csv_safe
+    if kind not in EXPORT_KINDS:
+        raise Http404
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    safe = re.sub(r'[^a-zA-Z0-9]+', '_', event.name).strip('_') or 'event'
+    response['Content-Disposition'] = f'attachment; filename="{safe}_{kind}.csv"'
+    response.write('\ufeff')  # Excel reads UTF-8 with a BOM
+    out = csv.writer(response)
+    tz = _tz(event)
+    local = lambda dt: dt.astimezone(tz).strftime('%Y-%m-%d %H:%M') if dt else ''  # noqa: E731
+    row = lambda values: out.writerow([csv_safe(v) for v in values])  # noqa: E731
+    if kind == 'schedule':
+        row(['Name', 'Start', 'End', 'Location', 'Tags', 'Hidden', 'Description'])
+        for it in event.scheduleditem_set.select_related('location').order_by('start_time', 'name'):
+            row([it.name, local(it.start_time), local(it.end_time), it.location.name if it.location_id else '',
+                 ', '.join(it.tags or []), 'yes' if it.hidden else '', it.description])
+    elif kind == 'locations':
+        row(['Name', 'Category', 'Summary', 'Address', 'Latitude', 'Longitude', 'Tags', 'Website', 'Hidden', 'Description'])
+        for loc in event.location_set.order_by('sort_order', 'name'):
+            row([loc.name, loc.category, loc.snippet, loc.address, loc.latitude if loc.latitude is not None else '',
+                 loc.longitude if loc.longitude is not None else '', ', '.join(loc.tags or []), loc.website,
+                 'yes' if loc.hidden else '', loc.description])
+    elif kind == 'notifications':
+        row(['Title', 'Text', 'Urgent', 'Status', 'Send time', 'Sent at', 'Delivered', 'Failed'])
+        for n in event.notification_set.order_by('send_time'):
+            row([n.title, n.body, 'yes' if n.is_urgent else '', 'sent' if n.sent else 'scheduled', local(n.send_time),
+                 local(n.sent_at), n.delivered_count, n.failed_count])
+    else:
+        from console.usage import event_usage
+        u = event_usage(event, tz)
+        row(['Metric', 'Value'])
+        for label, value in (('Joined', u['joins']), ('Left', u['leaves']), ('App opens', u['opens']),
+                             ('Interactions', u['interactions']), ('Searches', u['searches']),
+                             ('Notifications opened', u['notification_opens']), ('Likes (net)', u['net_hearts']),
+                             ('iOS interactions', u['platforms']['ios']), ('Android interactions', u['platforms']['android']),
+                             ('QR / link opens', u['link_opens']['total'])):
+            row([label, value])
+        for title, rows in (('Most viewed location', u['top_locations']), ('Most viewed schedule item', u['top_items']),
+                            ('Most liked location', u['hearted_locations']), ('Most liked schedule item', u['hearted_items'])):
+            for r in rows:
+                row([f'{title}: {r["name"]}', r['count']])
+    return response
 
 
 # ---------------------------------------------------------------------------

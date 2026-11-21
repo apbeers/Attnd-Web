@@ -182,8 +182,9 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   `data-form-component` / `data-form-ids`. The button opens Ask Attnd with a prompt for that thing and remembers the
   form (`AgentRun.target`, "FORM ON SCREEN" in the context); the agent's `fill_form(component, ids, values, submit)`
   tool (agent/components.py: validated against the form's fields, ctx_ details only when empty and not hand-edited)
-  is applied by the panel to that same form in front of the person (page, canvas overlay or chat card: highlighted,
-  one after another); nothing saves until they press Save or say "save it" (`submit`). New form components get it
+  is applied by the panel to that form in a chat or canvas card (never a page's own form): highlighted, one after
+  another; nothing saves until they press Save or say "save it" (`submit`), and forms that always ask (sending a
+  notification, team invites) are never submitted by the agent: the person presses Send and gets the confirm card. New form components get it
   for free (`agent/tests_round3.py` checks every one).
 - **Draw the eye** (`window.attndReveal(el, kind)` in console.js: `slide`, `in`, `pulse`, `glow`, `collapse`, `scroll`,
   `flip`; ~200–320 ms, nothing with reduced motion): canvas tab switches slide in from their side of the tab order,
@@ -411,6 +412,26 @@ on Save does; there is no second copy of any business logic.
   finished run's answer is drawn once (text next to a `finish` call isn't stored as a note). Assistant answers turn
   `[Account](/console/account/)` into real links. **Platform help** (`agent/help.md`, appended to the system prompt):
   how-to answers always link the exact page; `agent/tests_help.py` resolves every link.
+- **The rest on the canvas** (A18, `console/components/catalog_more.py`): `changeset_review` (tab **Review · N** while
+  AI suggestions wait: tick changes, Apply / Discard always ask; per-field ticks on pages; `Component.act_args` turns the
+  ticked boxes into `accept_change_ids`), **Settings** tab: `app_layout` (autosave, `data-autosave`),
+  `website_watching`, `event_context_form` and `event_flyer` (a partial event form: only those fields, every other one
+  posted hidden with its current value), Overview: `event_lifecycle` (publish / draft / end / list / delete, all ask),
+  `sharing_kit` (code, link, QR PNG / SVG, poster and **table tent** in A4 or Letter: `console:event_poster?layout=tent&paper=a4`),
+  `event_exports` (`console:export` CSV of schedule, locations, notifications, metrics; formula-safe `csv_safe`),
+  **History** tab: `object_history` + `event_versions` (restore a whole version, asks). No attendee preview (cut).
+- **Prospects on the canvas** (A19, staff only, `console/components/catalog_prospects.py`): `prospect_row`,
+  `prospect_detail` (contacts with their source page; do-not-contact ones never show email or phone),
+  `prospect_run_row`, `prospect_settings_form` (also draws the Settings page); `Component.audience = 'staff'` hides them
+  everywhere else (`C.allowed`, the show tool's list, `instances` → 404); `Component.kwarg_map` maps `pk` URLs to
+  `prospect_id`. The list and detail pages keep their own templates (bulk-select table).
+- **Chat as default** (A20): the top bar's switch (`ConsolePreference.chat_default`, `console:chat_default`, agent
+  action `set_chat_default`): `/console/` and an event's overview open the full-screen chat (`?event=`); internal
+  agent reads and `?page=1` (Exit) aren't redirected.
+- **Reload without jumps** (A21): one request restores the conversation (`agent:runs?chat=1,2,3` returns the runs with
+  their steps), drawn hidden, scrolled once, faded in; the canvas (tabs, sections, cards, active tab) is drawn on the
+  server (`agent/canvas.py`) and adopted by agent.js. Measured on a reload with 6 runs: scroll events 5 → 0, CLS
+  0.042 → 0–0.012, Ask Attnd requests 25 → 1.
 - **Naming**: the console and the chat say **Notifications** (the apps keep their "Updates" tab; API names unchanged).
 - **Follow-up chips**: `finish(summary, suggest)` (2–4 short requests, `AgentRun.suggestions`); without them
   `views.suggestions` derives them from the last component shown (`FOLLOW_UPS`). `run_json.suggestions` (done runs

@@ -779,3 +779,25 @@ body:has(.assistant) .task-toast { top: 9rem; bottom: auto; right: 2.5rem; }
 .map-popup__close { position: absolute; top: .35rem; right: .45rem; width: 1.8rem; height: 1.8rem; font-size: 1.2rem; line-height: 1;
   color: var(--color-muted); background: none; border: 0; border-radius: 50%; cursor: pointer; }
 .map-popup__close:hover { background: var(--color-subtle); }
+
+/* changeset_review, sharing_kit, event_flyer */
+.review-change { display: grid; gap: var(--space-1); }
+.review-change__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.review-fields { margin: 0 0 0 1.6rem; padding: 0; list-style: none; display: grid; gap: 2px; }
+.sharing-kit { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; }
+.sharing-kit__qr { width: 160px; height: 160px; padding: .5rem; background: #fff; border-radius: var(--radius); }
+.flyer-preview { max-width: min(100%, 22rem); border-radius: var(--radius-lg); border: 1px solid var(--color-border); }
+
+/* "Chat as default" switch in the top bar */
+.chat-switch-form { margin: 0; }
+.chat-switch { display: inline-flex; align-items: center; gap: var(--space-2); padding: .3rem .6rem; font: inherit; font-size: var(--text-sm);
+  color: var(--color-text); background: none; border: 1px solid var(--color-border); border-radius: var(--radius-pill); cursor: pointer; }
+.chat-switch:hover { background: var(--color-brand-soft); }
+.chat-switch__track { position: relative; width: 2.1rem; height: 1.2rem; background: var(--color-subtle); border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-pill); transition: background-color .2s ease-out; }
+.chat-switch__knob { position: absolute; top: 1px; left: 1px; width: calc(1.2rem - 4px); height: calc(1.2rem - 4px); background: var(--color-surface);
+  border-radius: 50%; box-shadow: var(--shadow-sm); transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+.chat-switch[aria-checked="true"] .chat-switch__track { background: var(--color-brand); border-color: var(--color-brand); }
+.chat-switch[aria-checked="true"] .chat-switch__knob { transform: translateX(.9rem); }
+@media (prefers-reduced-motion: reduce) { .chat-switch__track, .chat-switch__knob { transition: none; } }
+@media (max-width: 600px) { .chat-switch__label { display: none; } }

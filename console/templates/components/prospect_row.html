@@ -1,0 +1,9 @@
+{% load console_tags %}{# prospect_row: one prospect (staff only). #}<li class="stack stack--tight component component--prospect_row row-link" data-id="{{ d.id }}">
+  <div class="cluster">
+    <a class="title-link grow row-link__target" href="{{ d.url }}"><strong>{{ d.name }}</strong></a>
+    <span class="badge badge--{% if d.fit >= 70 %}success{% elif d.fit >= 40 %}info{% else %}neutral{% endif %}" title="Fit">{{ d.fit }}</span>
+    <span class="badge badge--neutral">{{ d.status }}</span>
+  </div>
+  <div class="small muted">{{ d.dates }}{% if d.city %} · {{ d.city }}{% endif %}{% if d.organizer %} · {{ d.organizer }}{% endif %} · {{ d.contacts }} contact{{ d.contacts|pluralize }}{% if d.event_name %} · test event “{{ d.event_name }}”{% endif %}</div>
+  {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+</li>

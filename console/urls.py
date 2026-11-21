@@ -9,6 +9,7 @@ urlpatterns = [
     path('signup/', views.SignUpView.as_view(), name='signup'),
     path('account/', views.account, name='account'),
     path('tasks/', v.tasks_feed, name='tasks'),
+    path('chat-default/', v.chat_default, name='chat_default'),
     path('undo/last/', views_undo.undo_last, name='undo_last'),
     path('assistant/', agent_views.assistant_page, name='assistant'),
     path('undo/<int:undo_id>/', views_undo.undo_change, name='undo'),
@@ -26,6 +27,7 @@ urlpatterns = [
     path('events/<int:event_id>/delete/', v.event_delete, name='event_delete'),
     path('events/<int:event_id>/qr.png', v.event_qr, name='event_qr'),
     path('events/<int:event_id>/poster/', v.event_poster, name='event_poster'),
+    path('events/<int:event_id>/export/<slug:kind>.csv', v.export_csv, name='export'),
 
     path('events/<int:event_id>/locations/', v.locations, name='locations'),
     path('events/<int:event_id>/locations/new/', v.location_edit, name='location_new'),

@@ -1,0 +1,5 @@
+{% load console_tags %}{# event_exports: CSV downloads. #}<div class="stack component component--event_exports">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "download" %} {{ d.name }}</h3>{% endif %}
+  <p class="small muted">CSV files open in Excel, Numbers and Google Sheets.</p>
+  <div class="cluster">{% for f in d.files %}<a class="button button--outline button--small" href="{{ f.url }}" download>{% icon "download" %} {{ f.label }}</a>{% endfor %}</div>
+</div>

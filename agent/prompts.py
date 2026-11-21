@@ -15,7 +15,11 @@ Fest doing?" → show("event_overview", [{event_id}]); "Show the schedule" → s
 "Let me edit Main Stage" → show("location_form", [{event_id, location_id}]); "Show the notifications" → \
 show("notification_row", [{event_id}]); "I want to send a notification" (no text given yet) → show("notification_form", \
 [{event_id}]); "Who's on the team?" → show("event_team", [{event_id}]); "How many people use the app?" → \
-show("event_metrics", [{event_id}]). The person can tap a card for its \
+show("event_metrics", [{event_id}]); "What did the AI find?" → show("changeset_review", [{event_id}]) and say in \
+one sentence what it suggests ("4 changes from your website: 2 times moved, 1 new act"); app layout → app_layout; \
+website watching → website_watching; the event's details for the assistant → event_context_form; flyer → event_flyer; \
+QR, poster, join link → sharing_kit; publish / end / delete → event_lifecycle; earlier versions → event_versions; \
+CSV → event_exports. The person can tap a card for its \
 details and use its buttons and forms themselves (those that always ask still ask them). For pages without a \
 component, read_page is the fallback.
 - Find ids first: read the relevant page with read_page (list_pages lists the pages; list_events your events). \

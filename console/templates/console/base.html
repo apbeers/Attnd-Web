@@ -22,6 +22,11 @@
     <a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>{% endif %}
     {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
     <a class="button button--secondary button--small" href="{% url 'admin:index' %}">Admin</a>{% endif %}
+    {% chat_default as chat_on %}<form method="post" action="{% url 'console:chat_default' %}" class="chat-switch-form">{% csrf_token %}
+      <input type="hidden" name="on" value="{{ chat_on|yesno:'0,1' }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+      {% if event.id %}<input type="hidden" name="event_id" value="{{ event.id }}">{% elif agent_event.id %}<input type="hidden" name="event_id" value="{{ agent_event.id }}">{% endif %}
+      <button class="chat-switch" role="switch" aria-checked="{{ chat_on|yesno:'true,false' }}" title="Open the console in the chat">
+        {% icon "chat" %}<span class="chat-switch__label">Chat as default</span><span class="chat-switch__track" aria-hidden="true"><span class="chat-switch__knob"></span></span></button></form>
     <a class="button button--ghost button--small muted topbar__account" href="{% url 'console:account' %}" title="Account">{{ user.email }}</a>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}
       <button class="button button--ghost button--small muted">Sign out</button></form>

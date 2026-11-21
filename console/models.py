@@ -130,3 +130,24 @@ class HistoryRecord(models.Model):
 
     def __str__(self):
         return f'History {self.log_entry_id} ({self.via or "console"})'
+
+
+class ConsolePreference(models.Model):
+    """Per-person console choices (owner, Nov 21, 2026): "Chat as my default view" opens signed-in landings
+    (/console/, an event's overview) in Ask Attnd's full-screen chat instead of the page."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='console_preference')
+    chat_default = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.user_id}: chat {"on" if self.chat_default else "off"}'
+
+    @classmethod
+    def chat_first(cls, user):
+        if not getattr(user, 'is_authenticated', False):
+            return False
+        cached = getattr(user, '_chat_default', None)
+        if cached is None:
+            cached = cls.objects.filter(user=user, chat_default=True).exists()
+            user._chat_default = cached
+        return cached

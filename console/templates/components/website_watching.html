@@ -1,0 +1,7 @@
+{% load console_tags %}{# website_watching: source websites, watching and update mode, Check for updates now (a background task). #}<div class="stack component component--website_watching">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "refresh" %} {{ d.name }}</h3>{% endif %}
+  <p class="small muted">{% if d.watching %}Attnd watches these pages for changes{% else %}Not watching{% endif %}{% if d.checked %} · last checked {{ d.checked }}{% endif %}.</p>
+  {% include 'components/_form.html' with form=d.form %}
+  {% if d.has_sources %}<form method="post" action="{{ d.refresh_url }}" data-background data-busy-label="Checking for updates…" data-after-start="reset">{% csrf_token %}
+    <button class="button button--outline">{% icon "refresh" %} Check for updates now</button></form>{% endif %}
+</div>

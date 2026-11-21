@@ -69,8 +69,9 @@ Built on `develop` in this order; ticked as it ships.
   (one line in the chat) ✅, Team and Metrics tabs ✅, platform help with links ✅, narrower margins ✅, no dumps / one
   answer ✅, History hides Locked fields ✅, Add with AI on every form + fill_form ✅, AI fills Details for the
   assistant ✅, Updates → Notifications in the console ✅, one reveal helper for every cross-place change ✅, the event
-  map on the Overview ✅, live numbers every 60 s ✅; the rest of the organizer's work on the canvas (A18: review,
-  layout, watching, event details, flyer, sharing kit, lifecycle, restore, CSV export).
+  map on the Overview ✅, live numbers every 60 s ✅, the rest of the organizer's work on the canvas (review, layout,
+  watching, event details, flyer, sharing kit, lifecycle, restore, CSV) ✅, Prospects on the canvas (staff) ✅, Chat as
+  default ✅, reload without jumps ✅. Then A-fix (architecture corrections).
 - [ ] **B. Sign-in flow**: signed in → console; logo → /home/; no prompts during a session.
 - [ ] **C. All AI on Anthropic** (official SDK; OpenAI only for Studio images).
 - [ ] **D. Place images in our own store** (event pages, venue site, Wikimedia; API-022 `image_credit`).

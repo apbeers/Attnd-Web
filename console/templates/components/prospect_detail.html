@@ -1,0 +1,25 @@
+{% load console_tags %}{# prospect_detail: one prospect with contacts and activity (staff only). Attnd never emails prospects. #}<div class="stack component component--prospect_detail">
+  <div class="cluster"><h3 class="title-3 grow">{{ d.name }}</h3><span class="badge badge--info">Fit {{ d.fit }}</span></div>
+  <p class="small muted">{{ d.dates }}{% if d.city %} · {{ d.city }}{% endif %}{% if d.venue %} · {{ d.venue }}{% endif %}{% if d.organizer %} · {{ d.organizer }}{% endif %}</p>
+  {% if d.summary %}<p>{{ d.summary }}</p>{% endif %}
+  {% if d.reasons %}<ul class="small">{% for r in d.reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+  {% if d.links %}<div class="cluster small">{% for u in d.links %}<a href="{{ u }}" target="_blank" rel="noopener noreferrer">{{ u|truncatechars:60 }}</a>{% endfor %}</div>{% endif %}
+  {% if d.event_name %}<p class="small">Test event: <a href="{{ d.event_url }}">{{ d.event_name }}</a></p>{% endif %}
+  <form method="post" action="{{ d.save_url }}" class="stack stack--tight"{% if surface == 'chat' %} data-component-form{% endif %}>{% csrf_token %}
+    <input type="hidden" name="action" value="save">
+    <label class="field"><span class="field__label">Status</span><select name="status">{% for s in d.statuses %}<option value="{{ s.value }}"{% if s.value == d.status %} selected{% endif %}>{{ s.label }}</option>{% endfor %}</select></label>
+    <label class="field"><span class="field__label">Notes</span><textarea name="notes" rows="3">{{ d.notes }}</textarea></label>
+    <div class="cluster"><button class="button button--primary button--small">Save</button>
+</div>
+  </form>
+  {% if not d.event_name %}<div class="cluster">{% for a in d.actions %}{% if a.name == 'create_test_event' %}{% include 'components/_actions.html' with actions=d.actions|slice:"-1:" %}{% endif %}{% endfor %}</div>{% endif %}
+  <h4 class="eyebrow">Contacts</h4>
+  {% if d.contacts %}<ul class="list list--boxed">{% for c in d.contacts %}<li class="team-row">
+    <span class="team-row__who"><strong>{{ c.name }}</strong><span class="small muted">{{ c.role }}{% if c.role and c.organization %} · {% endif %}{{ c.organization }}</span>
+      {% if c.dnc %}<span class="badge badge--danger">Do not contact</span>{% else %}{% if c.email %}<span class="small mono">{{ c.email }}</span>{% endif %}{% if c.phone %}<span class="small">{{ c.phone }}</span>{% endif %}{% endif %}
+      <a class="small" href="{{ c.source }}" target="_blank" rel="noopener noreferrer">Source page</a></span>
+    <span class="cluster team-row__actions">{% include 'components/_actions.html' with actions=c.actions %}</span></li>{% endfor %}</ul>
+  {% else %}<p class="small muted">No contacts found on the event’s own pages.</p>{% endif %}
+  <p class="small muted">Attnd never emails prospects. Whoever reaches out identifies themselves, includes a mailing address and an opt-out, and never contacts anyone marked do not contact.</p>
+  {% if d.activity %}<h4 class="eyebrow">Activity</h4><ul class="list list--inset small">{% for a in d.activity %}<li>{{ a.when }} · {{ a.who }}: {{ a.text }}</li>{% endfor %}</ul>{% endif %}
+</div>

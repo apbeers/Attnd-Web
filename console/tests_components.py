@@ -34,7 +34,7 @@ class ComponentTestCase(TestCase):
                                                  tags=['folk'])
         self.update = Notification.objects.create(event=self.event, title='Gates open late', body='At 11 instead',
                                                   send_time=start + timedelta(hours=-1))
-        ChangeSet.objects.create(event=self.event, summary='2 schedule changes', status=ChangeSet.PENDING)
+        self.changeset = ChangeSet.objects.create(event=self.event, summary='2 schedule changes', status=ChangeSet.PENDING)
         self.ids = {
             'event_tile': {'event_id': self.event.pk}, 'event_header': {'event_id': self.event.pk},
             'event_stats': {'event_id': self.event.pk}, 'live_on_phone': {'event_id': self.event.pk},
@@ -48,6 +48,11 @@ class ComponentTestCase(TestCase):
             'object_history': {'event_id': self.event.pk}, 'event_form': {'event_id': self.event.pk},
             'event_new_form': {}, 'event_team': {'event_id': self.event.pk},
             'event_metrics': {'event_id': self.event.pk}, 'event_map': {'event_id': self.event.pk},
+            'changeset_review': {'event_id': self.event.pk, 'changeset_id': self.changeset.pk},
+            'app_layout': {'event_id': self.event.pk}, 'website_watching': {'event_id': self.event.pk},
+            'event_context_form': {'event_id': self.event.pk}, 'event_flyer': {'event_id': self.event.pk},
+            'sharing_kit': {'event_id': self.event.pk}, 'event_lifecycle': {'event_id': self.event.pk},
+            'event_versions': {'event_id': self.event.pk}, 'event_exports': {'event_id': self.event.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -57,6 +62,10 @@ class ComponentTestCase(TestCase):
             'notification_row': 'Gates open late', 'notification_form': 'Send a notification',
             'object_history': 'No changes recorded yet', 'event_form': 'Prairie Fest', 'event_new_form': 'Create with AI',
             'event_team': 'Owner', 'event_metrics': 'iOS and Android', 'event_map': 'No location has a map pin yet',
+            'changeset_review': '2 schedule changes', 'app_layout': 'Changes reach open apps',
+            'website_watching': 'Source websites', 'event_context_form': 'Only add what attendees may see',
+            'event_flyer': 'No flyer yet', 'sharing_kit': 'PRAIRIE', 'event_lifecycle': 'Now:',
+            'event_versions': 'No saved versions yet', 'event_exports': 'CSV files',
         }
 
     def request(self, user=None):
@@ -67,7 +76,9 @@ class ComponentTestCase(TestCase):
 
 class RegistryTests(ComponentTestCase):
     def test_the_set(self):
-        self.assertEqual(set(C.registry()), set(self.ids))
+        staff_only = {n for n, c in C.registry().items() if c.audience == 'staff'}
+        self.assertEqual(set(C.registry()) - staff_only, set(self.ids))
+        self.assertEqual(staff_only, {'prospect_row', 'prospect_detail', 'prospect_run_row', 'prospect_settings_form'})
 
     def test_every_action_is_a_registered_agent_action(self):
         writes = agent_registry.registry()['writes']
@@ -99,7 +110,8 @@ class RegistryTests(ComponentTestCase):
                 if action.get('confirm_text'):
                     guarded.add(action['name'])
                     self.assertTrue(writes[action['name']].confirm, action['name'])
-        self.assertEqual(guarded, {'delete_location', 'delete_schedule_item'})
+        self.assertTrue({'delete_location', 'delete_schedule_item', 'publish_event', 'delete_event',
+                         'discard_ai_changes'} <= guarded, guarded)
 
     def test_every_component_renders_on_pages_and_in_the_narrow_chat(self):
         for name, ids in self.ids.items():

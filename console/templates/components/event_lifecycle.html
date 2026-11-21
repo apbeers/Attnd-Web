@@ -1,0 +1,7 @@
+{% load console_tags %}{# event_lifecycle: publish / draft / end, nearby listing, transfer, delete (always ask). #}<div class="stack component component--event_lifecycle">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "broadcast" %} {{ d.name }}</h3>{% endif %}
+  <p class="small">Now: <strong>{{ d.status }}</strong> · {% if d.public %}listed in nearby events{% else %}unlisted (code, QR or link only){% endif %}</p>
+  {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>
+  {% else %}<p class="small muted">Only the owner and event admins can change this.</p>{% endif %}
+  {% if d.owner %}<p class="small muted">Hand the event to someone else: <a href="{{ d.team_url }}">Team → Make owner</a>.</p>{% endif %}
+</div>

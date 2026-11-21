@@ -1,0 +1,6 @@
+{% load console_tags %}{# prospect_settings_form: discovery settings and Run now (staff only). #}<div class="stack component component--prospect_settings_form">
+  {% if surface == 'chat' %}<h3 class="title-4">{{ d.name }}</h3>{% endif %}
+  <div class="cluster"><span class="small muted grow">Spent today ${{ d.spent }} of ${{ d.cap }}{% if d.running %} · a run is going{% endif %}</span>
+    {% if d.actions %}{% include 'components/_actions.html' with actions=d.actions %}{% endif %}</div>
+  {% include 'components/_form.html' with form=d.form %}
+</div>

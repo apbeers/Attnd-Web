@@ -30,8 +30,9 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 
 REGISTRY = {}
-ID_NAMES = ('event_id', 'location_id', 'item_id', 'notification_id')
-ENTITY = {'event_id': 'event', 'location_id': 'location', 'item_id': 'item', 'notification_id': 'notification'}
+ID_NAMES = ('event_id', 'location_id', 'item_id', 'notification_id', 'changeset_id', 'prospect_id', 'prospect_run_id')
+ENTITY = {'event_id': 'event', 'location_id': 'location', 'item_id': 'item', 'notification_id': 'notification',
+          'changeset_id': 'changeset', 'prospect_id': 'prospect', 'prospect_run_id': 'prospect_run'}
 
 
 @dataclass
@@ -50,6 +51,9 @@ class Component:
     form: object = None  # (user, ids, data) -> bound form, for chat submissions that wait for a confirmation
     template: str = ''
     chat: bool = True  # may Ask Attnd show it
+    kwarg_map: dict = None  # URL kwarg -> id name, for views whose URLs say pk (Prospects: {'pk': 'prospect_id'})
+    audience: str = ''  # 'staff': only staff and superusers (Prospects); absent for everyone else
+    act_args: object = None  # (action name, POST) -> extra tool arguments for always-ask buttons with a form (review)
     ai_subject: str = ''  # Add with AI: "the location", "the notification"… (default: from the title)
 
     def __post_init__(self):
@@ -71,7 +75,7 @@ def component(name, title, description, **options):
 
 
 def registry():
-    from console.components import catalog  # noqa: F401  (registers the components)
+    from console.components import catalog, catalog_more, catalog_prospects  # noqa: F401  (registers the components)
     return REGISTRY
 
 
@@ -114,6 +118,8 @@ def instances(user, name, items):
     """[(ids, data)] for one component and a list of id sets, expanding list components given only a parent
     (e.g. location_row with just event_id = every location). Raises IdError / Http404."""
     comp = get(name)
+    if not allowed(comp, user):
+        raise Http404
     out = []
     for raw in items or [{}]:
         raw = {k: v for k, v in (raw or {}).items() if v not in (None, '')}
@@ -137,9 +143,22 @@ def clean_parent(ids):
         raise IdError('ids must be numbers.') from None
 
 
+def allowed(comp, user):
+    if comp.audience == 'staff':
+        return bool(getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False))
+    return True
+
+
+def for_user(user):
+    """The components this person may see (staff-only ones are absent for everyone else)."""
+    return {n: c for n, c in registry().items() if allowed(c, user)}
+
+
 def load(user, name, ids):
     """Run the data function for this person (Http404 when they may not see it) and resolve its actions."""
     comp = get(name)
+    if not allowed(comp, user):
+        raise Http404
     data = comp.data(user, **ids)
     return finish(comp, ids, data)
 
@@ -185,7 +204,8 @@ def resolve_actions(comp, ids, offered):
         if name not in declared:
             raise ValueError(f'{comp.name} does not declare the action {name}')
         action = writes[name]
-        kwargs = {k: ids[k] for k, _ in action.kwargs}
+        alias = comp.kwarg_map or {}
+        kwargs = {k: ids[k] if k in ids else ids[alias[k]] for k, _ in action.kwargs}
         entry.setdefault('label', declared[name])
         entry['confirm'] = action.confirm
         entry['url'] = reverse(action.url_name, kwargs=kwargs)
@@ -240,7 +260,8 @@ def model_json(data, limit=4000):
                                and v not in ('', None, [], False)}
                         for name, f in (value.get('fields') or {}).items()} | (
                     {'errors': value['errors']} if value.get('errors') else {})
-            return {k: slim(v, k) for k, v in value.items() if k not in DROP_KEYS and v not in ('', None, [], {})}
+            return {k: slim(v, k) for k, v in value.items()
+                    if k not in DROP_KEYS and not k.endswith(('_url', '_png', '_svg')) and v not in ('', None, [], {})}
         if isinstance(value, list):
             if key == 'actions':
                 return [f'{a["name"]} ({a["label"]}){" — asks to confirm" if a.get("confirm") else ""}' for a in value]

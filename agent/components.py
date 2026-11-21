@@ -30,8 +30,8 @@ ID_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required': list(C
              'properties': {k: {'type': ['integer', 'null']} for k in C.ID_NAMES}}
 
 
-def tool_definitions():
-    comps = [c for c in C.registry().values() if c.chat]
+def tool_definitions(user=None):
+    comps = [c for c in C.registry().values() if c.chat and (user is None or C.allowed(c, user))]
     catalog = '; '.join(f'{c.name} ({", ".join(c.ids) or "no ids"}'
                         f'{", optional " + ", ".join(c.optional_ids) if c.optional_ids else ""}): {c.description}'
                         for c in comps)
@@ -153,7 +153,7 @@ def _label(name, ids):
 
 def _load(user, name, items):
     """[(ids, data)] or raise ValueError with a message for the model."""
-    if name not in C.registry() or not C.get(name).chat:
+    if name not in C.registry() or not C.get(name).chat or not C.allowed(C.get(name), user):
         raise ValueError(f'There is no component “{name}”.')
     try:
         found = C.instances(user, name, items)
@@ -312,10 +312,11 @@ def pick(request):
     return JsonResponse({'step': step_json(step), 'items': rendered(request, detail.name, found)})
 
 
-def _tool_args(action, ids, post):
+def _tool_args(action, ids, post, alias=None):
     """A gated form's values as the action's tool arguments (what the agent would pass)."""
     from django import forms as dj_forms
-    args = {name: ids[name] for name, _ in action.kwargs}
+    alias = alias or {}
+    args = {name: ids[name] if name in ids else ids[alias[name]] for name, _ in action.kwargs}
     if action.form:
         fields = registry.form_fields(action.form)
         for name in registry.form_field_names(action):
@@ -370,7 +371,9 @@ def act(request):
     run = _own_run(request, create=True)
     if run.steps.filter(confirm_state=AgentStep.CONFIRM_PENDING).exists():
         return _error('Answer the confirmation that is waiting first.', status=409)
-    args = _tool_args(action, ids, request.POST)
+    args = _tool_args(action, ids, request.POST, comp.kwarg_map)
+    if comp.act_args:  # e.g. the review's ticked changes → accept_change_ids
+        args.update(comp.act_args(action_name, request.POST))
     for name, value in offered[0].get('params', {}).items():  # the button's own values, typed like the tool's
         if name in action.params:
             kind = action.params[name].get('type')

@@ -208,12 +208,30 @@ def start(request):
 @login_required
 @require_GET
 def runs(request):
-    recent = AgentRun.objects.filter(user=request.user).order_by('-created_at')[:10]
-    return JsonResponse({'runs': [{'id': r.pk, 'goal': r.goal[:200], 'status': r.status, 'active': r.active,
-                                   'summary': (r.summary or r.error)[:300], 'created_at': r.created_at.isoformat()}
-                                  for r in recent],
-                         'spent_today': f'{loop.spent_today(request.user):.2f}',
-                         'cap': f'{settings.AGENT_DAILY_SPEND_CAP_USD:.2f}'})
+    recent = list(AgentRun.objects.filter(user=request.user).order_by('-created_at')[:10])
+    out = {'runs': [{'id': r.pk, 'goal': r.goal[:200], 'status': r.status, 'active': r.active,
+                     'summary': (r.summary or r.error)[:300], 'created_at': r.created_at.isoformat()}
+                    for r in recent],
+           'spent_today': f'{loop.spent_today(request.user):.2f}',
+           'cap': f'{settings.AGENT_DAILY_SPEND_CAP_USD:.2f}'}
+    if 'chat' in request.GET:
+        # The conversation on reload, in one request (A21): the runs of this chat (?chat=3,5,8) plus an active one,
+        # each with its steps, oldest first.
+        wanted = [int(i) for i in request.GET['chat'].split(',') if i.strip().isdigit()][-20:]
+        active = next((r.pk for r in recent if r.active), None)
+        if active and active not in wanted:
+            wanted.append(active)
+        found = {r.pk: r for r in AgentRun.objects.filter(user=request.user, pk__in=wanted)}
+        chat = []
+        for pk in wanted:
+            r = found.get(pk)
+            if r is None:
+                continue
+            rows = list(r.steps.order_by('seq')[:200])
+            states = undo_states(request.user, rows)
+            chat.append({'run': run_json(r), 'steps': [step_json(s, states) for s in rows]})
+        out['chat'] = chat
+    return JsonResponse(out)
 
 
 @login_required
@@ -327,4 +345,9 @@ def assistant_page(request):
     if not (back.startswith('/console/') and not off_limits(back)
             and url_has_allowed_host_and_scheme(back, {request.get_host()})):
         back = '/console/'
-    return render(request, 'agent/assistant.html', {'agent_event': event, 'back_url': back})
+    from console.models import ConsolePreference
+    if ConsolePreference.chat_first(request.user) and 'page=1' not in back:
+        back += ('&' if '?' in back else '?') + 'page=1'  # Exit goes to the page (chat stays the default)
+    from agent import canvas
+    return render(request, 'agent/assistant.html', {'agent_event': event, 'back_url': back,
+                                                    'canvas_tabs': canvas.build(request, event)})

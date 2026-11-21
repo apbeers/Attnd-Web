@@ -146,6 +146,10 @@
   }
 
   // ---- rendering ---------------------------------------------------------------------
+  // While the conversation is restored on load (A21) nothing scrolls: the log is hidden, filled in one go, then its
+  // scroll position is set once and it fades in.
+  let restoring = null;  // promises of cards still loading, while restoring
+  function stick() { if (!restoring) log.scrollTop = log.scrollHeight; }
   // Console links in the assistant's words become real links ("Change your password → [Account](/console/account/)"):
   // only same-site paths, built with the DOM (never HTML from the model).
   const LINK_RE = /\[([^\]\n]{1,80})\]\((\/(?!\/)[^)\s]{0,200})\)/g;
@@ -171,7 +175,7 @@
     log.appendChild(el);
     if (live && kind !== 'user') window.attndReveal?.(el, 'in');
     if (!thinking.hidden) log.appendChild(thinking);
-    log.scrollTop = log.scrollHeight;
+    stick();
     return el;
   }
   // A step line: a small status mark in a tinted circle (✓ changed, + added, × failed, • looked), then the text.
@@ -194,7 +198,7 @@
     log.appendChild(el);
     if (live) window.attndReveal?.(el, 'in');
     if (!thinking.hidden) log.appendChild(thinking);
-    log.scrollTop = log.scrollHeight;
+    stick();
     return el;
   }
   function renderStep(step) {
@@ -266,7 +270,7 @@
       row.appendChild(chip);
     });
     log.appendChild(row);
-    log.scrollTop = log.scrollHeight;
+    stick();
     return el;
   }
   async function answer(text, row) {
@@ -303,6 +307,7 @@
       renderedSteps.add(step.id);
       const waiting = unfinished.get(step.id);
       const el = renderStep(step);
+      if (restoring && el instanceof Promise) restoring.push(el);
       if (waiting) { waiting.spot.replaceWith(el); unfinished.delete(step.id); }
       if (live && step.changed && step.event_id) refreshKeys([`event:${step.event_id}`]);
       if (live && watching() && step.changed && step.url) watchNavigate(step.url);
@@ -355,7 +360,7 @@
     const last = steps.length ? steps[steps.length - 1] : null;
     if (last) setStage(last.text && !/…$/.test(last.text) && last.kind !== 'component' ? 'Thinking…' : (last.stage || 'Working…'));
     else if (!lastStage) setStage('Thinking…');
-    log.scrollTop = log.scrollHeight;
+    stick();
   }
   // Follow-ups after an answer: tapping one sends it.
   function showSuggestions(list) {
@@ -459,9 +464,11 @@
   }
 
   async function appendRun(id, isLive) {
+    appendData(await get(runUrl(id, '?after=0')), isLive);
+  }
+  function appendData(data, isLive) {
     lastSeq = 0;
     live = false;
-    const data = await get(runUrl(id, '?after=0'));
     if (!data.run.buttons) bubble('user', data.run.goal);
     wasActive = data.run.active;
     renderRun(data);
@@ -694,7 +701,7 @@
       } catch (err) {
         box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
       }
-      log.scrollTop = log.scrollHeight;
+      stick();
       return box;
     }
     const box = cardBox();
@@ -705,7 +712,7 @@
       box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
     }
     foldOld();
-    log.scrollTop = log.scrollHeight;
+    stick();
     return box;
   }
 
@@ -983,15 +990,25 @@
   // rows appear and deleted ones go. Toolbars add things (Add location, Add schedule item…) in the overlay.
   const KINDS = { event_tile: 'Events', event_new_form: 'Events', event_overview: 'Overview', event_stats: 'Overview',
                   live_on_phone: 'Overview', needs_review: 'Overview', event_header: 'Overview', event_form: 'Overview',
-                  object_history: 'Overview', location_row: 'Locations', location_form: 'Locations',
+                  object_history: 'History', location_row: 'Locations', location_form: 'Locations',
                   schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Notifications',
-                  notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics' };
-  const ORDER = ['Events', 'Overview', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics'];
-  const SECTION_ORDER = ['event_tile', 'event_overview', 'notification_form', 'notification_row'];
+                  notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics',
+                  event_map: 'Overview', event_lifecycle: 'Overview', sharing_kit: 'Overview', event_exports: 'Overview',
+                  changeset_review: 'Review', app_layout: 'Settings', website_watching: 'Settings',
+                  event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
+                  prospect_row: 'Prospects', prospect_detail: 'Prospects', prospect_run_row: 'Prospects',
+                  prospect_settings_form: 'Prospects' };
+  const ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
+                 'History', 'Prospects'];
+  const SECTION_ORDER = ['event_tile', 'event_overview', 'event_lifecycle', 'sharing_kit', 'event_exports',
+                         'notification_form', 'notification_row', 'app_layout', 'website_watching',
+                         'event_context_form', 'event_flyer', 'object_history', 'event_versions',
+                         'prospect_run_row', 'prospect_row'];
   const EMPTY = { location_row: 'No locations yet. Add stages, booths, food, anywhere attendees go.',
                   schedule_item_row: 'No schedule items yet.', notification_row: 'No notifications sent or scheduled yet.',
-                  event_tile: 'No events yet.' };
-  const HEADINGS = {};  // (notifications: the groups' own headings, Scheduled · N and Sent · N)
+                  event_tile: 'No events yet.', prospect_row: 'No open prospects. Run a discovery from its settings.',
+                  prospect_run_row: 'No discovery runs yet.' };
+  const HEADINGS = { prospect_run_row: 'Latest runs', prospect_row: 'Open prospects, best fit first' };  // (notifications: the groups' own headings, Scheduled · N and Sent · N)
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const tabs = new Map();  // label -> {button, pane, label}
   let overlayStack = [];   // [{title, items, el}]
@@ -1023,6 +1040,8 @@
     return (TOOLBARS[label] || []).filter((x) => !x.needsEvent || eventId);
   }
   const TOOLBARS = {
+    Prospects: [{ text: 'Discovery settings', plain: true, run: (b) => openComponent('prospect_settings_form', {}, 'Prospect settings', b) },
+                { text: 'Export CSV', plain: true, run: () => { location.href = '/console/prospects/export.csv'; } }],
     Events: [{ text: 'New event', run: (b) => openComponent('event_new_form', {}, 'New event', b) }],
     Overview: [{ text: 'Edit details', needsEvent: true, run: (b) => openComponent('event_form', { event_id: eventId }, 'Details', b) },
                { text: 'History', needsEvent: true, plain: true, run: (b) => openComponent('object_history', { event_id: eventId }, 'History', b) }],
@@ -1363,8 +1382,54 @@
 
   // The event the page is about: its overview, locations, schedule and notifications (the compose form and every notification)
   // are on the canvas from the start; empty lists say so, and the toolbars add to them.
+  // Staff: the Prospects tab (runs, then the open prospects by fit); absent for everyone else.
+  async function preloadProspects() {
+    if (!('staff' in root.dataset)) return;
+    for (const name of ['prospect_run_row', 'prospect_row']) {
+      let items = [];
+      try { items = await fetchCards(name, [{}]); } catch (e) { /* none yet */ }
+      toCanvas(name, items, {}, true);
+    }
+  }
+  // The server drew the canvas (agent/canvas.py, A21): adopt its tabs, panes and cards as if toCanvas had made them.
+  function adoptCanvas() {
+    const bar = canvas.querySelector('[data-canvas-tabs]');
+    if (!bar || !('ssr' in bar.dataset)) return false;
+    bar.querySelectorAll('[role=tab]').forEach((button) => {
+      const label = button.dataset.tabLabel;
+      const pane = canvas.querySelector(`#${button.getAttribute('aria-controls')}`);
+      const grid = pane.querySelector('.canvas__grid');
+      const tools = toolbarFor(label);
+      if (tools.length) {
+        const row = document.createElement('div');
+        row.className = 'canvas__toolbar';
+        tools.forEach((tool) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = `button button--${tool.plain ? 'outline' : 'primary'} button--small`;
+          b.textContent = tool.plain ? tool.text : `+ ${tool.text}`;
+          b.addEventListener('click', () => tool.run(b));
+          row.appendChild(b);
+        });
+        pane.prepend(row);
+      }
+      button.addEventListener('click', () => selectTab(label));
+      tabs.set(label, { button, pane, label, grid });
+      pane.querySelectorAll('.canvas__section[data-component="location_row"]').forEach((sec) => {
+        const wrap = sec.querySelector('.canvas__cards');
+        if (wrap && wrap.querySelectorAll('.agent__card').length > 1 && window.makeSortable) sortable(wrap, sec);
+      });
+    });
+    window.attndShowIf?.(canvas);
+    window.attndOpenApp?.(canvas);
+    window.attndEnhance?.(canvas);
+    return true;
+  }
+
   async function preloadCanvas() {
     if (!canvasOn()) return;
+    if (adoptCanvas()) return;
+    preloadProspects();
     if (!eventId) {
       try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
       selectTab('Events');
@@ -1373,11 +1438,15 @@
     // Every event and "New event" too, so the whole console is reachable from here.
     try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
     const parent = { event_id: eventId };
-    for (const name of ['event_overview', 'location_row', 'schedule_item_row', 'notification_form', 'notification_row',
-                        'event_team', 'event_metrics']) {
+    for (const name of ['event_overview', 'event_lifecycle', 'sharing_kit', 'event_exports', 'changeset_review',
+                        'location_row', 'schedule_item_row', 'notification_form', 'notification_row',
+                        'event_team', 'event_metrics', 'app_layout', 'website_watching', 'event_context_form',
+                        'event_flyer', 'object_history', 'event_versions']) {
       let items = [];
       try { items = await fetchCards(name, [parent]); } catch (e) { /* none yet: the section says so */ }
+      if (name === 'changeset_review' && !items.length) continue;  // the Review tab only while something waits
       toCanvas(name, items, parent, true);
+      if (name === 'changeset_review') tabs.get('Review').button.textContent = `Review · ${items.length}`;
     }
     selectTab('Overview');
   }
@@ -1427,22 +1496,29 @@
   (async () => {
     if (full) { root.classList.add('is-open'); preloadCanvas(); }
     else if (store.get('sessionStorage', 'attnd.agent.open') === '1') open(false);
+    // One request for the whole conversation (its runs with their steps), drawn hidden, scrolled once, faded in.
+    const ids = chatIds();
+    if (ids.length) root.classList.add('is-restoring');
     try {
-      const data = await get(root.dataset.runsUrl);
+      const data = await get(`${root.dataset.runsUrl}?chat=${ids.join(',')}`);
       const active = data.runs.find((r) => r.active);
-      let ids = chatIds().filter((id) => data.runs.some((r) => r.id === id));
-      if (active && !ids.includes(active.id)) ids = ids.concat([active.id]);
-      setChatIds(ids);
-      if (ids.length) {
+      const chat = data.chat || [];
+      setChatIds(chat.map((c) => c.run.id));
+      if (chat.length) {
         log.textContent = '';
-        for (const id of ids) {
-          const r = data.runs.find((x) => x.id === id);
-          await appendRun(id, id === ids[ids.length - 1] && r && r.active);
-        }
+        restoring = [];
+        chat.forEach((c, i) => appendData(c, i === chat.length - 1 && c.run.active));
+        await Promise.allSettled(restoring);
+        restoring = null;
         const saved = parseInt(store.get('sessionStorage', 'attnd.agent.scroll') || '', 10);
-        if (!Number.isNaN(saved)) log.scrollTop = saved;
+        log.scrollTop = Number.isNaN(saved) ? log.scrollHeight : saved;
       }
       if (active && active.status !== 'running') open(false);
     } catch (e) { /* offline: the panel still opens */ }
+    restoring = null;
+    if (root.classList.contains('is-restoring')) {
+      root.classList.remove('is-restoring');
+      root.classList.add('is-restored');  // one gentle fade-in (agent.css)
+    }
   })();
 })();

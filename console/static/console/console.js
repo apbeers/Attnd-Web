@@ -492,6 +492,26 @@
   document.addEventListener('visibilitychange', () => { liveSync(); if (!document.hidden) liveTick(); });
   liveSync();
 
+  // The top bar's "Chat as default" switch: it flips (animated) before the page goes on.
+  document.addEventListener('submit', (e) => {
+    const form = e.target.closest && e.target.closest('.chat-switch-form');
+    if (!form || form.dataset.flipped) return;
+    e.preventDefault();
+    const sw = form.querySelector('.chat-switch');
+    sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+    form.dataset.flipped = '1';
+    setTimeout(() => form.submit(), calm.matches ? 0 : 240);
+  });
+
+  // Forms that save as you change them (app layout on the canvas): a short pause after the last change, then submit
+  // (the chat posts it with fetch; a page reloads).
+  document.addEventListener('change', (e) => {
+    const form = e.target.closest && e.target.closest('form[data-autosave]');
+    if (!form) return;
+    clearTimeout(form._autosave);
+    form._autosave = setTimeout(() => form.requestSubmit(), 500);
+  });
+
   window.attndEnhance = function (scope) {
     scope = scope || document;
     scope.querySelectorAll('form').forEach((form) => { enhanceMaps(form); enhanceFill(form); });
