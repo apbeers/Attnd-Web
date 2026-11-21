@@ -141,7 +141,9 @@ def structured(*, system, content, schema, model=None, effort='low', max_tokens=
             response = _create(api, kwargs)
         except anthropic.APIError as exc:
             raise exc
-        cost += cost_of(model, response.usage)
+        spent = cost_of(model, response.usage)
+        cost += spent
+        _ledger(model, response, spent)
         if meta is not None:  # (callers that log usage themselves)
             meta.update(model=model, input=(getattr(response.usage, 'input_tokens', 0) or 0)
                         + (getattr(response.usage, 'cache_read_input_tokens', 0) or 0),
@@ -211,7 +213,18 @@ def message(*, system, messages, model=None, effort='low', max_tokens=4096, tool
         response = api.messages.create(**kwargs)
     except anthropic.APIError as exc:
         raise ClaudeError(f'Claude: {exc.__class__.__name__}: {getattr(exc, "message", exc)}'[:300]) from exc
-    return response, cost_of(model, response.usage)
+    cost = cost_of(model, response.usage)
+    _ledger(model, response, cost)
+    return response, cost
+
+
+def _ledger(model, response, cost):
+    """Every Claude call into the AI credit ledger (credit.ledger; who and what come from its spend context)."""
+    from credit import ledger
+    usage = getattr(response, 'usage', None)
+    ledger.record(cost=cost, model=model, provider='anthropic',
+                  input_tokens=(getattr(usage, 'input_tokens', 0) or 0) + (getattr(usage, 'cache_read_input_tokens', 0) or 0),
+                  output_tokens=getattr(usage, 'output_tokens', 0) or 0, request_id=_request_id(response))
 
 
 def nullable(schema):

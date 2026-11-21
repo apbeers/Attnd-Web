@@ -45,7 +45,8 @@ def spent_today():
 
 
 def budget_left():
-    return Decimal(str(getattr(settings, 'EVENT_COVERS_DAILY_CAP_USD', 2))) - spent_today()
+    from credit.ledger import limits
+    return Decimal(limits().covers_daily_usd) - spent_today()
 
 
 def has_own_picture(event):
@@ -169,6 +170,13 @@ def _openai_env():
 
 
 def ensure(event, ai=True, force=False):
+    """(AI credit: Attnd's own marketing, exempt from the owner's monthly limit.)"""
+    from credit import ledger
+    with ledger.spend_context(event=event, feature='covers', exempt=True):
+        return _ensure(event, ai, force)
+
+
+def _ensure(event, ai=True, force=False):
     """Give a gallery event a cover when it has no picture of its own. Returns 'wikimedia', 'ai', 'own', 'skipped'
     or 'none'."""
     from django.core.files.base import ContentFile

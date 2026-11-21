@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'studio.apps.StudioConfig',
     'prospects.apps.ProspectsConfig',
     'agent.apps.AgentConfig',
+    'credit.apps.CreditConfig',
 ]
 
 MIDDLEWARE = [
@@ -82,6 +83,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # AI credit (credit/): every AI call while answering a request is attributed to its person (or visitor).
+    'credit.middleware.SpendContextMiddleware',
     # Organizers' 14-day sliding sign-in (7 days idle); staff keep until-midnight (console/session_expiry.py).
     'console.session_expiry.SessionLifetimeMiddleware',
     # Where the account is signed in (Account → Signed in on other devices) + the device cookie (console/user_sessions.py).
@@ -488,6 +491,10 @@ PLAN_SUGGESTIONS_MODEL = os.getenv('PLAN_SUGGESTIONS_MODEL', 'claude-haiku-5-5')
 # A run Claude Haiku declines (stop_reason refusal) continues once on this model (agent/loop.py _refusal_fallback).
 AGENT_REFUSAL_MODEL = os.getenv('AGENT_REFUSAL_MODEL', 'claude-sonnet-5-5')
 AGENT_DAILY_SPEND_CAP_USD = float(os.getenv('AGENT_DAILY_SPEND_CAP_USD', '2'))  # per person per UTC day
+# AI credit (credit/): first defaults of the staff-editable "AI limits" (the database row wins once saved).
+AI_MONTHLY_CREDIT_USD = float(os.getenv('AI_MONTHLY_CREDIT_USD', '30'))  # per person per calendar month (UTC)
+AI_VISITOR_CREDIT_USD = float(os.getenv('AI_VISITOR_CREDIT_USD', '5'))  # signed-out visitors, carried over at sign-up
+AI_PLATFORM_ALERT_USD = float(os.getenv('AI_PLATFORM_ALERT_USD', '100'))  # all AI spend this month → email admins
 AGENT_MAX_STEPS = int(os.getenv('AGENT_MAX_STEPS', '40'))  # model calls per run
 AGENT_RUN_MAX_MINUTES = int(os.getenv('AGENT_RUN_MAX_MINUTES', '15'))  # wall clock per run (waiting doesn't count)
 # One reasoning effort for every call of a run and the whole conversation (a changed effort loses the prompt cache).

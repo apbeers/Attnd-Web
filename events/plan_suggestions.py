@@ -245,6 +245,16 @@ def ask_ai(f, client=None):
 # ---------------------------------------------------------------------------
 
 def generate(event, client=None, force=False):
+    """(AI credit: background work for the event, counted against its owner; skipped while they are over their
+    monthly limit: the fallback examples are used.)"""
+    from credit import ledger
+    if not ledger.owner_allowed(event):
+        return None
+    with ledger.spend_context(event=event, feature='plan_suggestions', background=True):
+        return _generate(event, client, force)
+
+
+def _generate(event, client=None, force=False):
     """Make and store the suggestions for the event's current content. Returns the stored dict.
 
     With the AI: stored as `source: ai` and the content version bumped (one update, so the bundle's ETag changes and

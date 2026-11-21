@@ -215,6 +215,8 @@ class RegistryTests(AgentTestCase):
             rel = '/'.join(path.parts[path.parts.index('templates') + 1:])
             if rel == 'console/account.html':
                 continue  # off-limits (account security)
+            if rel == 'components/_form.html':
+                continue  # a submit's data-confirm only on forms with confirm_action (an always-ask action, checked in credit.tests)
             if rel == 'components/_actions.html':
                 continue  # components' data-confirm buttons: console.tests_components checks each is confirm=True
             text = path.read_text()

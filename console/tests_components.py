@@ -64,6 +64,7 @@ class ComponentTestCase(TestCase):
             'first_run': {}, 'event_theme': {'event_id': self.event.pk},
             'app_screens': {'event_id': self.event.pk},  # API-024
             'event_theme_editor': {'event_id': self.event.pk},
+            'ai_credit_meter': {},  # credit/
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -80,6 +81,7 @@ class ComponentTestCase(TestCase):
             'change_preview': 'Move sets later', 'event_readiness': 'to fix',
             'attention': 'What needs attention', 'usage_answer': 'numbers', 'event_rollover': 'Make the copy', 'first_run': 'Get started',
             'event_theme': 'Generate with AI', 'app_screens': 'What each screen of the apps shows', 'event_theme_editor': 'Where the colours show',
+            'ai_credit_meter': 'used this month',
         }
 
     def request(self, user=None):
@@ -94,7 +96,8 @@ class RegistryTests(ComponentTestCase):
         studio = {n for n, c in C.registry().items() if c.audience == 'studio'}
         self.assertEqual(studio, {'website_overview', 'website_versions', 'website_assets', 'website_forms'})
         self.assertEqual(set(C.registry()) - staff_only - studio, set(self.ids))
-        self.assertEqual(staff_only, {'prospect_row', 'prospect_detail', 'prospect_run_row', 'prospect_settings_form'})
+        self.assertEqual(staff_only, {'prospect_row', 'prospect_detail', 'prospect_run_row', 'prospect_settings_form',
+                                      'ai_spend_summary', 'ai_limits_form', 'ai_limit_overrides'})
 
     def test_every_action_is_a_registered_agent_action(self):
         writes = agent_registry.registry()['writes']

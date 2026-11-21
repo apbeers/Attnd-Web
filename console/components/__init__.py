@@ -79,8 +79,8 @@ def component(name, title, description, **options):
 
 
 def registry():
-    from console.components import (catalog, catalog_chat, catalog_more, catalog_prospects,  # noqa: F401  (registers them)
-                                    catalog_screens, catalog_website)
+    from console.components import (catalog, catalog_chat, catalog_credit, catalog_more,  # noqa: F401  (registers them)
+                                    catalog_prospects, catalog_screens, catalog_website)
     from agent import proposals  # noqa: F401  (change_preview, stage I)
     return REGISTRY
 

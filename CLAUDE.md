@@ -86,6 +86,7 @@ home/           # Marketing/landing pages
 join/           # /join/<code>/ redirect + AASA & assetlinks well-known files
 scrape/         # AI import/refresh: crawl + Claude extraction, jobs, diff/changesets
 attestation/    # Apple App Attest + Google Play Integrity + JWT issuance
+credit/         # AI credit: the AiSpend ledger, monthly limits, overrides, the staff AI spend page
 diagnostics/    # API-013/014: debug log uploads, crash reports, R8 retrace, request log middleware, staff panel
 studio/         # Attnd Studio (admins only): AI-designed event websites hosted on SITES_HOST, flyer art, app look
 prospects/      # Staff only: sales pipeline (web-search discovery of events that suit the app, organizer contacts, test events)
@@ -336,6 +337,36 @@ event name the apps may log are in **`LOG_EVENTS.md`** (add a row there before a
   with paste-and-retrace, API-014 performance buckets. App text is untrusted: templates escape it, the JS only uses
   `textContent`; no inline scripts.
 - **API-014:** `perf_*` usage metrics with bucket details (`events/usage.py` `PERF_METRICS`); not interactions.
+
+## AI credit (`credit/`, batch 6 §2, owner Nov 21, 2026)
+
+Every AI call goes into one ledger and counts toward a monthly credit per person.
+- **Ledger** (`credit/ledger.py`, `AiSpend`): `ledger.record(cost, model, provider, tokens, request_id)` is called by the
+  shared helpers (`attnd/claude.py` `_ledger` for every Claude call, Ask Attnd's loop, Studio's text and image calls);
+  who and what come from `spend_context(user, event, feature, background, visitor, exempt)`, a contextvar set by
+  `SpendContextMiddleware` (the signed-in person, else a lazy visitor key; the feature by URL name) and by the
+  background entry points (`scrape.jobs.run_job`, `place_images.find_for`, `plan_suggestions.generate`, `covers.ensure`,
+  `prospects.discover.execute`). A new AI entry point outside a request must open a `spend_context` itself.
+- **Counting rules**: a person's own requests count to them; background work for an event (photos, plan suggestions,
+  website watching) to the event's owner; not counted (`counted=False`): Prospects, covers, showcase / DEMO / App Review
+  sample events, CI. Staff are counted but have no monthly limit.
+- **Limits** (`AiLimits`, pk 1, staff-editable live, cached 30 s; first values from `AI_MONTHLY_CREDIT_USD` 30,
+  `AI_VISITOR_CREDIT_USD` 5, `AI_PLATFORM_ALERT_USD` 100 and the old per-day caps, which now read from it too);
+  `AiLimitOverride` per person (an amount or no limit). Calendar month in UTC.
+- **Enforcement**: `@ai_credit_required` (`credit/decorators.py`) on the AI views (website check, paste import, colours,
+  Fill from website, Studio design / start / bring in), the AI path of New event, the home composer's `consume` and
+  Ask Attnd's start: "You've used this month's AI credit ($30). It renews on Dec 1." (429 JSON or a message); editing,
+  publishing and notifications keep working. Background work checks `ledger.owner_allowed(event)`.
+- **Warnings**: 80 % and 100 % once a month each (`AiCreditNotice`): an email and a line above the Ask Attnd composer
+  (`run_json.credit_note`); the platform alert emails `ADMINS` once a month.
+- **Screens**: Account → **AI credit** (`ai_credit_meter`: used / left / renews, by feature); staff **AI spend**
+  (`/console/ai-spend/`, `credit:spend`, top bar, canvas tab "AI spend"): `ai_spend_summary` (month, by feature /
+  model / person / event, latest calls, CSV `credit:export`), `ai_limits_form` and `ai_limit_overrides`. Changing a
+  limit or an override always asks (page `data-confirm`, Ask Attnd `save_ai_limits` / `set_ai_limit_override` /
+  `remove_ai_limit_override`, confirm=True) and is a History `LogEntry`.
+- **Anonymous visitors**: AI still needs an account (the home composer waits for sign-up); their visitor key is
+  tracked anyway, and any spend under it moves into the account at sign-in (`credit/signals.py`).
+- Tests: `credit/tests.py`.
 
 ## Prospects (staff only; `prospects/`)
 
@@ -713,7 +744,7 @@ hosts the site.
   one), `StudioAsset` (UUID, Cloudinary *raw* storage when configured), `StudioRun` (one AI turn, working copy),
   `StudioMessage`, `StudioUsage` (cost per call), `FormSubmission`, `SiteReport`.
 - **Hosting/security** (`studio/middleware.py`, first in `MIDDLEWARE`; `studio/hosting.py`): sites live on a separate
-  registrable domain, path-based `https://<SITES_HOST>/<slug>/` (default: the Heroku app's herokuapp.com hostname, on
+  registrable domain, path-based `https://<SITES_HOST>/<slug>/` (the bare root `/` → 301 to `SITE_URL` + `/home/`, unknown slugs 404; default: the Heroku app's herokuapp.com hostname, on
   the Public Suffix List; `127.0.0.1:8000` with `DEBUG`, so use localhost:8000 for the console). On that host only
   `studio/urls_sites.py` exists (console/admin/API/static → 404), no cookies, no X-Frame-Options, the sites CSP (inline
   scripts allowed, `connect-src 'self'`, `worker-src 'none'`, `frame-ancestors` = console origins), no service workers
@@ -1115,6 +1146,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `AGENT_ANTHROPIC_MODEL` | No | Ask Attnd on Anthropic, default `claude-haiku-5-5` (owner, Nov 21, 2026) |
 | `AGENT_REFUSAL_MODEL` | No | The model a run continues on when Claude Haiku declines it, default `claude-sonnet-5-5` |
 | `PLAN_SUGGESTIONS_MODEL` | No | API-021 "Plan your day" suggestions, default `claude-haiku-5-5` (needs `ANTHROPIC_API_KEY`; without it the deterministic fallback is used) |
+| `AI_MONTHLY_CREDIT_USD` / `AI_VISITOR_CREDIT_USD` / `AI_PLATFORM_ALERT_USD` | No | First values of the staff-editable AI limits (credit/): monthly credit per person (30), visitor allowance (5), monthly platform alert (100); the database row wins once saved, as for the per-day caps below |
 | `AGENT_DAILY_SPEND_CAP_USD` | No | Ask Attnd AI spend per person per UTC day, default `2` |
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
 | `AGENT_EFFORT` | No | Ask Attnd's reasoning effort, one for every call of a run and the whole conversation (so the prompt cache holds), default `medium`. Replaces `AGENT_PLANNING_EFFORT` (still read as a fallback) and `AGENT_STEP_EFFORT` (ignored) |

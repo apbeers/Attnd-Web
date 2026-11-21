@@ -1,0 +1,11 @@
+{% load console_tags %}{# ai_credit_meter: the person's own AI credit this month (Account). #}<div class="stack stack--tight component component--ai_credit_meter">
+  <h2 class="title-4">{% icon "stars" %} {{ d.name }}</h2>
+  {% if d.unlimited %}<p class="small">No monthly limit on your account. You've used ${{ d.used }} of AI this month.</p>
+  {% else %}
+  <p class="small{% if d.over %} tone-danger{% endif %}"><strong>${{ d.used }}</strong> of ${{ d.limit }} used this month{% if not d.over %} · ${{ d.left }} left{% endif %} · renews on {{ d.renews }}.</p>
+  <span class="meter{% if d.near %} meter--warning{% endif %}" role="img" aria-label="{{ d.percent }}% of this month's AI credit used"><span style="width: {{ d.percent }}%"></span></span>
+  {% if d.over %}<p class="small">AI features (Ask Attnd, imports, Studio, colours) pause until then; editing, publishing and notifications keep working.</p>{% endif %}
+  {% endif %}
+  {% if d.breakdown %}<ul class="list list--inset small">{% for r in d.breakdown %}<li class="cluster"><span class="grow">{{ r.label }}</span><span class="muted">{{ r.calls }} call{{ r.calls|pluralize }}</span><span class="nowrap">${{ r.cost }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="small muted">Nothing used yet this month. Ask Attnd, AI imports, website checks, colours and Studio count toward it.</p>{% endif %}
+</div>

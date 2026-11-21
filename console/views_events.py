@@ -27,6 +27,7 @@ from attnd.links import join_url, qr_png
 from console.recent_auth import recent_auth_required, require as require_recent_auth
 from agent import summaries as S
 from agent.registry import agent_action, param as P
+from credit.decorators import ai_credit_required, blocked as credit_blocked
 
 from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, EventThemeForm,
                                        EventThemeSwitchesForm, LocationForm, NotificationEditForm, ThemeGenerateForm,
@@ -203,6 +204,8 @@ def event_new(request):
     ai_form = AIImportForm(prefix='ai')
     blank_form = BlankEventForm(prefix='blank')
     mode = request.POST.get('mode', 'ai')
+    if request.method == 'POST' and mode == 'ai' and (over := credit_blocked(request)):
+        return over
     if request.method == 'POST' and mode == 'ai':
         ai_form = AIImportForm(request.POST, request.FILES, prefix='ai')
         if ai_form.is_valid():
@@ -590,6 +593,7 @@ def event_sources(request, event):
               json=True, title='Started checking for updates')
 @event_view
 @require_POST
+@ai_credit_required
 def event_refresh(request, event):
     form = RefreshForm(request.POST, request.FILES)
     error = None
@@ -635,6 +639,7 @@ def event_duplicate(request, event):
               form=PasteImportForm, json=True, title='Started reading it into the event')
 @event_view
 @require_POST
+@ai_credit_required
 def event_import(request, event):
     from scrape.tables import to_text
     form = PasteImportForm(request.POST, request.FILES)
@@ -1291,6 +1296,7 @@ def event_theme_switches(request, event):
               form=ThemeGenerateForm, json=True, title='Started picking colours')
 @event_view
 @require_POST
+@ai_credit_required
 def event_theme_generate(request, event):
     form = ThemeGenerateForm(request.POST)
     if not form.is_valid():
@@ -1629,6 +1635,7 @@ def place_search(request, event):
 
 @require_POST
 @event_view
+@ai_credit_required
 def location_fill(request, event):
     """POST url: suggestions for the location form's empty fields from a website. Saves nothing."""
     from attnd.ratelimit import RateLimit

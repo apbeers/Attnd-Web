@@ -5,7 +5,7 @@ submits it to the same view (a form that always asks goes through the confirm ga
   {% include 'components/_form_rows.html' with rows=form.layout %}
   {% if form.submit %}<div class="{% if surface == 'chat' %}cluster{% else %}action-bar{% endif %}">
     {% if surface != 'chat' and form.summary %}<div class="action-bar__summary">{{ form.summary }}</div>{% endif %}
-    {% for b in form.submit %}<button class="button button--{{ b.style|default:'primary' }}"{% if b.name %} name="{{ b.name }}" value="{{ b.value }}"{% endif %}>{% if b.icon %}{% icon b.icon %} {% endif %}{{ b.label }}</button>
+    {% for b in form.submit %}<button class="button button--{{ b.style|default:'primary' }}"{% if b.name %} name="{{ b.name }}" value="{{ b.value }}"{% endif %}{% if b.confirm and surface != 'chat' and form.confirm_action %} data-confirm="{{ b.confirm }}"{% endif %}>{% if b.icon %}{% icon b.icon %} {% endif %}{{ b.label }}</button>
     {% endfor %}
   </div>{% endif %}
 </form>

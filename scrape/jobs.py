@@ -169,10 +169,23 @@ def _fail(job, message):
     job.save()
 
 
+JOB_FEATURES = {IngestJob.KIND_CREATE: 'import', IngestJob.KIND_REFRESH: 'refresh', IngestJob.KIND_THEME: 'theme'}
+
+
 def run_job(job_id, already_claimed=False):
     job = IngestJob.objects.get(pk=job_id) if already_claimed else claim(job_id)
     if job is None:
         return None
+    from credit import ledger
+    feature = 'paste' if job.trigger == IngestJob.TRIGGER_PASTE else JOB_FEATURES.get(job.kind, 'import')
+    background = job.trigger in (IngestJob.TRIGGER_WATCH, IngestJob.TRIGGER_SCHEDULE)
+    exempt = job.trigger == IngestJob.TRIGGER_PROSPECT  # staff prospect test copies
+    with ledger.spend_context(user=job.created_by, event=job.event, feature=feature, background=background,
+                              exempt=exempt):
+        return _run_job(job)
+
+
+def _run_job(job):
     try:
         if job.kind == IngestJob.KIND_CREATE:
             _run_create(job)

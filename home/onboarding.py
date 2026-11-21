@@ -263,7 +263,12 @@ def may_import(user):
         return True
     since = timezone.now() - timedelta(days=1)
     return IngestJob.objects.filter(created_by=user, kind=IngestJob.KIND_CREATE, created_at__gte=since).count() \
-        < int(getattr(settings, 'NEW_ACCOUNT_DAILY_IMPORTS', NEW_ACCOUNT_DAILY_IMPORTS))
+        < int(_new_account_imports())
+
+
+def _new_account_imports():
+    from credit.ledger import limits
+    return limits().new_account_daily_imports
 
 
 def consume(request):
@@ -273,6 +278,9 @@ def consume(request):
     pending = pending_for(request)
     if pending is None:
         return None, ''
+    from credit import ledger
+    if not ledger.allowed(request.user):
+        return None, ledger.limit_message(request.user)
     if not may_import(request.user):
         return None, 'New accounts can build three events a day. Try again tomorrow, or edit the ones you have.'
     text = pending.text

@@ -148,5 +148,5 @@ def prospect_settings_form(user, form=None):
                             ('grid', 'schedule_enabled', 'interval_days')],
                      action=reverse('prospects:settings'), submit=[{'label': 'Save', 'style': 'primary'}])
     return {'name': 'Prospect settings', 'form': data, 'running': bool(discover.running_run()),
-            'spent': f'{discover.spent_today():.2f}', 'cap': f'{settings.PROSPECT_DAILY_SPEND_CAP_USD:.2f}',
+            'spent': f'{discover.spent_today():.2f}', 'cap': f'{discover._daily_cap():.2f}',
             'actions': [] if discover.running_run() else [{'name': 'run_prospect_discovery', 'style': 'primary'}]}

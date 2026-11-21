@@ -113,12 +113,17 @@ def spent_today(user):
     return total or Decimal('0')
 
 
+def daily_cap():
+    from credit.ledger import limits
+    return Decimal(limits().agent_daily_usd)
+
+
 def budget_left(user):
-    return Decimal(str(settings.AGENT_DAILY_SPEND_CAP_USD)) - spent_today(user)
+    return daily_cap() - spent_today(user)
 
 
 def budget_message():
-    return (f'Today\'s Ask Attnd budget (${settings.AGENT_DAILY_SPEND_CAP_USD:.2f} per person) is used up. It resets '
+    return (f'Today\'s Ask Attnd budget (${daily_cap():.2f} per person) is used up. It resets '
             'at midnight UTC; everything in the console still works by hand.')
 
 
@@ -405,6 +410,9 @@ def _loop(run, provider, messages):
         AgentUsage.objects.create(user=run.user, run=run, provider=provider.name, model=model[:64],
                                   input_tokens=turn.input_tokens, cached_tokens=turn.cached_tokens,
                                   output_tokens=turn.output_tokens, cost_usd=cost)
+        from credit import ledger
+        ledger.record(cost=cost, model=model, provider=provider.name, input_tokens=turn.input_tokens,
+                      output_tokens=turn.output_tokens, feature='ask_attnd', user=run.user, event=run.event)
         run.step_count += 1
         run.cost_usd += cost
         run.input_tokens += turn.input_tokens

@@ -1,0 +1,5 @@
+{% load console_tags %}{# ai_limits_form: the live AI limits (staff). Saving always asks (page: data-confirm; chat: the confirm card). #}<div class="stack component component--ai_limits_form">
+  <h2 class="title-4">{% icon "lock" %} {{ d.name }}</h2>
+  <p class="small muted">Every AI call counts toward the person who started it (background work toward the event's owner). Staff have no monthly limit; Prospects, the showcase and demo events and App Review's samples aren't counted.{% if d.updated_by %} Last changed {{ d.updated }} by {{ d.updated_by }}.{% endif %}</p>
+  {% include 'components/_form.html' with form=d.form %}
+</div>

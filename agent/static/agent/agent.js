@@ -430,6 +430,7 @@
     }
     setThinking(run.status === 'running', data.steps || []);
     showSuggestions(run.active ? [] : (run.suggestions || []));
+    showCreditNote(run.credit_note || '');
     const waiting = run.status === 'waiting_confirmation' || run.status === 'waiting_reply';
     launcher.classList.toggle('needs-you', waiting);
     busy.hidden = run.status !== 'running';
@@ -468,6 +469,19 @@
     stick();
   }
   // Follow-ups after an answer: tapping one sends it.
+  // Past 80 % of this month's AI credit: one quiet line above the composer (credit/, agent.views.credit_note).
+  function showCreditNote(text) {
+    let line = suggestBox.parentNode.querySelector('[data-agent-credit]');
+    if (!text) { if (line) line.remove(); return; }
+    if (!line) {
+      line = document.createElement('p');
+      line.className = 'agent__credit small muted';
+      line.dataset.agentCredit = '';
+      line.setAttribute('role', 'status');
+      suggestBox.parentNode.insertBefore(line, suggestBox);
+    }
+    line.textContent = text;
+  }
   function showSuggestions(list) {
     suggestBox.textContent = '';
     suggestBox.hidden = !list.length;
@@ -1483,7 +1497,8 @@
                   event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
                   prospect_row: 'Prospects', prospect_detail: 'Prospects', prospect_run_row: 'Prospects',
                   prospect_settings_form: 'Prospects', website_overview: 'Website', website_versions: 'Website',
-                  website_assets: 'Website', website_forms: 'Website' };
+                  website_assets: 'Website', website_forms: 'Website', ai_spend_summary: 'AI spend',
+                  ai_limits_form: 'AI spend', ai_limit_overrides: 'AI spend' };
   // A count beside a tab's name (agent/canvas.py ALERT_COUNTS): a filled alert badge when it waits for the person.
   function setTabCount(label, count, alert) {
     const tab = tabs.get(label);
@@ -1497,12 +1512,12 @@
     button.append(' ', badge);
   }
   const ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
-                 'Website', 'History', 'Prospects'];
+                 'Website', 'History', 'Prospects', 'AI spend'];
   const SECTION_ORDER = ['event_tile', 'event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports',
                          'notification_form', 'notification_row', 'app_layout', 'website_watching',
                          'event_context_form', 'event_flyer', 'website_overview', 'website_versions', 'website_forms',
                          'website_assets', 'object_history', 'event_versions',
-                         'prospect_run_row', 'prospect_row'];
+                         'prospect_run_row', 'prospect_row', 'ai_spend_summary'];
   const EMPTY = { location_row: 'No locations yet. Add stages, booths, food, anywhere attendees go.',
                   schedule_item_row: 'No schedule items yet.', notification_row: 'No notifications sent or scheduled yet.',
                   event_tile: 'No events yet.', prospect_row: 'No open prospects. Run a discovery from its settings.',
@@ -1541,6 +1556,8 @@
   const TOOLBARS = {
     Prospects: [{ text: 'Discovery settings', plain: true, run: (b) => openComponent('prospect_settings_form', {}, 'Prospect settings', b) },
                 { text: 'Export CSV', plain: true, run: () => { location.href = '/console/prospects/export.csv'; } }],
+    'AI spend': [{ text: 'AI limits', plain: true, run: (b) => openComponent('ai_limits_form', {}, 'AI limits', b) },
+                 { text: 'Overrides', plain: true, run: (b) => openComponent('ai_limit_overrides', {}, 'AI credit overrides', b) }],
     Events: [{ text: 'New event', run: (b) => openComponent('event_new_form', {}, 'New event', b) }],
     Overview: [{ text: 'Edit details', needsEvent: true, run: (b) => openComponent('event_form', { event_id: eventId }, 'Details', b) },
                { text: 'History', needsEvent: true, plain: true, run: (b) => openComponent('object_history', { event_id: eventId }, 'History', b) }],
@@ -1551,7 +1568,7 @@
     const bar = canvas.querySelector('[data-canvas-tabs]');
     const body = canvas.querySelector('[data-canvas-body]');
     canvas.querySelector('[data-canvas-empty]')?.remove();
-    const id = `canvas-${label.toLowerCase()}`;
+    const id = `canvas-${label.toLowerCase().replace(/ /g, "-")}`;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'tabs__tab';
@@ -1899,7 +1916,7 @@
   // Staff: the Prospects tab (runs, then the open prospects by fit); absent for everyone else.
   async function preloadProspects() {
     if (!('staff' in root.dataset)) return;
-    for (const name of ['prospect_run_row', 'prospect_row']) {
+    for (const name of ['prospect_run_row', 'prospect_row', 'ai_spend_summary']) {
       let items = [];
       try { items = await fetchCards(name, [{}]); } catch (e) { /* none yet */ }
       toCanvas(name, items, {}, true);

@@ -110,7 +110,7 @@ def spent_today():
 
 
 def budget_left():
-    return Decimal(str(settings.PROSPECT_DAILY_SPEND_CAP_USD)) - spent_today()
+    return _daily_cap() - spent_today()
 
 
 def search_cost(searches):
@@ -398,7 +398,7 @@ class Runner:
         if time.monotonic() > self.deadline:
             raise StopRun(f'Stopped: the run reached its time limit ({self.max_minutes} min).')
         if budget_left() <= 0:
-            raise StopRun(f'Stopped: today\'s prospect AI budget (${settings.PROSPECT_DAILY_SPEND_CAP_USD:.2f}) '
+            raise StopRun(f'Stopped: today\'s prospect AI budget (${_daily_cap():.2f}) '
                           'is used up.')
 
     @staticmethod
@@ -616,14 +616,26 @@ def claim(run_id):
         return run
 
 
+def _daily_cap():
+    from credit.ledger import limits
+    return Decimal(limits().prospects_daily_usd)
+
+
 def execute(run_id, max_new=None, max_minutes=None):
+    """(AI credit: staff-only Prospects is exempt from personal limits; its own daily cap applies.)"""
+    from credit import ledger
+    with ledger.spend_context(feature='prospects', exempt=True):
+        return _execute(run_id, max_new, max_minutes)
+
+
+def _execute(run_id, max_new=None, max_minutes=None):
     run = claim(run_id)
     if run is None:
         return ProspectRun.objects.get(pk=run_id)
     runner = Runner(run, max_new=max_new, max_minutes=max_minutes)
     try:
         if budget_left() <= 0:
-            runner.log(f'Not started: today\'s prospect AI budget (${settings.PROSPECT_DAILY_SPEND_CAP_USD:.2f}) '
+            runner.log(f'Not started: today\'s prospect AI budget (${_daily_cap():.2f}) '
                        'is used up.')
         else:
             runner.execute()

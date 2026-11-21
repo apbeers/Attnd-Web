@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 
 from agent import summaries as S
 from agent.registry import agent_action, param as P
+from credit.decorators import ai_credit_required
 
 from events.display import resolve_display
 from events.models import Event
@@ -113,7 +114,7 @@ def run_task(run):
 
 def _budget_error(event):
     if ai.budget_left(event) <= 0:
-        return _json_error(f'Today\'s AI budget for this event is used up (${settings.STUDIO_DAILY_SPEND_CAP_USD:.2f} '
+        return _json_error(f'Today\'s AI budget for this event is used up (${ai.daily_cap():.2f} '
                            f'per day). It resets at midnight UTC.', status=429)
     return None
 
@@ -160,6 +161,7 @@ def _start_design(request, event, text):
               title='Started a new website')
 @studio_event_view
 @require_POST
+@ai_credit_required
 def start_from_scratch(request, event):
     return _start_design(request, event, starter_instruction(event))
 
@@ -172,6 +174,7 @@ def start_from_scratch(request, event):
               title='Started working on the website')
 @studio_event_view
 @require_POST
+@ai_credit_required
 def design(request, event):
     site = _site_or_404(event)
     text = (request.POST.get('instruction') or request.POST.get('text') or '').strip()
@@ -192,7 +195,7 @@ def run_retry(request, event, run_id):
     wants_json = 'application/json' in request.headers.get('Accept', '')
     error = None
     if ai.budget_left(event) <= 0:
-        error = (f'Today\'s AI budget for this event is used up (${settings.STUDIO_DAILY_SPEND_CAP_USD:.2f} per day). '
+        error = (f'Today\'s AI budget for this event is used up (${ai.daily_cap():.2f} per day). '
                  f'It resets at midnight UTC.')
     else:
         with transaction.atomic():
@@ -386,6 +389,7 @@ def site_settings(request, event):
               title='Started bringing a website in')
 @studio_event_view
 @require_POST
+@ai_credit_required
 def bring_in(request, event):
     site = _site_or_404(event)
     url = (request.POST.get('url') or '').strip() or ((event.source_urls or [''])[0])

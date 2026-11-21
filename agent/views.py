@@ -193,6 +193,21 @@ def suggestions(run):
     return ['Show the schedule', 'Add a location', 'Send a notification'] if run.event_id else []
 
 
+def credit_note(user):
+    """A line under a finished answer once the person passed 80 % of this month's AI credit (credit/)."""
+    from credit import ledger
+    try:
+        s = ledger.status(user)
+    except Exception:
+        return ''
+    if s['unlimited'] or s['percent'] < 80:
+        return ''
+    if s['percent'] >= 100:
+        return ledger.limit_message(user)
+    return (f"You've used {s['percent']}% of this month's AI credit (${s['used']:.2f} of ${s['limit']:.0f}). "
+            f"It renews on {s['renews_label']}.")
+
+
 def run_json(run):
     pending = run.steps.filter(confirm_state=AgentStep.CONFIRM_PENDING).order_by('-seq').first()
     question = (run.steps.filter(kind=AgentStep.KIND_QUESTION).order_by('-seq').first()
@@ -213,6 +228,7 @@ def run_json(run):
         'options': (question.arguments.get('options') or []) if question else [],
         'undo': loop.undo_available(run), 'undone': run.undone_at is not None, 'feedback': run.feedback,
         'suggestions': suggestions(run),
+        'credit_note': '' if run.active else credit_note(run.user),
         'changed_events': sorted({c['event_id'] for c in changed if c['event_id']}),
         'changed_urls': sorted({c['url'] for c in changed if c['url']}),
     }
@@ -237,6 +253,9 @@ def start(request):
                              'run': run_json(active)}, status=409)
     if loop.budget_left(request.user) <= 0:
         return _error(loop.budget_message(), status=429)
+    from credit import ledger
+    if not ledger.allowed(request.user):  # this month's AI credit (credit/)
+        return _error(ledger.limit_message(request.user), status=429)
     from attnd.ratelimit import RateLimit
     limit = RateLimit('agent_start_user')
     if limit.hit(request.user.pk) > limit.limit:
@@ -272,7 +291,7 @@ def runs(request):
                      'summary': (r.summary or r.error)[:300], 'created_at': r.created_at.isoformat()}
                     for r in recent],
            'spent_today': f'{loop.spent_today(request.user):.2f}',
-           'cap': f'{settings.AGENT_DAILY_SPEND_CAP_USD:.2f}'}
+           'cap': f'{loop.daily_cap():.2f}'}
     if 'chat' in request.GET:
         # The conversation on reload, in one request (A21): the runs of this chat (?chat=3,5,8) plus an active one,
         # each with its steps, oldest first. Stage I4: with no ids (another device, after signing in again, a new

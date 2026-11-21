@@ -76,7 +76,8 @@ def spent_today():
 
 
 def budget_left():
-    return Decimal(str(getattr(settings, 'PLACE_IMAGES_DAILY_CAP_USD', 1))) - spent_today()
+    from credit.ledger import limits
+    return Decimal(limits().place_images_daily_usd) - spent_today()
 
 
 def wanted(location):
@@ -336,6 +337,16 @@ def _credit_for(candidate):
 
 
 def find_for(location, pages=None, force=False):
+    """(AI credit: background work for the event, counted against its owner; paused while they are over their
+    monthly limit unless a person asked for it.)"""
+    from credit import ledger
+    if not force and not ledger.owner_allowed(location.event):
+        return 'skipped'
+    with ledger.spend_context(event=location.event, feature='place_images', background=not force):
+        return _find_for(location, pages, force)
+
+
+def _find_for(location, pages=None, force=False):
     """Look for an image for one location; returns 'found', 'none', 'skipped' or 'error'."""
     from attnd import claude
     from events.models import PlaceImageAttempt

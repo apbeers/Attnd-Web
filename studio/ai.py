@@ -84,13 +84,18 @@ def spent_today(event):
     return total or Decimal('0')
 
 
+def daily_cap():
+    from credit.ledger import limits
+    return Decimal(limits().studio_daily_usd)
+
+
 def budget_left(event):
-    return Decimal(str(settings.STUDIO_DAILY_SPEND_CAP_USD)) - spent_today(event)
+    return daily_cap() - spent_today(event)
 
 
 def check_budget(event):
     if budget_left(event) <= 0:
-        raise BudgetExceeded(f'Today\'s AI budget for this event (${settings.STUDIO_DAILY_SPEND_CAP_USD:.2f}) is used up. '
+        raise BudgetExceeded(f'Today\'s AI budget for this event (${daily_cap():.2f}) is used up. '
                              f'It resets at midnight UTC; you can still edit the code by hand.')
 
 
@@ -99,6 +104,11 @@ def record_usage(event, run, kind, provider, model, input_tokens=0, output_token
     cost = token_cost(model, input_tokens, output_tokens, cached_tokens) + Decimal(str(settings.STUDIO_PRICES['image'])) * images
     StudioUsage.objects.create(event=event, run=run, kind=kind, provider=provider, model=model[:64],
                                input_tokens=input_tokens, output_tokens=output_tokens, images=images, cost_usd=cost)
+    from credit import ledger  # (the images part is recorded by generate_image itself)
+    if input_tokens or output_tokens:
+        ledger.record(cost=token_cost(model, input_tokens, output_tokens, cached_tokens), model=model,
+                      provider=provider, input_tokens=input_tokens, output_tokens=output_tokens, feature='studio',
+                      user=getattr(run, 'created_by', None) if run is not None else None, event=event)
     return cost
 
 
@@ -107,7 +117,7 @@ def usage_summary(event, days=30):
     since = timezone.now() - timedelta(days=days)
     rows = StudioUsage.objects.filter(event=event, created_at__gte=since)
     agg = rows.aggregate(cost=Sum('cost_usd'), inp=Sum('input_tokens'), out=Sum('output_tokens'), img=Sum('images'))
-    return {'today': spent_today(event), 'cap': settings.STUDIO_DAILY_SPEND_CAP_USD, 'month': agg['cost'] or 0,
+    return {'today': spent_today(event), 'cap': daily_cap(), 'month': agg['cost'] or 0,
             'input_tokens': agg['inp'] or 0, 'output_tokens': agg['out'] or 0, 'images': agg['img'] or 0}
 
 
@@ -365,6 +375,9 @@ def generate_image(prompt, size='portrait', references=()):
             raise AIError(f'Image generation failed: {exc}') from exc
         item = response.data[0]
         if getattr(item, 'b64_json', None):
+            from credit import ledger
+            ledger.record(cost=Decimal(str(settings.STUDIO_PRICES['image'])), model=model, provider='openai',
+                          feature=(ledger.current().get('feature') or 'studio_images'))
             return base64.b64decode(item.b64_json), model
         raise AIError('The image model returned no image.')
     raise AIError(f'Image generation failed: {last_error}')

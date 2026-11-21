@@ -219,7 +219,7 @@ def runs(request):
         if running:
             messages.info(request, f'Run {running.pk} is already going.')
         elif discover.budget_left() <= 0:
-            messages.error(request, f"Today's prospect AI budget (${settings.PROSPECT_DAILY_SPEND_CAP_USD:.2f}) is "
+            messages.error(request, f"Today's prospect AI budget (${discover._daily_cap():.2f}) is "
                                     'used up. It resets at midnight UTC.')
         else:
             run = discover.start_background(request.user)
@@ -229,7 +229,7 @@ def runs(request):
     return render(request, 'prospects/runs.html', {
         'tab': 'runs', 'runs': ProspectRun.objects.select_related('started_by')[:100],
         'running': discover.running_run(), 'spent_today': discover.spent_today(),
-        'cap': settings.PROSPECT_DAILY_SPEND_CAP_USD, 'conf': ProspectSettings.load()})
+        'cap': discover._daily_cap(), 'conf': ProspectSettings.load()})
 
 
 @agent_action('prospect_run', 'One discovery run: log and events found.', kind='read')
@@ -257,7 +257,7 @@ def settings_view(request):
         next_run = (conf.last_run_at + timedelta(days=conf.interval_days)) if conf.last_run_at else timezone.now()
     return render(request, 'prospects/settings.html', {
         'tab': 'settings', 'form': form, 'conf': conf, 'next_run': next_run, 'due': is_due(conf),
-        'cap': settings.PROSPECT_DAILY_SPEND_CAP_USD, 'model': settings.PROSPECT_MODEL,
+        'cap': discover._daily_cap(), 'model': settings.PROSPECT_MODEL,
         'max_minutes': settings.PROSPECT_RUN_MAX_MINUTES})
 
 
