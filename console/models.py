@@ -139,6 +139,8 @@ class ConsolePreference(models.Model):
     chat_default = models.BooleanField(default=False)
     # Stage I15: on phones the console opens on the chat unless the person turned it off there.
     phone_chat = models.BooleanField(default=True)
+    # Stage I16: which organizer emails this person wants ({kind: bool}, console/organizer_mail.KINDS; all on).
+    notify = models.JSONField(default=dict, blank=True)
     # What Ask Attnd should remember for this person (stage I11): [{id, text, event_id (or null = every event),
     # created}], ≤ 30, learned from corrections ("always call it Main Stage"); shown and removable in Account.
     agent_notes = models.JSONField(default=list, blank=True)

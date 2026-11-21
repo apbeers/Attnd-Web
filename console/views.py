@@ -121,6 +121,13 @@ def account(request):
             return response
     elif action in ('passkey_rename', 'passkey_remove'):
         return _passkey_action(request, action)
+    elif action == 'notify':  # stage I16: which organizer emails
+        from console.models import ConsolePreference
+        from console.organizer_mail import KINDS
+        ConsolePreference.objects.update_or_create(user=request.user, defaults={
+            'notify': {kind: request.POST.get(kind) == 'on' for kind in KINDS}})
+        messages.success(request, 'Saved your email choices.')
+        return redirect('console:account')
     elif action == 'forget_note':  # stage I11: what Ask Attnd remembers
         from console.models import ConsolePreference
         ConsolePreference.forget(request.user, request.POST.get('note', ''))
@@ -155,8 +162,11 @@ def account(request):
                  .values_list('pk', 'name'))
     for note in notes:
         note['event'] = names.get(note.get('event_id'), '')
+    from console.organizer_mail import KINDS
+    chosen = pref.notify if pref else {}
     return render(request, 'console/account.html', {
         'agent_notes': notes,
+        'notify_kinds': [{'key': k, 'label': v, 'on': chosen.get(k, True)} for k, v in KINDS.items()],
         'email_form': email_form, 'password_form': password_form, 'section': 'account',
         'two_factor': device, 'two_factor_required': required,
         'recovery_codes': recovery_codes,

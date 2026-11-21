@@ -119,6 +119,14 @@
       <button class="button button--secondary button--small">{% if recovery_codes_left %}New recovery codes{% else %}Set up recovery codes{% endif %}</button></form>
   </div>
   {% endif %}
+  <div class="panel span-all" id="emails">
+    <h2 class="title-4">{% icon "mail" %} Email me when…</h2>
+    <form method="post" class="stack stack--tight">{% csrf_token %}<input type="hidden" name="action" value="notify">
+      {% for k in notify_kinds %}<label class="check" for="notify-{{ k.key }}"><input type="checkbox" id="notify-{{ k.key }}" name="{{ k.key }}"{% if k.on %} checked{% endif %}> {{ k.label }}</label>{% endfor %}
+      <p class="small muted">For your events and those you help run as an admin. While a console tab is open, background tasks also show as browser notifications.</p>
+      <div><button class="button button--secondary button--small">Save</button></div>
+    </form>
+  </div>
   <div class="panel span-all" id="ask-attnd-memory">
     <h2 class="title-4">{% icon "stars" %} What Ask Attnd remembers</h2>
     {% if agent_notes %}<p class="small muted">Ask Attnd follows these in every request (it learns them when you say something should always apply). Remove any you no longer want.</p>

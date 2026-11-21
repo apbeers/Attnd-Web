@@ -14,7 +14,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.mail import send_mail
 from django.db import close_old_connections, connection, transaction
 from django.utils import timezone
 
@@ -244,6 +243,9 @@ def _run_create(job):
         'notes': ' '.join(filter(None, [data.get('notes', '')] + notes)),
     }
     job.save()
+    if job.created_by_id and job.trigger == IngestJob.TRIGGER_CONSOLE and not job.testing_only:
+        from console import organizer_mail  # stage I16: "your event is ready" (each person can turn it off)
+        organizer_mail.import_done(job, event)
     if job.studio_import and job.urls and job.created_by_id and not job.testing_only:
         _bring_into_studio(job, event)
     if job.testing_only:
@@ -357,22 +359,8 @@ def _geocode_new_locations(event, changes):
 
 
 def _email_owner(event, changeset, pending):
-    """Tell the owner and event admins that AI updates are waiting for review."""
-    from events.models import EventMember
-    recipients = [u.email for u in ([event.user] if event.user else []) if u.email]
-    recipients += list(event.members.filter(role=EventMember.ROLE_ADMIN).exclude(user__email='')
-                       .values_list('user__email', flat=True))
-    from django.urls import reverse
-    from console.mail import email_enabled, site_url
-    if not recipients or not email_enabled():
-        return
-    try:
-        send_mail(
-            subject=f'{pending} suggested update(s) for {event.name}',
-            message=(f'Attnd checked your event sources and found: {changeset.summary}.\n\n'
-                     f'Review them: {site_url(reverse("console:changeset", args=[changeset.id]))}\n'),
-            from_email=None,
-            recipient_list=sorted(set(recipients)),
-        )
-    except Exception:
-        logger.exception('Could not email %s', recipients)
+    """Tell the owner and event admins that AI updates are waiting for review (each can turn it off, stage I16)."""
+    from console import organizer_mail
+    organizer_mail.review_waiting(event, changeset, pending)
+
+

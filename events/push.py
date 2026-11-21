@@ -372,6 +372,12 @@ def send_due_notifications(now=None):
     for n in due:
         send_notification(n)
         count += 1
+        try:  # stage I16: tell the organizers it went out (each can turn it off in Account)
+            from console import organizer_mail
+            n.refresh_from_db()
+            organizer_mail.notification_sent(n)
+        except Exception:
+            logger.exception('Organizer email for notification %s failed', n.pk)
     return count
 
 
