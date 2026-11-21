@@ -436,6 +436,13 @@ class DisplayForm(forms.Form):
             initial[key] = {True: '1', False: '0'}.get(overrides.get(key), '')
         return initial
 
+    def clean(self):
+        from events.display import MAX_TABS, TAB_LIMIT_NOTE
+        data = super().clean()
+        if data.get('customize_tabs') and len(data.get('tabs') or []) > MAX_TABS:
+            self.add_error('tabs', TAB_LIMIT_NOTE)
+        return data
+
     def to_overrides(self):
         d = self.cleaned_data
         out = {}

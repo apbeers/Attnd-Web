@@ -20,6 +20,27 @@ PRESETS = ['auto', 'intimate', 'standard', 'festival']
 TABS = ['home', 'map', 'locations', 'schedule', 'flyer', 'notifications']
 MAX_TABS = 5
 LOCATIONS_STYLES = ['cards', 'list', 'grouped']
+TAB_LIMIT_NOTE = 'The apps show at most 5 tabs. Turn one off first.'
+
+
+def fit_tabs(tabs):
+    """(kept, dropped): at most MAX_TABS (iOS shows five, Home counts as one). Over it (old saved lists, Home on top
+    of five) the flyer goes first, then Places when the Map is there (the map lists them too), then the Map when
+    Places stays; Home and Updates are never dropped (owner, Nov 21, 2026)."""
+    kept, dropped = list(tabs), []
+    for tab in ('flyer', 'locations', 'map', 'schedule'):
+        if len(kept) <= MAX_TABS:
+            break
+        if tab == 'locations' and 'map' not in kept:
+            continue
+        if tab in kept:
+            kept.remove(tab)
+            dropped.append(tab)
+    while len(kept) > MAX_TABS:  # whatever else, never Home or Updates
+        tab = next(t for t in reversed(kept) if t not in ('home', 'notifications'))
+        kept.remove(tab)
+        dropped.append(tab)
+    return kept, dropped
 SCHEDULE_STYLES = ['timeline', 'by_day', 'by_location', 'now_next']
 SECONDARY_PANES = ['locations', 'schedule', 'now_next', 'none']
 
@@ -249,9 +270,7 @@ def resolve_display(event, stats=None, sections=0):
         cfg['tabs'] = [t for t in cfg['tabs'] if t != 'home']
         if cfg['default_tab'] == 'home' and 'default_tab' not in overrides:
             cfg['default_tab'] = auto_default
-    if len(cfg['tabs']) > MAX_TABS and 'tabs' not in overrides and 'flyer' in cfg['tabs']:
-        cfg['tabs'].remove('flyer')  # Home + five: the flyer goes first (Updates stays)
-    cfg['tabs'] = cfg['tabs'][:MAX_TABS]  # the apps show at most five (never a "More" tab)
+    cfg['tabs'], _dropped = fit_tabs(cfg['tabs'])  # the apps show at most five (never a "More" tab)
     if not cfg['tabs']:
         cfg['tabs'] = ['map', 'notifications']
     if cfg['default_tab'] not in cfg['tabs']:

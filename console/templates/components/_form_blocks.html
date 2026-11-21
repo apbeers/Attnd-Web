@@ -26,7 +26,9 @@
         Also rebuild the website in Attnd Studio <span class="badge badge--neutral badge--pill">Beta</span>
         <span class="field__help">Studio copies every page, image, font and PDF of the website and the AI builds a matching site.</span></label>
 {% elif r.name == 'layout_reason' %}<div class="notice notice--neutral small" data-layout-reason>{{ r.text }}</div>
-{% elif r.name == 'tab_list' %}<ul class="list list--boxed field tab-list" data-tab-sortable>{% for t in r.tabs %}
+{% elif r.name == 'tab_list' %}<p class="small muted" data-tab-count data-max="{{ r.max }}" data-note="{{ r.note }}">{{ r.chosen }} of {{ r.max }} tabs{% if r.chosen >= r.max %} · {{ r.note }}{% endif %}</p>
+      {% if r.cut %}<p class="small tone-warning">Not shown in the apps: {{ r.cut }} (5-tab limit)</p>{% endif %}
+      <ul class="list list--boxed field tab-list" data-tab-sortable data-max-tabs="{{ r.max }}">{% for t in r.tabs %}
         <li class="cluster" data-tab="{{ t.value }}">{% icon "grip" "drag-handle" %}<label class="check" for="{{ uid }}tab-{{ t.value }}"><input type="checkbox" name="tabs" value="{{ t.value }}" id="{{ uid }}tab-{{ t.value }}"{% if t.checked %} checked{% endif %}> {{ t.label }}</label>{% if t.empty %}<span class="small tone-warning">{{ t.empty }}{% if t.checked %} · the apps would show an empty tab{% else %} · left out automatically{% endif %}</span>{% endif %}</li>{% endfor %}
       </ul>
 {% elif r.name == 'accent' %}<div class="field"><span class="field__label">Accent colour</span>

@@ -110,12 +110,16 @@ def app_layout(user, event_id=None, event=None, form=None):
     from events.display import empty_tabs
     empty = empty_tabs(stats)  # the apps leave these out automatically; chosen by hand, they'd show nothing
     resolved = resolve_display(event, stats, sections=CATALOGUE_VERSION)  # the newest apps' tabs (Home included)
+    from events.display import MAX_TABS, TAB_LIMIT_NOTE, fit_tabs
+    _, cut = fit_tabs([t for t in order if t in chosen]) if 'tabs' in overrides else ([], [])
     data = form_json(form, [('choices', 'preset'),
                             ('block', 'layout_reason', {'text': f"Currently using {str(resolved.get('resolved_preset', '')).capitalize()}: {resolved.get('reason', '')}."}),
                             'customize_tabs',
                             ('block', 'tab_list', {'tabs': [{'value': t, 'label': LABELS['tabs'].get(t, t), 'checked': t in chosen,
                                                              'empty': EMPTY_NOTES.get(t) if t in empty else ''}
-                                                            for t in order]}),
+                                                            for t in order],
+                                                   'max': MAX_TABS, 'chosen': len(chosen), 'note': TAB_LIMIT_NOTE,
+                                                   'cut': ', '.join(LABELS['tabs'].get(t, t) for t in cut)}),
                             ('grid', 'default_tab', 'secondary_pane'), ('grid', 'locations_style', 'schedule_style'),
                             ('grid', 'map_clustering', 'map_fit_all'), ('grid', 'show_location_images', 'enable_search'),
                             'group_by_category',

@@ -560,6 +560,46 @@
   }
   setInterval(phonesTick, 10000);
 
+  // §4: the "N unpublished changes · Review · Discard · Publish" bar (event pages, the chat's canvas): fetched, so
+  // pages don't pay for the diff; again after every save (attnd:saved) and every 30 s while visible.
+  async function publishBars() {
+    for (const slot of document.querySelectorAll('[data-publish-bar]')) {
+      try {
+        const r = await fetch(slot.dataset.publishBar, { credentials: 'same-origin', headers: { Accept: 'text/html' } });
+        if (!r.ok) continue;
+        const html = (await r.text()).trim();
+        if (slot.dataset.html === html) continue;
+        const was = !!slot.dataset.html;
+        slot.dataset.html = html;
+        slot.innerHTML = html;
+        if (html) reveal(slot.firstElementChild, was ? 'pulse' : 'in');
+      } catch (e) { /* next time */ }
+    }
+  }
+  if (document.querySelector('[data-publish-bar]')) {
+    publishBars();
+    setInterval(() => { if (!document.hidden) publishBars(); }, 30000);
+    document.addEventListener('attnd:saved', () => setTimeout(publishBars, 300));
+  }
+  window.attndPublishBars = publishBars;
+
+  // App layout's tabs: at most 5 (iOS shows five, Home counts as one): "5 of 5 tabs", the rest disabled with a note.
+  function tabLimit(list) {
+    const max = Number(list.dataset.maxTabs || 5);
+    const boxes = [...list.querySelectorAll('input[name=tabs]')];
+    const on = boxes.filter((b) => b.checked).length;
+    boxes.forEach((b) => { b.disabled = !b.checked && on >= max; });
+    const count = list.parentElement.querySelector('[data-tab-count]');
+    if (count) count.textContent = `${on} of ${max} tabs${on >= max ? ` · ${count.dataset.note}` : ''}`;
+  }
+  const tabLimits = (scope) => (scope || document).querySelectorAll('[data-max-tabs]').forEach(tabLimit);
+  document.addEventListener('change', (e) => {
+    const list = e.target.closest && e.target.closest('[data-max-tabs]');
+    if (list && e.target.name === 'tabs') tabLimit(list);
+  });
+  tabLimits();
+  window.attndTabLimits = tabLimits;
+
   // The top bar's "Chat as default" switch: it flips (animated) before the page goes on.
   document.addEventListener('submit', (e) => {
     const form = e.target.closest && e.target.closest('.chat-switch-form');
@@ -753,6 +793,7 @@
   }
 
   window.attndEnhance = function (scope) {
+    window.attndTabLimits?.(scope);
     scope = scope || document;
     enhanceHexFields(scope);
     enhanceLockPreview(scope);
