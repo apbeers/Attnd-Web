@@ -187,7 +187,10 @@ def run_json(run):
         'id': run.pk, 'status': run.status, 'active': run.active, 'goal': run.goal, 'summary': run.summary,
         'thread': run.thread,
         'buttons': run.goal == BUTTONS_GOAL,  # a quiet run that only holds chat buttons' confirmations
-        'error': run.error, 'cost_usd': f'{run.cost_usd:.4f}', 'model_calls': run.step_count,
+        'error': run.error,
+        # Staff see what failed underneath (status, error type, request id); never the provider's raw text.
+        'error_details': run.error_details if (run.user.is_staff or run.user.is_superuser) else '',
+        'cost_usd': f'{run.cost_usd:.4f}', 'model_calls': run.step_count,
         'created_at': run.created_at.isoformat(),
         'pending': {'step': pending.pk, 'summary': pending.confirm_summary, 'hash': pending.confirm_hash,
                     'kind': pending.kind} if pending else None,

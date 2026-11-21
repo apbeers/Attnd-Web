@@ -204,9 +204,10 @@ class ClaudeProviderTests(AgentTestCase):
     def test_typed_errors_become_messages(self):
         run, _ = self.run_claude([api_error(anthropic.RateLimitError, 429, 'slow down')])
         self.assertEqual(run.status, AgentRun.FAILED)
-        self.assertIn('rate limited', run.error)
+        self.assertIn('busy', run.error)
         run, _ = self.run_claude([api_error(anthropic.AuthenticationError, 401, 'bad key')])
-        self.assertIn('ANTHROPIC_API_KEY', run.error)
+        self.assertEqual(run.error, providers.FRIENDLY_ERROR)  # never the provider's own text
+        self.assertIn('401', run.error_details)
 
     def test_strict_schema_refused_retries_without_strict(self):
         providers._strict_refused.clear()

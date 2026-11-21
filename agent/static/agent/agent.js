@@ -426,7 +426,7 @@
   }
   function finished() {
     if (run.summary) addFeedback(answerOnce(run.summary), run);
-    if (run.error && run.status !== 'done') bubble('error', run.error);
+    if (run.error && run.status !== 'done') errorBubble(run);
     if (full) {  // full screen: fresh copies on the canvas instead of a reload
       run.changed_events.forEach((id) => refreshKeys([`event:${id}`]));
       return;
@@ -525,7 +525,7 @@
     wasActive = data.run.active;
     renderRun(data);
     if (!data.run.active && data.run.summary) answerOnce(data.run.summary);
-    if (!data.run.active && data.run.error && data.run.status !== 'done') bubble('error', data.run.error);
+    if (!data.run.active && data.run.error && data.run.status !== 'done') errorBubble(data.run);
     live = isLive !== false;
   }
 
@@ -623,6 +623,19 @@
       else bubble('error', err.message);
     }
   });
+  // A failed run: the friendly line, plus (staff only) a folded "Details" with the status, type and request id.
+  function errorBubble(r) {
+    const el = bubble('error', r.error);
+    if (!r.error_details || !el) return;
+    const more = document.createElement('details');
+    more.className = 'agent__error-details';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Details';
+    const code = document.createElement('code');
+    code.textContent = r.error_details;
+    more.append(summary, code);
+    el.append(more);
+  }
   // "Confirm it's you": a risky action needs a recent sign-in first. The card opens the check, which comes back
   // here; the action is still waiting for Confirm.
   function reauthCard(url, text) {

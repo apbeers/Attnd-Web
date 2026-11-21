@@ -98,9 +98,9 @@ class Finished(Exception):
 class StopRun(Exception):
     """End the run now with this message (signed out, stopped, caps)."""
 
-    def __init__(self, message, status=AgentRun.FAILED):
+    def __init__(self, message, status=AgentRun.FAILED, details=''):
         super().__init__(message)
-        self.message, self.status = message, status
+        self.message, self.status, self.details = message, status, details
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +240,7 @@ def execute(run_id):
         messages = provider.start(first)
         _loop(run, provider, messages)
     except StopRun as exc:
-        _end(run, exc.status, error=exc.message)
+        _end(run, exc.status, error=exc.message, details=exc.details)
     except internal.Signedout as exc:
         _end(run, AgentRun.FAILED, error=str(exc))
     except Exception as exc:
@@ -279,7 +279,7 @@ def resume_run(run_id):
                                             for c in later])
         _loop(run, provider, messages)
     except StopRun as exc:
-        _end(run, exc.status, error=exc.message)
+        _end(run, exc.status, error=exc.message, details=exc.details)
     except internal.Signedout as exc:
         _end(run, AgentRun.FAILED, error=str(exc))
     except Exception as exc:
@@ -394,8 +394,8 @@ def _loop(run, provider, messages):
                 raise StopRun('The AI declined this request. Try rephrasing it.')
             provider, messages = _refusal_fallback(run, messages, exc)
             continue
-        except ai.AIError as exc:
-            raise StopRun(str(exc))
+        except ai.AIError as exc:  # a friendly line; the provider's details are logged and shown to staff only
+            raise StopRun(str(exc), details=getattr(exc, 'details', ''))
         model = turn.model or provider.model
         cost = ai.token_cost(model, turn.input_tokens, turn.output_tokens, turn.cached_tokens,
                              getattr(turn, 'cache_written', 0))
@@ -445,7 +445,7 @@ def _pause(run, provider, messages, calls, results, call, pause):
         AgentStep.objects.filter(pk=pause.step.pk).update(confirm_state=AgentStep.CONFIRM_EXPIRED)  # stopped meanwhile
 
 
-def _end(run, status, summary='', error='', suggestions=None):
+def _end(run, status, summary='', error='', suggestions=None, details=''):
     with transaction.atomic():
         current = AgentRun.objects.select_for_update().get(pk=run.pk)
         if current.status not in AgentRun.ACTIVE:  # already ended (e.g. the person pressed Stop): keep that
@@ -453,10 +453,11 @@ def _end(run, status, summary='', error='', suggestions=None):
         run.status = status
         run.summary = (summary or current.summary)[:8000]
         run.error = (error or current.error)[:4000]
+        run.error_details = (details or '')[:500]
         run.finished_at = timezone.now()
         run.state = {}
         run.suggestions = list(suggestions or [])[:4]
-        run.save(update_fields=['status', 'summary', 'error', 'finished_at', 'state', 'suggestions'])
+        run.save(update_fields=['status', 'summary', 'error', 'error_details', 'finished_at', 'state', 'suggestions'])
         run.steps.filter(confirm_state=AgentStep.CONFIRM_PENDING).update(confirm_state=AgentStep.CONFIRM_EXPIRED)
 
 

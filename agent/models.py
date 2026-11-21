@@ -28,6 +28,8 @@ class AgentRun(models.Model):
     step_count = models.PositiveIntegerField(default=0)  # model calls
     summary = models.TextField(blank=True)
     error = models.TextField(blank=True)
+    # The provider's error details (status, type, request id) for staff; the person sees only `error` (a friendly line).
+    error_details = models.CharField(max_length=500, blank=True)
     revisions = models.JSONField(default=dict, blank=True)  # {event id: History revision before the first change}
     suggestions = models.JSONField(default=list, blank=True)  # follow-up chips (finish's `suggest`)
     target = models.JSONField(default=dict, blank=True)  # Add with AI: the form being filled {component, ids}

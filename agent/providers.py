@@ -29,10 +29,38 @@ logger = logging.getLogger('attnd.agent')
 MAX_TOKENS = 16000
 MAX_TOKENS_RETRY = 32000
 MAX_CONTINUATIONS = 3
-STRICT_TOOLS = {'search_everything', 'remember', 'propose_changes', 'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show', 'get_component', 'fill_form', 'platform_help'}
+# (show / get_component / fill_form are not strict: their id sets alone were 24 optional parameters, and the API allows
+# 24 optional and 16 union-typed parameters across all strict schemas of a request; their handlers validate the ids.)
+STRICT_TOOLS = {'search_everything', 'remember', 'propose_changes', 'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'platform_help'}
 
 # Strict schemas the API refused once (too complex): this process sends tools without `strict` from then on.
 _strict_refused = set()
+
+
+FRIENDLY_ERROR = 'Ask Attnd couldn’t finish that. Try again, or Talk to a person.'
+
+
+class ProviderError(AIError):
+    """An API error, shown as a friendly line (never the provider's own text, which can be a raw error dict);
+    `details` (status, error type, request id) is logged on attnd.agent and shown to staff only."""
+
+    def __init__(self, message=FRIENDLY_ERROR, details=''):
+        super().__init__(message)
+        self.details = details[:500]
+
+
+def _api_error(exc, message=FRIENDLY_ERROR):
+    body = getattr(exc, 'body', None)
+    kind = ''
+    if isinstance(body, dict):
+        err = body.get('error') if isinstance(body.get('error'), dict) else body
+        kind = str(err.get('type') or '')
+    status = getattr(exc, 'status_code', '') or ''
+    request_id = getattr(exc, 'request_id', '') or ''
+    details = ' · '.join(str(p) for p in (status, kind or type(exc).__name__, request_id and f'request {request_id}') if p)
+    logging.getLogger('attnd.agent').warning('Ask Attnd: AI request failed (%s): %s', details,
+                                             str(getattr(exc, 'message', exc))[:500])
+    return ProviderError(message, details)
 
 
 class Refused(AIError):
@@ -82,6 +110,59 @@ def claude_schema(schema):
             branches.append({'type': 'null'})
         out['anyOf'] = branches
     return out
+
+
+def _non_null(schema):
+    """The schema without its null option, or None when it has none (a plain, non-nullable schema)."""
+    kind = schema.get('type')
+    if isinstance(kind, list) and 'null' in kind:
+        out = dict(schema)
+        rest = [t for t in kind if t != 'null']
+        out['type'] = rest[0] if len(rest) == 1 else rest
+        if 'enum' in out:
+            out['enum'] = [v for v in out['enum'] if v is not None]
+        return out
+    for key in ('anyOf', 'oneOf'):
+        branches = schema.get(key)
+        if isinstance(branches, list) and any(isinstance(b, dict) and b.get('type') == 'null' for b in branches):
+            rest = [b for b in branches if not (isinstance(b, dict) and b.get('type') == 'null')]
+            out = {k: v for k, v in schema.items() if k != key}
+            if len(rest) == 1:
+                out.update(rest[0])
+            else:
+                out[key] = rest
+            return out
+    return None
+
+
+def tool_input_schema(schema):
+    """A tool's parameters as sent to Claude: "null = keep / leave empty" becomes an optional property with a plain
+    type (left out of `required`) instead of a nullable union, at any depth, and a nullable enum becomes the plain
+    enum. The API allows only 16 union-typed parameters per request (found on dev, Nov 21, 2026: 33 from the
+    components' id sets), and a missing argument means exactly what null did (the callers read args.get()). Unions
+    of two real types stay. Then claude_schema's clean-up."""
+    def walk(s):
+        if isinstance(s, list):
+            return [walk(v) for v in s]
+        if not isinstance(s, dict):
+            return s
+        out = {k: walk(v) for k, v in s.items()}
+        props = out.get('properties')
+        if isinstance(props, dict):
+            required = list(out.get('required') or [])
+            for name, prop in list(props.items()):
+                plain = _non_null(prop) if isinstance(prop, dict) else None
+                if plain is not None:
+                    props[name] = plain
+                    if name in required:
+                        required.remove(name)
+            out['required'] = required
+        elif isinstance(out.get('items'), dict):
+            plain = _non_null(out['items'])
+            if plain is not None:
+                out['items'] = plain
+        return out
+    return claude_schema(walk(schema))
 
 
 def _is(kind, value):
@@ -160,7 +241,8 @@ class ClaudeProvider:
         strict = self.model not in _strict_refused
         out = []
         for t in tools:
-            tool = {'name': t['name'], 'description': t['description'][:1000], 'input_schema': claude_schema(t['parameters'])}
+            tool = {'name': t['name'], 'description': t['description'][:1000],
+                    'input_schema': tool_input_schema(t['parameters'])}
             if strict and t.get('strict') and t['name'] in STRICT_TOOLS:
                 tool['strict'] = True
             out.append(tool)
@@ -199,21 +281,15 @@ class ClaudeProvider:
                                exc)
                 _strict_refused.add(self.model)
                 return self._create(system, messages, tools, max_tokens)
-            raise AIError(f'The AI request failed: {getattr(exc, "message", exc)}') from exc
-        except anthropic.AuthenticationError as exc:
-            raise AIError('The AI service rejected the server\'s key (ANTHROPIC_API_KEY).') from exc
-        except anthropic.PermissionDeniedError as exc:
-            raise AIError(f'The AI service refused this key: {getattr(exc, "message", exc)}') from exc
-        except anthropic.NotFoundError as exc:
-            raise AIError(f'The AI model {self.model} is not available.') from exc
+            raise _api_error(exc) from exc
         except anthropic.RateLimitError as exc:
-            raise AIError('The AI service is busy (rate limited). Try again in a minute.') from exc
-        except anthropic.APIStatusError as exc:
-            raise AIError(f'The AI request failed ({exc.status_code}). Try again.') from exc
+            raise _api_error(exc, 'Ask Attnd is busy right now. Try again in a minute.') from exc
         except anthropic.APITimeoutError as exc:
-            raise AIError('The AI service took too long to answer. Try again.') from exc
+            raise _api_error(exc, 'Ask Attnd took too long to answer. Try again.') from exc
         except anthropic.APIConnectionError as exc:
-            raise AIError('Could not reach the AI service. Try again.') from exc
+            raise _api_error(exc, 'Ask Attnd couldn’t reach the AI service. Try again.') from exc
+        except anthropic.APIError as exc:  # authentication, permission, not found, any other status
+            raise _api_error(exc) from exc
 
     def chat(self, system, messages, tools):
         """One model turn. Handles pause_turn (continues, appending the paused content to `messages`),
