@@ -1,0 +1,9 @@
+{% load console_tags %}{# website_versions: every version, live / draft, preview, restore and publish (both ask). #}<div class="stack component component--website_versions">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "history" %} {{ d.name }}</h3>{% else %}<h2 class="title-3">Versions</h2>{% endif %}
+  {% if d.rows %}<ul class="list list--boxed">{% for r in d.rows %}
+    <li class="cluster"><div class="grow"><strong>Version {{ r.number }}</strong>{% if r.live %} <span class="badge badge--success">Live</span>{% endif %}{% if r.draft %} <span class="badge badge--info">Draft</span>{% endif %}
+      <div class="small muted">{{ r.summary }} · {{ r.source }} · {{ r.when }}</div></div>
+      <a class="button button--ghost button--small" href="{{ r.preview }}" target="_blank" rel="noopener">Preview ↗</a>
+      {% include 'components/_actions.html' with actions=r.actions %}</li>{% endfor %}</ul>
+  {% elif d.enabled %}<p class="small muted">No versions yet.</p>{% else %}<p class="small muted">Switch the event to Studio first.</p>{% endif %}
+</div>

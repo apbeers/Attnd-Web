@@ -263,3 +263,19 @@ def create_test_event(ctx):
     from prospects.models import Prospect
     p = Prospect.objects.get(pk=ctx.args['pk'])
     return f'Import “{p.name}” as a testing-only event (AI import from its website). Nobody is invited or emailed.'
+
+
+@safe
+def studio_restore(ctx):
+    return (f'Make a copy of website version {ctx.args.get("version")} the draft of {_name(ctx)}'
+            ' (the live site stays as it is until you publish).')
+
+
+@safe
+def studio_asset_delete(ctx):
+    return f'Delete a file from the website library of {_name(ctx)}.'
+
+
+@safe
+def studio_entry_delete(ctx):
+    return f'Delete one website form entry of {_name(ctx)}.'

@@ -184,7 +184,7 @@ class RegistryTests(AgentTestCase):
         organizer_tools = registry.writes_for(self.owner)
         staff_tools = registry.writes_for(staff)
         for name in ('delete_diagnostics_session', 'retrace_stack', 'create_test_events', 'run_prospect_discovery',
-                     'take_down_studio_site', 'publish_studio_site'):
+                     'take_down_studio_site', 'publish_website'):
             self.assertNotIn(name, organizer_tools)
             self.assertIn(name, staff_tools)
         self.assertNotIn('assign_event_owner', staff_tools)  # superusers only
@@ -202,9 +202,6 @@ class RegistryTests(AgentTestCase):
             ('diagnostics/symbols.html', 'delete'): 'delete_symbol_mapping',
             ('diagnostics/session.html', ''): 'delete_diagnostics_session',
             ('prospects/claims.html', ''): 'approve_event_claim',
-            ('studio/editor.html', 'unpublish'): 'unpublish_studio_site',
-            ('studio/editor.html', 'form_delete'): 'delete_studio_form_entry',
-            ('studio/editor.html', 'reset_previews'): 'reset_studio_preview_links',
             ('studio/reports.html', 'suspend'): 'take_down_studio_site',
             ('console/team.html', 'transfer'): 'transfer_event_ownership',
             ('console/team.html', 'leave'): 'leave_event',
@@ -231,7 +228,7 @@ class RegistryTests(AgentTestCase):
             self.assertIn(key, expected, f'{key}: a new data-confirm button; register its action with confirm=True')
             self.assertTrue(writes[expected[key]].confirm, expected[key])
         for name in ('send_notification', 'send_scheduled_notification', 'publish_event', 'invite_team_member',
-                     'publish_studio_site', 'create_test_event', 'delete_event', 'remove_team_member'):
+                     'publish_website', 'create_test_event', 'delete_event', 'remove_team_member'):
             self.assertTrue(writes[name].confirm, name)
 
 

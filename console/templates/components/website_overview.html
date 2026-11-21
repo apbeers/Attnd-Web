@@ -1,0 +1,22 @@
+{% load console_tags %}{# website_overview: the event's Studio website: live preview, state, publish, ask for a change. #}<div class="stack component component--website_overview" id="website">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "brush" %} {{ d.name }}</h3>{% endif %}
+  {% if not d.enabled %}
+    <p>Attnd Studio designs and hosts a website for this event, kept in sync with the app. Ask for any change in the chat.</p>
+    {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>
+    {% else %}<p class="small muted">The owner or an event admin can switch this event to Studio.</p>{% endif %}
+  {% else %}
+    <p class="small">
+      {% if d.suspended %}<span class="badge badge--danger">Taken down by Attnd</span>
+      {% elif d.public_url %}<span class="badge badge--success">Live</span> version {{ d.live }} at <a href="{{ d.public_url }}" target="_blank" rel="noopener">{{ d.public_url }}</a>
+      {% else %}<span class="badge badge--neutral">Not published</span> · it will be at <span class="mono">{{ d.address }}</span>{% endif %}
+      {% if d.draft %} · draft: version {{ d.draft }}{% if d.pages %} ({{ d.pages|length }} page{{ d.pages|length|pluralize }}){% endif %}{% endif %}
+    </p>
+    {% if d.working %}<p class="small" data-website-working="{{ d.working.id }}"><span class="spinner" aria-hidden="true"></span> {{ d.working.title }}: {{ d.working.progress }}</p>{% endif %}
+    {% if d.preview %}<div class="website-preview"><iframe src="{{ d.preview }}" title="Preview of the draft website" sandbox="allow-scripts allow-forms allow-popups" referrerpolicy="no-referrer" loading="lazy"></iframe></div>
+    {% elif d.draft %}<p class="small muted">The preview needs the sites address (SITES_HOST).</p>
+    {% else %}<p class="small muted">No website yet. Ask for one below, or bring your current site in.</p>{% endif %}
+    {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+    {% include 'components/_form.html' with form=d.design %}
+    {% if d.bring %}<details class="small"><summary>Bring your current website into Studio</summary>{% include 'components/_form.html' with form=d.bring %}</details>{% endif %}
+  {% endif %}
+</div>

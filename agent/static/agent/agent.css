@@ -221,6 +221,11 @@
   .canvas__pane:is([data-tab=Settings], [data-tab=Metrics], [data-tab=History]) > .canvas__grid {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: var(--space-5); align-items: start; }
   .canvas__pane:is([data-tab=Notifications], [data-tab=Settings], [data-tab=Metrics], [data-tab=History]) > .canvas__grid > .canvas__section + .canvas__section { margin-top: 0; }
+  /* Website: the preview across the row, then versions | forms and files in columns */
+  .canvas__pane[data-tab=Website] > .canvas__grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--space-5); align-items: start; }
+  .canvas__pane[data-tab=Website] > .canvas__grid > .canvas__section + .canvas__section { margin-top: 0; }
+  .canvas__pane[data-tab=Website] [data-section=website_overview] { grid-column: 1 / -1; }
   /* Settings' big forms (app layout and Screens) span the whole row */
   .canvas__pane[data-tab=Settings] [data-section=app_layout] { grid-column: 1 / -1; }
   /* Team: the members beside the invite form */

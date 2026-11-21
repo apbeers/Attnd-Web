@@ -667,9 +667,25 @@ on Save does; there is no second copy of any business logic.
 
 ## Attnd Studio (admins only; `studio/`, spec `docs/specs/studio_spec.md`)
 
-A second tier (`Event.plan`: `standard` = import/manage, `studio` = Studio; no checkout yet, Stripe later): the
-organizer chats with an AI that writes the event's **website** (raw multi-page HTML/CSS/JS), makes **flyer art** and
-sets the **app's look**; Attnd hosts the site.
+A second tier (`Event.plan`: `standard` = import/manage, `studio` = Studio; no checkout yet, Stripe later): an AI
+writes the event's **website** (raw multi-page HTML/CSS/JS), makes **flyer art** and sets the **app's look**; Attnd
+hosts the site.
+- **Inside Ask Attnd** (batch 5, owner Nov 21, 2026: one chat): Studio's own chat UI, its editor page and its
+  JavaScript (`studio.js` / `studio.css`, `editor.html`, `enable.html`, the `chat` / `state` / `app_preview` /
+  `runs/<id>/` endpoints) are gone. The engine stays (agent loop, file tools, set_app_look, generate_image, set_flyer,
+  importer, versions, publishing) behind registered Ask Attnd actions: **`design_website(instruction)`**
+  (`studio:design`: a `StudioRun` in the background → `{"task": studio.views.run_task(run)}`, the chat's live task card;
+  always offered to Studio users, `loop.ALWAYS_LOADED`, and the system prompt routes website requests to it),
+  **`publish_website`** / **`unpublish_website`** / **`publish_website_version`** / **`restore_website_version`**
+  (always ask; versions by POST `version`), **`bring_into_studio`** (JSON task), `delete_studio_asset` (POST `asset`),
+  `delete_studio_form_entry` (POST `entry`), plus the existing code / settings / flyer / undo actions. The console task
+  feed lists Studio runs as tasks `studio-<id>` (`_studio_tasks`, `?ids=`); Retry = `studio:run_retry` (JSON task).
+  **Components** (`console/components/catalog_website.py`, audience `studio` = `studio.access.has_studio_access`):
+  `website_overview` (sandboxed signed preview iframe of the draft, live / draft versions, address, Publish /
+  Unpublish, "What should change on the website?" (a background form to `design`), Bring your current site in, or
+  Use Studio for this event), `website_versions` (Preview ↗, Restore as the draft, Publish this one), `website_forms`
+  (entries per form, CSV, Delete), `website_assets` (files, Delete). They make the canvas **Website** tab (Studio users
+  only; `?tab=website` opens on it) and the **Website** page (`studio:editor`, sidenav "Website").
 - **Access** (`studio/access.py`, Nov 19, 2026: admins only): staff and superusers, plus emails in `STUDIO_BETA_EMAILS`
   (an explicit override, default empty). The old beta invite list (`StudioAccess`) and its staff page are gone. Everyone else gets 404 on every Studio URL and sees no entry point (sidenav
   "Studio"). Staff: `/console/studio/reports/` (abuse reports, take down/restore; topbar "Studio reports"). Team roles as today: any member edits drafts;
@@ -694,8 +710,7 @@ sets the **app's look**; Attnd hosts the site.
   reasoning, chained with `previous_response_id`; Chat Completions refuses tools with reasoning on gpt-5.5. Anthropic
   Messages API through the official SDK (streamed) when `ANTHROPIC_API_KEY` is set, with a prompt-cache breakpoint), agent loop with tools
   write/edit/delete/read file, set_app_look, generate_image, set_flyer, in a background thread (like AI import); the
-  editor polls `runs/<id>/` (no WebSockets), the preview reloads on every file change, a failed run shows **Retry**
-  (`runs/<id>/retry/`). Defaults: `gpt-5.5` → `gpt-5` fallback (only when the model is unavailable), `claude-sonnet-5-5` (owner, Nov 21, 2026: Studio runs on Anthropic on dev and production; `STUDIO_AI_PROVIDER` auto/anthropic),
+  chat's task card follows it through the console task feed, a failed run offers **Retry** (`runs/<id>/retry/`). Defaults: `gpt-5.5` → `gpt-5` fallback (only when the model is unavailable), `claude-sonnet-5-5` (owner, Nov 21, 2026: Studio runs on Anthropic on dev and production; `STUDIO_AI_PROVIDER` auto/anthropic),
   images `gpt-image-2` → `gpt-image-1`. Daily spend cap per event (`STUDIO_DAILY_SPEND_CAP_USD`, $10: a full import
   costs ~$2–4) over `StudioUsage` (cached input at a tenth); vision describes uploads. Asset descriptions (vision) run on Claude Haiku (`attnd/claude.py`); images stay on OpenAI.
 - **Import** (`importer.py`, spec §9): an AI import that creates an event brings its website into Studio

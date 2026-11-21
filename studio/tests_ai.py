@@ -585,9 +585,10 @@ class ImporterTests(StudioTestCase):
         self.assertTrue(run.context['captured'])
         copied = StudioAsset.objects.filter(event=self.event).count()
         self.assertEqual(copied, 13)
-        editor = self.client.get(reverse('studio:editor', args=[self.event.pk]))
-        self.assertContains(editor, reverse('studio:run_retry', args=[self.event.pk, run.pk]))
-        self.assertContains(editor, 'The AI request failed (500)')
+        from studio.views import run_task
+        task = run_task(run)
+        self.assertEqual(task['retry_url'], reverse('studio:run_retry', args=[self.event.pk, run.pk]))
+        self.assertIn('The AI request failed (500)', task['error'])
         overview = self.client.get(reverse('console:event', args=[self.event.pk]))
         self.assertContains(overview, 'data-studio-import="failed"')
         # Retry: a new import run with the same crawl; nothing is fetched again.
@@ -595,7 +596,7 @@ class ImporterTests(StudioTestCase):
             response = self.client.post(reverse('studio:run_retry', args=[self.event.pk, run.pk]),
                                         HTTP_ACCEPT='application/json')
         self.assertEqual(response.status_code, 202)
-        retry = StudioRun.objects.get(pk=response.json()['run']['id'])
+        retry = StudioRun.objects.get(pk=int(response.json()['task']['id'].removeprefix('studio-')))
         self.assertEqual((retry.kind, retry.context['pages']), (StudioRun.KIND_IMPORT, run.context['pages']))
         log = []
         provider = FakeProvider([ai.Turn(calls=[call('write_file', path='index.html', content=PAGE)]),
@@ -621,7 +622,7 @@ class ImporterTests(StudioTestCase):
             importer.start_import(self.site, 'https://someone-else.example/', self.owner)
         self.assertTrue(importer.allowed_url(self.event, 'https://www.artsfair.example/about'))
         response = self.client.post(f'/console/events/{self.event.pk}/studio/import/', {'url': 'https://evil.example/'})
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 400)
         self.assertFalse(StudioRun.objects.exists())
 
     def test_ssrf_guard(self):

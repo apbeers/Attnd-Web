@@ -142,7 +142,7 @@ def started_task(step):
         return str((json.loads(step.result).get('task') or {}).get('id') or '')
     except ValueError:  # (trimmed at 4,000 characters)
         import re
-        found = re.match(r'\{"task": \{"id": "([0-9a-f-]{36})"', step.result)
+        found = re.match(r'\{"task": \{"id": "([0-9a-z-]{1,40})"', step.result)
         return found.group(1) if found else ''
 
 

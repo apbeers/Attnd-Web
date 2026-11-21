@@ -101,9 +101,14 @@ class AccessTests(StudioTestCase):
         EventMember.objects.create(event=self.event, user=member, role=EventMember.ROLE_ADMIN)
         client = Client()
         client.force_login(member)
-        for name in ('editor', 'state', 'code', 'app_preview'):
+        for name in ('editor', 'code'):
             self.assertEqual(client.get(reverse(f'studio:{name}', args=[self.event.pk])).status_code, 404, name)
-        self.assertEqual(client.post(reverse('studio:chat', args=[self.event.pk]), {'text': 'hi'}).status_code, 404)
+        self.assertEqual(client.post(reverse('studio:design', args=[self.event.pk]), {'instruction': 'hi'}).status_code, 404)
+        # Nor in the chat: the Website components and design_website are Studio-only.
+        from agent import registry as agent_registry
+        from console import components as C
+        self.assertNotIn('design_website', agent_registry.writes_for(member))
+        self.assertNotIn('website_overview', C.for_user(member))
         overview = client.get(reverse('console:event', args=[self.event.pk]))
         self.assertNotContains(overview, reverse('studio:editor', args=[self.event.pk]))
         self.assertNotContains(client.get(reverse('console:event_new')), 'studio_import')
@@ -140,14 +145,14 @@ class AccessTests(StudioTestCase):
         page = self.client.get(url)
         self.assertContains(page, 'Use Studio for this event')
         self.assertFalse(Site.objects.filter(event=event).exists())
-        self.assertEqual(self.client.get(reverse('studio:state', args=[event.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse('studio:code', args=[event.pk])).status_code, 404)
         version = event.content_version
         self.client.post(url, {'action': 'switch'})
         event.refresh_from_db()
         self.assertEqual(event.plan, Event.PLAN_STUDIO)
         self.assertGreater(event.content_version, version)
         self.assertTrue(Site.objects.filter(event=event).exists())
-        self.assertContains(self.client.get(url), 'Assistant')
+        self.assertContains(self.client.get(url), 'What should change on the website?')
 
     def test_contributor_cannot_switch_or_publish(self):
         event = Event.objects.create(name='Market', event_code='MKT2', user=self.owner, start_time=timezone.now())
@@ -158,7 +163,7 @@ class AccessTests(StudioTestCase):
         client = Client()
         client.force_login(helper)
         page = client.get(reverse('studio:editor', args=[event.pk]))
-        self.assertContains(page, 'Ask the event')
+        self.assertContains(page, 'The owner or an event admin can switch this event to Studio.')
         client.post(reverse('studio:editor', args=[event.pk]), {'action': 'switch'})
         event.refresh_from_db()
         self.assertEqual(event.plan, Event.PLAN_STANDARD)
@@ -429,7 +434,7 @@ class FormTests(StudioTestCase):
         self.assertIn('submitted_at,page,name,email', text)
         self.assertIn("'=HYPERLINK", text)
         entry = FormSubmission.objects.get()
-        self.client.post(reverse('studio:form_delete', args=[self.event.pk, entry.pk]))
+        self.client.post(reverse('studio:form_delete', args=[self.event.pk]), {'entry': entry.pk})
         self.assertFalse(FormSubmission.objects.exists())
 
 
@@ -498,7 +503,9 @@ class AssetTests(StudioTestCase):
         number = self.client.post(reverse('studio:flyer', args=[self.event.pk]), {'asset_id': asset.pk}).json()['number']
         self.site.refresh_from_db()
         self.assertEqual((self.site.draft.number, self.site.draft.flyer_asset_id), (number, asset.pk))
-        self.assertEqual(self.client.post(url, {'action': 'delete'}).status_code, 400)  # it's the draft's flyer
+        delete = reverse('studio:asset_delete', args=[self.event.pk])
+        self.client.post(delete, {'asset': str(asset.pk)})
+        self.assertTrue(type(asset).objects.filter(pk=asset.pk).exists())  # it's the draft's flyer
         self.publish()
         event = Event.objects.get(pk=self.event.pk)
         self.assertTrue(event.flyer.name)
@@ -524,7 +531,7 @@ class VersionTests(StudioTestCase):
         self.assertEqual((self.site.draft.number, self.site.draft.files), (4, self.v2.files))
         self.assertEqual(self.site.draft.source, SiteVersion.SOURCE_RESTORE)
         v3 = self.site.versions.get(number=3)
-        self.client.post(reverse('studio:restore', args=[self.event.pk, v3.pk]))
+        self.client.post(reverse('studio:restore', args=[self.event.pk]), {'version': v3.pk})
         self.site.refresh_from_db()
         self.assertEqual(self.site.draft.files, {'index.html': '<p>v3</p>'})
 
@@ -539,7 +546,7 @@ class VersionTests(StudioTestCase):
         self.assertEqual(event.display_config.get('default_tab'), 'schedule')
         self.assertNotIn('bogus', event.display_config)
         # Publish an older version: the live site rolls back, the draft stays.
-        self.client.post(reverse('studio:publish_version', args=[self.event.pk, self.v2.pk]))
+        self.client.post(reverse('studio:publish_version', args=[self.event.pk]), {'version': self.v2.pk})
         self.site.refresh_from_db()
         self.assertEqual((self.site.published, self.site.draft), (self.v2, version))
         self.client.post(reverse('studio:unpublish', args=[self.event.pk]))
@@ -572,16 +579,21 @@ class VersionTests(StudioTestCase):
         self.assertEqual(unique_slug('!!'), 'event')
         self.assertEqual(unique_slug('Console'), 'console-2')
 
-    def test_editor_renders(self):
+    def test_website_page_and_components(self):
+        """The Website page draws the same components as the chat's Website tab (no Studio chat of its own)."""
         page = self.client.get(reverse('studio:editor', args=[self.event.pk]))
-        self.assertContains(page, 'studio-state-json')
-        self.assertContains(page, 'sandbox="allow-scripts allow-forms allow-popups')
+        self.assertContains(page, 'component--website_overview')
+        self.assertContains(page, 'sandbox="allow-scripts allow-forms allow-popups"')
         self.assertNotContains(page, 'allow-same-origin')
         self.assertNotContains(page, '<h1>Fair</h1>')  # site HTML never rendered on attnd.app
-        state = self.client.get(reverse('studio:state', args=[self.event.pk])).json()
-        self.assertEqual(state['pages'], ['about.html', 'index.html'])
-        self.assertTrue(state['preview'].startswith(f'https://{SITES}/'))
-        self.assertIn('phone-preview', self.client.get(reverse('studio:app_preview', args=[self.event.pk])).json()['html'])
+        self.assertNotContains(page, 'studio.js')
+        from console import components as C
+        data = C.load(self.owner, 'website_overview', {'event_id': self.event.pk})
+        self.assertTrue(data['preview'].startswith(f'https://{SITES}/'))
+        self.assertEqual(data['draft'], self.site.draft.number)
+        self.assertIn('publish_website', [a['name'] for a in data['actions']])
+        versions = C.load(self.owner, 'website_versions', {'event_id': self.event.pk})
+        self.assertTrue(any(a['name'] == 'restore_website_version' for r in versions['rows'] for a in r['actions']))
 
 
 class ReportTests(StudioTestCase):
@@ -615,24 +627,49 @@ class ReportTests(StudioTestCase):
         self.assertEqual(self.sites(url, 'post', data={'reason': 'spam'}).status_code, 429)
 
 
-class ChatEndpointTests(StudioTestCase):
-    def test_chat_creates_a_run(self):
+class DesignWebsiteTests(StudioTestCase):
+    """Ask Attnd is the one chat: design_website starts Studio's engine in the background and answers a task (the
+    chat's live card); the canvas has a Website tab for people with Studio access."""
+
+    def test_design_creates_a_run_and_a_task(self):
         with self.captureOnCommitCallbacks(execute=False) as callbacks:
-            response = self.client.post(reverse('studio:chat', args=[self.event.pk]), {
-                'text': 'Make it bold', 'selection': json.dumps({'selector': 'h1', 'tag': 'h1', 'text': 'Fair'})})
+            response = self.client.post(reverse('studio:design', args=[self.event.pk]), {'instruction': 'Make it bold'})
         self.assertEqual(response.status_code, 202)
         self.assertEqual(len(callbacks), 1)  # the background thread starts after commit
         run = StudioRun.objects.get()
-        self.assertEqual((run.prompt, run.selection['selector']), ('Make it bold', 'h1'))
-        busy = self.client.post(reverse('studio:chat', args=[self.event.pk]), {'text': 'Again'})
+        self.assertEqual(run.prompt, 'Make it bold')
+        task = response.json()['task']
+        self.assertEqual((task['id'], task['status'], task['kind']), (f'studio-{run.pk}', 'queued', 'website'))
+        busy = self.client.post(reverse('studio:design', args=[self.event.pk]), {'instruction': 'Again'})
         self.assertEqual(busy.status_code, 409)
-        status = self.client.get(reverse('studio:run', args=[self.event.pk, run.pk])).json()['run']
-        self.assertEqual(status['status'], 'queued')
-        self.assertTrue(status['preview'].startswith(f'https://{SITES}/'))
+        feed = self.client.get(f'/console/tasks/?ids=studio-{run.pk}').json()['tasks']
+        self.assertIn(f'studio-{run.pk}', [t['id'] for t in feed])
+        # The agent step's JSON answer becomes a live task card.
+        from agent.models import AgentRun, AgentStep
+        from agent.views import step_json
+        agent_run = AgentRun.objects.create(user=self.owner, goal='make the hero bigger')
+        step = AgentStep.objects.create(run=agent_run, seq=1, tool='design_website', result=response.content.decode())
+        self.assertEqual(step_json(step)['task'], f'studio-{run.pk}')
 
     def test_spend_cap(self):
         StudioUsage.objects.create(event=self.event, kind='chat', provider='openai', model='x',
                                    cost_usd=settings.STUDIO_DAILY_SPEND_CAP_USD + 1)
-        response = self.client.post(reverse('studio:chat', args=[self.event.pk]), {'text': 'Hi'})
+        response = self.client.post(reverse('studio:design', args=[self.event.pk]), {'instruction': 'Hi'})
         self.assertEqual(response.status_code, 429)
         self.assertFalse(StudioRun.objects.exists())
+
+    def test_actions_and_canvas_tab(self):
+        from agent import loop, registry as agent_registry
+        writes = agent_registry.writes_for(self.owner)
+        for name in ('design_website', 'publish_website', 'unpublish_website', 'restore_website_version',
+                     'bring_into_studio'):
+            self.assertIn(name, writes)
+        for name in ('publish_website', 'unpublish_website', 'restore_website_version'):
+            self.assertTrue(writes[name].confirm, name)
+        self.assertFalse(writes['design_website'].confirm)
+        # "make the hero bigger" names no area: design_website is always among the tools for Studio users.
+        run = type('R', (), {'goal': 'make the hero bigger', 'page_url': ''})()
+        self.assertIn('design_website', {t['name'] for t in loop.tools_for(self.owner, run)})
+        page = self.client.get(reverse('console:assistant') + f'?event={self.event.pk}&tab=website')
+        self.assertContains(page, 'data-tab="Website"')
+        self.assertContains(page, 'component--website_overview')

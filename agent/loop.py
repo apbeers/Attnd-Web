@@ -169,7 +169,9 @@ def _thread(run_id, resume):
 
 # Rarely used write tools (staff areas, Studio) load only when the request is about them (prompt size): the page is
 # in that area or the request names it. list_pages still lists every page.
-AREAS = {'studio': ('studio', 'website', ' site'), 'prospects': ('prospect',),
+# design_website is always offered to people with Studio access ("make the hero bigger" names no area).
+ALWAYS_LOADED = {'design_website'}
+AREAS = {'studio': ('studio', 'website', ' site', 'hero', 'homepage', 'web page', 'landing page', 'sponsors page'), 'prospects': ('prospect',),
          'diagnostics': ('diagnostic', 'crash', ' log')}
 
 
@@ -185,7 +187,8 @@ def tools_for(user, run=None):
     from agent import components
     areas = _areas_for(run)
     writes = [a for a in registry.writes_for(user).values()
-              if (a.url_name or '').split(':')[0] not in AREAS or (a.url_name or '').split(':')[0] in areas]
+              if (a.url_name or '').split(':')[0] not in AREAS or (a.url_name or '').split(':')[0] in areas
+              or a.name in ALWAYS_LOADED]
     from agent.proposals import TOOL as PROPOSE_TOOL
     from agent.search_tool import TOOL as SEARCH_TOOL
     return FIXED_TOOLS + [PROPOSE_TOOL, SEARCH_TOOL] + components.tool_definitions(user) + [registry.tool_definition(a) for a in writes]

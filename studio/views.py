@@ -23,9 +23,6 @@ from studio.models import (RESERVED_SLUGS, SLUG_RE, FormSubmission, Site, SiteRe
                            StudioMessage, StudioRun)
 
 MAX_UPLOAD_FILES = 20
-IDEAS = ['Design the site', 'Add a schedule page', 'Add a sponsors section with a sponsorship form',
-         'Make it more high-contrast', 'Add a volunteer application form', 'Make flyer art and use it as the flyer']
-
 
 def _ctx(event, **extra):
     from console.views_events import _ctx as console_ctx
@@ -48,33 +45,22 @@ def _json_error(message, status=400):
 
 @agent_action('enable_studio', 'Switch an event to Attnd Studio (owner/admins).', fixed={'action': 'switch'},
               title='Switched to Studio')
-@agent_action('studio_editor', "An event's Studio page: the site, versions, chat, assets, forms, settings.",
-              kind='read')
+@agent_action('studio_editor', "An event's website (Attnd Studio): the live preview, versions, publish state, address, "
+              'assets and form entries. Changes to the site go through design_website.', kind='read')
 @studio_event_view
 def editor(request, event):
-    if event.plan != Event.PLAN_STUDIO:
-        if request.method == 'POST' and request.POST.get('action') == 'switch':
-            if not can_switch_plan(event, request.user):
-                messages.error(request, 'Only the owner and event admins can switch this event to Studio.')
-            else:
-                publishing.switch_plan(event, Event.PLAN_STUDIO)
-                publishing.ensure_site(event, request.user)
-                messages.success(request, 'This event now uses Attnd Studio.')
-            return redirect('studio:editor', event_id=event.pk)
-        return render(request, 'studio/enable.html', _ctx(event, can_switch=can_switch_plan(event, request.user)))
-    site = publishing.ensure_site(event, request.user)
-    active = site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).first()
-    last = site.runs.order_by('-created_at').first()
-    forms = _forms_summary(site)
-    return render(request, 'studio/editor.html', _ctx(
-        event, site=site, can_publish=can_publish(event, request.user),
-        is_manager=event.can_manage_team(request.user),
-        chat=site.messages.select_related('created_by').order_by('-created_at')[:60][::-1],
-        active_run=active, failed_run=last if last and last.status == StudioRun.FAILED else None, forms=forms, usage=ai.usage_summary(event), sites_origin=hosting.sites_origin(),
-        public_url=site.public_url(), sources=event.source_urls or [],
-        app_preview=_app_preview_html(site), undo=publishing.undo_target(site),
-        state=_state(site), ideas=IDEAS,
-    ))
+    """The Website page: the same components as the full-screen chat's Website tab (Ask Attnd is the one chat)."""
+    if request.method == 'POST' and request.POST.get('action') == 'switch' and event.plan != Event.PLAN_STUDIO:
+        if not can_switch_plan(event, request.user):
+            messages.error(request, 'Only the owner and event admins can switch this event to Studio.')
+        else:
+            publishing.switch_plan(event, Event.PLAN_STUDIO)
+            publishing.ensure_site(event, request.user)
+            messages.success(request, 'This event now uses Attnd Studio.')
+        return redirect('studio:editor', event_id=event.pk)
+    if event.plan == Event.PLAN_STUDIO:
+        publishing.ensure_site(event, request.user)
+    return render(request, 'studio/website.html', _ctx(event, studio=event.plan == Event.PLAN_STUDIO))
 
 
 def _state(site):
@@ -97,89 +83,68 @@ def _state(site):
     }
 
 
-@agent_action('studio_state', "Studio's state as JSON: draft/published versions, assets, forms.", kind='read')
-@studio_event_view
-def state(request, event):
-    return JsonResponse(_state(_site_or_404(event)))
-
-
-def _app_preview_html(site):
-    """The console's phone preview with the draft's app look applied (in memory only)."""
-    from console.views_events import _preview_html
-    from events.display import clean_overrides
-    event = site.event
-    look = (site.draft.app_look if site.draft else {}) or {}
-    original = event.accent_color, event.display_config
-    if look.get('accent_color'):
-        event.accent_color = look['accent_color']
-    if look.get('display'):
-        event.display_config = clean_overrides({**(event.display_config or {}), **look['display']})
-    try:
-        resolved = resolve_display(event)
-        html = _preview_html(event, resolved)
-    finally:
-        event.accent_color, event.display_config = original
-    return html
-
-
-@studio_event_view
-def app_preview(request, event):
-    site = _site_or_404(event)
-    look = (site.draft.app_look if site.draft else {}) or {}
-    return JsonResponse({'html': _app_preview_html(site), 'logo': publishing.logo_url(site, look),
-                         'accent': look.get('accent_color') or event.accent_color or ''})
-
-
 # ---------------------------------------------------------------------------
-# Chat + runs
+# Designing the website (Ask Attnd's design_website) + runs
 # ---------------------------------------------------------------------------
 
-def _run_json(run):
-    return {'id': run.pk, 'status': run.status, 'kind': run.kind,
-            'retry_url': reverse('studio:run_retry', args=[run.site.event_id, run.pk]), 'steps': run.steps[-30:], 'files_rev': run.files_rev,
-            'reply': run.reply, 'error': run.error, 'version': run.result_version.number if run.result_version else None,
-            'preview': hosting.preview_url(run.site, run=run) if run.is_active and hosting.sites_origin() else '',
-            'cost': float(run.cost_usd)}
+def run_task(run):
+    """A Studio run as the console's task feed shows it (Ask Attnd's live task card, the tray)."""
+    running = run.status in (StudioRun.QUEUED, StudioRun.RUNNING)
+    title = ('Bringing your website into Studio' if run.kind == StudioRun.KIND_IMPORT else 'Working on the website')
+    steps = [{'text': st.get('text', ''), 'state': 'done'} for st in (run.steps or [])][-8:]
+    if steps and running:
+        steps[-1]['state'] = 'running'
+    if run.status == StudioRun.FAILED and steps:
+        steps[-1]['state'] = 'failed'
+    version = run.result_version.number if run.result_version_id else None
+    return {
+        'id': f'studio-{run.pk}', 'kind': 'website', 'title': title, 'status': run.status,
+        'progress': steps[-1]['text'] if steps and running else ('Waiting to start…' if run.status == StudioRun.QUEUED else ''),
+        'summary': (run.reply or (f'Draft version {version} is ready' if version else 'Done'))[:300]
+        if run.status == StudioRun.DONE else '',
+        'error': run.error if run.status == StudioRun.FAILED else '',
+        'url': reverse('studio:editor', args=[run.site.event_id]) if run.status == StudioRun.DONE else None,
+        'event_id': run.site.event_id, 'finished_at': run.finished_at.isoformat() if run.finished_at else None,
+        'steps': steps or ([{'text': 'Waiting to start…', 'state': 'running'}] if running else []),
+        'result_label': 'See the website' if run.status == StudioRun.DONE else '',
+        'retry_url': reverse('studio:run_retry', args=[run.site.event_id, run.pk]) if run.status == StudioRun.FAILED else '',
+    }
 
 
-@agent_action('studio_chat', "Ask Studio's website AI to change the event's website (it works in the background; "
-              'follow it with studio_run_status / read_page of the run).', json=True,
-              params={'text': P('string', 'what to change on the website')}, title='Asked Studio’s AI')
+def _budget_error(event):
+    if ai.budget_left(event) <= 0:
+        return _json_error(f'Today\'s AI budget for this event is used up (${settings.STUDIO_DAILY_SPEND_CAP_USD:.2f} '
+                           f'per day). It resets at midnight UTC.', status=429)
+    return None
+
+
+@agent_action('design_website', "Change the event's website (Attnd Studio's designer: pages, sections, styles, "
+              'images, flyer art, the app look). Runs in the background and makes a new draft version; publishing '
+              'is separate (publish_website). Use it for any request about the website ("make the hero bigger", '
+              '"add a sponsors page").', json=True,
+              params={'instruction': P('string', 'what to change on the website, in the person\'s words')},
+              title='Started working on the website')
 @studio_event_view
 @require_POST
-def chat(request, event):
+def design(request, event):
     site = _site_or_404(event)
-    text = (request.POST.get('text') or '').strip()
+    text = (request.POST.get('instruction') or request.POST.get('text') or '').strip()
     if not text:
         return _json_error('Write what you want to change.')
     if len(text) > 8000:
         return _json_error('That message is too long (8,000 characters at most).')
-    try:
-        selection = json.loads(request.POST.get('selection') or '{}')
-        selection = {k: str(selection.get(k, ''))[:3000] for k in ('page', 'selector', 'tag', 'text', 'html')
-                     } if isinstance(selection, dict) and selection else {}
-    except json.JSONDecodeError:
-        selection = {}
-    if ai.budget_left(event) <= 0:
-        return _json_error(f'Today\'s AI budget for this event is used up (${settings.STUDIO_DAILY_SPEND_CAP_USD:.2f} '
-                           f'per day). It resets at midnight UTC.', status=429)
+    error = _budget_error(event)
+    if error:
+        return error
     with transaction.atomic():
         Site.objects.select_for_update().get(pk=site.pk)  # one request at a time per site
         if site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).exists():
-            return _json_error('The assistant is still working on the last request.', status=409)
-        run = StudioRun.objects.create(site=site, created_by=request.user, prompt=text, selection=selection)
-        StudioMessage.objects.create(site=site, role=StudioMessage.ROLE_USER, text=text, selection=selection,
-                                     run=run, created_by=request.user)
+            return _json_error('Studio is still working on the last request.', status=409)
+        run = StudioRun.objects.create(site=site, created_by=request.user, prompt=text)
+        StudioMessage.objects.create(site=site, role=StudioMessage.ROLE_USER, text=text, run=run,
+                                     created_by=request.user)
         agent.start(run)
-    return JsonResponse({'run': _run_json(run)}, status=202)
-
-
-@agent_action('studio_run_status', 'One Studio AI run: status, steps and reply (JSON).', kind='read')
-@studio_event_view
-def run_status(request, event, run_id):
-    site = _site_or_404(event)
-    run = get_object_or_404(StudioRun, pk=run_id, site=site)
-    return JsonResponse({'run': _run_json(run)})
+    return JsonResponse({'task': run_task(run)}, status=202)
 
 
 @agent_action('retry_studio_run', 'Retry a failed Studio AI run.', title='Retried a Studio run')
@@ -202,7 +167,7 @@ def run_retry(request, event, run_id):
             else:
                 run = agent.retry(failed, request.user)
     if wants_json:
-        return _json_error(error, status=409) if error else JsonResponse({'run': _run_json(run)}, status=202)
+        return _json_error(error, status=409) if error else JsonResponse({'task': run_task(run)}, status=202)
     if error:
         messages.error(request, error)
     return redirect('studio:editor', event_id=event.pk)
@@ -243,16 +208,20 @@ def code(request, event):
 
 
 def _version(site, request, version_id):
-    return get_object_or_404(SiteVersion, pk=version_id, site=site)
+    try:
+        return get_object_or_404(SiteVersion, pk=int(version_id), site=site)
+    except (TypeError, ValueError):
+        raise Http404 from None
 
 
-@agent_action('restore_studio_version', 'Make a copy of an earlier website version the draft.',
+@agent_action('restore_website_version', 'Make a copy of an earlier website version the draft.', confirm=True,
+              summary=S.studio_restore, params={'version': P('integer', 'the version id')},
               title='Restored a website version')
 @studio_event_view
 @require_POST
-def restore(request, event, version_id):
+def restore(request, event):
     site = _site_or_404(event)
-    version = publishing.restore(site, _version(site, request, version_id), request.user)
+    version = publishing.restore(site, _version(site, request, request.POST.get('version')), request.user)
     messages.success(request, f'Version {version.number} is a copy of the version you restored. It is the draft now.')
     return redirect('studio:editor', event_id=event.pk)
 
@@ -271,13 +240,15 @@ def undo(request, event):
     return redirect('studio:editor', event_id=event.pk)
 
 
-@agent_action('publish_studio_site', 'Publish the website draft (and its app look and flyer).', confirm=True,
+@agent_action('publish_website', 'Publish the website draft (and its app look and flyer).', confirm=True,
               summary=S.studio_publish, url_name='studio:publish', title='Published the website')
-@agent_action('publish_studio_version', 'Publish one website version.', confirm=True, summary=S.studio_publish,
-              url_name='studio:publish_version', title='Published a website version')
+@agent_action('publish_website_version', 'Publish one earlier website version.', confirm=True,
+              summary=S.studio_publish, url_name='studio:publish_version',
+              params={'version': P('integer', 'the version id')}, title='Published a website version')
 @studio_event_view
 @require_POST
-def publish(request, event, version_id=None):
+def publish(request, event):
+    version_id = request.POST.get('version')
     site = _site_or_404(event)
     if not can_publish(event, request.user):
         messages.error(request, 'Only the owner and event admins can publish the site.')
@@ -301,7 +272,7 @@ def publish(request, event, version_id=None):
     return redirect('studio:editor', event_id=event.pk)
 
 
-@agent_action('unpublish_studio_site', 'Take the website offline.', confirm=True, summary=S.studio_unpublish,
+@agent_action('unpublish_website', 'Take the website offline.', confirm=True, summary=S.studio_unpublish,
               title='Took the website offline')
 @studio_event_view
 @require_POST
@@ -373,24 +344,25 @@ def site_settings(request, event):
     return redirect('studio:editor', event_id=event.pk)
 
 
-@agent_action('bring_site_into_studio', "Bring the organizer's existing website into Studio (AI, background).",
+@agent_action('bring_into_studio', "Bring the organizer's existing website into Studio: its pages, images and fonts "
+              'are copied and the AI rebuilds the site (background, a few minutes).', json=True,
               params={'url': P('string', 'the website address'), 'note': P('string', 'notes for the AI', nullable=True)},
               title='Started bringing a website in')
 @studio_event_view
 @require_POST
 def bring_in(request, event):
     site = _site_or_404(event)
-    url = (request.POST.get('url') or '').strip()
+    url = (request.POST.get('url') or '').strip() or ((event.source_urls or [''])[0])
     if site.runs.filter(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]).exists():
-        messages.error(request, 'The assistant is still working on the last request. Try again when it is done.')
-        return redirect('studio:editor', event_id=event.pk)
+        return _json_error('Studio is still working on the last request. Try again when it is done.', status=409)
+    error = _budget_error(event)
+    if error:
+        return error
     try:
-        importer.start_import(site, url, request.user, note=(request.POST.get('note') or '').strip())
+        run = importer.start_import(site, url, request.user, note=(request.POST.get('note') or '').strip())
     except importer.SiteImportError as exc:
-        messages.error(request, str(exc))
-    else:
-        messages.success(request, 'Bringing your website in. Watch the chat: it takes a few minutes.')
-    return redirect('studio:editor', event_id=event.pk)
+        return _json_error(str(exc))
+    return JsonResponse({'task': run_task(run)}, status=202)
 
 
 # ---------------------------------------------------------------------------
@@ -419,8 +391,6 @@ def assets_upload(request, event):
                         status=200 if added or not errors else 400)
 
 
-@agent_action('delete_studio_asset', 'Delete a file from the asset library.', confirm=True, json=True,
-              fixed={'action': 'delete'}, title='Deleted an asset')
 @agent_action('describe_studio_asset', "Set an asset's description, alt text and tags.", json=True,
               params={'description': P('string', 'description'), 'alt': P('string', 'alt text'),
                       'tags': P('string', 'comma-separated tags')}, title='Described an asset')
@@ -429,16 +399,30 @@ def assets_upload(request, event):
 def asset_action(request, event, asset_id):
     site = _site_or_404(event)
     asset = get_object_or_404(StudioAsset, pk=asset_id, event=event)
-    if request.POST.get('action') == 'delete':
-        if site.versions.filter(flyer_asset=asset).filter(pk__in=[site.draft_id, site.published_id]).exists():
-            return _json_error('This file is the flyer of the draft or the live site. Choose another flyer first.')
-        delete_asset(asset)
-    else:
-        asset.description = (request.POST.get('description') or '')[:1000]
-        asset.alt = (request.POST.get('alt') or asset.alt)[:300]
-        asset.tags = parse_tags(request.POST.get('tags'))
-        asset.save(update_fields=['description', 'alt', 'tags'])
+    asset.description = (request.POST.get('description') or '')[:1000]
+    asset.alt = (request.POST.get('alt') or asset.alt)[:300]
+    asset.tags = parse_tags(request.POST.get('tags'))
+    asset.save(update_fields=['description', 'alt', 'tags'])
     return JsonResponse({'state': _state(site)})
+
+
+@agent_action('delete_studio_asset', 'Delete a file from the website\'s asset library.', confirm=True,
+              params={'asset': P('string', 'the asset id')}, summary=S.studio_asset_delete, title='Deleted an asset')
+@studio_event_view
+@require_POST
+def asset_delete(request, event):
+    import uuid
+    site = _site_or_404(event)
+    try:
+        asset = get_object_or_404(StudioAsset, pk=uuid.UUID(str(request.POST.get('asset'))), event=event)
+    except ValueError:
+        raise Http404 from None
+    if site.versions.filter(flyer_asset=asset).filter(pk__in=[site.draft_id, site.published_id]).exists():
+        messages.error(request, 'This file is the flyer of the draft or the live site. Choose another flyer first.')
+    else:
+        delete_asset(asset)
+        messages.info(request, f'Deleted {asset.name}.')
+    return redirect('studio:editor', event_id=event.pk)
 
 
 @agent_action('set_studio_flyer', "Choose an image or PDF asset as the event's flyer (new draft version).", json=True,
@@ -490,14 +474,14 @@ def form_csv(request, event, form_name):
 
 
 @agent_action('delete_studio_form_entry', 'Delete one website form entry.', confirm=True,
-              title='Deleted a form entry')
+              params={'entry': P('integer', 'the entry id')}, summary=S.studio_entry_delete, title='Deleted a form entry')
 @studio_event_view
 @require_POST
-def form_delete(request, event, submission_id):
+def form_delete(request, event):
     site = _site_or_404(event)
-    FormSubmission.objects.filter(site=site, pk=submission_id).delete()
+    FormSubmission.objects.filter(site=site, pk=request.POST.get('entry') or 0).delete()
     messages.info(request, 'Entry deleted.')
-    return redirect(reverse('studio:editor', args=[event.pk]) + '#forms')
+    return redirect(reverse('studio:editor', args=[event.pk]) + '#website-forms')
 
 
 # ---------------------------------------------------------------------------

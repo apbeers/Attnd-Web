@@ -31,11 +31,11 @@ class CanvasWidthTests(SimpleTestCase):
 
     def test_a_lone_card_spans_the_row_and_multi_section_tabs_use_columns(self):
         self.assertIn('.canvas__cards:has(> .agent__card:only-child) { grid-template-columns: minmax(0, 1fr); }', CSS)
-        for tab in ('Notifications', 'Settings', 'Metrics', 'History'):
+        for tab in ('Notifications', 'Settings', 'Metrics', 'History', 'Website'):
             self.assertIn(f'[data-tab={tab}]', CSS, f'{tab}: its sections side by side on wide canvases')
         self.assertIn('.canvas .component--event_team { display: grid;', CSS, 'Team: members beside the invite form')
         # Every tab the canvas draws is known to the CSS rules above or holds one full-width list.
-        multi = {'Notifications', 'Settings', 'Metrics', 'History'}
+        multi = {'Notifications', 'Settings', 'Metrics', 'History', 'Website'}
         for label in canvas.ORDER:
             sections = [name for name, tab in canvas.KINDS.items() if tab == label]
             if len(sections) > 1 and label not in {'Overview', 'Prospects'}:

@@ -61,8 +61,9 @@ you can't open or change those pages yourself.
   [Usage](/console/events/{event_id}/usage/). Attnd never collects who attendees are.
 
 ## Attnd Studio (websites)
-- Studio designs and hosts an event website with AI. It is in a private beta for Attnd's own team:
-  [Studio](/console/events/{event_id}/studio/) (only shown to people who have it).
+- Studio designs and hosts an event website with AI. It is in a private beta for Attnd's own team: ask for changes
+  right here in the chat (design_website), and see the preview, versions and form entries on the
+  [Website](/console/events/{event_id}/studio/) page or the full-screen chat's Website tab (only shown to people who have it).
 
 ## Billing
 - Events without a paid plan show a "Demo event" badge in the apps. There is no checkout in the console yet:

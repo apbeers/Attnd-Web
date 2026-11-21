@@ -18,11 +18,14 @@ KINDS = {
     'event_team': 'Team', 'event_metrics': 'Metrics', 'usage_answer': 'Metrics', 'app_layout': 'Settings', 'website_watching': 'Settings',
     'event_context_form': 'Settings', 'event_flyer': 'Settings', 'object_history': 'History', 'event_theme': 'Overview',
     'event_versions': 'History', 'prospect_run_row': 'Prospects', 'prospect_row': 'Prospects',
+    'website_overview': 'Website', 'website_versions': 'Website', 'website_assets': 'Website', 'website_forms': 'Website',
 }
 # Tab counts that wait for the person's action are drawn as a filled alert badge (.tab-count--alert); others muted.
 ALERT_COUNTS = {'Review'}
 ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
-         'History', 'Prospects']
+         'Website', 'History', 'Prospects']
+# The Website tab (Attnd Studio inside Ask Attnd): only for people with Studio access.
+WEBSITE_SECTIONS = ['website_overview', 'website_versions', 'website_forms', 'website_assets']
 EVENT_SECTIONS = ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'event_rollover',
                   'changeset_review', 'location_row', 'schedule_item_row', 'notification_form', 'notification_row', 'event_team',
                   'event_metrics', 'usage_answer', 'app_layout', 'website_watching', 'event_context_form', 'event_flyer',
@@ -77,10 +80,17 @@ def build(request, event=None):
     if event is not None:
         for name in EVENT_SECTIONS:
             add(name, {'event_id': event.pk})
+        from studio.access import has_studio_access
+        if has_studio_access(request.user):
+            for name in WEBSITE_SECTIONS if event.plan == event.PLAN_STUDIO else WEBSITE_SECTIONS[:1]:
+                add(name, {'event_id': event.pk})
     if request.user.is_staff or request.user.is_superuser:
         for name in ('prospect_run_row', 'prospect_row'):
             add(name, {})
     active = 'Overview' if event is not None else 'Events'
+    wanted = (request.GET.get('tab') or '').capitalize()
+    if wanted in tabs:  # ?tab=website (the Website page's "Change it with Ask Attnd")
+        active = wanted
     out = []
     for label in sorted(tabs, key=ORDER.index):
         count, alert = None, False

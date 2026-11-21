@@ -1,0 +1,14 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Website · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="stack stack--loose">
+  <div class="cluster"><h1 class="title-2 grow">Website</h1>
+    <a class="button button--outline button--small" href="{% url 'console:assistant' %}?event={{ event.id }}&amp;tab=website">{% icon "stars" %} Change it with Ask Attnd</a></div>
+  {% component "website_overview" event=event %}
+  {% if studio %}<div class="grid grid--2">
+    {% component "website_versions" event=event %}
+    <div class="stack">{% component "website_forms" event=event %}{% component "website_assets" event=event %}</div>
+  </div>{% endif %}
+</div>
+{% endblock %}

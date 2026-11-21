@@ -70,7 +70,7 @@ class StepsTests(RunJobsInline, TestCase):
         self.assertIn('waiting for your review', job.steps[-1]['text'])
         self.assertIn('Compared with your event', [s['text'] for s in job.steps])
         task = self.client.get(reverse('console:tasks'), secure=True).json()['tasks'][0]
-        self.assertEqual(task['result_label'], 'Review the changes')
+        self.assertRegex(task['result_label'], r'^Review \d+ changes?$')
 
     def test_scrape_event_reports_pages_read(self):
         steps = []

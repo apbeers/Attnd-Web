@@ -91,7 +91,9 @@ class ComponentTestCase(TestCase):
 class RegistryTests(ComponentTestCase):
     def test_the_set(self):
         staff_only = {n for n, c in C.registry().items() if c.audience == 'staff'}
-        self.assertEqual(set(C.registry()) - staff_only, set(self.ids))
+        studio = {n for n, c in C.registry().items() if c.audience == 'studio'}
+        self.assertEqual(studio, {'website_overview', 'website_versions', 'website_assets', 'website_forms'})
+        self.assertEqual(set(C.registry()) - staff_only - studio, set(self.ids))
         self.assertEqual(staff_only, {'prospect_row', 'prospect_detail', 'prospect_run_row', 'prospect_settings_form'})
 
     def test_every_action_is_a_registered_agent_action(self):

@@ -1425,7 +1425,8 @@
                   changeset_review: 'Review', app_layout: 'Settings', website_watching: 'Settings', event_theme: 'Overview',
                   event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
                   prospect_row: 'Prospects', prospect_detail: 'Prospects', prospect_run_row: 'Prospects',
-                  prospect_settings_form: 'Prospects' };
+                  prospect_settings_form: 'Prospects', website_overview: 'Website', website_versions: 'Website',
+                  website_assets: 'Website', website_forms: 'Website' };
   // A count beside a tab's name (agent/canvas.py ALERT_COUNTS): a filled alert badge when it waits for the person.
   function setTabCount(label, count, alert) {
     const tab = tabs.get(label);
@@ -1439,10 +1440,11 @@
     button.append(' ', badge);
   }
   const ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
-                 'History', 'Prospects'];
+                 'Website', 'History', 'Prospects'];
   const SECTION_ORDER = ['event_tile', 'event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports',
                          'notification_form', 'notification_row', 'app_layout', 'website_watching',
-                         'event_context_form', 'event_flyer', 'object_history', 'event_versions',
+                         'event_context_form', 'event_flyer', 'website_overview', 'website_versions', 'website_forms',
+                         'website_assets', 'object_history', 'event_versions',
                          'prospect_run_row', 'prospect_row'];
   const EMPTY = { location_row: 'No locations yet. Add stages, booths, food, anywhere attendees go.',
                   schedule_item_row: 'No schedule items yet.', notification_row: 'No notifications sent or scheduled yet.',

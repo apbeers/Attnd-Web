@@ -14,17 +14,17 @@
 {% if r.status == 'queued' or r.status == 'running' %}
 <div class="panel panel--accent cluster" data-studio-import="running">
   <div class="grow"><span class="spinner"></span> <strong>Studio is rebuilding your website.</strong> <span class="muted">It reads every page, copies the images, fonts and PDFs, then designs the new site. This takes a few minutes.</span></div>
-  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Watch in Studio</a>
+  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} See the website</a>
 </div>
 {% elif r.status == 'failed' %}
 <div class="panel panel--warning cluster" data-studio-import="failed">
   <div class="grow"><strong>Bringing your website into Studio didn't finish.</strong> <span class="small">{{ r.error|truncatechars:240 }}</span></div>
-  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">Open Studio to retry</a>
+  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">Open the website to retry</a>
 </div>
 {% elif r.result_version_id and not r.site.published_id %}
 <div class="panel panel--accent cluster" data-studio-import="done">
   <div class="grow">{% icon "stars" "tone-brand" %} <strong>Your new website is ready in Studio.</strong> Review it and publish it when you like it.</div>
-  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Open Studio</a>
+  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Open the website</a>
 </div>
 {% endif %}{% endwith %}{% endif %}
 {% component "needs_review" event=event %}

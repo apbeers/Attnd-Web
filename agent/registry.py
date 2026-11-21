@@ -56,7 +56,6 @@ EXCLUDED = {
     'console:manifest': 'The web app manifest, no content.',
     'console:event_qr': 'A PNG image of the join QR code (the overview has the join link).',
     'console:event_poster': 'A printable poster; the overview has the same join link and code.',
-    'studio:app_preview': 'An HTML fragment for the editor\'s phone preview; studio:state has the same data.',
     'studio:version_preview': 'Redirects to a signed preview link on the sites host (outside the console).',
     'prospects:export': 'CSV download of organizer contacts; the list and detail pages show the same data.',
     'diagnostics:session_export': 'A .jsonl file download; the session page and entries.json have the entries.',

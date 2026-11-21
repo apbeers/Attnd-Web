@@ -55,7 +55,7 @@ class Component:
     chat: bool = True  # may Ask Attnd show it
     chat_only: str = ''  # why no page draws it (e.g. a canvas cut-down of a page's component); else a page must
     kwarg_map: dict = None  # URL kwarg -> id name, for views whose URLs say pk (Prospects: {'pk': 'prospect_id'})
-    audience: str = ''  # 'staff': only staff and superusers (Prospects); absent for everyone else
+    audience: str = ''  # 'staff': only staff and superusers (Prospects); 'studio': Studio access; '' everyone
     act_args: object = None  # (action name, POST) -> extra tool arguments for always-ask buttons with a form (review)
     ai_subject: str = ''  # Add with AI: "the location", "the notification"… (default: from the title)
     ai_prompt: str = ''  # Add with AI: the prompt the chat starts with, when the generic one doesn't fit
@@ -79,7 +79,8 @@ def component(name, title, description, **options):
 
 
 def registry():
-    from console.components import catalog, catalog_chat, catalog_more, catalog_prospects, catalog_screens  # noqa: F401  (registers them)
+    from console.components import (catalog, catalog_chat, catalog_more, catalog_prospects,  # noqa: F401  (registers them)
+                                    catalog_screens, catalog_website)
     from agent import proposals  # noqa: F401  (change_preview, stage I)
     return REGISTRY
 
@@ -161,6 +162,9 @@ def clean_parent(ids):
 def allowed(comp, user):
     if comp.audience == 'staff':
         return bool(getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False))
+    if comp.audience == 'studio':  # Attnd Studio (studio.access: staff, superusers, STUDIO_BETA_EMAILS)
+        from studio.access import has_studio_access
+        return bool(getattr(user, 'is_authenticated', False)) and has_studio_access(user)
     return True
 
 

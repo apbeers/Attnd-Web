@@ -282,6 +282,22 @@ def task_json(job):
     }
 
 
+def _studio_tasks(user, recent, asked):
+    """Studio website runs (design_website, bring_into_studio) as tasks: the person's running and recent ones and
+    the ones asked for (only with Studio access, only on events they can edit)."""
+    from studio.access import has_studio_access
+    if not has_studio_access(user):
+        return []
+    from studio.models import StudioRun
+    from studio.views import run_task
+    wanted = Q(status__in=[StudioRun.QUEUED, StudioRun.RUNNING]) | Q(finished_at__gte=recent)
+    if asked:
+        wanted |= Q(pk__in=asked)
+    runs = (StudioRun.objects.filter(created_by=user, site__event__in=events_for_user(user)).filter(wanted)
+            .select_related('site', 'result_version').order_by('-created_at')[:10])
+    return [run_task(r) for r in runs]
+
+
 def _plural_changes(n):
     return f'{n} change' + ('' if n == 1 else 's')
 
@@ -320,16 +336,20 @@ def tasks_feed(request):
     mine = Q(created_by=request.user) | Q(event__in=visible_events, trigger=IngestJob.TRIGGER_WATCH)
     wanted = Q(status__in=[IngestJob.QUEUED, IngestJob.RUNNING]) | Q(finished_at__gte=recent)
     import uuid
-    asked = []
+    asked, asked_runs = [], []
     for raw in (request.GET.get('ids') or '').split(',')[:20]:
+        raw = raw.strip()
+        if raw.startswith('studio-') and raw[7:].isdigit():
+            asked_runs.append(int(raw[7:]))
+            continue
         try:
-            asked.append(uuid.UUID(raw.strip()))
+            asked.append(uuid.UUID(raw))
         except ValueError:
             continue
     if asked:
         wanted |= Q(pk__in=asked)
     qs = IngestJob.objects.filter(mine).filter(wanted).select_related('event').order_by('-created_at')[:20 + len(asked)]
-    tasks = [task_json(j) for j in qs]
+    tasks = [task_json(j) for j in qs] + _studio_tasks(request.user, recent, asked_runs)
     return JsonResponse({'tasks': tasks, 'active': sum(t['status'] in ('queued', 'running') for t in tasks)})
 
 
