@@ -241,3 +241,198 @@ class ClaimTests(TestCase):
         self.assertEqual(c.post(reverse('prospects:claims'), {'claim': claim.pk, 'action': 'approve'}, secure=True).status_code, 404)
         claim.refresh_from_db()
         self.assertEqual(claim.status, 'pending')
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class GalleryFeedbackTests(TestCase):
+    """Owner feedback (Nov 21, 2026): covers on every card, the event's website, the App Clip, approximate location
+    from the browser (Google Geolocation, no prompt), the region label."""
+
+    def setUp(self):
+        from django.core.cache import caches
+        caches['local'].clear()
+        from prospects.models import Prospect, ProspectSettings
+        self.staff = User.objects.create_user('staff', 'staff@example.com', 'pw', is_staff=True)
+        now = timezone.now()
+        self.event = Event.objects.create(
+            name='Trinity Chili Cookoff', event_code='CHILI2', user=self.staff, status=Event.STATUS_PUBLISHED,
+            testing_only=True, timezone='UTC', start_time=now + timedelta(days=3), end_time=now + timedelta(days=3, hours=8),
+            latitude=32.75, longitude=-97.33, address='Panther Island, Fort Worth, TX 76102',
+            source_urls=['https://www.trinitychili.org/', 'https://other.example/'])
+        Prospect.objects.create(name='Trinity Chili Cookoff', event=self.event, status=Prospect.TEST_EVENT)
+        ProspectSettings.objects.update_or_create(pk=1, defaults={'region': 'Fort Worth, TX, .\nDallas'})
+
+    def test_region_label_has_no_empty_parts(self):
+        from home.onboarding import clean_region
+        self.assertEqual(clean_region('Fort Worth, TX, .'), 'Fort Worth, TX')
+        self.assertEqual(clean_region('\n  Austin,, TX ;\nmore'), 'Austin, TX')
+        self.assertEqual(clean_region(''), '')
+        html = self.client.get('/home/', secure=True).content.decode()
+        self.assertIn('Happening near Fort Worth, TX</h3>', html)
+        self.assertNotIn(', .', html)
+
+    def test_no_browser_geolocation_and_no_use_my_location(self):
+        html = self.client.get('/home/', secure=True).content.decode()
+        self.assertNotIn('Use my location', html)
+        self.assertNotIn('data-geo-key', html)  # no key, no Google call
+        from django.contrib.staticfiles import finders
+        js = open(finders.find('home/home.js')).read()
+        self.assertNotIn('navigator.geolocation', js)
+        self.assertIn('geolocation/v1/geolocate', js)
+        self.assertIn('considerIp', js)
+
+    @override_settings(GOOGLE_MAPS_BROWSER_KEY='browser-key-123')
+    def test_the_key_goes_to_the_page_only_when_set(self):
+        html = self.client.get('/home/', secure=True).content.decode()
+        self.assertIn('data-geo-key="browser-key-123"', html)
+
+    def test_csp_allows_googleapis_only_with_a_key(self):
+        from attnd import settings as S
+        self.assertEqual(S._MAPS, bool(S.GOOGLE_MAPS_BROWSER_KEY))
+        if not S._MAPS:
+            self.assertNotIn('googleapis', ' '.join(S.CSP_POLICY['connect-src']))
+        else:
+            self.assertIn('https://*.googleapis.com', S.CSP_POLICY['connect-src'])
+
+    def test_near_rounds_names_the_place_and_is_rate_limited(self):
+        from django.core.cache import cache
+        cache.clear()
+        url = reverse('home:near')
+        d = self.client.get(url + '?lat=32.7432&lng=-97.3311', secure=True).json()
+        self.assertEqual(d['count'], 1)
+        self.assertEqual(d['place'], 'Fort Worth')
+        self.assertEqual(self.client.get(url + '?lat=x&lng=1', secure=True).status_code, 400)
+        self.assertEqual(self.client.get(url + '?lat=47.6&lng=-122.3', secure=True).json()['count'], 0)
+        with override_settings(RATE_LIMITS={'home_near_ip': (2, 600)}):
+            cache.clear()
+            self.client.get(url + '?lat=1&lng=1', secure=True)
+            self.client.get(url + '?lat=1&lng=1', secure=True)
+            self.assertEqual(self.client.get(url + '?lat=1&lng=1', secure=True).status_code, 429)
+
+    def test_card_links_the_events_https_website_and_shows_a_cover_credit(self):
+        from django.core.files.base import ContentFile
+        html = self.client.get('/home/', secure=True).content.decode()
+        self.assertIn('href="https://www.trinitychili.org/" target="_blank" rel="noopener nofollow"', html)
+        self.event.source_urls = ['http://insecure.example/']
+        self.event.cover.save('c.jpg', ContentFile(b'x'), save=False)
+        self.event.cover_credit = 'Jane Doe · CC BY-SA 4.0 · Wikimedia Commons'
+        self.event.save()
+        from django.core.cache import caches
+        caches['local'].clear()
+        html = self.client.get('/home/', secure=True).content.decode()
+        self.assertNotIn('insecure.example', html)
+        self.assertIn('Jane Doe · CC BY-SA 4.0 · Wikimedia Commons', html)
+
+    def test_showcase_events_have_no_website(self):
+        from home.onboarding import _website
+        self.event.showcase = True
+        self.assertEqual(_website(self.event), '')
+
+    def test_the_app_clip_is_explained_accurately(self):
+        html = self.client.get('/home/', secure=True).content.decode()
+        self.assertIn('No download on iPhone', html)
+        self.assertIn('App Clip opens', html)
+        self.assertIn('Google Play', html)
+        self.assertNotIn('Instant App', html)
+
+
+class EventCoverTests(TestCase):
+    """events/covers.py: Wikimedia Commons near the venue (checked by vision), else AI; never the event's website."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('o', 'o@example.com', 'pw')
+        now = timezone.now()
+        self.event = Event.objects.create(
+            name='Trinity Chili Cookoff', event_code='CHILI3', user=self.user, status=Event.STATUS_PUBLISHED,
+            testing_only=True, timezone='UTC', start_time=now, latitude=32.75, longitude=-97.33,
+            address='Panther Island, Fort Worth, TX 76102', source_urls=['https://www.trinitychili.org/'])
+
+    def _jpeg(self, w=1200, h=700):
+        import io
+
+        from PIL import Image
+        out = io.BytesIO()
+        Image.new('RGB', (w, h), (200, 80, 40)).save(out, 'JPEG')
+        return out.getvalue()
+
+    def _commons(self, params):
+        if params.get('list') == 'geosearch':
+            return {'query': {'geosearch': [{'title': 'File:Panther Island.jpg'}]}}
+        if params.get('list') == 'search':
+            return {'query': {'search': []}}
+        return {'query': {'pages': [{'title': 'File:Panther Island.jpg', 'imageinfo': [{
+            'width': 1600, 'height': 900, 'thumburl': 'https://upload.wikimedia.org/x.jpg',
+            'descriptionurl': 'https://commons.wikimedia.org/wiki/File:Panther_Island.jpg',
+            'extmetadata': {'LicenseShortName': {'value': 'CC BY-SA 4.0'}, 'Artist': {'value': '<a>Jane Doe</a>'}}}]}]}}
+
+    def test_wikimedia_photo_with_credit(self):
+        from unittest.mock import patch
+
+        from events import covers
+        fetched = []
+        with patch('events.place_images._commons', side_effect=self._commons), \
+                patch('events.place_images._fetch', side_effect=lambda u, *a: fetched.append(u) or (self._jpeg(), 'image/jpeg')), \
+                patch('attnd.claude.available', return_value=True), \
+                patch('events.covers.confirm', return_value=(True, 0.9, 'photo', 0.002)), \
+                patch('events.covers.from_ai') as ai:
+            self.assertEqual(covers.ensure(self.event), 'wikimedia')
+        ai.assert_not_called()
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.cover)
+        self.assertEqual(self.event.cover_credit, 'Jane Doe · CC BY-SA 4.0 · Wikimedia Commons')
+        self.assertEqual(self.event.cover_source, 'wikimedia')
+        self.assertTrue(all('trinitychili' not in u for u in fetched))  # never the organizer's own site
+        self.assertGreater(self.event.cover_cost_usd, 0)
+        # Not an app change: no content_version bump from the cover.
+        self.assertEqual(covers.ensure(self.event), 'skipped')
+
+    def test_falls_back_to_ai_and_respects_the_cap(self):
+        from unittest.mock import patch
+
+        from events import covers
+        with patch('events.place_images._commons', return_value={}), \
+                patch('attnd.claude.available', return_value=True), \
+                patch('events.covers.from_ai', return_value=(self._jpeg(), covers.Decimal('0.25'))):
+            self.assertEqual(covers.ensure(self.event), 'ai')
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.cover_source, 'ai')
+        self.assertEqual(self.event.cover_credit, 'AI-generated image')
+        other = Event.objects.create(name='Other', event_code='OTHER9', user=self.user, status=Event.STATUS_PUBLISHED,
+                                     testing_only=True, timezone='UTC', start_time=timezone.now())
+        with override_settings(EVENT_COVERS_DAILY_CAP_USD=0.25), patch('events.covers.from_wikimedia') as wiki:
+            self.assertEqual(covers.ensure(other), 'skipped')
+        wiki.assert_not_called()
+
+    def test_own_pictures_win_and_showcase_skips_wikimedia(self):
+        from unittest.mock import patch
+
+        from django.core.files.base import ContentFile
+
+        from events import covers
+        loc = Location.objects.create(event=self.event, name='Stage')
+        loc.image.save('s.jpg', ContentFile(self._jpeg()), save=True)
+        self.assertEqual(covers.ensure(self.event), 'own')
+        loc.delete()
+        self.event.showcase = True
+        with patch('events.covers.from_wikimedia') as wiki, patch('events.covers.from_ai', return_value=(None, 0)):
+            self.assertEqual(covers.ensure(self.event), 'none')
+        wiki.assert_not_called()
+
+    def test_backfill_command(self):
+        from io import StringIO
+        from unittest.mock import patch
+
+        from django.core.management import call_command
+
+        from prospects.models import Prospect
+        Prospect.objects.create(name='Trinity Chili Cookoff', event=self.event, status=Prospect.TEST_EVENT)
+        out = StringIO()
+        with patch('events.covers.from_wikimedia', return_value=(None, '', covers_decimal())), \
+                patch('events.covers.from_ai', return_value=(self._jpeg(), covers_decimal('0.25'))):
+            call_command('find_event_covers', stdout=out)
+        self.assertIn('CHILI3: ai', out.getvalue())
+
+
+def covers_decimal(value='0'):
+    from decimal import Decimal
+    return Decimal(value)

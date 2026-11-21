@@ -241,7 +241,6 @@ RATE_LIMITS = {
     'studio_form_ip': _rate('studio_form_ip', '10/600'),       # Studio site form posts per IP per site, 10 min
     'studio_form_site': _rate('studio_form_site', '300/3600'),  # Studio site form posts per site, 1 hour
     'studio_report_ip': _rate('studio_report_ip', '5/3600'),    # "Report this site" per IP, 1 hour
-    'scrape_ip': _rate('scrape_ip', '5/3600'),                  # homepage trial AI imports per IP, 1 hour
     'attest_nonce_ip': _rate('attest_nonce_ip', '30/60'),       # attestation challenges per IP, 1 minute
     'place_search_user': _rate('place_search_user', '60/600'),  # the location form's address searches per person
     'location_fill_user': _rate('location_fill_user', '30/3600'),  # "Fill from this website?" per person, 1 hour
@@ -249,6 +248,7 @@ RATE_LIMITS = {
     'agent_start_user': _rate('agent_start_user', '30/600'),
     'limit_request_user': _rate('limit_request_user', '3/86400'),  # "Remove the limit" requests per person, a day
     'home_metric_ip': _rate('home_metric_ip', '120/600'),  # the home page's anonymous counts per IP, 10 minutes
+    'home_near_ip': _rate('home_near_ip', '30/600'),  # the home page's approximate "near you" lookups per IP, 10 minutes
     'pending_import_ip': _rate('pending_import_ip', '10/3600'),  # home composer submissions per IP, an hour
     'claim_user': _rate('claim_user', '5/86400'),  # "Claim this event" requests per person, a day
     'agent_contact_user': _rate('agent_contact_user', '3/3600'),  # "Talk to a person" messages per person, an hour  # Ask Attnd requests started per person, 10 minutes
@@ -439,6 +439,8 @@ TASKS = {'default': {'BACKEND': 'background.backend.DatabaseBackend' if TASKS_BA
 PLACE_IMAGES_ENABLED = os.getenv('PLACE_IMAGES_ENABLED', '1') != '0'
 PLACE_IMAGES_ON_CREATE = PLACE_IMAGES_ENABLED and not TESTING
 PLACE_IMAGES_DAILY_CAP_USD = float(os.getenv('PLACE_IMAGES_DAILY_CAP_USD', '1'))
+# The home page gallery's card covers (events/covers.py): Wikimedia checks + AI pictures, all of them per UTC day.
+EVENT_COVERS_DAILY_CAP_USD = float(os.getenv('EVENT_COVERS_DAILY_CAP_USD', '2'))
 PLACE_IMAGES_MIN_CONFIDENCE = 0.75
 STUDIO_MAX_STEPS = int(os.getenv('STUDIO_MAX_STEPS', '24'))
 STUDIO_IMPORT_MAX_STEPS = int(os.getenv('STUDIO_IMPORT_MAX_STEPS', '40'))  # model calls of an import run

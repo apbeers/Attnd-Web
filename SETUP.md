@@ -74,6 +74,11 @@ Do these steps once, in order. Each step says which values go where. For any sin
   unset = dev.attnd.app only); for production later: `heroku config:set SHOWCASE_EVENTS=1 -a attnd-web`, and once for
   AI covers on either app: `heroku run -a attnd-dev python manage.py load_showcase_events --images` (OpenAI, a few
   cents each). Watch `ADMIN_EMAILS`: "Remove the limit" requests and event claims are emailed there.
+- [ ] Home page "Happening near <city>" (Nov 21, 2026): in Google Cloud (project `attnd-df28e`), enable the
+      **Geolocation API** and add it to the **browser key**'s API restrictions (the key behind
+      `GOOGLE_MAPS_BROWSER_KEY`, referrer-restricted to attnd.app / dev.attnd.app). The browser calls it at most once a day
+      for an approximate position from the visitor's IP (no prompt); billed per request after the monthly free usage,
+      about $5 per 1,000. Without it the page shows the prospects region's cards instead (nothing breaks).
 - [ ] Later (before outside organizers or payments): move everything to a Texas LLC — `docs/LLC_MIGRATION.md`.
 - [x] Repos made public (Nov 19, 2026); history scan found old secrets: the OpenAI key in `_set_heroku_env.command`
       (revoked Apr 29, 2026) and the 2021 service-account keys `attnd-prod` (`bf9dce7d…`) and `attnd-742` (`73dbb440…`),

@@ -258,6 +258,11 @@ def _run_create(job):
             job_finished(job)
         except Exception:
             logger.exception('Could not link test event %s to its prospect', event.pk)
+        # The home page card's cover (events/covers.py), after the place images had their chance.
+        from django.db import transaction
+
+        from events import covers
+        transaction.on_commit(lambda: covers.schedule(event.pk, delay=covers.AFTER_IMPORT_SECONDS))
 
 
 def _pick_theme(event, page_colors, instruction='', force=False):

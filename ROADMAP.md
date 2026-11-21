@@ -247,6 +247,10 @@ mode; `null` → today's behaviour (`accent_color`, else the brand purple).
 
 ## Onboarding follow-ups (built Nov 21, 2026: open sign-ups, demo events, free limit, home page)
 - **Testimonials / "used at" logos** on the home page once real events have run with Attnd (with the organizers' OK).
+- **"Happening near you" without Google**: today the browser asks Google's Geolocation API for an approximate position
+  from the visitor's IP (no prompt, `home.js`). Once prospects span several regions, consider an IP database on our own
+  server instead (e.g. MaxMind GeoLite2, free with an account and attribution; refreshed weekly), so nothing goes to
+  Google and it works without the browser key.
 - API-025 in the apps: show the server's `event_full_free` message on a full free event (API_CHANGES.md → API-025).
 - Checkout: "Remove the limit" emails the admins and an admin marks the event paid; a real checkout (Stripe) later.
 - Showcase events on production: set `SHOWCASE_EVENTS=1` on attnd-web when the owner wants the gallery there, and

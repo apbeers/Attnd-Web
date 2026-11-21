@@ -64,41 +64,33 @@ class RunJobsInline:
 
 
 # ---------------------------------------------------------------------------
-# Public trial endpoints
+# Create jobs (the console's AI import; the old homepage trial endpoints are gone)
 # ---------------------------------------------------------------------------
 
-@override_settings(SIGNUPS_OPEN=True)
-class TrialImportTests(RunJobsInline, TestCase):
+class CreateJobTests(RunJobsInline, TestCase):
     def setUp(self):
-        self.client = Client()
-        cache.clear()
+        self.owner = User.objects.create_user("owner", "owner@example.com", "pw")
 
-    def _post(self, payload):
-        return self.client.post("/scrape/", data=json.dumps(payload), content_type="application/json", secure=True)
-
-    def _post_and_run(self, payload, data=None, side_effect=None):
+    def _run(self, tz="America/Chicago", data=None, side_effect=None):
         kwargs = {"side_effect": side_effect} if side_effect else {"return_value": data or _sample_data()}
+
+        def create():
+            job = IngestJob.objects.create(kind=IngestJob.KIND_CREATE, trigger=IngestJob.TRIGGER_CONSOLE,
+                                           created_by=self.owner, urls=["https://example.com"], timezone=tz)
+            jobs.enqueue(job)
+            return job
+
         with patch("scrape.jobs.scrape_event", **kwargs):
-            return self.run_queued(self._post, payload)
+            job = self.run_queued(create)
+        job.refresh_from_db()
+        return job
 
-    def test_missing_url_returns_400(self):
-        self.assertEqual(self._post({"url": ""}).status_code, 400)
-
-    def test_invalid_scheme_returns_400(self):
-        self.assertEqual(self._post({"url": "ftp://x"}).status_code, 400)
-
-    def test_invalid_json_body_returns_400(self):
-        resp = self.client.post("/scrape/", data="nope", content_type="application/json", secure=True)
-        self.assertEqual(resp.status_code, 400)
-
-    def test_happy_path_creates_unlisted_published_trial_event(self):
-        resp = self._post_and_run({"url": "https://example.com", "timezone": "America/Chicago"})
-        self.assertEqual(resp.status_code, 202)
-        job = IngestJob.objects.get(pk=resp.json()["job_id"])
+    def test_happy_path_creates_a_draft_event_for_its_owner(self):
+        job = self._run()
         self.assertEqual(job.status, IngestJob.DONE)
         event = job.event
-        self.assertEqual(event.user.username, "trialuser")
-        self.assertEqual(event.status, Event.STATUS_PUBLISHED)
+        self.assertEqual(event.user, self.owner)
+        self.assertEqual(event.status, Event.STATUS_DRAFT)
         self.assertFalse(event.public)
         self.assertFalse(event.paid)
         self.assertEqual(event.timezone, "America/Chicago")
@@ -107,55 +99,35 @@ class TrialImportTests(RunJobsInline, TestCase):
         self.assertEqual(EventRevision.objects.filter(event=event).count(), 1)
 
     def test_naive_times_are_event_local(self):
-        resp = self._post_and_run({"url": "https://example.com", "timezone": "UTC"})
-        event = IngestJob.objects.get(pk=resp.json()["job_id"]).event
+        event = self._run(tz="UTC").event
         # 18:00 in Chicago (CDT, UTC-5) == 23:00 UTC
         self.assertEqual(event.start_time.astimezone(django_timezone.UTC).hour, 23)
 
     def test_unknown_coordinates_stay_null(self):
-        resp = self._post_and_run({"url": "https://example.com"})
-        event = IngestJob.objects.get(pk=resp.json()["job_id"]).event
-        food = event.location_set.get(name="Food Court")
-        self.assertIsNone(food.latitude)
+        self.assertIsNone(self._run().event.location_set.get(name="Food Court").latitude)
 
     def test_item_without_location_is_kept(self):
-        resp = self._post_and_run({"url": "https://example.com"})
-        event = IngestJob.objects.get(pk=resp.json()["job_id"]).event
+        event = self._run().event
         self.assertIsNone(event.scheduleditem_set.get(name="Welcome").location)
         self.assertEqual(event.scheduleditem_set.get(name="Opening Act").location.name, "Main Stage")
 
-    def test_status_endpoint_returns_result(self):
-        resp = self._post_and_run({"url": "https://example.com"})
-        status = self.client.get(resp.json()["status_url"], secure=True).json()
-        self.assertEqual(status["status"], "done")
-        self.assertEqual(status["event_name"], "Test County Fair")
-        self.assertEqual(status["location_count"], 2)
-        self.assertTrue(status["qr_code"].startswith("data:image/png;base64,"))
-        self.assertIn(status["event_code"], status["join_url"])
-        self.assertIn("claim=", status["claim_url"])
-
     def test_missing_start_time_falls_back_to_first_item_and_notes_it(self):
-        resp = self._post_and_run({"url": "https://example.com"}, data=_sample_data(start_time=None))
-        job = IngestJob.objects.get(pk=resp.json()["job_id"])
+        job = self._run(data=_sample_data(start_time=None))
         self.assertIn("start time", job.result["notes"])
         self.assertEqual(job.event.start_time, job.event.scheduleditem_set.order_by("start_time").first().start_time)
 
     def test_value_error_marks_job_failed(self):
-        resp = self._post_and_run({"url": "https://example.com"}, side_effect=ValueError("No content found."))
-        status = self.client.get(resp.json()["status_url"], secure=True).json()
-        self.assertEqual(status["status"], "failed")
-        self.assertIn("No content", status["error"])
+        job = self._run(side_effect=ValueError("No content found."))
+        self.assertEqual(job.status, IngestJob.FAILED)
+        self.assertIn("No content", job.error)
 
     def test_unexpected_error_marks_job_failed(self):
-        resp = self._post_and_run({"url": "https://example.com"}, side_effect=RuntimeError("boom"))
-        job = IngestJob.objects.get(pk=resp.json()["job_id"])
-        self.assertEqual(job.status, IngestJob.FAILED)
+        self.assertEqual(self._run(side_effect=RuntimeError("boom")).status, IngestJob.FAILED)
 
-    def test_rate_limit(self):
-        with patch("scrape.jobs._start_background"):
-            for _ in range(5):
-                self.assertEqual(self._post({"url": "https://example.com"}).status_code, 202)
-            self.assertEqual(self._post({"url": "https://example.com"}).status_code, 429)
+    def test_the_old_trial_endpoint_is_gone(self):
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.post("/scrape/", data="{}", content_type="application/json",
+                                          secure=True).status_code, 404)
 
 
 # ---------------------------------------------------------------------------

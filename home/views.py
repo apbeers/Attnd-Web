@@ -90,16 +90,22 @@ def metric(request):
 
 
 def near(request):
-    """"Happening near you" for the browser's own location (only if the visitor allowed it): the cards' HTML."""
+    """"Happening near <city>": the browser asked Google's Geolocation API for an approximate position from the
+    visitor's IP (no prompt, home.js) and sends it here rounded to 0.1° (~10 km). Nothing is stored or logged."""
+    from attnd.ratelimit import RateLimit, client_ip
     try:
-        lat, lng = float(request.GET['lat']), float(request.GET['lng'])
+        lat, lng = round(float(request.GET['lat']), 1), round(float(request.GET['lng']), 1)
         if not (-90 <= lat <= 90 and -180 <= lng <= 180):
             raise ValueError
     except (KeyError, ValueError):
         return JsonResponse({'error': 'lat and lng are required numbers'}, status=400)
+    limit, ip = RateLimit('home_near_ip'), client_ip(request)
+    if limit.exceeded(ip):
+        return JsonResponse({'error': 'Too many requests.'}, status=429)
+    limit.hit(ip)
     near_you, _ = onboarding.gallery((lat, lng))
     html = ''.join(render_to_string('home/_card.html', {'c': c}, request=request) for c in near_you)
-    return JsonResponse({'count': len(near_you), 'html': html})
+    return JsonResponse({'count': len(near_you), 'html': html, 'place': onboarding.near_place(near_you)})
 
 
 @login_required

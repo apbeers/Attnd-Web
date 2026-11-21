@@ -37,7 +37,7 @@ attnd-web is the coordinating repo for all three. Any feature that touches the A
 
 ## Platform model (the "full vision")
 
-1. **AI import** — an organizer (or anonymous visitor on the homepage) gives URLs / a PDF or image / pasted text. An `IngestJob` crawls + extracts with Claude Haiku structured output (`attnd/claude.py`) and creates the event (`scrape/jobs.py`, `scrape/service.py`).
+1. **AI import** — an organizer (or a visitor through the home page's composer, after signing up) gives URLs / a PDF or image / pasted text. An `IngestJob` crawls + extracts with Claude Haiku structured output (`attnd/claude.py`) and creates the event (`scrape/jobs.py`, `scrape/service.py`).
 2. **Manual management** — the organizer console (`/console/`) edits everything. Any field a person edits is added to that row's `locked_fields`. An event has an owner plus a team (`EventMember`: admins manage the team and settings, contributors edit content); invites by email work before the person has an account (`EventInvite`, claimed on sign-up/sign-in).
 3. **Website watching + AI refresh** — `scrape/watch.py` fingerprints the event's pages (conditional GET + hash of visible text/JSON-LD; every 10 min during the event, hourly the week before, 6-hourly earlier) and runs the AI only on pages that changed, with a minimum gap and daily cap (`WATCH_MIN_AI_GAP_MINUTES`, `WATCH_MAX_AI_RUNS_PER_DAY`). `update_mode` review/minor/auto decides what applies itself (removals and locked fields always wait). Manual "Check for updates now" re-crawls everything. The AI re-reads the sources *with the current data* and returns its view; `scrape/diff.py` turns that into a `ChangeSet` of field-level `Change`s. Locked fields become conflicts (unticked), empty AI values never blank data, removals need cited evidence.
 4. **Review** — the organizer accepts per change / per field; `apply_changeset` applies atomically, snapshots an `EventRevision` first (rollback from History), and bumps `content_version` once.
@@ -259,14 +259,36 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   kept happening now by `run_scheduled_tasks`; the release phase loads them where `SHOWCASE_EVENTS` is on (default:
   dev.attnd.app and DEBUG only). `--images` asks Studio's image model for covers (stored as the flyer). DEMO is
   unchanged and is one more card.
-- **Happening near you** (`home.onboarding.gallery`): published prospect test events (`testing_only`, linked to a
-  prospect, not yet claimed) within 150 miles of the browser's location (only after "Use my location": `GET
-  /home/near/`), else every one with the prospects region as the label; each card says **Is this your event? Claim it**
+- **Happening near <place>** (`home.onboarding.gallery`): published prospect test events (`testing_only`, linked to a
+  prospect, not yet claimed). With `GOOGLE_MAPS_BROWSER_KEY` set, `home.js` asks Google's **Geolocation API from the
+  browser** (`POST https://www.googleapis.com/geolocation/v1/geolocate?key=…`, `{"considerIp": true}`; the browser, so
+  Google sees the visitor's IP and not Heroku's) at most once a day per browser (`localStorage attnd.home.geo`, rounded), no permission
+  prompt, rounded to 0.1° before `GET /home/near/?lat&lng` (`home_near_ip` 30 / 10 min; never stored or logged) picks the
+  cards within 150 miles and names the nearest card's city ("Happening near Fort Worth"). No key, a failed call or
+  nothing near → every card with the prospects region as the label (`clean_region`: first line, empty parts dropped).
+  CSP `connect-src` has `https://*.googleapis.com` only with the key. No "Use my location" / `navigator.geolocation`.
+  Owner task: enable the Geolocation API on the browser key (SETUP.md). Each card says **Is this your event? Claim it**
   (`/claim/<code>/`, sign-in required): email, role, note → `prospects.ClaimRequest` with a domain hint (the email's
   domain is the event's website or a contact's); staff decide in **Prospects → Claims** (`approve_event_claim` always
   asks, `decline_event_claim`): approving hands the event over (owner = them, no longer testing-only, still unpaid),
-  the prospect → Claimed, History records it. Never automatic. Tests: `home/tests_onboarding.py`,
-  `events/tests_free_limit.py`.
+  the prospect → Claimed, History records it. Never automatic.
+- **Layout** (owner, Nov 21, 2026): a tight hero (small phone preview that never makes it taller) so the gallery
+  ("See it live" / the console's "Try one on your phone first") starts within a 1440×900 screen; its header carries the
+  **instant App Clip** in three steps (Scan → App Clip opens → You're in) and the accurate Android line (the code opens
+  Google Play; once installed Attnd opens on the event through the install referrer; no Instant App promise).
+- **Cards** (`_card.html`, `onboarding.card`): every card has a cover: the event's flyer (not a PDF) or a place photo,
+  else `Event.cover` from **`events/covers.py`**: a licensed Wikimedia Commons photo near the event's pin (1 km) or named
+  like its venue / event in its city, landscape, ≥ 600 px, confirmed by Claude Haiku's vision, credit ("author · licence
+  · Wikimedia Commons") shown small on the cover; else an AI picture (Studio's image model, "AI-generated image";
+  showcase events always AI, they're made up). **Never** an image from the organizer's own website. Runs 2 min after a
+  prospect test event's import finishes (`scrape.jobs` → `covers.schedule`), catches up in `run_scheduled_tasks`
+  (`covers.refresh_due`), backfill `manage.py find_event_covers [--event CODE] [--no-ai] [--force]`;
+  `EVENT_COVERS_DAILY_CAP_USD` (2) caps every look per UTC day (`Event.cover_cost_usd`). Not in the API, no
+  `content_version` bump. **Event website ↗** (`target=_blank rel="noopener nofollow"`): the published Studio site, else
+  `source_urls[0]`, https only; none for showcase events.
+- The old home page's anonymous trial import (`POST /scrape/`, `scrape:job_status`, sign-up `?claim=` for `trialuser`
+  events, `TRIAL_IMPORT_OPEN`) is gone; `expire_trial_events` still clears leftover trial events.
+  Tests: `home/tests_onboarding.py` (incl. `GalleryFeedbackTests`, `EventCoverTests`), `events/tests_free_limit.py`.
 
 ## Diagnostics (API-013, API-014)
 
@@ -791,7 +813,7 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
 
 - `status`: `draft` (invisible to every API) → `published` → `archived` (still viewable, apps show "ended").
 - `paid=False` means demo/trial — mobile clients must show a "Demo Event" banner.
-- `public` = listed in nearby search. Unclaimed homepage trial events are published but unlisted, reachable by code/QR.
+- `public` = listed in nearby search. Prospect test events and showcase events are published but unlisted, reachable by code/QR.
 - Coordinates are nullable; `null` means unknown (never `0,0`).
 - Times are stored in UTC; `Event.timezone` is the IANA zone used for entry and display.
 - **Context** (API-018): `context` JSON on events, locations and items holds what the on-device assistants answer from
@@ -918,7 +940,7 @@ uv run python manage.py runserver
   dyno (`manage.py run_tasks`, Procfile, scaled to 0 by default) or, without one, by `run_scheduled_tasks`
   (`run_tasks --once --max-seconds 240`). AI imports keep their own `IngestJob` queue, Ask Attnd and Studio runs their
   threads (they need seconds, not minutes). Tests: `background/tests.py`.
-- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events, keeps the DEMO event happening now and runs a scheduled prospect discovery when it is on and due, and refreshes out-of-date "Plan your day" suggestions (API-021).
+- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires leftover trial events, finds gallery card covers, keeps the DEMO event happening now and runs a scheduled prospect discovery when it is on and due, and refreshes out-of-date "Plan your day" suggestions (API-021).
 - **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged. Urgent notifications (API-011) go to every device with a token (time-sensitive APNs alert, high-priority FCM data message) plus an APNs `liveactivity` update to every `Device.live_activity_token` in the event; at most `URGENT_MAX_PER_HOUR` (3) per event, beyond that they go out as normal. iOS tokens are sent per APNs topic (API-019, `send_apns_groups`): App Clip devices (`Device.app_clip`) on `APNS_CLIP_TOPIC` (default `<APNS_TOPIC>.clip`, Live Activities `+ .push-type.liveactivity`), the app's on `APNS_TOPIC`.
 
 ## Running Tests
@@ -1009,10 +1031,11 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `TASKS_BACKEND` | No | `threads` (default) or `database` (django.tasks on the Postgres queue, F5; scale the `tasks` dyno or rely on the scheduler) |
 | `DB_POOL` / `DB_POOL_MAX` | No | psycopg 3 connection pool on (default `1`) / its size per process (default `8`) |
 | `CACHE_BACKEND` | No | `database` (default, the `attnd_cache` table) or `locmem` |
+| `EVENT_COVERS_DAILY_CAP_USD` | No | The home page gallery's card covers (events/covers.py): Wikimedia checks + AI pictures per UTC day, default `2` |
 | `PLACE_IMAGES_ENABLED` / `PLACE_IMAGES_DAILY_CAP_USD` | No | Place images found automatically (API-022), default on (needs `ANTHROPIC_API_KEY`) / `1` USD per UTC day for every look |
 | `CSP_MODE` | No | `enforce` (default), `report` (Report-Only header, nothing blocked) or `off` |
 | `ADMIN_URL_PATH` | No | Where the Django admin lives, default `manage-attnd/` (`/admin/` is a 404) |
-| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60), `STUDIO_FORM_IP` (10/600, form posts per IP per site), `STUDIO_FORM_SITE` (300/3600), `STUDIO_REPORT_IP` (5/3600), `SCRAPE_IP` (5/3600, homepage trial imports), `ATTEST_NONCE_IP` (30/60, attestation challenges) |
+| `RATE_LIMIT_<NAME>` | No | `count/seconds` overrides for `DIAGNOSTICS_IP` (600/600, log uploads), `DIAGNOSTICS_REPORTS_IP` (60/3600, report uploads), `LOGIN_EMAIL` (5/900), `LOGIN_IP` (20/900), `RESET_EMAIL` (3/3600), `RESET_IP` (10/3600), `SIGNUP_IP` (10/3600), `OTP_USER` (5/900), `PASSKEY_IP` (20/900, failed passkey sign-ins), `EMAIL_CODE_USER` (3/900, emailed sign-in codes), `CSP_REPORT_IP` (60/60), `STUDIO_FORM_IP` (10/600, form posts per IP per site), `STUDIO_FORM_SITE` (300/3600), `STUDIO_REPORT_IP` (5/3600), `ATTEST_NONCE_IP` (30/60, attestation challenges) |
 | `RATE_LIMIT_TRUST_X_FORWARDED_FOR` | No | Default `1` (behind Heroku's router); `0` = use the socket address |
 | `TWO_FACTOR_ISSUER` | No | Name shown in authenticator apps, default `Attnd` |
 | `WEBAUTHN_RP_ID` | No | Passkey domain (relying party ID), default `SITE_URL`'s host (`attnd.app`; dev: `dev.attnd.app`). Changing it makes existing passkeys stop working |

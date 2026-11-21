@@ -37,7 +37,7 @@ MAX_OPERATIONS = 500
 TRACKED = ('events.event', 'events.location', 'events.scheduleditem', 'events.notification', 'events.eventmember',
            'events.eventinvite')
 # Fields the system keeps up to date by itself: never restored and never a conflict.
-BOOKKEEPING = {'plan_suggestions', 'content_version', 'content_updated_at', 'last_refreshed_at', 'sources_checked_at', 'updated_at',
+BOOKKEEPING = {'plan_suggestions', 'cover_checked_at', 'cover_cost_usd', 'content_version', 'content_updated_at', 'last_refreshed_at', 'sources_checked_at', 'updated_at',
                'last_seen'}
 
 _current = contextvars.ContextVar('attnd_undo_recorder', default=None)

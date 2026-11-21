@@ -1,7 +1,5 @@
-"""Invite-only organizer side (SIGNUPS_OPEN off, the default): sign-up gate, homepage, trial AI import."""
-import json
+"""Invite-only organizer side (SIGNUPS_OPEN off, the default): sign-up gate and homepage."""
 import re
-from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
@@ -15,7 +13,6 @@ from console.signups import INVITE_ONLY_MESSAGE, is_invited
 
 INVITE_ONLY_HTML = escape(INVITE_ONLY_MESSAGE)  # as the template renders it (apostrophes escaped)
 from events.models import Event, EventInvite, EventMember
-from scrape.models import IngestJob
 
 PASSWORD = 'a-strong-password-123'
 
@@ -86,24 +83,6 @@ class SignupGateTests(TestCase):
         for email in ('b@example.com', ' Beta@Example.com ', 'c@example.com', '', None):
             self.assertFalse(is_invited(email), email)
 
-    def _trial_event(self):
-        trial, _ = User.objects.get_or_create(username='trialuser', defaults={'email': 'trial@attnd.app'})
-        return Event.objects.create(name='Trial', event_code='TRIAL123', timezone='UTC',
-                                    start_time=timezone.now(), user=trial)
-
-    def test_claim_only_for_invited_emails(self):
-        trial = self._trial_event()
-        response = self.post('stranger@example.com', claim='TRIAL123')
-        self.assertEqual(response.status_code, 403)
-        trial.refresh_from_db()
-        self.assertEqual(trial.user.username, 'trialuser')
-
-        EventInvite.objects.create(event=self.event, email='invited@example.com')
-        response = self.post('invited@example.com', claim='TRIAL123')
-        trial.refresh_from_db()
-        self.assertEqual(trial.user.email, 'invited@example.com')
-        self.assertRedirects(response, reverse('console:event', args=[trial.pk]), fetch_redirect_response=False)
-
     def test_sign_in_page_stays_and_says_invite_only(self):
         response = self.client.get(reverse('login'), secure=True)
         self.assertContains(response, 'Attnd is invite-only right now.')
@@ -123,25 +102,6 @@ class InviteOnlyHomepageTests(TestCase):
         self.assertIn('invite-only right now', html)
         self.assertNotIn('id="scrape-form"', html)
 
-    def test_anonymous_trial_import_is_refused(self):
-        with patch('scrape.jobs.scrape_event') as scrape_event, patch('scrape.jobs.enqueue') as enqueue:
-            response = self.client.post('/scrape/', data=json.dumps({'url': 'https://example.com'}),
-                                        content_type='application/json', secure=True)
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()['error'], INVITE_ONLY_MESSAGE)
-        self.assertFalse(IngestJob.objects.exists())
-        scrape_event.assert_not_called()
-        enqueue.assert_not_called()
-
-    def test_signed_in_organizers_keep_the_import(self):
-        self.client.force_login(User.objects.create_user('org', 'org@example.com', 'pw'))
-        with patch('scrape.jobs.enqueue') as enqueue:
-            response = self.client.post('/scrape/', data=json.dumps({'url': 'https://example.com'}),
-                                        content_type='application/json', secure=True)
-        self.assertEqual(response.status_code, 202)
-        enqueue.assert_called_once()
-        self.assertIn('data-composer', self.client.get('/home/', secure=True).content.decode())
-
 
 @override_settings(SIGNUPS_OPEN=True)
 class SignupsOpenTests(TestCase):
@@ -157,13 +117,8 @@ class SignupsOpenTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(User.objects.filter(email='anyone@example.com').exists())
 
-    def test_homepage_and_import_open(self):
+    def test_homepage_open(self):
         html = self.client.get('/', secure=True).content.decode()
         self.assertIn('data-composer', html)
         self.assertNotIn('invite-only right now', html)
         self.assertContains(self.client.get(reverse('login'), secure=True), 'New here?')
-        with patch('scrape.jobs.enqueue'):
-            response = self.client.post('/scrape/', data=json.dumps({'url': 'https://example.com'}),
-                                        content_type='application/json', secure=True)
-        self.assertEqual(response.status_code, 202)
-        self.assertEqual(IngestJob.objects.count(), 1)

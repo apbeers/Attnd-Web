@@ -10,7 +10,8 @@ from events.models import Event, Location, Notification, ScheduledItem
 _EVENT_BOOKKEEPING = {'content_version', 'content_updated_at', 'last_refreshed_at',
                       'locked_fields', 'source_urls', 'source_text', 'refresh_schedule',
                       'update_mode', 'sources_checked_at', 'order_id', 'plan',
-                      'theme_web'}  # (theme_web: the website only; the apps' theme_apps does change the bundle)
+                      'theme_web', 'cover', 'cover_credit', 'cover_source', 'cover_checked_at',
+                      'cover_cost_usd'}  # (theme_web: the website only; the apps' theme_apps does change the bundle)
 
 
 @receiver(post_save, sender=Event)

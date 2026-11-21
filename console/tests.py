@@ -7,16 +7,6 @@ import datetime
 from console.testing import TwoFactorClient
 from events.models import Device, Event, EventInvite, EventMember, Location, Notification
 
-TRIAL_USERNAME = "trialuser"
-
-
-def _make_trial_user():
-    user, _ = User.objects.get_or_create(username=TRIAL_USERNAME, defaults={"email": "trial@attnd.app"})
-    user.set_unusable_password()
-    user.save()
-    return user
-
-
 @override_settings(SIGNUPS_OPEN=True)
 class SignUpViewTests(TestCase):
 
@@ -45,39 +35,6 @@ class SignUpViewTests(TestCase):
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
         self.assertEqual(user.email, 'new@example.com')
-
-    def test_claim_transfers_trial_event(self):
-        """Signing up with ?claim=CODE transfers the trial event to the new user."""
-        trial_user = _make_trial_user()
-        event = Event.objects.create(
-            name="Scraped Festival",
-            event_code="TESTCODE",
-            description="desc",
-            latitude=0, longitude=0,
-            start_time=timezone.now() + datetime.timedelta(days=7),
-            address="123 Main St",
-            user=trial_user,
-        )
-        Location.objects.create(
-            name="Main Stage", snippet="s", description="d",
-            latitude=0, longitude=0, address="", user=trial_user, event=event,
-        )
-        Notification.objects.create(
-            title="Welcome!", body="Thanks for joining.",
-            send_time=timezone.now() + datetime.timedelta(hours=1),
-            user=trial_user, event=event,
-        )
-
-        data = {**self.valid_data, 'claim': 'TESTCODE'}
-        self._post(data)
-
-        new_user = User.objects.get(email='new@example.com')
-        event.refresh_from_db()
-        self.assertEqual(event.user, new_user)
-        self.assertEqual(event.location_set.filter(user=new_user).count(), 1)
-        self.assertEqual(event.notification_set.filter(user=new_user).count(), 1)
-        # No extra demo event should be created
-        self.assertEqual(Event.objects.filter(user=new_user).count(), 1)
 
     def test_claim_bad_code_lands_on_dashboard(self):
         """An invalid claim code still creates the account and lands on the empty dashboard."""

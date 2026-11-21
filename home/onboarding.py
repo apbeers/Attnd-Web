@@ -71,19 +71,40 @@ def _dates(event):
 
 
 def _cover(event):
-    if event.flyer:
+    """(url, credit): the event's own flyer or a place photo first, then the gallery cover events/covers.py found
+    (a Wikimedia Commons photo with its credit, or an AI picture)."""
+    if event.flyer and not (event.flyer.name or '').lower().endswith('.pdf'):
         try:
-            return event.flyer.url
+            return event.flyer.url, ''
         except Exception:
             pass
     loc = event.location_set.filter(hidden=False).exclude(image='').exclude(image__isnull=True).first()
     if loc is not None:
         try:
-            return loc.image.url
+            return loc.image.url, loc.image_credit or ''
+        except Exception:
+            pass
+    if event.cover:
+        try:
+            return event.cover.url, event.cover_credit
         except Exception:
             pass
     loc = event.location_set.filter(hidden=False).exclude(image_url='').exclude(image_url__isnull=True).first()
-    return (loc.image_url if loc else '') or event.logo_url or ''
+    return (loc.image_url if loc else '') or event.logo_url or '', ''
+
+
+def _website(event):
+    """The event's own website for "Event website ↗": the published Studio site, else its first source page; https
+    only. Showcase events are made up and have none."""
+    if event.showcase:
+        return ''
+    from events.content import _website_url
+    from events.context import https_url
+    url = _website_url(event) or ''
+    if not url:
+        urls = [u for u in (event.source_urls or []) if isinstance(u, str)]
+        url = urls[0] if urls else ''
+    return https_url(url)
 
 
 def _colours(event):
@@ -96,13 +117,14 @@ def _colours(event):
 def card(event, kind='', near=None, claimable=False):
     from attnd.links import join_url, open_in_app_links
     from events.showcase import kind_of
+    cover, credit = _cover(event)
     miles = None
     if near and event.latitude is not None and event.longitude is not None:
         miles = round(_miles(near[0], near[1], event.latitude, event.longitude))
     return {
         'id': event.pk, 'code': event.event_code, 'name': event.name, 'kind': kind or kind_of(event),
         'dates': _dates(event), 'city': (event.address or '').split(',')[-2].strip() if event.address.count(',') >= 1 else '',
-        'cover': _cover(event), 'colours': _colours(event), 'join': join_url(event),
+        'cover': cover, 'credit': credit, 'website': _website(event), 'colours': _colours(event), 'join': join_url(event),
         'qr': reverse('join:join_qr', args=[event.event_code]), 'open': open_in_app_links(event),
         'lat': float(event.latitude) if event.latitude is not None else None,
         'lng': float(event.longitude) if event.longitude is not None else None,
@@ -126,7 +148,7 @@ def gallery(near=None):
                               start_time__lte=soon, latitude__isnull=False, longitude__isnull=False)
                   .exclude(claim_requests__status='approved').distinct()[:40])
     for e in candidates:
-        c = card(e, kind='Happening near you', near=near, claimable=True)
+        c = card(e, kind='Near you', near=near, claimable=True)
         if near is None or (c['miles'] is not None and c['miles'] <= NEAR_MILES):
             near_you.append(c)
     near_you.sort(key=lambda c: (c['miles'] if c['miles'] is not None else 10 ** 6, c['name']))
@@ -142,13 +164,29 @@ def categories(cards):
     return seen
 
 
+def clean_region(text):
+    """The prospects region as a short label: its first line, empty parts dropped ("Fort Worth, TX, " → "Fort Worth,
+    TX"), no trailing punctuation."""
+    line = next((ln for ln in (text or '').splitlines() if ln.strip()), '')
+    parts = [p.strip(' .;:-–—') for p in re.split(r'[,;]', line)]
+    return ', '.join(p for p in parts if p)[:80]
+
+
 def region():
     try:
         from prospects.models import ProspectSettings
         s = ProspectSettings.objects.filter(pk=1).first()
-        return (s.region if s else '').strip().splitlines()[0][:80] if s and s.region else ''
+        return clean_region(s.region) if s else ''
     except Exception:
         return ''
+
+
+def near_place(cards):
+    """"Happening near <city>": the nearest card's city (the visitor's own place is never looked up)."""
+    for c in cards:
+        if c.get('city'):
+            return c['city']
+    return ''
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +307,7 @@ def looks():
         theme = T.normalize({'light': dict(zip(T.ROLES, spec['theme']))})
         tokens = T.tokens(theme['light'], 'light')
         out.append({'key': key, 'name': spec['name'], 'kind': spec['kind'], 'address': spec['address'],
-                    'places': [p[0] for p in spec['places'][:4]],
+                    'places': [p[0] for p in spec['places'][:3]],
                     'items': [i[0] for i in spec['items'][1:4]],
                     'style': ';'.join(f'--ph-{k}:{v}' for k, v in (
                         ('brand', tokens['--color-brand']), ('on', tokens['--color-on-brand']),
@@ -299,5 +337,5 @@ def page_context(request, preview=False, near=None):
         'chips': CHIPS, 'placeholders': PLACEHOLDERS, 'looks': looks(), 'near_you': near_you,
         'showcase': showcase_cards, 'categories': categories(showcase_cards), 'region': where,
         'preview': preview, 'free_limit': int(getattr(settings, 'FREE_DEVICE_LIMIT', 20)),
-        'max_file_mb': MAX_FILE_MB,
+        'max_file_mb': MAX_FILE_MB, 'geo_key': getattr(settings, 'GOOGLE_MAPS_BROWSER_KEY', ''),
     }

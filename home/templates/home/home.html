@@ -56,7 +56,7 @@
       {% include 'home/_composer.html' with cid='hero' %}
       {% include 'home/_chips.html' %}
       {% if not SIGNUPS_OPEN %}<p class="small muted">New organizer accounts are invite-only right now: sign in, or use the email your invite went to.</p>{% endif %}
-      <p class="onb-trust small muted">Free to try with up to {{ free_limit }} phones · No app for attendees to sign up for · iPhone, Android and an instant App Clip</p>
+      <p class="onb-trust small muted">Free to try with up to {{ free_limit }} phones · No download on iPhone: attendees scan and the App Clip opens · Android too</p>
     </div>
     {% include 'home/_phone.html' %}
   </div>
@@ -84,8 +84,8 @@
         <div class="feature-row__text">
           <p class="eyebrow">The app</p>
           <h3>Scan and you’re in, even with no signal</h3>
-          <p class="muted">On iPhone the QR code opens an instant App Clip: nothing to install. Android opens the app
-            straight on the event. Everything works offline once loaded, with walking times and directions between places.</p>
+          <p class="muted">On iPhone the QR code opens an instant App Clip: nothing to install. On Android it opens
+            Google Play, and Attnd opens straight on the event once installed. Everything works offline once loaded, with walking times and directions between places.</p>
         </div>
         <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-map.webp' %}" alt="The Attnd app's event map with walking routes" width="768" height="1670" loading="lazy" decoding="async"></div></div>
       </article>

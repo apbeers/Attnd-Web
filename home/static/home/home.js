@@ -1,6 +1,6 @@
 /* The home page and the console's first screen (Nov 21, 2026): the composer (typed examples, attach, speak), the
-   chips (fill the composer, switch the phone's look), "See it live" (kinds, Grid | Map, Happening near you with the
-   browser's location only after a tap) and anonymous counts of the page's own taps. Everything works without it. */
+   chips (fill the composer, switch the phone's look), "See it live" (kinds, Grid | Map, Happening near <place> (an
+   approximate position from the visitor's IP, no prompt) and anonymous counts of the page's own taps. Works without it. */
 (function () {
   const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const METRIC_URL = '/home/m/';
@@ -168,24 +168,35 @@
   }
   gallery.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
 
-  // Happening near you: the browser's location only after the visitor taps "Use my location".
+  // Happening near <place>: an approximate position from the visitor's IP, asked by the BROWSER from Google's
+  // Geolocation API (so Google sees the visitor's IP, not our server's; no permission prompt, no precise location),
+  // at most once a day per browser (localStorage, rounded to 0.1°) and only when the page carries a key.
+  // Anything failing keeps the page's own "Happening near <region>" cards.
   const near = gallery.querySelector('[data-near]');
-  const locate = gallery.querySelector('[data-near-locate]');
-  if (near && locate && navigator.geolocation) {
-    locate.hidden = false;
-    near.hidden = false;
-    locate.addEventListener('click', () => {
-      locate.disabled = true;
-      locate.textContent = 'Finding events near you…';
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        try {
-          const url = `${gallery.dataset.nearUrl}?lat=${pos.coords.latitude.toFixed(2)}&lng=${pos.coords.longitude.toFixed(2)}`;
-          const d = await (await fetch(url, { headers: { Accept: 'application/json' } })).json();
-          near.querySelector('[data-near-list]').innerHTML = d.html || '';
-          near.querySelector('[data-near-where]').textContent = d.count ? 'Near you.' : 'Nothing near you yet. Try one of these:';
-        } catch (e) { /* keep what the page had */ }
-        locate.hidden = true;
-      }, () => { locate.disabled = false; locate.textContent = 'Use my location'; }, { maximumAge: 600000, timeout: 10000 });
+  const key = gallery.dataset.geoKey;
+  async function position() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('attnd.home.geo') || 'null');
+      if (saved && typeof saved.lat === 'number' && Date.now() - saved.at < 864e5) return saved;
+    } catch (e) { /* no storage */ }
+    const resp = await fetch(`https://www.googleapis.com/geolocation/v1/geolocate?key=${encodeURIComponent(key)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ considerIp: true }),
+      credentials: 'omit', referrerPolicy: 'strict-origin',
     });
+    if (!resp.ok) throw new Error('geolocate');
+    const d = await resp.json();
+    const pos = { lat: Math.round(d.location.lat * 10) / 10, lng: Math.round(d.location.lng * 10) / 10, at: Date.now() };
+    try { localStorage.setItem('attnd.home.geo', JSON.stringify(pos)); } catch (e) { /* no storage */ }
+    return pos;
+  }
+  if (near && key && window.fetch) {
+    position().then(async (pos) => {
+      const url = `${gallery.dataset.nearUrl}?lat=${pos.lat.toFixed(1)}&lng=${pos.lng.toFixed(1)}`;
+      const d = await (await fetch(url, { headers: { Accept: 'application/json' } })).json();
+      if (!d.count) return;  // nothing near: keep the region's cards
+      near.querySelector('[data-near-list]').innerHTML = d.html;
+      near.querySelector('[data-near-title]').textContent = d.place ? `Happening near ${d.place}` : 'Happening near you';
+      near.hidden = false;
+    }).catch(() => { /* keep what the page had */ });
   }
 })();

@@ -114,6 +114,14 @@ class Event(CoordinatesMixin, models.Model):
     # Showcase events (manage.py load_showcase_events, dev only for now): the home page's "See it live" gallery. Kept
     # happening now like DEMO; exempt from the free limit (API-025), never in nearby search, no usage counts.
     showcase = models.BooleanField(default=False, help_text='Home page showcase event (gallery, kept happening now)')
+    # The home page gallery's card cover (events/covers.py), only for events with no flyer or place photo of their own:
+    # a licensed Wikimedia Commons photo near the venue (credit shown on the card) or an AI-made picture. Never copied
+    # from the organizer's website. Not part of the API.
+    cover = models.FileField(upload_to=get_file_path, blank=True)
+    cover_credit = models.CharField(max_length=300, blank=True)
+    cover_source = models.CharField(max_length=16, blank=True)  # wikimedia / ai
+    cover_checked_at = models.DateTimeField(null=True, blank=True)
+    cover_cost_usd = models.DecimalField(max_digits=8, decimal_places=4, default=0)
     # API-021: "Plan your day" examples written for this event (events/plan_suggestions.py): {items: [{text, kind}],
     # version: the content_version they were made for, source: ai | fallback, at, cost_usd}. Kept up to date in the
     # background after content changes; the bundle falls back to the deterministic ones when empty or stale.

@@ -42,7 +42,6 @@ urlpatterns = [
     path('p/<str:event_code>/<str:payload>/qr.svg', public(join_views.shared_plan_qr), name='shared_plan_qr'),
     path('p/<str:event_code>/<str:payload>/', public(join_views.SharedPlanRedirect.as_view()), name='shared_plan'),
     path('p/<str:event_code>/<str:payload>', public(join_views.SharedPlanRedirect.as_view())),
-    path('scrape/', public_include('scrape.urls')),  # anonymous: 403 JSON (invite-only)
     path('accounts/login/', public(views_auth.SignInView.as_view()), name='login'),
     path('accounts/2fa/', views_auth.two_factor_verify, name='two_factor_verify'),
     path('accounts/2fa/setup/', views_auth.two_factor_setup, name='two_factor_setup'),
