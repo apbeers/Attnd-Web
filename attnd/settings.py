@@ -71,6 +71,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     # Off production (dev.attnd.app, dev.attnd.site): robots.txt disallows everything, X-Robots-Tag noindex.
     'attnd.middleware.NoIndexMiddleware',
+    # www.attnd.app → attnd.app (301; /.well-known/ served on www as is).
+    'attnd.middleware.WwwRedirectMiddleware',
     # Attnd Studio's hosted sites (SITES_HOST): only site routes there, no cookies, the sites' own CSP.
     'studio.middleware.SitesHostMiddleware',
     # First, so it times the whole request: one JSON line per /api/ request + X-Request-Id (API-013).

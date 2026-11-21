@@ -994,3 +994,6 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .segmented__button[aria-pressed="true"] { background: var(--color-brand); color: var(--color-on-brand, #fff); }
 .website-bar { align-items: center; }
 @media (prefers-reduced-motion: no-preference) { .site-full__stage iframe { transition: width .2s ease, height .2s ease; } }
+/* Clear of the Ask Attnd launcher (bottom-right): beside it on wide screens, above it on phones */
+@media (min-width: 601px) { .publish-bar-slot:not(.canvas__publish) { margin-right: 10.5rem; } }
+@media (max-width: 600px) { .publish-bar-slot:not(.canvas__publish) { bottom: 4.75rem; } }

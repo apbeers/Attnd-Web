@@ -86,6 +86,18 @@ def _landing(request, event, kind, extra=None):
     return response
 
 
+def download(request):
+    """/download/, /app/, /get/ (old links): iPhone → the App Store, Android → Google Play, anything else → the
+    home page's app section. 302: it depends on the device."""
+    from django.http import HttpResponseRedirect
+    kind = client_kind(request.headers.get('User-Agent') or '')
+    if kind == 'ios':
+        return HttpResponseRedirect(settings.IOS_APP_STORE_URL)
+    if kind == 'android':
+        return HttpResponseRedirect(settings.ANDROID_PLAY_STORE_URL)
+    return HttpResponseRedirect(reverse('home:homepage') + '#download')
+
+
 class JoinEventRedirect(View):
     """/join/<code>/: the one link (and QR code) for every device.
 

@@ -102,13 +102,22 @@ Do these steps once, in order. Each step says which values go where. For any sin
       set `APNS_KEY_ID` / `APNS_AUTH_KEY` on both apps (the `read -s` way below), test a push, then revoke the old key.
 - **Business listings & discoverability** (owner, Nov 21, 2026; not urgent). Add each profile's URL to `SOCIAL_PROFILES`
   on attnd-web (comma-separated; the home page's schema.org `sameAs`):
-  - [x] Google Search Console: verify attnd.app (DNS TXT) — done Nov 21, 2026. [ ] Submit https://attnd.app/sitemap.xml.
+  - [x] Google Search Console: attnd.app verified as a domain property (DNS TXT), Nov 21, 2026. Still to do:
+        - [ ] submit https://attnd.app/sitemap.xml;
+        - [ ] after the SEO release reaches production: **Validate fix** on the "Duplicate without user-selected
+              canonical" and "Not found (404)" reports;
+        - [ ] add an attnd.site property once a Studio site is published there.
   - [ ] Google Business Profile: only as a service-area business (no storefront); optional.
   - [ ] Bing Webmaster Tools: verify and add the sitemap (import from Search Console); Bing's index feeds ChatGPT
         search, Copilot and DuckDuckGo.
   - [ ] ChatGPT: no listing form; it finds Attnd through Bing and OpenAI's crawler (OAI-SearchBot, allowed by
         robots.txt). Later, optional: a ChatGPT app (Apps SDK) for organizers.
-  - [ ] Apple Business Connect: brand and logo for Apple Maps, Siri and Mail (also verifies the brand for the App Store).
+  - [~] Apple Business (Business Connect): organization "Attnd" submitted for review Nov 21, 2026 (Org ID 552089622879).
+        After approval:
+        - [ ] verify attnd.app under Domains;
+        - [ ] add the Attnd brand (logo, description, website, the App Store app);
+        - [ ] optional: Branded Mail (needs a DMARC policy of quarantine or reject on mg.attnd.app);
+        - no public Location listing (no storefront; the organization's address is private and never goes in the repo).
   - [ ] Perplexity, Claude and other AI search: allowed by robots.txt and `llms.txt`; nothing to submit.
   - [ ] LinkedIn company page, Crunchbase profile, X and Instagram handles (claim "attnd").
   - [ ] Software directories AI answers cite: G2, Capterra / GetApp / Software Advice, a Product Hunt launch,

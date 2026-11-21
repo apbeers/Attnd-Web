@@ -54,3 +54,25 @@ class SeoTests(TestCase):
             data = _structured_data('https://attnd.app')
         self.assertIn('"sameAs": ["https://www.linkedin.com/company/attnd"]', data)
         self.assertIn('SoftwareApplication', data)
+
+
+@override_settings(SITE_URL='https://attnd.app', ALLOWED_HOSTS=['attnd.app', 'www.attnd.app', 'testserver'])
+class HostAndDownloadTests(TestCase):
+    def test_www_redirects_but_not_the_well_known_files(self):
+        c = Client()
+        r = c.get('/privacy/?utm_source=x', secure=True, HTTP_HOST='www.attnd.app')
+        self.assertEqual(r.status_code, 301)
+        self.assertEqual(r['Location'], 'https://attnd.app/privacy/?utm_source=x')
+        self.assertEqual(c.get('/.well-known/apple-app-site-association', secure=True, HTTP_HOST='www.attnd.app').status_code, 200)
+        self.assertEqual(c.get('/privacy/', secure=True, HTTP_HOST='attnd.app').status_code, 200)
+        # http → https: SECURE_SSL_REDIRECT = not DEBUG (attnd/settings.py), HSTS a year.
+
+    def test_download_links(self):
+        from django.conf import settings
+        c = Client()
+        iphone = c.get('/download/', secure=True, HTTP_HOST='attnd.app', HTTP_USER_AGENT='Mozilla/5.0 (iPhone; CPU iPhone OS 26_0)')
+        self.assertEqual((iphone.status_code, iphone['Location']), (302, settings.IOS_APP_STORE_URL))
+        android = c.get('/app/', secure=True, HTTP_HOST='attnd.app', HTTP_USER_AGENT='Mozilla/5.0 (Linux; Android 16)')
+        self.assertEqual(android['Location'], settings.ANDROID_PLAY_STORE_URL)
+        desktop = c.get('/get/', secure=True, HTTP_HOST='attnd.app', HTTP_USER_AGENT='Mozilla/5.0 (Macintosh)')
+        self.assertTrue(desktop['Location'].endswith('#download'))

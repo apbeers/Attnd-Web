@@ -40,6 +40,9 @@ urlpatterns = [
     # versions, JSON 404 otherwise.
     re_path(r'^api/v(?P<version>\d+)/', public(retired_api_view)),
     path('join/', public_include('join.urls')),
+    path('download/', public(join_views.download), name='download'),  # old app-download links (Search Console)
+    path('app/', public(join_views.download), name='download_app'),
+    path('get/', public(join_views.download), name='download_get'),
     # Shared plan links (API-015), with or without the trailing slash (the apps write them without).
     path('p/<str:event_code>/<str:payload>/qr.svg', public(join_views.shared_plan_qr), name='shared_plan_qr'),
     path('p/<str:event_code>/<str:payload>/', public(join_views.SharedPlanRedirect.as_view()), name='shared_plan'),

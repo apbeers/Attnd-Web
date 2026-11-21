@@ -950,7 +950,10 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
   demo, shared plans) say `noindex`; `sitemap.xml` lists the static pages and those events' join pages
   (`home/sitemaps.py`); the sites host has its own `sitemap.xml` of published sites and each site page a canonical
   to its address. `public/llms.txt` says what Attnd is; the home page's JSON-LD has Organization (+ `sameAs` from
-  `SOCIAL_PROFILES`), WebSite and SoftwareApplication. Tests: `home/tests_seo.py`.
+  `SOCIAL_PROFILES`), WebSite and SoftwareApplication. One host: `WwwRedirectMiddleware` 301s www.attnd.app to
+  https://attnd.app (same path and query) except `/.well-known/` (the AASA must not redirect); http → https is
+  `SECURE_SSL_REDIRECT`. Old app links `/download/`, `/app/`, `/get/` → App Store / Google Play / the home page's app
+  section (302, by device). Tests: `home/tests_seo.py`.
 - **Admin** lives at `ADMIN_URL_PATH` (default `manage-attnd/`); `/admin/` is a 404. Link to it with `{% url 'admin:index' %}`.
 
 ## Data Models (`events/models.py`)

@@ -74,3 +74,25 @@ class NoIndexMiddleware:
             response = self.get_response(request)
         response['X-Robots-Tag'] = 'noindex, nofollow'
         return response
+
+
+class WwwRedirectMiddleware:
+    """www.attnd.app → https://attnd.app/<same path and query> (301), one canonical host for search engines. The
+    well-known files (Apple's AASA must never redirect, assetlinks) are served on www as they are."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        host = request.get_host().split(':')[0].lower()
+        if host.startswith('www.') and not request.path.startswith('/.well-known/'):
+            from urllib.parse import urlsplit
+
+            from django.conf import settings
+            from django.http import HttpResponsePermanentRedirect
+            site = urlsplit(getattr(settings, 'SITE_URL', '') or 'https://attnd.app')
+            if host == f'www.{site.hostname}':
+                query = request.META.get('QUERY_STRING', '')
+                return HttpResponsePermanentRedirect(f'{site.scheme}://{site.netloc}{request.path}'
+                                                     + (f'?{query}' if query else ''))
+        return self.get_response(request)
