@@ -113,6 +113,25 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   review, prospects, history, usage, team) stay plain pages and are not shown in the chat. With the header
   `X-Attnd-Component: <name>` a page POST whose form has errors answers with just that component's chat rendering
   (`console.middleware.ComponentFragmentMiddleware`).
+- **Undo for every change** (`console/undo.py`, owner Nov 21, 2026): per change, never a whole-event rollback.
+  `UndoMiddleware` (after MessageMiddleware) wraps every console POST (also Ask Attnd's internal requests and the
+  chat's component forms; not `/console/undo/` or `/console/agent/`) in a `Recorder` (context variable) that the
+  `pre_save` / `post_save` / `pre_delete` signals fill for `Event`, `Location`, `ScheduledItem`, `Notification`,
+  `EventMember`, `EventInvite`: the serialized row before, create / update / delete (a deleted location remembers its
+  items). At the end the changed fields (bookkeeping like `content_version` ignored) become one `console.UndoEntry`
+  (user, event, label = the success message, operations, 24 h, single use, `reverses` = the entry it undid). The
+  success message gets `extra_tags` `undo-<id>` → base.html draws an **Undo** button (a POST form; after undoing,
+  "Undone: The Nobleman Hotel: name “The Nobleman Hotel” again." with **Redo**); the response carries
+  `X-Attnd-Undo: <id>`. `POST /console/undo/<id>/` (the owner of the entry only; JSON for fetch) checks every
+  operation first and refuses cleanly: a sent update ("This update was already sent — it can’t be unsent."), a field
+  changed again since (names who, from the newer entry), something deleted since or a row already back; then restores
+  in one transaction with `save()` / `delete()` (signals: `content_version` bumps, pushes) and records the redo.
+  `POST /console/undo/last/` undoes the person's latest. Both are agent writes (`undo_change`, `undo_last_change`: "undo
+  that"). Ask Attnd steps store `AgentStep.undo_id` (from the header) and the chat shows **Undo** next to every changing
+  step, component form save (the next page's `data-undo-id`) and confirmed chat button (`step_json.undo` = id + state
+  available / used / expired). The run-level "Undo all" (History snapshot) stays. Not covered: `QuerySet.update()`
+  writes (drag-to-reorder) and deleting a whole event. Expired entries are purged by `run_scheduled_tasks`. Tests:
+  `console/tests_undo.py`.
 - **Live editing:** every attendee-visible change bumps `content_version` and schedules a debounced silent push (`events.push.content_changed`); it goes to every joined device with a push token, `subscribed` or not (API-007). Open apps refresh on that push, on resume and pull-to-refresh, and poll every 60 s only without a push token (5 min safety poll with one). App layout autosaves. The "Live on your phone" panel (QR) replaces the old phone mock-up; `_phone_preview.html` (`console.views_events._preview_html`) is now only Studio's app-look preview.
 - **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs` (links use `aria-current="page"`), `data-table` (`--compact`), `code-block` (pre), `link-button`, `meter`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
 - **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. Web app manifest at `/console/manifest.webmanifest`.

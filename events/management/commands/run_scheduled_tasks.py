@@ -45,6 +45,8 @@ class Command(BaseCommand):
         watched, queued = watch.check_watched_events()
         from attestation.views import purge_expired_nonces
         purge_expired_nonces()
+        from console.undo import purge as purge_undo
+        purge_undo()  # Undo entries a day past their 24 h
         # Privacy policy: device records unused for 12 months are deleted
         from datetime import timedelta
         from django.utils import timezone

@@ -43,6 +43,11 @@
 .agent__msg--step.is-changed { color: var(--color-text); border-left-color: var(--color-success); }
 .agent__msg--step.is-failed { color: var(--color-danger); border-left-color: var(--color-danger); }
 .agent__open { margin-left: var(--space-1); font-weight: 600; }
+.agent__undo { margin-left: var(--space-1); padding: .1rem .55rem; font: inherit; font-size: var(--text-xs); font-weight: 600;
+  color: var(--color-brand); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-pill); cursor: pointer; }
+.agent__undo:hover:not(:disabled) { background: var(--color-brand-soft); }
+.agent__undo:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.agent__undo:disabled { color: var(--color-muted); cursor: default; }
 /* Console components in the chat (console/components): the same templates as the pages, at the chat's width. */
 .agent__component { align-self: stretch; display: grid; gap: var(--space-2); }
 .agent__card { min-width: 0; font-size: var(--text-sm); }

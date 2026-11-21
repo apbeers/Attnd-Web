@@ -87,3 +87,27 @@ class Passkey(models.Model):
 
     def __str__(self):
         return f'Passkey “{self.name}” for {self.user.email or self.user.username}'
+
+
+class UndoEntry(models.Model):
+    """One change someone made (a Save, a delete, an Ask Attnd step), recorded row by row so exactly that change can
+    be undone for 24 hours without touching other people's later edits (console/undo.py).
+
+    operations = [{model, pk, op: create|update|delete, before: serialized row | None, after: {field: value},
+    fields: [changed field names], related: {...}}], in the order they happened."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='undo_entries')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='+')
+    label = models.CharField(max_length=300)
+    operations = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    # The entry this one reverses (an undo is recorded too, so it can be redone).
+    reverses = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', '-created_at'])]
+
+    def __str__(self):
+        return f'Undo {self.pk}: {self.label[:60]}'

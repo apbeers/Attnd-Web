@@ -154,3 +154,12 @@ def status_badges(event):
     """An event's status badges (console.components.catalog.status_badges), for templates outside components."""
     from console.components.catalog import status_badges as badges
     return badges(event)
+
+
+@register.filter
+def tag_id(extra_tags, prefix):
+    """The number in a message tag like "undo-12" ({{ message.extra_tags|tag_id:'undo' }}), or ''."""
+    for tag in (extra_tags or '').split():
+        if tag.startswith(prefix + '-') and tag[len(prefix) + 1:].isdigit():
+            return int(tag[len(prefix) + 1:])
+    return ''

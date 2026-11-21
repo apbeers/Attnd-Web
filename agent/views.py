@@ -17,10 +17,26 @@ def _error(message, status=400):
     return JsonResponse({'error': message}, status=status)
 
 
-def step_json(step):
+def undo_states(user, steps):
+    """{undo id: 'available' | 'used' | 'expired'} for the steps' recorded changes (one query)."""
+    from django.utils import timezone
+
+    from console.models import UndoEntry
+    ids = [s.undo_id for s in steps if s.undo_id]
+    if not ids:
+        return {}
+    now = timezone.now()
+    return {e.pk: ('used' if e.used_at else 'expired' if e.expires_at <= now else 'available')
+            for e in UndoEntry.objects.filter(pk__in=ids, user=user).only('pk', 'used_at', 'expires_at')}
+
+
+def step_json(step, undo=None):
     out = {'seq': step.seq, 'id': step.pk, 'kind': step.kind, 'tool': step.tool, 'text': step.text, 'ok': step.ok,
            'changed': step.changed, 'url': step.url, 'event_id': step.event_id, 'confirm': step.confirm_state,
            'at': step.created_at.isoformat()}
+    if step.undo_id:
+        state = (undo or {}).get(step.undo_id) if undo is not None else undo_states(step.run.user, [step]).get(step.undo_id)
+        out['undo'] = {'id': step.undo_id, 'state': state or 'expired'}
     if step.kind == AgentStep.KIND_QUESTION:
         out['options'] = step.arguments.get('options') or []
     if step.kind == AgentStep.KIND_COMPONENT:  # the panel fetches the HTML (agent/components.py: render)
@@ -98,7 +114,9 @@ def runs(request):
 def run(request, run_id):
     r = _run(request, run_id)
     after = int(request.GET.get('after') or 0) if str(request.GET.get('after') or '0').isdigit() else 0
-    steps = [step_json(s) for s in r.steps.filter(seq__gt=after).order_by('seq')[:200]]
+    rows = list(r.steps.filter(seq__gt=after).order_by('seq')[:200])
+    states = undo_states(request.user, rows)
+    steps = [step_json(s, states) for s in rows]
     return JsonResponse({'run': run_json(r), 'steps': steps})
 
 

@@ -81,6 +81,8 @@ class AgentStep(models.Model):
     confirm_summary = models.TextField(blank=True)
     confirm_hash = models.CharField(max_length=64, blank=True)  # sha256 of the exact tool + arguments confirmed
     cost_usd = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    # The console.UndoEntry this step's change recorded (console/undo.py): the chat's Undo next to it.
+    undo_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

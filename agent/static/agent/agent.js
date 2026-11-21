@@ -147,7 +147,39 @@
       link.className = 'agent__open';
       el.append(' ', link);
     }
+    if (step.undo) addUndo(el, step.undo.id, step.undo.state, step.event_id);
     return el;
+  }
+
+  // ---- Undo next to every change (console/undo.py: one recorded change, 24 h, then Redo) ----------------
+  const undoUrl = (id) => root.dataset.undoUrl.replace(/\/0\/$/, `/${id}/`);
+  function addUndo(el, id, state, changedEventId, redo) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'agent__undo';
+    button.textContent = redo ? 'Redo' : 'Undo';
+    button.dataset.undoId = id;
+    if (state && state !== 'available') {
+      button.disabled = true;
+      button.textContent = state === 'used' ? 'Undone' : 'Undo expired';
+    }
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const data = await post(undoUrl(id), {});
+        const said = bubble('step', data.message);
+        said.classList.add('is-changed');
+        button.textContent = redo ? 'Redone' : 'Undone';
+        if (data.redo) addUndo(said, data.redo, 'available', data.event_id, !redo);
+        const eid = data.event_id || changedEventId;
+        if (eid) { refreshKeys([`event:${eid}`]); pageChanged(eid); }
+      } catch (err) {
+        bubble('error', err.message);
+        button.disabled = false;
+      }
+    });
+    el.append(' ', button);
+    return button;
   }
 
   // ask_user with options: tappable chips that send the answer (only while that question waits).
@@ -351,7 +383,9 @@
       renderRun(data);
       live = true;
       if (data.step) {  // a chat button (or Undo all) ran right away: its outcome, and fresh copies of what it touched
-        bubble('step', data.step.text).classList.toggle('is-failed', !data.step.ok);
+        const line = bubble('step', data.step.text);
+        line.classList.toggle('is-failed', !data.step.ok);
+        if (data.step.undo) addUndo(line, data.step.undo.id, data.step.undo.state, data.step.event_id);
         if (data.step.changed && data.step.event_id) { refreshKeys([`event:${data.step.event_id}`]); pageChanged(data.step.event_id); }
       }
       poll();
@@ -543,7 +577,10 @@
 
   function notices(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    return [...doc.querySelectorAll('main .notice')].map((n) => n.textContent.replace('×', '').trim()).filter(Boolean);
+    const found = [...doc.querySelectorAll('main .notice')];
+    const undo = found.map((n) => n.dataset.undoId).find(Boolean);
+    const texts = found.map((n) => (n.querySelector('.notice__text') || n).textContent.replace('×', '').trim()).filter(Boolean);
+    return Object.assign(texts, { undo });
   }
 
   async function submitForm(card, form, submitter) {
@@ -561,7 +598,10 @@
                                                               : 'That didn’t work. Please try again.');
       const said = notices(await response.text());
       if (!response.redirected) throw new Error(said.join(' ') || 'Not saved. Open the page to see why.');
-      bubble('step', said.join(' ') || 'Saved ✓').classList.add('is-changed');
+      const savedLine = bubble('step', said.join(' ') || 'Saved ✓');
+      savedLine.classList.add('is-changed');
+      const ids0 = JSON.parse(card.dataset.ids);
+      if (said.undo) addUndo(savedLine, said.undo, 'available', ids0.event_id);
       const keys = card.dataset.keys.split(' ');
       await refresh(card);
       refreshKeys(keys, card);

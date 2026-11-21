@@ -551,6 +551,7 @@ def _run_write(run, action, args, step):
     else:
         step.text = f'✗ {action.label()}: ' + (out['result'][:200])
     step.ok, step.changed, step.url = out['ok'], out['changed'], out['url'][:500]
+    step.undo_id = out.get('undo')
     step.event_id = event_id or step.event_id
     step.result = out['result'][:4000]
     step.save()

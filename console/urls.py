@@ -1,6 +1,6 @@
 from django.urls import path
 
-from console import views, views_events as v
+from console import views, views_events as v, views_undo
 
 app_name = 'console'
 urlpatterns = [
@@ -8,6 +8,8 @@ urlpatterns = [
     path('signup/', views.SignUpView.as_view(), name='signup'),
     path('account/', views.account, name='account'),
     path('tasks/', v.tasks_feed, name='tasks'),
+    path('undo/last/', views_undo.undo_last, name='undo_last'),
+    path('undo/<int:undo_id>/', views_undo.undo_change, name='undo'),
     path('sw.js', v.service_worker, name='service_worker'),
     path('manifest.webmanifest', v.manifest, name='manifest'),
     path('new/', v.event_new, name='event_new'),

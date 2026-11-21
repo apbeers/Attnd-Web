@@ -228,6 +228,9 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .notice--error { background: var(--color-danger-soft); border-color: var(--color-danger-line); }
 .notice--neutral { background: #fbfbfc; border-color: var(--color-border); }
 .notice--dismissible { padding-right: var(--space-7); }
+.notice[data-undo-id], .notice[data-redo-id] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.notice__text { flex: 1 1 12rem; }
+.notice__undo { margin: 0; }
 .notice__close { position: absolute; top: .55rem; right: .6rem; padding: var(--space-1); background: none; border: 0;
   color: inherit; opacity: .6; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .notice__close:hover { opacity: 1; }

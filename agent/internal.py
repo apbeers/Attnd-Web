@@ -48,6 +48,8 @@ class Response:
         self.location = raw.get('Location', '') if 300 <= raw.status_code < 400 else ''
         self.content_type = raw.get('Content-Type', '')
         self.messages = []
+        undo = raw.get('X-Attnd-Undo', '')  # console/undo.py recorded this change
+        self.undo = int(undo) if undo.isdigit() else None
 
     @property
     def html(self):
@@ -373,6 +375,7 @@ def execute(run, action, args, step=None):
         out.update(ok=bool(200 <= response.status < 300), changed=200 <= response.status < 300,
                    result=f'HTTP {response.status}')
     out['changes'] = _changes(action, args, before)
+    out['undo'] = response.undo
     return out
 
 
