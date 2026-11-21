@@ -123,6 +123,7 @@ def app_layout(user, event_id=None, event=None, form=None):
            page=lambda ids: reverse('console:event', args=[ids['event_id']]))
 def website_watching(user, event_id=None, event=None):
     from console.forms.event_forms import RefreshForm, SourcesForm
+    from django.contrib.humanize.templatetags.humanize import naturaltime
     from django.utils.timesince import timesince
     event = editable_event(user, event_id, event)
     manage = event.can_manage_team(user)
@@ -139,7 +140,7 @@ def website_watching(user, event_id=None, event=None):
         if p.has_pending_change:
             state = 'changed, AI update pending'
         elif p.changed_at:
-            state = f'last changed {timesince(p.changed_at)} ago'
+            state = f'last changed {naturaltime(p.changed_at)}'
         elif p.checked_at:
             state = 'no changes yet'
         else:

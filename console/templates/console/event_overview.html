@@ -1,5 +1,5 @@
 {% extends 'console/base.html' %}
-{% load console_tags %}
+{% load console_tags humanize %}
 {% block title %}{{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="stack stack--loose">
@@ -50,7 +50,7 @@
         <li class="cluster">
           <a href="{% url 'console:changeset' cs.id %}" class="grow">{{ cs.summary }}</a>
           <span class="badge {% if cs.status == 'pending' %}badge--primary{% else %}badge--neutral{% endif %}">{{ cs.get_status_display }}</span>
-          <span class="muted small">{{ cs.created_at|timesince }} ago</span>
+          <span class="muted small">{{ cs.created_at|naturaltime }}</span>
         </li>
       {% endfor %}
       </ul>

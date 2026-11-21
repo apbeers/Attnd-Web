@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 MIN_WIDTH = 600
 MAX_SIDE = 2000
 MAX_BYTES = 12 * 1024 * 1024
-LOGO_WORDS = re.compile(r'logo|icon|sprite|favicon|avatar|badge|banner-ad|map|marker|placeholder|button|qr', re.I)
+LOGO_WORDS = re.compile(r'logo|icon|sprite|favicon|avatar|badge|banner-ad|map|marker|placeholder|button|qr', re.IGNORECASE)
 COMMONS_API = 'https://commons.wikimedia.org/w/api.php'
 USER_AGENT = 'AttndPlaceImages/1.0 (+https://attnd.app)'
 
@@ -71,7 +71,7 @@ def spent_today():
 
     from events.models import PlaceImageAttempt
     start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    return PlaceImageAttempt.objects.filter(created_at__gte=start).aggregate(t=Sum('cost_usd'))['t'] or Decimal('0')
+    return PlaceImageAttempt.objects.filter(created_at__gte=start).aggregate(t=Sum('cost_usd'))['t'] or Decimal(0)
 
 
 def budget_left():
@@ -214,7 +214,7 @@ def from_wikimedia(location):
     data = _commons({'action': 'query', 'list': 'search', 'srnamespace': 6, 'srlimit': 5,
                      'srsearch': f'"{location.name}" {location.address.split(",")[-2] if "," in location.address else ""}'})
     titles += [s['title'] for s in (data.get('query') or {}).get('search') or []]
-    titles = [t for t in dict.fromkeys(titles) if re.search(r'\.(jpe?g|png|webp)$', t, re.I)][:8]
+    titles = [t for t in dict.fromkeys(titles) if re.search(r'\.(jpe?g|png|webp)$', t, re.IGNORECASE)][:8]
     if not titles:
         return []
     data = _commons({'action': 'query', 'prop': 'imageinfo', 'titles': '|'.join(titles),
@@ -292,16 +292,16 @@ def try_candidate(location, candidate, digests):
     """(jpeg bytes, digest, cost, why not) for one candidate."""
     got = _fetch(candidate.url, MAX_BYTES)
     if not got:
-        return None, '', Decimal('0'), 'could not download'
+        return None, '', Decimal(0), 'could not download'
     image = _load_image(got[0])
     if image is None:
-        return None, '', Decimal('0'), 'not an image'
+        return None, '', Decimal(0), 'not an image'
     if image.width < MIN_WIDTH:
-        return None, '', Decimal('0'), f'{image.width} px wide'
+        return None, '', Decimal(0), f'{image.width} px wide'
     jpeg = reencode(image)
     digest = hashlib.sha256(jpeg).hexdigest()
     if digest[:12] in digests:
-        return None, '', Decimal('0'), 'the same picture as another place'
+        return None, '', Decimal(0), 'the same picture as another place'
     usable, confidence, kind, reason, cost = confirm(location, jpeg)
     if not usable or kind != 'photo' or confidence < getattr(settings, 'PLACE_IMAGES_MIN_CONFIDENCE', 0.75):
         return None, '', cost, f'not confident ({kind}, {confidence:.2f}): {reason}'
@@ -340,7 +340,7 @@ def find_for(location, pages=None, force=False):
     digests = image_digests(location)
     if pages is None:
         pages = {u: _page_images(u) for u in (location.event.source_urls or [])[:3]}
-    cost = Decimal('0')
+    cost = Decimal(0)
     tried = []
     for finder in (lambda: from_event_pages(location, pages), lambda: from_venue(location),
                    lambda: from_wikimedia(location)):

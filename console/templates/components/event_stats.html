@@ -1,4 +1,4 @@
-{% load console_tags %}{# event_stats: timing, the numbers, most liked. The overview page places the parts apart. #}
+{% load console_tags humanize %}{# event_stats: timing, the numbers, most liked. The overview page places the parts apart. #}
 {% partialdef timing %}<div class="timing timing--{{ d.timing.state }}">
       {% if d.timing.state == 'now' %}<span class="live-dot"></span><strong>{{ d.timing.label }}</strong><span class="small">{{ d.timing.detail }}</span>
       {% elif d.timing.state == 'upcoming' %}{% icon "calendar" %}<strong>{{ d.timing.label }}</strong><span class="small">{{ d.timing.detail }}</span>
@@ -7,7 +7,7 @@
 {% partialdef numbers %}<div class="panel" data-live="event_stats">
       <p class="small muted live-updated" data-live-updated>Updated just now · refreshes every minute</p>
       <div class="grid grid--3 grid--stats">
-        {% for n in d.numbers %}<div><div class="stat__value">{{ n.value }}</div><div class="eyebrow">{{ n.label }}</div></div>
+        {% for n in d.numbers %}<div><div class="stat__value">{{ n.value|intcomma }}</div><div class="eyebrow">{{ n.label }}</div></div>
         {% endfor %}
       </div>
     </div>{% endpartialdef %}

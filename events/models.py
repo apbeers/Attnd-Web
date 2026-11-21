@@ -128,7 +128,7 @@ class Event(CoordinatesMixin, models.Model):
     logo_url = models.URLField(max_length=1024, blank=True)
 
     # Sync — bumped on every content change so clients can cheaply detect updates
-    content_version = models.PositiveIntegerField(default=1)
+    content_version = models.PositiveIntegerField(default=1, db_default=1)
     content_updated_at = models.DateTimeField(default=dj_tz.now)
 
     # AI sources & refresh
@@ -330,8 +330,8 @@ class Notification(models.Model):
     send_time = models.DateTimeField()
     sent = models.BooleanField(default=False)
     sent_at = models.DateTimeField(null=True, blank=True)
-    delivered_count = models.PositiveIntegerField(default=0)
-    failed_count = models.PositiveIntegerField(default=0)
+    delivered_count = models.PositiveIntegerField(default=0, db_default=0)
+    failed_count = models.PositiveIntegerField(default=0, db_default=0)
     priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default=PRIORITY_NORMAL)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
     event = models.ForeignKey(Event, on_delete=models.CASCADE)

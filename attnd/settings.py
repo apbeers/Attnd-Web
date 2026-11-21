@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sitemaps',
+    'django.contrib.humanize',  # naturaltime / intcomma in the console (F4)
     'django.contrib.postgres',  # GIN trigram + BRIN indexes for diagnostics (built into Django)
     'cloudinary_storage',
     'cloudinary',
@@ -122,10 +123,18 @@ WSGI_APPLICATION = 'attnd.wsgi.application'
 # Without DATABASE_URL this points at the local database from `scripts/dev_db.sh` (Postgres 18 in Docker).
 import dj_database_url  # noqa: E402
 
+# psycopg 3 with Django's connection pool (psycopg_pool, one per process): the web dyno's 4 threads plus the
+# background threads (AI jobs, Ask Attnd, place images) share up to DB_POOL_MAX connections (essential-0 allows 20 in
+# all, and the release phase and Heroku Scheduler have their own). DB_POOL=0 = Django's persistent connections.
+DB_POOL = os.getenv('DB_POOL', '1') != '0'
 DATABASES = {
     'default': dj_database_url.config(
-        default='postgres://attnd:attnd@localhost:5432/attnd', conn_max_age=600, conn_health_checks=True),
+        default='postgres://attnd:attnd@localhost:5432/attnd', conn_max_age=0 if DB_POOL else 600,
+        conn_health_checks=not DB_POOL),
 }
+if DB_POOL:
+    DATABASES['default'].setdefault('OPTIONS', {})['pool'] = {
+        'min_size': 1, 'max_size': int(os.getenv('DB_POOL_MAX', '8')), 'timeout': 20}
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -143,6 +152,9 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 WHITENOISE_ROOT = os.path.join(BASE_DIR, 'public')
 WHITENOISE_MIMETYPES = {'.webmanifest': 'application/manifest+json'}
+# Root files (H): icons a day with a week of stale-while-revalidate (their names never change, so not immutable);
+# robots.txt and the manifest an hour. Hashed /static/ files stay immutable for a year (WhiteNoise's default).
+from attnd.static_headers import root_headers as WHITENOISE_ADD_HEADERS_FUNCTION  # noqa: E402,N812
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
@@ -185,17 +197,18 @@ CONTENT_PUSH_ENABLED = not TESTING and os.getenv('CONTENT_PUSH_ENABLED', '1') no
 CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '3'))
 CONTENT_PUSH_MIN_INTERVAL = int(os.getenv('CONTENT_PUSH_MIN_INTERVAL', '15'))
 
-# Rate limits (attnd.ratelimit) and other per-process counters (scrape/'s "try it" limit) live here.
-# LocMemCache is shared by the gthread threads of one process, and Heroku runs a single web process
-# (Procfile: 1 worker), so the counts are global. With more web processes or dynos each process would
-# count on its own (limits effectively multiply); switch to DatabaseCache (+ `createcachetable` in the
-# Procfile release line) then.
+# Rate limits (attnd.ratelimit), the bundle cache, component and place-search caches live in the database cache
+# (F1), shared by every process and dyno (web, worker, Heroku Scheduler, a second web dyno one day); the table is
+# made by `createcachetable` in the Procfile's release line (and by the test runner). `local` is a per-process
+# LocMemCache for hot, rebuildable things. CACHE_BACKEND=locmem keeps everything in memory (one process).
+if os.getenv('CACHE_BACKEND', 'database') == 'locmem':
+    _default_cache = {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'attnd'}
+else:
+    _default_cache = {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 'LOCATION': 'attnd_cache'}
 CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'attnd',
-        'OPTIONS': {'MAX_ENTRIES': 10000},
-    },
+    'default': {**_default_cache, 'OPTIONS': {'MAX_ENTRIES': 20000, 'CULL_FREQUENCY': 4}},
+    'local': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'attnd-local',
+              'OPTIONS': {'MAX_ENTRIES': 5000}},
 }
 
 

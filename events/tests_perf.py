@@ -7,7 +7,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.core.cache import cache
+from django.core.cache import caches
 from django.db import connection
 from django.test import Client, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -24,7 +24,8 @@ CLOUD = 'https://res.cloudinary.com/demo/image/upload/'
 @override_settings(API_KEY='test-key')
 class PerfBase(TestCase):
     def setUp(self):
-        cache.clear()
+        caches['default'].clear()
+        caches['local'].clear()
         self.user = User.objects.create_user('o', 'o@example.com', 'pw')
         start = timezone.now() + timedelta(hours=2)
         self.event = Event.objects.create(
@@ -90,7 +91,8 @@ class BundlePerfTests(PerfBase):
 
     def test_304_without_building_the_bundle(self):
         etag = self.get(self.url)['ETag']
-        cache.clear()
+        caches['default'].clear()
+        caches['local'].clear()
         with self.assertNumQueries(1), patch('events.content.bundle', side_effect=AssertionError('built')):
             resp = self.get(self.url, HTTP_IF_NONE_MATCH=etag)
         self.assertEqual(resp.status_code, 304)

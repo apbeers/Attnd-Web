@@ -60,9 +60,12 @@ def _filtered(request):
     f = {k: request.GET.get(k, '').strip() for k in ('q', 'status', 'min_fit', 'since', 'until', 'contacts', 'sort')}
     if f['q']:
         q = f['q']
-        qs = qs.filter(Q(name__icontains=q) | Q(organizer__icontains=q) | Q(city__icontains=q)
-                       | Q(venue__icontains=q) | Q(contacts__name__icontains=q)
-                       | Q(contacts__organization__icontains=q) | Q(contacts__email__icontains=q)).distinct()
+        from attnd.search import ids  # F3: full text + typo-tolerant trigram match
+        found = ids(Prospect.objects.all(), q, {'name': 'A', 'organizer': 'A', 'venue': 'B', 'city': 'B',
+                                                'notes': 'D'})
+        contacts = ids(ProspectContact.objects.all(), q, {'name': 'A', 'organization': 'B'})
+        found += list(ProspectContact.objects.filter(pk__in=contacts).values_list('prospect_id', flat=True))
+        qs = qs.filter(Q(pk__in=found) | Q(contacts__email__icontains=q)).distinct()
     if f['status'] == 'open':
         qs = qs.exclude(status__in=[Prospect.DISMISSED, Prospect.LOST])
     elif f['status']:

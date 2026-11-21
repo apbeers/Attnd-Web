@@ -1,11 +1,11 @@
 {% extends 'console/base.html' %}
-{% load console_tags %}
+{% load console_tags humanize %}
 {% block title %}Review AI updates · {{ event.name }}{% endblock %}
 {% block crumb_back %}{% url 'console:changesets' event.id %}{% endblock %}
 {% block crumbs_more %}<li><a href="{% url 'console:changesets' event.id %}">AI updates</a></li><li><span aria-current="page">Review</span></li>{% endblock %}
 {% block event_content %}
 <h2 class="title-2">{{ cs.summary }}</h2>
-<p class="muted small">Found {{ cs.created_at|timesince }} ago{% if cs.status != 'pending' %} · {{ cs.get_status_display }}{% endif %}.</p>
+<p class="muted small">Found {{ cs.created_at|naturaltime }}{% if cs.status != 'pending' %} · {{ cs.get_status_display }}{% endif %}.</p>
 {% if cs.notes %}<div class="notice notice--neutral">{% icon "chat" %} <strong>AI notes:</strong> {{ cs.notes }}</div>{% endif %}
 {% if stale and cs.status == 'pending' %}<div class="notice notice--warning small">The event changed after these suggestions were made, so some “before” values may be out of date. Review carefully.</div>{% endif %}
 

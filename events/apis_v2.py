@@ -16,7 +16,9 @@ import decimal
 import json
 from datetime import timedelta
 
-from django.core.cache import cache
+from django.core.cache import caches
+
+cache = caches['local']  # per process: rebuilt from content_version, no database round trip
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse

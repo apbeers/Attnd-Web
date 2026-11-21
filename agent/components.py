@@ -441,16 +441,29 @@ def act(request):
 # What the agent reads as JSON instead of page text (the first message, list_events / search_events)
 # ---------------------------------------------------------------------------
 
+def matching_events(event_ids, query):
+    """F3: events matching a search by their own name, code, description, address, or one of their locations or
+    schedule items (Postgres full text + trigram similarity), best first."""
+    from attnd.search import ids
+    from events.models import Event, Location, ScheduledItem
+    own = ids(Event.objects.filter(pk__in=event_ids), query,
+              {'name': 'A', 'event_code': 'A', 'address': 'B', 'description': 'C'})
+    places = ids(Location.objects.filter(event_id__in=event_ids), query,
+                 {'name': 'A', 'category': 'B', 'snippet': 'C', 'description': 'D'})
+    items = ids(ScheduledItem.objects.filter(event_id__in=event_ids), query, {'name': 'A', 'description': 'D'})
+    event_of = dict(Location.objects.filter(pk__in=places).values_list('pk', 'event_id'))
+    event_of_item = dict(ScheduledItem.objects.filter(pk__in=items).values_list('pk', 'event_id'))
+    return list(dict.fromkeys(own + [event_of[p] for p in places] + [event_of_item[i] for i in items]))
+
+
 def events_json(user, query=''):
     """The person's events as compact event_tile JSON lines (one query for all of them)."""
     found = C.instances(user, 'event_tile', [{}])
-    lines = []
-    query = (query or '').lower().strip()
-    for ids, data in found:
-        line = C.model_json(data, limit=600)
-        if query and query not in line.lower():
-            continue
-        lines.append(line)
+    query = (query or '').strip()
+    if query:
+        order = {pk: i for i, pk in enumerate(matching_events([ids['event_id'] for ids, _ in found], query))}
+        found = sorted((f for f in found if f[0]['event_id'] in order), key=lambda f: order[f[0]['event_id']])
+    lines = [C.model_json(data, limit=600) for _, data in found]
     if not lines:
         return f'No event matches “{query}”.' if query else 'No events yet.'
     return '\n'.join(lines)
