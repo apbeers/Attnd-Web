@@ -216,7 +216,7 @@ def registry():
     return {'writes': writes, 'reads': reads}
 
 
-RESERVED_TOOLS = {'remember', 'propose_changes', 'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show',
+RESERVED_TOOLS = {'search_everything', 'remember', 'propose_changes', 'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show',
                   'get_component'}
 
 

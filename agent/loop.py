@@ -187,7 +187,8 @@ def tools_for(user, run=None):
     writes = [a for a in registry.writes_for(user).values()
               if (a.url_name or '').split(':')[0] not in AREAS or (a.url_name or '').split(':')[0] in areas]
     from agent.proposals import TOOL as PROPOSE_TOOL
-    return FIXED_TOOLS + [PROPOSE_TOOL] + components.tool_definitions(user) + [registry.tool_definition(a) for a in writes]
+    from agent.search_tool import TOOL as SEARCH_TOOL
+    return FIXED_TOOLS + [PROPOSE_TOOL, SEARCH_TOOL] + components.tool_definitions(user) + [registry.tool_definition(a) for a in writes]
 
 
 def _provider(name=None, model=None):
@@ -511,6 +512,9 @@ def _call(run, call):
             add_step(run, tool='remember', call_id=call.id, arguments={'note': note, 'event_id': event_id},
                      text=f'Remembered: {note[:120]}')
             return 'Remembered (the person can see and remove it in Account).'
+        if name == 'search_everything':  # stage I13: full text across events, places, items, notifications, details
+            from agent import search_tool
+            return search_tool.tool(run, call, args)
         if name == 'propose_changes':  # several changes previewed for the person to apply (agent/proposals.py)
             from agent import proposals
             return proposals.propose_tool(run, call, args)

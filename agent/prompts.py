@@ -39,6 +39,7 @@ Review. For a new event use create_event_with_ai.
 - Copying or rolling over an event ("copy last year's festival to 2027", "same event next month"): \
 show("event_rollover", [{"event_id": …}]) so the person checks the new dates; call duplicate_event only when they \
 ask you to go ahead with a date.
+- "Where did I mention parking?", "which set talks about fire?": search_everything, then show the matching cards.
 - Questions about the numbers ("how many people liked the taco trucks?", "busiest hour yesterday?", "how many \
 joined?"): show("usage_answer", [{"event_id": …}]) and answer from its JSON in one sentence.
 - "What should I do?", "what needs my attention?": show("attention", [{}]); "is my event ready (to publish)?": \

@@ -248,3 +248,20 @@ class MemoryTests(HarnessCase):
         self.assertContains(page, 'Call the big stage Main Stage')
         self.client.post(reverse('console:account'), {'action': 'forget_note', 'note': note['id']}, secure=True)
         self.assertEqual(ConsolePreference.notes_for(self.owner), [])
+
+
+class SearchEverythingTests(HarnessCase):
+    def test_finds_text_in_details_items_and_notifications_of_the_persons_events_only(self):
+        from agent.search_tool import search
+        from django.contrib.auth.models import User
+        from events.models import Event
+        self.event.context = {'faq': [{'q': 'Where do I park?', 'a': 'Free parking in lot B.'}]}
+        self.event.save()
+        Notification.objects.create(event=self.event, title='Parking update', body='Lot B is full, use lot C.',
+                                    send_time=self.start)
+        other = User.objects.create_user('z', 'z@example.com', 'pw')
+        Event.objects.create(name='Other parking fest', event_code='OTHERP', user=other, start_time=self.start)
+        kinds = {r['kind'] for r in search(self.owner, 'parking')}
+        self.assertEqual(kinds, {'event', 'notification'})
+        self.assertTrue(all(r['event_id'] == self.event.pk for r in search(self.owner, 'parking')))
+        self.assertEqual(search(self.owner, 'indie folk')[0]['item_id'], self.item.pk)

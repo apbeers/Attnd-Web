@@ -11,9 +11,16 @@ from django.contrib.postgres.search import (
     TrigramWordSimilarity,
 )
 from django.db.models import F, FloatField, Q, TextField, Value
-from django.db.models.functions import Coalesce, Greatest
+from django.db.models.functions import Cast, Coalesce, Greatest
 
 MIN_SIMILARITY = 0.3
+
+
+def _text(field):
+    """A field as text; JSON fields (`context`) are searched as their JSON text (keys and values)."""
+    if field.endswith('::json'):
+        return Coalesce(Cast(F(field[:-6]), TextField()), Value(''), output_field=TextField())
+    return Coalesce(F(field), Value(''), output_field=TextField())
 
 
 def search(qs, query, fields, similarity=MIN_SIMILARITY):
@@ -25,10 +32,10 @@ def search(qs, query, fields, similarity=MIN_SIMILARITY):
         return qs
     vector = None
     for field, weight in fields.items():
-        part = SearchVector(Coalesce(F(field), Value(''), output_field=TextField()), weight=weight, config='english')
+        part = SearchVector(_text(field), weight=weight, config='english')
         vector = part if vector is None else vector + part
     terms = SearchQuery(query, search_type='websearch', config='english')
-    similarities = [TrigramWordSimilarity(query, Coalesce(F(field), Value(''), output_field=TextField())) for field in fields]
+    similarities = [TrigramWordSimilarity(query, _text(field)) for field in fields]
     best = similarities[0] if len(similarities) == 1 else Greatest(*similarities)
     annotated = qs.annotate(_vector=vector, _rank=SearchRank(vector, terms), _similar=best)
     matched = annotated.filter(Q(_vector=terms) | Q(_similar__gte=similarity))  # ts_rank is never 0
