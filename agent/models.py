@@ -31,6 +31,8 @@ class AgentRun(models.Model):
     revisions = models.JSONField(default=dict, blank=True)  # {event id: History revision before the first change}
     suggestions = models.JSONField(default=list, blank=True)  # follow-up chips (finish's `suggest`)
     target = models.JSONField(default=dict, blank=True)  # Add with AI: the form being filled {component, ids}
+    # The conversation this run belongs to (stage I4): the same chat on every device and after signing in again.
+    thread = models.CharField(max_length=32, blank=True, db_index=True)
     undone_at = models.DateTimeField(null=True, blank=True)
     # 👍 / 👎 on the answer (stage I), for staff review in the admin; the note is the person's own words (≤ 500).
     feedback = models.SmallIntegerField(null=True, blank=True, choices=[(1, 'Helpful'), (-1, 'Not helpful')])

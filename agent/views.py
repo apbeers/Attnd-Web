@@ -183,6 +183,7 @@ def run_json(run):
     changed = list(run.steps.filter(changed=True).values('event_id', 'url'))
     return {
         'id': run.pk, 'status': run.status, 'active': run.active, 'goal': run.goal, 'summary': run.summary,
+        'thread': run.thread,
         'buttons': run.goal == BUTTONS_GOAL,  # a quiet run that only holds chat buttons' confirmations
         'error': run.error, 'cost_usd': f'{run.cost_usd:.4f}', 'model_calls': run.step_count,
         'created_at': run.created_at.isoformat(),
@@ -254,8 +255,24 @@ def runs(request):
            'cap': f'{settings.AGENT_DAILY_SPEND_CAP_USD:.2f}'}
     if 'chat' in request.GET:
         # The conversation on reload, in one request (A21): the runs of this chat (?chat=3,5,8) plus an active one,
-        # each with its steps, oldest first.
-        wanted = [int(i) for i in request.GET['chat'].split(',') if i.strip().isdigit()][-20:]
+        # each with its steps, oldest first. Stage I4: with no ids (another device, after signing in again, a new
+        # tab) the person's latest conversation of the last week, for this event when ?event= is given; the newest
+        # 20 runs, `earlier` = the ids of up to 40 older ones ("Earlier" loads them).
+        wanted = [int(i) for i in request.GET['chat'].split(',') if i.strip().isdigit()][-60:]
+        out['earlier'] = []
+        if not wanted and request.GET.get('latest'):
+            from datetime import timedelta
+
+            from django.utils import timezone
+            last = AgentRun.objects.filter(user=request.user, created_at__gte=timezone.now() - timedelta(days=7))
+            if str(request.GET.get('event') or '').isdigit():
+                last = last.filter(event_id=int(request.GET['event']))
+            last = last.exclude(thread='').order_by('-created_at').first()
+            if last is not None:
+                ids = list(AgentRun.objects.filter(user=request.user, thread=last.thread)
+                           .order_by('-created_at').values_list('pk', flat=True)[:60])[::-1]
+                wanted, out['earlier'] = ids[-20:], ids[:-20]
+                out['thread'] = last.thread
         active = next((r.pk for r in recent if r.active), None)
         if active and active not in wanted:
             wanted.append(active)

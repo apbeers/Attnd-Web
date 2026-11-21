@@ -322,6 +322,7 @@ def _own_run(request, create=False):
             raise PermissionError('Too many chat buttons in a short time. Wait a few minutes and try again.')
         return AgentRun.objects.create(user=request.user, goal=BUTTONS_GOAL, status=AgentRun.DONE,
                                        summary='', session_key=request.session.session_key or '',
+                                       thread=loop.thread_for(request),
                                        host=request.get_host(), secure=request.is_secure())
     return get_object_or_404(AgentRun, pk=int(raw), user=request.user)
 

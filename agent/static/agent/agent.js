@@ -467,7 +467,10 @@
 
   // ---- the conversation: every request of this chat stays in the log (and across page loads) ----
   const chatIds = () => { try { return JSON.parse(store.get('sessionStorage', 'attnd.agent.chat') || '[]'); } catch (e) { return []; } };
-  const setChatIds = (ids) => store.set('sessionStorage', 'attnd.agent.chat', JSON.stringify(ids.slice(-20)));
+  const setChatIds = (ids) => store.set('sessionStorage', 'attnd.agent.chat', JSON.stringify(ids.slice(-60)));
+  // The conversation id on the server (stage I4): the same chat on every device and after signing in again.
+  const thread = () => store.get('sessionStorage', 'attnd.agent.thread') || '';
+  const setThread = (t) => { if (t) store.set('sessionStorage', 'attnd.agent.thread', t); };
   let scrollTimer = null;
   log.addEventListener('scroll', () => {
     clearTimeout(scrollTimer);
@@ -484,6 +487,8 @@
     run = null;
     wasActive = false;
     setChatIds([]);
+    store.remove('sessionStorage', 'attnd.agent.thread');
+    store.set('sessionStorage', 'attnd.agent.fresh', '1');  // "+": this tab starts empty, not the latest chat
     store.remove('sessionStorage', 'attnd.agent.scroll');
     statusLine.textContent = '';
     confirmBox.hidden = true;
@@ -568,7 +573,10 @@
         showSuggestions([]);
         const data = await post(root.dataset.startUrl, { goal: text, page: full ? fromPage : location.pathname + location.search,
                                                           event_id: eventId || '', attachments: attachments.map((a) => a.id).join(','),
-                                                          target: target ? JSON.stringify({ component: target.component, ids: target.ids }) : '' });
+                                                          target: target ? JSON.stringify({ component: target.component, ids: target.ids }) : '',
+                                                          thread: thread() });
+        setThread(data.run?.thread);
+        store.remove('sessionStorage', 'attnd.agent.fresh');
         if (data.run && data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
         attachments = [];
         filesList.textContent = '';
@@ -972,8 +980,10 @@
     body.set('component', card.dataset.component);
     body.set('ids', card.dataset.ids);
     body.set('action', action);
+    body.set('thread', thread());
     try {
       const data = await post(root.dataset.actUrl, body);
+      setThread(data.run?.thread);
       if (data.invalid) { setBody(card, data.items[0].html); return; }
       renderedSteps.add(data.step.id);
       if (!run || run.id !== data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
@@ -1588,6 +1598,26 @@
     } catch (err) { bubble('error', err.message); }
   });
 
+  // "Earlier · 12": older requests of a long conversation, loaded on demand above the first one.
+  function earlierButton(older) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'link-button small agent__earlier';
+    b.textContent = `Earlier · ${older.length}`;
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        const data = await get(`${root.dataset.runsUrl}?chat=${older.join(',')}`);
+        const keep = [...log.childNodes];
+        log.textContent = '';
+        (data.chat || []).forEach((c) => appendData(c, false));
+        keep.forEach((n) => { if (n !== b) log.appendChild(n); });
+        setChatIds([...(data.chat || []).map((c) => c.run.id), ...chatIds()]);
+      } catch (e) { b.disabled = false; }
+    });
+    log.prepend(b);
+  }
+
   // ---- on load: pick up a run that is still going -------------------------------------------
   (async () => {
     if (full) { root.classList.add('is-open'); preloadCanvas(); }
@@ -1596,10 +1626,13 @@
     const ids = chatIds();
     if (ids.length) root.classList.add('is-restoring');
     try {
-      const data = await get(`${root.dataset.runsUrl}?chat=${ids.join(',')}`);
+      // No ids in this tab (another device, signed in again): the latest conversation on the server (stage I4).
+      const latest = ids.length || store.get('sessionStorage', 'attnd.agent.fresh') ? '' : `&latest=1&event=${eventId || ''}`;
+      const data = await get(`${root.dataset.runsUrl}?chat=${ids.join(',')}${latest}`);
       const active = data.runs.find((r) => r.active);
       const chat = data.chat || [];
       setChatIds(chat.map((c) => c.run.id));
+      setThread(data.thread || chat[chat.length - 1]?.run.thread);
       if (chat.length) {
         log.textContent = '';
         restoring = [];
@@ -1608,6 +1641,7 @@
         restoring = null;
         const saved = parseInt(store.get('sessionStorage', 'attnd.agent.scroll') || '', 10);
         log.scrollTop = Number.isNaN(saved) ? log.scrollHeight : saved;
+        if (data.earlier?.length) earlierButton(data.earlier);
       }
       if (active && active.status !== 'running') open(false);
     } catch (e) { /* offline: the panel still opens */ }

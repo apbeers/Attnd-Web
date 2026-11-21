@@ -185,3 +185,27 @@ class ProposalTests(HarnessCase):
                                                              'changes': changes})],
                                        [('finish', {'summary': 'ok', 'suggest': None})]])
         self.assertIn('always asks', provider.results[0][1])
+
+
+class ConversationTests(HarnessCase):
+    def test_the_latest_conversation_comes_back_on_another_device(self):
+        from django.urls import reverse
+        old = self.make_run(goal='Older chat')
+        AgentRun.objects.filter(pk=old.pk).update(thread='a' * 32)
+        runs = [self.make_run(goal=f'Request {n}') for n in range(23)]
+        AgentRun.objects.filter(pk__in=[r.pk for r in runs]).update(thread='b' * 32)
+        data = self.client.get(reverse('agent:runs'), {'chat': '', 'latest': '1', 'event': self.event.pk}).json()
+        self.assertEqual(data['thread'], 'b' * 32)
+        self.assertEqual([c['run']['goal'] for c in data['chat']][-1], 'Request 22')
+        self.assertEqual(len(data['chat']), 20)
+        self.assertEqual(len(data['earlier']), 3)
+        self.assertNotIn(old.pk, data['earlier'])
+        # a new request joins the thread the browser names, only when it is the person's own
+        with self.settings(AGENT_DAILY_SPEND_CAP_USD=2.0):
+            from unittest import mock
+            with mock.patch('agent.loop.spawn'):
+                r = self.client.post(reverse('agent:start'), {'goal': 'More', 'thread': 'b' * 32}).json()['run']
+                self.assertEqual(r['thread'], 'b' * 32)
+                AgentRun.objects.filter(pk=r['id']).update(status='done')
+                r2 = self.client.post(reverse('agent:start'), {'goal': 'More', 'thread': 'c' * 32}).json()['run']
+                self.assertNotEqual(r2['thread'], 'c' * 32)

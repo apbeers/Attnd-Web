@@ -122,9 +122,20 @@ def args_hash(tool, args):
 # Starting
 # ---------------------------------------------------------------------------
 
+def thread_for(request):
+    """The conversation a new run joins: the one the browser names (it must be the person's), else a new one."""
+    import re
+    import uuid
+    raw = str(request.POST.get('thread') or '')
+    if re.fullmatch(r'[0-9a-f]{32}', raw) and AgentRun.objects.filter(user=request.user, thread=raw).exists():
+        return raw
+    return uuid.uuid4().hex
+
+
 def create_run(request, goal, page_url='', event=None, attachment_ids=(), target=None):
     run = AgentRun.objects.create(
         user=request.user, goal=goal[:4000], page_url=(page_url or '')[:500], event=event, target=target or {},
+        thread=thread_for(request),
         session_key=request.session.session_key or '', host=request.get_host(), secure=request.is_secure())
     if attachment_ids:
         AgentAttachment.objects.filter(user=request.user, run__isnull=True, pk__in=attachment_ids).update(run=run)
