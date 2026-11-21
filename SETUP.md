@@ -74,7 +74,8 @@ Do these steps once, in order. Each step says which values go where. For any sin
   unset = dev.attnd.app only); for production later: `heroku config:set SHOWCASE_EVENTS=1 -a attnd-web`, and once for
   AI covers on either app: `heroku run -a attnd-dev python manage.py load_showcase_events --images` (OpenAI, a few
   cents each). Watch `ADMIN_EMAILS`: "Remove the limit" requests and event claims are emailed there.
-- [ ] Home page "Happening near <city>" (Nov 21, 2026): in Google Cloud (project `attnd-df28e`), enable the
+- [x] Home page "Happening near <city>" (done Nov 21, 2026, 17:44 UTC: Geolocation API enabled and
+      `geolocation.googleapis.com` added to the "Attnd web (browser)" key's API restrictions; referrers unchanged): in Google Cloud (project `attnd-df28e`), enable the
       **Geolocation API** and add it to the **browser key**'s API restrictions (the key behind
       `GOOGLE_MAPS_BROWSER_KEY`, referrer-restricted to attnd.app / dev.attnd.app). The browser calls it at most once a day
       for an approximate position from the visitor's IP (no prompt); billed per request after the monthly free usage,
