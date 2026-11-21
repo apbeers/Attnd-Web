@@ -1,5 +1,6 @@
 from django.urls import path
 
+from agent import views as agent_views
 from console import views, views_events as v, views_undo
 
 app_name = 'console'
@@ -9,6 +10,7 @@ urlpatterns = [
     path('account/', views.account, name='account'),
     path('tasks/', v.tasks_feed, name='tasks'),
     path('undo/last/', views_undo.undo_last, name='undo_last'),
+    path('assistant/', agent_views.assistant_page, name='assistant'),
     path('undo/<int:undo_id>/', views_undo.undo_change, name='undo'),
     path('sw.js', v.service_worker, name='service_worker'),
     path('manifest.webmanifest', v.manifest, name='manifest'),

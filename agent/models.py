@@ -29,6 +29,7 @@ class AgentRun(models.Model):
     summary = models.TextField(blank=True)
     error = models.TextField(blank=True)
     revisions = models.JSONField(default=dict, blank=True)  # {event id: History revision before the first change}
+    suggestions = models.JSONField(default=list, blank=True)  # follow-up chips (finish's `suggest`)
     undone_at = models.DateTimeField(null=True, blank=True)
     # The person's own session (internal requests use it read-only) and where they were.
     session_key = models.CharField(max_length=64, blank=True)

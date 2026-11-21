@@ -38,7 +38,7 @@ from django.conf import settings
 from django.urls import URLPattern, URLResolver, get_resolver
 
 # Never registered, refused by read_page, whatever the request: account security, sign-out, the admin.
-OFF_LIMITS_PREFIXES = ('/accounts/', '/console/account/', '/console/signup/', '/console/agent/')
+OFF_LIMITS_PREFIXES = ('/accounts/', '/console/account/', '/console/signup/', '/console/agent/', '/console/assistant/')
 
 
 def off_limits(path):
@@ -59,6 +59,7 @@ EXCLUDED = {
     'studio:version_preview': 'Redirects to a signed preview link on the sites host (outside the console).',
     'prospects:export': 'CSV download of organizer contacts; the list and detail pages show the same data.',
     'diagnostics:session_export': 'A .jsonl file download; the session page and entries.json have the entries.',
+    'console:assistant': 'Ask Attnd\'s own full-screen chat page: the agent never drives itself.',
     'agent:start': 'Ask Attnd\'s own endpoints: the agent never drives itself.',
     'agent:runs': 'Ask Attnd\'s own endpoints.',
     'agent:run': 'Ask Attnd\'s own endpoints.',

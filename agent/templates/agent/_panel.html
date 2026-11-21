@@ -1,12 +1,14 @@
-{% load console_tags static %}<section class="agent" id="agent" data-agent data-agent-skip
-  data-event-id="{% if event.id %}{{ event.id }}{% endif %}"
+{% load console_tags static %}<section class="agent{% if mode == 'full' %} agent--full{% endif %}" id="agent" data-agent data-agent-skip
+  data-mode="{{ mode|default:'panel' }}" data-assistant-url="{% url 'console:assistant' %}"
+  data-event-id="{% if agent_event.id %}{{ agent_event.id }}{% elif event.id %}{{ event.id }}{% endif %}"
+  {% if mode == 'full' %}data-from="{{ back_url }}"{% endif %}
   data-start-url="{% url 'agent:start' %}" data-runs-url="{% url 'agent:runs' %}" data-attach-url="{% url 'agent:attach' %}"
   data-run-url="{% url 'agent:run' 0 %}" data-components-url="{% url 'agent:component_render' %}"
   data-pick-url="{% url 'agent:component_pick' %}" data-act-url="{% url 'agent:component_act' %}"
   data-undo-url="{% url 'console:undo' 0 %}">
   <button type="button" class="agent__launcher" aria-expanded="false" aria-controls="agent-panel" data-agent-open>
     {% icon "stars" %}<span>Ask Attnd</span><span class="agent__busy spinner" hidden></span></button>
-  <div class="agent__panel" id="agent-panel" role="dialog" aria-modal="false" aria-labelledby="agent-title" hidden>
+  <div class="agent__panel" id="agent-panel" {% if mode == 'full' %}role="region"{% else %}role="dialog" aria-modal="false" hidden{% endif %} aria-labelledby="agent-title">
     <header class="agent__head">
       <div class="agent__titles">
         <h2 class="agent__title" id="agent-title">{% icon "stars" %} Ask Attnd</h2>
@@ -17,7 +19,9 @@
       <button type="button" class="button button--ghost button--small" data-agent-new>{% icon "plus" %}<span class="visually-hidden">New chat</span></button>
       <button type="button" class="button button--ghost button--small" data-agent-history aria-expanded="false"
               aria-controls="agent-recent">{% icon "history" %}<span class="visually-hidden">Recent requests</span></button>
-      <button type="button" class="button button--ghost button--small" data-agent-close aria-label="Close Ask Attnd">{% icon "close" %}</button>
+      {% if mode == 'full' %}<a class="button button--ghost button--small" href="{{ back_url }}" data-agent-exit title="Back to the floating chat">{% icon "collapse" %}<span class="visually-hidden">Exit full screen</span></a>
+      {% else %}<a class="button button--ghost button--small agent__full-link" href="{% url 'console:assistant' %}" data-agent-full title="Full screen">{% icon "expand" %}<span class="visually-hidden">Full screen</span></a>
+      <button type="button" class="button button--ghost button--small" data-agent-close aria-label="Close Ask Attnd">{% icon "close" %}</button>{% endif %}
     </header>
     <div class="agent__recent" id="agent-recent" hidden>
       <div class="eyebrow">Recent requests</div>
@@ -25,6 +29,10 @@
     </div>
     <div class="agent__log" role="log" aria-live="polite" aria-relevant="additions" data-agent-log>
       <p class="agent__hello small muted" data-agent-hello>Ask me to do anything in the console: “Move Prairie Lights to 8 PM”, “Add a lunch break at noon on Saturday”, “Which locations have no schedule?”. I work as you, and ask before sending, publishing, deleting or team changes.</p>
+    </div>
+    <div class="agent__thinking" data-agent-thinking hidden>
+      <span class="agent__thinking-spinner" aria-hidden="true"></span>
+      <span class="agent__thinking-text" data-agent-stage aria-live="polite">Thinking…</span>
     </div>
     <div class="agent__confirm" data-agent-confirm hidden role="alertdialog" aria-labelledby="agent-confirm-title" aria-describedby="agent-confirm-text">
       <div class="agent__confirm-title" id="agent-confirm-title">{% icon "warning" %} Confirm</div>
@@ -39,6 +47,7 @@
         <button type="button" class="link-button small" data-agent-undo hidden>{% icon "undo" %} Undo all changes from this run</button>
         <button type="button" class="link-button small" data-agent-refresh hidden>Updated · Refresh</button>
       </div>
+      <div class="agent__suggest" data-agent-suggest role="group" aria-label="Suggestions" hidden></div>
       <ul class="agent__files" data-agent-files></ul>
       <form class="agent__form" data-agent-form>{% csrf_token %}
         <label class="agent__icon agent__attach" title="Attach a file">{% icon "paperclip" %}<span class="visually-hidden">Attach a file</span>

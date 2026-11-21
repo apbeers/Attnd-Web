@@ -17,6 +17,51 @@ def _error(message, status=400):
     return JsonResponse({'error': message}, status=status)
 
 
+VERBS = {'add': 'Adding', 'edit': 'Editing', 'delete': 'Deleting', 'send': 'Sending', 'update': 'Updating',
+         'publish': 'Publishing', 'unpublish': 'Unpublishing', 'move': 'Moving', 'create': 'Creating', 'invite': 'Inviting',
+         'remove': 'Removing', 'set': 'Setting', 'undo': 'Undoing', 'schedule': 'Scheduling', 'save': 'Saving',
+         'archive': 'Archiving', 'restore': 'Restoring', 'reorder': 'Reordering', 'hide': 'Hiding', 'apply': 'Applying',
+         'discard': 'Discarding', 'change': 'Changing', 'leave': 'Leaving', 'transfer': 'Transferring', 'check': 'Checking',
+         'import': 'Importing', 'bring': 'Bringing', 'unlock': 'Unlocking', 'toggle': 'Switching', 'list': 'Listing'}
+PAGE_NAMES = {'': 'the overview', 'edit': 'Details', 'locations': 'Locations', 'schedule': 'the schedule',
+              'notifications': 'Updates', 'display': 'App layout', 'changes': 'AI updates', 'usage': 'Usage',
+              'history': 'History', 'team': 'Team', 'studio': 'Studio'}
+
+
+def _page_name(path):
+    parts = [p for p in (path or '').split('/') if p]
+    if parts[:2] == ['console', 'events'] and len(parts) >= 3:
+        rest = [p for p in parts[3:] if not p.isdigit()]
+        return PAGE_NAMES.get(rest[0] if rest else '', (rest[-1] if rest else 'the event').replace('_', ' ').capitalize())
+    if parts == ['console']:
+        return 'your events'
+    return (parts[-1] if parts else 'the page').replace('-', ' ').replace('_', ' ').capitalize()
+
+
+def stage_text(step):
+    """The thinking line while a step runs: "Reading Updates…", "Adding location “Taco Row”…"."""
+    args = step.arguments or {}
+    if step.kind == AgentStep.KIND_COMPONENT:
+        return f'Showing {step.text}…'
+    if step.tool == 'read_page':
+        return f'Reading {_page_name(args.get("path"))}…'
+    if step.tool in ('list_events', 'search_events'):
+        return 'Looking through your events…'
+    if step.tool == 'list_pages':
+        return 'Finding the right page…'
+    if step.confirm_state == AgentStep.CONFIRM_PENDING:
+        return 'Waiting for you to confirm…'
+    if step.kind == AgentStep.KIND_QUESTION:
+        return 'Waiting for your answer…'
+    words = (step.tool or '').split('_')
+    if not words or not words[0]:
+        return 'Working…'
+    verb = VERBS.get(words[0])
+    what = ' '.join(words[1:] if verb else words)
+    named = next((str(args[k]) for k in ('name', 'title') if args.get(k)), '')
+    return f'{verb or "Working on"} {what}{f" “{named[:40]}”" if named else ""}…'
+
+
 def undo_states(user, steps):
     """{undo id: 'available' | 'used' | 'expired'} for the steps' recorded changes (one query)."""
     from django.utils import timezone
@@ -33,7 +78,7 @@ def undo_states(user, steps):
 def step_json(step, undo=None):
     out = {'seq': step.seq, 'id': step.pk, 'kind': step.kind, 'tool': step.tool, 'text': step.text, 'ok': step.ok,
            'changed': step.changed, 'url': step.url, 'event_id': step.event_id, 'confirm': step.confirm_state,
-           'at': step.created_at.isoformat()}
+           'at': step.created_at.isoformat(), 'stage': stage_text(step)}
     if step.undo_id:
         state = (undo or {}).get(step.undo_id) if undo is not None else undo_states(step.run.user, [step]).get(step.undo_id)
         out['undo'] = {'id': step.undo_id, 'state': state or 'expired'}
@@ -43,6 +88,30 @@ def step_json(step, undo=None):
         out['component'] = {'name': step.arguments.get('component', ''), 'items': step.arguments.get('items') or [],
                             'picked': bool(step.arguments.get('picked'))}
     return out
+
+
+# Follow-ups when the model gave none: from the last component the run showed (the panel's chips).
+FOLLOW_UPS = {
+    'event_tile': ['Show the overview', 'Create an event'],
+    'event_overview': ['Show the schedule', 'Show locations', 'Send an update'],
+    'location_row': ['Add a location', 'Show the schedule', 'Send an update'],
+    'location_form': ['Show locations', 'Show the schedule'],
+    'schedule_item_row': ['Add a schedule item', 'Show locations', 'Send an update'],
+    'schedule_item_form': ['Show the schedule', 'Send an update'],
+    'notification_row': ['Send an update', 'Show the schedule'],
+    'notification_form': ['Show updates', 'Show the schedule'],
+}
+
+
+def suggestions(run):
+    if run.status != AgentRun.DONE:
+        return []
+    if run.suggestions:
+        return run.suggestions[:4]
+    last = run.steps.filter(kind=AgentStep.KIND_COMPONENT).order_by('-seq').first()
+    if last is not None:
+        return FOLLOW_UPS.get(last.arguments.get('component', ''), [])[:4]
+    return ['Show the schedule', 'Add a location', 'Send an update'] if run.event_id else []
 
 
 def run_json(run):
@@ -59,6 +128,7 @@ def run_json(run):
         'question': question.text if question else None,
         'options': (question.arguments.get('options') or []) if question else [],
         'undo': loop.undo_available(run), 'undone': run.undone_at is not None,
+        'suggestions': suggestions(run),
         'changed_events': sorted({c['event_id'] for c in changed if c['event_id']}),
         'changed_urls': sorted({c['url'] for c in changed if c['url']}),
     }
@@ -197,3 +267,27 @@ def attach(request):
                                                 data=upload.read())
     return JsonResponse({'attachment': {'id': attachment.pk, 'name': attachment.name, 'size': attachment.size}},
                         status=201)
+
+
+@login_required
+@require_GET
+def assistant_page(request):
+    """Ask Attnd full screen (desktop): the chat on the left, a canvas of what it shows on the right, details as an
+    overlay. Same conversation as the floating panel (sessionStorage); ?event= the event it is about, ?from= the
+    page to go back to (and the page the requests are about)."""
+    from django.shortcuts import render
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    from agent.registry import off_limits
+    from events.models import Event
+    event = None
+    raw = request.GET.get('event', '')
+    if raw.isdigit():
+        event = Event.objects.filter(pk=int(raw)).first()
+        if event is not None and not event.can_edit(request.user):
+            event = None
+    back = request.GET.get('from', '')
+    if not (back.startswith('/console/') and not off_limits(back)
+            and url_has_allowed_host_and_scheme(back, {request.get_host()})):
+        back = '/console/'
+    return render(request, 'agent/assistant.html', {'agent_event': event, 'back_url': back})

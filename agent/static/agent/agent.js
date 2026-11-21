@@ -22,6 +22,15 @@
   const filesList = $('[data-agent-files]');
   const recentBox = $('#agent-recent');
   const busy = $('.agent__busy');
+  const thinking = $('[data-agent-thinking]');
+  const stageLine = $('[data-agent-stage]');
+  const suggestBox = $('[data-agent-suggest]');
+  // Full screen (/console/assistant/): the chat on the left, the canvas on the right (assistant.html).
+  const full = root.dataset.mode === 'full';
+  const canvas = full ? document.querySelector('[data-canvas]') : null;
+  const fromPage = root.dataset.from || '';
+  const wide = window.matchMedia('(min-width: 1024px)');
+  const canvasOn = () => full && canvas && wide.matches;  // narrower: the full page works like the panel
   const csrf = form.querySelector('input[name=csrfmiddlewaretoken]').value;
   const runUrl = (id, tail) => root.dataset.runUrl.replace(/\/0\/$/, `/${id}/`) + (tail || '');
   const eventId = root.dataset.eventId ? parseInt(root.dataset.eventId, 10) : null;
@@ -41,6 +50,7 @@
   let attachments = [];
   let dirty = false;
   const renderedSteps = new Set();  // step ids in the log (taps add steps the poll would bring again)
+  const unfinished = new Map();     // step id -> {spot, seq}: steps still running, drawn when done
 
   // ---- open / close ----------------------------------------------------------
   function open(focus) {
@@ -60,15 +70,28 @@
     launcher.focus();
   }
   launcher.addEventListener('click', () => (panel.hidden ? open() : close()));
-  $('[data-agent-close]').addEventListener('click', close);
-  panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+  $('[data-agent-close]')?.addEventListener('click', close);
+  if (!full) panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+
+  // ---- Full screen and back: the same conversation (sessionStorage), the same scroll position ----------------
+  $('[data-agent-full]')?.addEventListener('click', (e) => {
+    const url = new URL(root.dataset.assistantUrl, location.origin);
+    if (eventId) url.searchParams.set('event', eventId);
+    url.searchParams.set('from', location.pathname + location.search);
+    e.currentTarget.href = url.pathname + url.search;
+    store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop));
+  });
+  $('[data-agent-exit]')?.addEventListener('click', () => {
+    store.set('sessionStorage', 'attnd.agent.open', '1');
+    store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop));
+  });
 
   // ---- Background / Watch ------------------------------------------------------
   // Phones (the bottom sheet) always work in the background: the Watch switch is not shown there.
   const phone = window.matchMedia('(max-width: 600px)');
   watchBox.checked = store.get('localStorage', 'attnd.agent.watch') === '1';
   watchBox.addEventListener('change', () => { store.set('localStorage', 'attnd.agent.watch', watchBox.checked ? '1' : '0'); });
-  const watching = () => watchBox.checked && !phone.matches;
+  const watching = () => !full && watchBox.checked && !phone.matches;
 
   // ---- Phones: the sheet follows the visual viewport (keyboard open = composer right above it) ----------
   const vv = window.visualViewport;
@@ -129,6 +152,7 @@
     el.className = `agent__msg agent__msg--${kind}`;
     el.textContent = text;
     log.appendChild(el);
+    if (!thinking.hidden) log.appendChild(thinking);
     log.scrollTop = log.scrollHeight;
     return el;
   }
@@ -218,14 +242,30 @@
   function renderRun(data) {
     run = data.run;
     (data.steps || []).forEach((step) => {
-      if (step.seq <= lastSeq) return;
-      lastSeq = step.seq;
-      if (renderedSteps.has(step.id)) return;
+      // A step still running ("Opening …") is the thinking line's stage, not a log line yet: it keeps a place in
+      // the log and is drawn there once it is done (polls ask again from the oldest unfinished step).
+      const running = step.kind === 'tool' && /…$/.test(step.text || '') && step.confirm !== 'pending'
+                      && data.run.status === 'running';
+      if (step.seq <= lastSeq && !unfinished.has(step.id)) return;
+      lastSeq = Math.max(lastSeq, step.seq);
+      if (renderedSteps.has(step.id) && !unfinished.has(step.id)) return;
+      if (running) {
+        if (!unfinished.has(step.id)) {
+          const spot = document.createComment(`step ${step.id}`);
+          log.appendChild(spot);
+          unfinished.set(step.id, { spot, seq: step.seq });
+          renderedSteps.add(step.id);
+        }
+        return;
+      }
       renderedSteps.add(step.id);
-      renderStep(step);
+      const waiting = unfinished.get(step.id);
+      const el = renderStep(step);
+      if (waiting) { waiting.spot.replaceWith(el); unfinished.delete(step.id); }
       if (live && step.changed && step.event_id) refreshKeys([`event:${step.event_id}`]);
       if (live && watching() && step.changed && step.url) watchNavigate(step.url);
     });
+    if (!data.run.active) unfinished.clear();
     const pending = run.pending;
     confirmBox.hidden = !pending;
     if (pending) {
@@ -239,6 +279,8 @@
     } else {
       delete confirmBox.dataset.step;
     }
+    setThinking(run.status === 'running', data.steps || []);
+    showSuggestions(run.active ? [] : (run.suggestions || []));
     const waiting = run.status === 'waiting_confirmation' || run.status === 'waiting_reply';
     launcher.classList.toggle('needs-you', waiting);
     busy.hidden = run.status !== 'running';
@@ -254,6 +296,39 @@
     if (run.active) schedule(); else stopPolling();
   }
 
+  // ---- The thinking line: one line, a spinner and the current stage, cross-fading as stages change ----------
+  let stageTimer = null;
+  let lastStage = '';
+  function setStage(text) {
+    if (text === lastStage) return;
+    lastStage = text;
+    clearTimeout(stageTimer);
+    stageLine.classList.add('is-leaving');
+    stageTimer = setTimeout(() => { stageLine.textContent = text; stageLine.classList.remove('is-leaving'); }, 160);
+  }
+  function setThinking(on, steps) {
+    thinking.hidden = !on;
+    if (!on) { lastStage = ''; return; }
+    log.appendChild(thinking);  // always the chat's last line
+    const last = steps.length ? steps[steps.length - 1] : null;
+    if (last) setStage(last.text && !/…$/.test(last.text) && last.kind !== 'component' ? 'Thinking…' : (last.stage || 'Working…'));
+    else if (!lastStage) setStage('Thinking…');
+    log.scrollTop = log.scrollHeight;
+  }
+  // Follow-ups after an answer: tapping one sends it.
+  function showSuggestions(list) {
+    suggestBox.textContent = '';
+    suggestBox.hidden = !list.length;
+    list.forEach((text) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'agent__chip';
+      chip.textContent = text;
+      chip.addEventListener('click', () => { input.value = text; fitInput(); form.requestSubmit(); });
+      suggestBox.appendChild(chip);
+    });
+  }
+
   function statusText(r) {
     const cost = parseFloat(r.cost_usd || '0');
     const spend = cost >= 0.005 ? ` · $${cost.toFixed(2)}` : '';
@@ -264,6 +339,10 @@
   function finished() {
     if (run.summary) bubble('assistant', run.summary);
     if (run.error && run.status !== 'done') bubble('error', run.error);
+    if (full) {  // full screen: fresh copies on the canvas instead of a reload
+      run.changed_events.forEach((id) => refreshKeys([`event:${id}`]));
+      return;
+    }
     const here = location.pathname;
     const touched = (eventId && run.changed_events.includes(eventId)) || run.changed_urls.includes(here);
     if (!touched || watching()) return;
@@ -285,7 +364,8 @@
   async function poll() {
     timer = null;
     if (!run) return;
-    try { renderRun(await get(runUrl(run.id, `?after=${lastSeq}`))); live = true; }
+    const oldest = Math.min(...[...unfinished.values()].map((u) => u.seq - 1), lastSeq);
+    try { renderRun(await get(runUrl(run.id, `?after=${oldest}`))); live = true; }
     catch (e) { statusLine.textContent = 'Reconnecting…'; schedule(); }
   }
 
@@ -304,6 +384,7 @@
     log.textContent = '';
     lastSeq = 0;
     renderedSteps.clear();
+    unfinished.clear();
     run = null;
     wasActive = false;
     setChatIds([]);
@@ -313,6 +394,8 @@
     stopButton.hidden = true;
     sendButton.hidden = false;
     input.placeholder = 'What should Attnd do?';
+    showSuggestions([]);
+    thinking.hidden = true;
     input.focus();
   }
   $('[data-agent-new]').addEventListener('click', newChat);
@@ -321,6 +404,7 @@
   async function show(id, isLive) {
     log.textContent = '';
     renderedSteps.clear();
+    unfinished.clear();
     setChatIds([id]);
     await appendRun(id, isLive);
   }
@@ -351,7 +435,8 @@
       } else {
         if (!run || !run.active) { lastSeq = 0; }
         bubble('user', text);
-        const data = await post(root.dataset.startUrl, { goal: text, page: location.pathname + location.search,
+        showSuggestions([]);
+        const data = await post(root.dataset.startUrl, { goal: text, page: full ? fromPage : location.pathname + location.search,
                                                           event_id: eventId || '', attachments: attachments.map((a) => a.id).join(',') });
         if (data.run && data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
         attachments = [];
@@ -452,6 +537,7 @@
     card.dataset.keys = (item.keys || []).join(' ');
     card.dataset.title = item.label || item.title;
     if (item.detail) card.dataset.detail = item.detail;
+    if (item.detail_ids) card.dataset.detailIds = JSON.stringify(item.detail_ids);
     const foot = document.createElement('div');
     foot.className = 'agent__card-foot';
     if (item.url) {
@@ -482,7 +568,19 @@
   async function showComponents(step) {
     const box = cardBox();
     try {
-      (await fetchCards(step.component.name, step.component.items)).forEach((item) => box.appendChild(makeCard(item)));
+      const items = await fetchCards(step.component.name, step.component.items);
+      if (canvasOn() && step.component.picked) {
+        // Something opened earlier: a tile that opens it again on the canvas.
+        box.classList.add('agent__tiles');
+        items.forEach((item) => box.appendChild(makeTile(item, null, 0, () => showOverlay(item.label || item.title, [item]))));
+      } else if (canvasOn()) {
+        // Full screen: compact tiles in the chat, the cards themselves on the canvas.
+        box.classList.add('agent__tiles');
+        const tab = toCanvas(step.component.name, items);
+        items.forEach((item, i) => box.appendChild(makeTile(item, tab, i)));
+      } else {
+        items.forEach((item) => box.appendChild(makeCard(item)));
+      }
     } catch (err) {
       box.className = 'agent__msg agent__msg--step is-failed';
       box.textContent = err.status === 404 ? 'This is no longer there.' : err.message;
@@ -492,11 +590,14 @@
     return box;
   }
 
-  function liveCards() { return [...log.querySelectorAll('.agent__card:not(.is-folded):not(.is-gone)')]; }
+  function liveCards() {
+    const scopes = [log, canvas].filter(Boolean);
+    return scopes.flatMap((scope) => [...scope.querySelectorAll('.agent__card:not(.is-folded):not(.is-gone)')]);
+  }
 
   // Long chats: the latest cards stay live; older ones fold into one line that re-fetches when tapped.
   function foldOld() {
-    const cards = liveCards();
+    const cards = [...log.querySelectorAll('.agent__card:not(.is-folded):not(.is-gone)')];
     cards.slice(0, Math.max(0, cards.length - LIVE_CARDS)).forEach((card) => {
       card.classList.add('is-folded');
       card.querySelector('.agent__card-body')?.remove();
@@ -545,6 +646,7 @@
   }
 
   async function pick(card) {
+    if (canvasOn()) return openDetail(card);
     if (!run) return;
     card.classList.add('is-busy');
     try {
@@ -611,7 +713,7 @@
     finally { card.classList.remove('is-busy'); }
   }
 
-  log.addEventListener('click', (e) => {
+  function onCardClick(e) {
     const card = e.target.closest('.agent__card');
     if (!card || card.classList.contains('is-folded') || card.classList.contains('is-gone')) return;
     const button = e.target.closest('[data-component-act]');
@@ -620,15 +722,211 @@
     if (title && card.dataset.detail) { e.preventDefault(); pick(card); return; }
     if (e.target.closest('a, button, input, select, textarea, label, summary, details, form, [data-copy]')) return;
     if (card.dataset.detail && e.target.closest('.agent__card-body')) pick(card);
-  });
-  log.addEventListener('submit', (e) => {
+  }
+  function onCardSubmit(e) {
     const form = e.target.closest('form[data-component-form]');
     const card = form && form.closest('.agent__card');
     if (!card) return;
     e.preventDefault();
     if (form.dataset.confirmAction) act(card, form.dataset.confirmAction, form);
     else submitForm(card, form, e.submitter);
+  }
+  [log, canvas].filter(Boolean).forEach((scope) => {
+    scope.addEventListener('click', onCardClick);
+    scope.addEventListener('submit', onCardSubmit);
   });
+
+  // ---- Full screen: the canvas (tabs of what the chat showed) and the detail overlay ---------------------------
+  const KINDS = { event_tile: 'Events', event_overview: 'Overview', event_stats: 'Overview', live_on_phone: 'Overview',
+                  needs_review: 'Overview', event_header: 'Overview', location_row: 'Locations', location_form: 'Locations',
+                  schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Updates',
+                  notification_form: 'Updates' };
+  const ORDER = ['Events', 'Overview', 'Locations', 'Schedule', 'Updates'];
+  const tabs = new Map();  // label -> {button, pane}
+  let overlayStack = [];   // [{title, items}]
+  let overlayOpener = null;
+
+  function selectTab(label) {
+    tabs.forEach((t, key) => {
+      const on = key === label;
+      t.button.setAttribute('aria-selected', String(on));
+      t.button.tabIndex = on ? 0 : -1;
+      t.pane.hidden = !on;
+    });
+    if (overlayStack.length) closeOverlay(false);
+  }
+
+  function ensureTab(label) {
+    if (tabs.has(label)) return tabs.get(label);
+    const bar = canvas.querySelector('[data-canvas-tabs]');
+    const body = canvas.querySelector('[data-canvas-body]');
+    canvas.querySelector('[data-canvas-empty]')?.remove();
+    const id = `canvas-${label.toLowerCase()}`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tabs__tab';
+    button.id = `${id}-tab`;
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-controls', id);
+    button.textContent = label;
+    button.addEventListener('click', () => selectTab(label));
+    const pane = document.createElement('div');
+    pane.className = 'canvas__pane';
+    pane.id = id;
+    pane.setAttribute('role', 'tabpanel');
+    pane.setAttribute('aria-labelledby', button.id);
+    pane.hidden = true;
+    const t = { button, pane, label };
+    tabs.set(label, t);
+    const sorted = [...tabs.values()].sort((a, b) => ORDER.indexOf(a.label) - ORDER.indexOf(b.label));
+    sorted.forEach((x) => { bar.appendChild(x.button); body.appendChild(x.pane); });
+    bar.hidden = false;
+    return t;
+  }
+  canvas?.querySelector('[data-canvas-tabs]').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const list = [...tabs.values()].sort((a, b) => ORDER.indexOf(a.label) - ORDER.indexOf(b.label));
+    const at = list.findIndex((t) => t.button === document.activeElement);
+    const next = list[(at + (e.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length];
+    if (next) { selectTab(next.label); next.button.focus(); }
+  });
+
+  function toCanvas(name, items) {
+    const t = ensureTab(KINDS[name] || 'More');
+    t.pane.textContent = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'canvas__cards' + (name.endsWith('_row') ? ' canvas__cards--rows' : '');
+    items.forEach((item) => wrap.appendChild(makeCard(item)));
+    t.pane.appendChild(wrap);
+    selectTab(t.label);
+    return t;
+  }
+
+  function makeTile(item, tab, index, onOpen) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'agent__tile';
+    const mark = document.createElement('span');
+    mark.className = 'agent__tile-mark';
+    mark.textContent = (item.label || item.title || '?').trim().charAt(0).toUpperCase();
+    const text = document.createElement('span');
+    text.className = 'agent__tile-text';
+    const strong = document.createElement('strong');
+    strong.textContent = item.label || item.title;
+    const small = document.createElement('span');
+    small.textContent = item.title;
+    text.append(strong, small);
+    const arrow = document.createElement('span');
+    arrow.className = 'agent__tile-arrow';
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = '›';
+    tile.append(mark, text, arrow);
+    tile.addEventListener('click', () => {
+      if (onOpen) { overlayOpener = tile; onOpen(); return; }
+      selectTab(tab.label);
+      const card = tab.pane.querySelectorAll('.agent__card')[index];
+      if (card && card.dataset.detail) openDetail(card, tile);
+      else card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    return tile;
+  }
+
+  async function openDetail(card, opener) {
+    const overlay = canvas.querySelector('[data-canvas-overlay]');
+    const ids = JSON.parse(card.dataset.ids);
+    const keep = card.dataset.detailIds ? JSON.parse(card.dataset.detailIds) : Object.keys(ids);
+    const detailIds = Object.fromEntries(Object.entries(ids).filter(([k]) => keep.includes(k)));
+    card.classList.add('is-busy');
+    try {
+      let items;
+      if (run) {  // remembered in the run (told to the model with the next message)
+        const data = await post(root.dataset.pickUrl, { run: run.id, component: card.dataset.component, ids: card.dataset.ids });
+        renderedSteps.add(data.step.id);
+        items = data.items;
+      } else {
+        items = await fetchCards(card.dataset.detail, [detailIds]);
+      }
+      if (!overlayStack.length) overlayOpener = opener || card;
+      showOverlay(card.dataset.title, items, true);
+    } catch (err) { bubble('error', err.message); }
+    finally { card.classList.remove('is-busy'); }
+  }
+
+  function showOverlay(title, items, push) {
+    const overlay = canvas.querySelector('[data-canvas-overlay]');
+    if (!push) overlayStack = [];
+    overlayStack.push({ title, items });
+    renderOverlay();
+    overlay.hidden = false;
+    overlay.querySelector('[data-overlay-title]').focus();
+  }
+
+  function renderOverlay() {
+    const overlay = canvas.querySelector('[data-canvas-overlay]');
+    const crumbs = overlay.querySelector('[data-overlay-crumbs]');
+    const body = overlay.querySelector('[data-overlay-body]');
+    crumbs.textContent = '';
+    const current = [...tabs.values()].find((t) => !t.pane.hidden);
+    const trail = [current ? current.label : 'Canvas', ...overlayStack.map((l) => l.title)];
+    trail.forEach((text, i) => {
+      const li = document.createElement('li');
+      if (i === trail.length - 1) {
+        const span = document.createElement('span');
+        span.setAttribute('aria-current', 'page');
+        span.textContent = text;
+        li.appendChild(span);
+      } else {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'link-button';
+        b.textContent = text;
+        b.addEventListener('click', () => { overlayStack = overlayStack.slice(0, i); if (overlayStack.length) renderOverlay(); else closeOverlay(true); });
+        li.appendChild(b);
+      }
+      crumbs.appendChild(li);
+    });
+    overlay.querySelector('[data-overlay-title]').textContent = trail[trail.length - 1];
+    body.textContent = '';
+    const level = overlayStack[overlayStack.length - 1];
+    level.items.forEach((item) => body.appendChild(makeCard(item)));
+  }
+
+  function closeOverlay(returnFocus) {
+    const overlay = canvas.querySelector('[data-canvas-overlay]');
+    overlayStack = [];
+    overlay.hidden = true;
+    overlay.querySelector('[data-overlay-body]').textContent = '';
+    if (returnFocus && overlayOpener && document.contains(overlayOpener)) overlayOpener.focus();
+    overlayOpener = null;
+  }
+  function popOverlay() {
+    overlayStack.pop();
+    if (overlayStack.length) { renderOverlay(); canvas.querySelector('[data-overlay-title]').focus(); }
+    else closeOverlay(true);
+  }
+  if (canvas) {
+    const overlay = canvas.querySelector('[data-canvas-overlay]');
+    overlay.querySelector('[data-overlay-back]').addEventListener('click', popOverlay);
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); popOverlay(); return; }
+      if (e.key !== 'Tab') return;  // keep focus inside the overlay while it is open
+      const focusable = [...overlay.querySelectorAll('a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])')]
+        .filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === overlay.querySelector('[data-overlay-title]'))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+  }
+
+  // The event the page is about: its overview, locations, schedule and updates are on the canvas from the start.
+  async function preloadCanvas() {
+    if (!canvasOn() || !eventId) return;
+    for (const name of ['event_overview', 'location_row', 'schedule_item_row', 'notification_row']) {
+      try { toCanvas(name, await fetchCards(name, [{ event_id: eventId }])); } catch (e) { /* none yet */ }
+    }
+    selectTab('Overview');
+  }
 
   // ---- recent requests ---------------------------------------------------------------------
   $('[data-agent-history]').addEventListener('click', async (e) => {
@@ -664,7 +962,8 @@
 
   // ---- on load: pick up a run that is still going -------------------------------------------
   (async () => {
-    if (store.get('sessionStorage', 'attnd.agent.open') === '1') open(false);
+    if (full) { root.classList.add('is-open'); preloadCanvas(); }
+    else if (store.get('sessionStorage', 'attnd.agent.open') === '1') open(false);
     try {
       const data = await get(root.dataset.runsUrl);
       const active = data.runs.find((r) => r.active);

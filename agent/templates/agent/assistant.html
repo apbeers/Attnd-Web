@@ -1,0 +1,28 @@
+{% extends 'console/base.html' %}
+{% load console_tags static %}
+{% block title %}Ask Attnd{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'agent/agent.css' %}">{% endblock %}
+{% block content %}
+<div class="assistant">
+  <section class="canvas" data-canvas aria-label="What Ask Attnd shows">
+    <div class="tabs canvas__tabs" role="tablist" aria-label="Canvas" data-canvas-tabs hidden></div>
+    <div class="canvas__body" data-canvas-body>
+      <div class="canvas__empty" data-canvas-empty>
+        <div class="canvas__empty-mark">{% icon "stars" %}</div>
+        <h2 class="title-3">What Ask Attnd shows appears here</h2>
+        <p class="muted">Events, overviews, locations, the schedule and updates open here at full size. Tap one for its details.</p>
+      </div>
+    </div>
+    <div class="canvas__overlay" data-canvas-overlay role="dialog" aria-modal="true" aria-labelledby="canvas-overlay-title" hidden>
+      <div class="canvas__overlay-head">
+        <button type="button" class="crumbs__back" data-overlay-back aria-label="Back">{% icon "arrow-left" %}</button>
+        <nav class="crumbs" aria-label="Breadcrumb"><ol data-overlay-crumbs></ol></nav>
+        <h2 class="visually-hidden" id="canvas-overlay-title" data-overlay-title tabindex="-1">Details</h2>
+      </div>
+      <div class="canvas__overlay-body" data-overlay-body></div>
+    </div>
+  </section>
+  {# the panel comes after the canvas in the DOM (its script looks the canvas up); CSS puts it on the left #}
+  {% include 'agent/_panel.html' with mode='full' %}
+</div>
+{% endblock %}

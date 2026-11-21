@@ -164,7 +164,8 @@ def rendered(request, name, found):
             html = f'<ul class="list list--boxed">{html}</ul>'
         out.append({'component': name, 'ids': ids, 'html': html, 'keys': C.keys(data), 'title': comp.title,
                     'label': data.get('name') or data.get('title') or comp.title,
-                    'url': C.page_url(name, ids), 'detail': comp.detail})
+                    'url': C.page_url(name, ids), 'detail': comp.detail,
+                    'detail_ids': list(C.get(comp.detail).all_ids) if comp.detail else []})
     return out
 
 

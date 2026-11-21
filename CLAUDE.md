@@ -308,6 +308,30 @@ on Save does; there is no second copy of any business logic.
   doesn't scroll; the console's viewport meta has `interactive-widget=resizes-content`) and its inputs are 16px (no
   iOS focus zoom); the task tray stacks above the launcher. Stale runs fail / unanswered ones close in
   `run_scheduled_tasks`.
+- **Full screen** (`/console/assistant/`, `console:assistant` → `agent.views.assistant_page`, template
+  `agent/assistant.html`; in `registry.EXCLUDED` and `OFF_LIMITS_PREFIXES`, so the floating panel isn't drawn there):
+  the panel header's **Full screen** button (≥ 1024px only, `data-agent-full`) opens it with `?event=` (checked with
+  `can_edit`) and `?from=` (a console path, not off-limits; the requests are about that page); **Exit** goes back and
+  reopens the floating panel. Same conversation (sessionStorage chat ids, scroll). Layout (Layla's chat + canvas):
+  the chat column on the left (~36%), the **canvas** on the right (`data-canvas`): what the chat `show`s appears there
+  at full size, grouped into underline tabs Events · Overview · Locations · Schedule · Updates (arrow keys move
+  between tabs; with `?event=` the event's overview, locations, schedule and updates are preloaded), while the chat
+  shows each card as a compact tile (initial, title, kind, ›). Tapping an item (tile, card body or title) opens its
+  `detail` component full width as an **overlay** on the canvas (`data-canvas-overlay`, `role=dialog`): a breadcrumb
+  (Locations › Main Stage › …; earlier levels are buttons) and a back arrow; nested opens push, Esc / the arrow pop,
+  focus moves to the overlay, Tab is trapped inside and focus returns to the opener. Cards there are the chat's
+  interactive components (forms save in place through the views, always-ask buttons still confirm). A pick is
+  recorded in the run (`components/pick`) when there is one, else the detail is fetched directly (`detail_ids` on
+  each rendered card). Narrower than 1024px the page works like the panel (cards in the chat, no canvas).
+- **Follow-up chips**: `finish(summary, suggest)` (2–4 short requests, `AgentRun.suggestions`); without them
+  `views.suggestions` derives them from the last component shown (`FOLLOW_UPS`). `run_json.suggestions` (done runs
+  only) → chips above the composer (`data-agent-suggest`); tapping one sends it.
+- **Thinking line** (`data-agent-thinking`): while a run works the chat shows one line, a CSS gradient ring and the
+  current stage (`step_json.stage` = `views.stage_text`: "Reading Updates…", "Adding location “Taco Row”…", "Showing
+  Schedule…"; "Thinking…" between steps). Each new stage fades out and the next fades in on the same line
+  (`aria-live=polite`; no motion with `prefers-reduced-motion`). Steps still running are not log lines yet: they keep
+  their place (a comment node) and are drawn there, compact as before, once done (polls ask again from the oldest
+  unfinished step).
 - **Components in the chat** (`agent/components.py`; the components are console/components, see Console UX): the
   model's `show(component, items)` tool (and `get_component`) validates the component and ids, loads the data **as
   the person** and records a step (`AgentStep.KIND_COMPONENT`: `arguments` = `{component, items, picked}`, `result` =
@@ -333,7 +357,8 @@ on Save does; there is no second copy of any business logic.
   `agent/tests_components.py` (show validation, JSON-only context, taps and renders as the person, chat forms
   through the views, the confirm gate for chat buttons and forms) and `agent/tests_claude.py` (the Anthropic request
   shape, blocks passed back, cache reads, refusal → OpenAI, max_tokens / pause_turn, typed errors, the context block,
-  one-day events schedule without asking, multi-day ones ask with day chips; the SDK is mocked, never called).
+  one-day events schedule without asking, multi-day ones ask with day chips; the SDK is mocked, never called) and
+  `agent/tests_fullscreen.py` (the full-screen page, `from` / `event` checks, follow-up chips, stage texts).
 
 ## Attnd Studio (admins only; `studio/`, spec `docs/specs/studio_spec.md`)
 

@@ -56,9 +56,15 @@ FIXED_TOOLS = [
                         'options': {'type': ['array', 'null'], 'items': {'type': 'string'},
                                     'description': '2-6 short answers the person can tap (e.g. the event days), or '
                                                    'null for an open question'}}}, 'strict': True},
-    {'name': 'finish', 'description': 'End the run with a short summary for the person.',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['summary'], 'properties': {
-         'summary': {'type': 'string'}}}, 'strict': True},
+    {'name': 'finish', 'description': 'End the run with a short summary for the person, and 2-4 follow-ups they '
+                                      'might tap next.',
+     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['summary', 'suggest'],
+                    'properties': {
+                        'summary': {'type': 'string'},
+                        'suggest': {'type': ['array', 'null'], 'items': {'type': 'string'},
+                                    'description': '2-4 short follow-up requests in the person\'s words (e.g. "Show '
+                                                   'the schedule", "Add a location", "Send an update"), or null'}}},
+     'strict': True},
 ]
 
 
@@ -69,9 +75,10 @@ class Pause(Exception):
 
 
 class Finished(Exception):
-    def __init__(self, summary):
+    def __init__(self, summary, suggest=()):
         super().__init__(summary)
         self.summary = summary
+        self.suggest = list(suggest or [])
 
 
 class StopRun(Exception):
@@ -375,7 +382,7 @@ def _loop(run, provider, messages):
                 _pause(run, provider, messages, turn.calls, results, call, pause)
                 return
             except Finished as fin:
-                _end(run, AgentRun.DONE, summary=fin.summary)
+                _end(run, AgentRun.DONE, summary=fin.summary, suggestions=fin.suggest)
                 return
             results.append((call, text))
         provider.add_results(messages, results)
@@ -393,7 +400,7 @@ def _pause(run, provider, messages, calls, results, call, pause):
         AgentStep.objects.filter(pk=pause.step.pk).update(confirm_state=AgentStep.CONFIRM_EXPIRED)  # stopped meanwhile
 
 
-def _end(run, status, summary='', error=''):
+def _end(run, status, summary='', error='', suggestions=None):
     with transaction.atomic():
         current = AgentRun.objects.select_for_update().get(pk=run.pk)
         if current.status not in AgentRun.ACTIVE:  # already ended (e.g. the person pressed Stop): keep that
@@ -403,7 +410,8 @@ def _end(run, status, summary='', error=''):
         run.error = (error or current.error)[:4000]
         run.finished_at = timezone.now()
         run.state = {}
-        run.save(update_fields=['status', 'summary', 'error', 'finished_at', 'state'])
+        run.suggestions = list(suggestions or [])[:4]
+        run.save(update_fields=['status', 'summary', 'error', 'finished_at', 'state', 'suggestions'])
         run.steps.filter(confirm_state=AgentStep.CONFIRM_PENDING).update(confirm_state=AgentStep.CONFIRM_EXPIRED)
 
 
@@ -425,7 +433,8 @@ def _call(run, call):
         return 'Error: the arguments are too long.'
     name = call.name
     if name == 'finish':
-        raise Finished(str(args.get('summary') or 'Done.')[:4000])
+        suggest = [str(x).strip()[:60] for x in (args.get('suggest') or []) if str(x).strip()][:4]
+        raise Finished(str(args.get('summary') or 'Done.')[:4000], suggest)
     if name == 'ask_user':
         question = str(args.get('question') or '').strip()[:1000] or 'Could you tell me more?'
         options = [str(o).strip()[:80] for o in (args.get('options') or []) if str(o).strip()][:6]
