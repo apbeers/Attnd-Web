@@ -194,6 +194,10 @@ def task_json(job):
         'summary': summary, 'error': job.error if job.status == IngestJob.FAILED else '',
         'url': url, 'event_id': job.event_id,
         'finished_at': job.finished_at.isoformat() if job.finished_at else None,
+        # Friendly steps (scrape.jobs.Steps) the tray shows when a task is opened; a queued job has one.
+        'steps': [{'text': st.get('text', ''), 'state': st.get('state', 'done')} for st in (job.steps or [])]
+                 or ([{'text': 'Waiting to start…', 'state': 'running'}] if job.status == IngestJob.QUEUED else []),
+        'result_label': ('Review the changes' if url and '/changes/' in url else 'Open the event') if url else '',
     }
 
 

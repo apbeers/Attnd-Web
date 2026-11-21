@@ -44,6 +44,8 @@ class IngestJob(models.Model):
 
     # Progress / output
     progress = models.CharField(max_length=256, blank=True)
+    # Friendly steps for the task tray: [{text, state: running|done|failed|waiting, at}] (scrape.jobs.Steps)
+    steps = models.JSONField(default=list, blank=True)
     error = models.TextField(blank=True)
     result = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(default=dj_tz.now)

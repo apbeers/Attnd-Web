@@ -45,6 +45,8 @@ class ComponentTestCase(TestCase):
             'schedule_item_form': {'event_id': self.event.pk, 'item_id': self.item.pk},
             'notification_row': {'event_id': self.event.pk, 'notification_id': self.update.pk},
             'notification_form': {'event_id': self.event.pk},
+            'object_history': {'event_id': self.event.pk}, 'event_form': {'event_id': self.event.pk},
+            'event_new_form': {},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -52,6 +54,7 @@ class ComponentTestCase(TestCase):
             'event_overview': 'Live on your phone', 'location_row': 'Main Stage', 'location_form': 'One-line summary',
             'schedule_item_row': 'Prairie Lights', 'schedule_item_form': 'Prairie Lights',
             'notification_row': 'Gates open late', 'notification_form': 'Send an update',
+            'object_history': 'No changes recorded yet', 'event_form': 'Prairie Fest', 'event_new_form': 'Create with AI',
         }
 
     def request(self, user=None):
@@ -161,6 +164,8 @@ class RegistryTests(ComponentTestCase):
 class PermissionTests(ComponentTestCase):
     def test_another_persons_event_is_not_found(self):
         for name, ids in self.ids.items():
+            if not ids:
+                continue  # event_new_form belongs to no event
             with self.assertRaises(Http404, msg=name):
                 C.load(self.other, name, ids)
 

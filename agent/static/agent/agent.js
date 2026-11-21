@@ -751,6 +751,10 @@
       const ids0 = JSON.parse(card.dataset.ids);
       if (said.undo) addUndo(savedLine, said.undo, 'available', ids0.event_id);
       const keys = card.dataset.keys.split(' ');
+      const made = response.url.match(/\/console\/events\/(\d+)\/$/);
+      if (card.dataset.component === 'event_new_form' && made) {  // an empty event was created: work on it here
+        if (full) { location.assign(`${root.dataset.assistantUrl}?event=${made[1]}&from=${encodeURIComponent(`/console/events/${made[1]}/`)}`); return; }
+      }
       const level = overlayStack.length ? overlayStack[overlayStack.length - 1] : null;
       const created = /_form$/.test(card.dataset.component) && !/"(location_id|item_id)"/.test(card.dataset.ids)
                       && !(submitter && submitter.name === 'save_add');
@@ -832,7 +836,11 @@
     if (label === 'Schedule' && eventId) return [add('Add schedule item', 'schedule_item_form', 'New schedule item')];
     return (TOOLBARS[label] || []).filter((x) => !x.needsEvent || eventId);
   }
-  const TOOLBARS = {};  // more toolbar buttons per tab (filled below where their components exist)
+  const TOOLBARS = {
+    Events: [{ text: 'New event', run: (b) => openComponent('event_new_form', {}, 'New event', b) }],
+    Overview: [{ text: 'Edit details', needsEvent: true, run: (b) => openComponent('event_form', { event_id: eventId }, 'Details', b) },
+               { text: 'History', needsEvent: true, plain: true, run: (b) => openComponent('object_history', { event_id: eventId }, 'History', b) }],
+  };
 
   function ensureTab(label) {
     if (tabs.has(label)) return tabs.get(label);
@@ -861,8 +869,8 @@
       tools.forEach((tool) => {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'button button--primary button--small';
-        b.textContent = `+ ${tool.text}`;
+        b.className = `button button--${tool.plain ? 'outline' : 'primary'} button--small`;
+        b.textContent = tool.plain ? tool.text : `+ ${tool.text}`;
         b.addEventListener('click', () => tool.run(b));
         row.appendChild(b);
       });
@@ -984,6 +992,10 @@
 
   async function openDetail(card, opener) {
     const ids = JSON.parse(card.dataset.ids);
+    if (card.dataset.component === 'event_tile' && ids.event_id !== eventId) {  // another event: full screen for it
+      location.assign(`${root.dataset.assistantUrl}?event=${ids.event_id}&from=${encodeURIComponent(`/console/events/${ids.event_id}/`)}`);
+      return;
+    }
     const keep = card.dataset.detailIds ? JSON.parse(card.dataset.detailIds) : Object.keys(ids);
     const detailIds = Object.fromEntries(Object.entries(ids).filter(([k]) => keep.includes(k)));
     card.classList.add('is-busy');
@@ -1007,7 +1019,7 @@
     if (!HISTORY_OF[name] || !ids[HISTORY_OF[name]]) return items;
     try { return items.concat(await fetchCards('object_history', [ids])); } catch (e) { return items; }
   }
-  const HISTORY_OF = {};  // detail component -> the id that has a history (filled where object_history exists)
+  const HISTORY_OF = { location_form: 'location_id', schedule_item_form: 'item_id' };  // details with a history card
 
   // Open any component in the overlay (toolbar buttons, links inside cards, finished background tasks).
   async function openComponent(name, ids, title, opener) {
@@ -1028,6 +1040,10 @@
     [/^\/console\/events\/(\d+)\/schedule\/new\/$/, (m) => ['schedule_item_form', { event_id: +m[1] }, 'New schedule item']],
     [/^\/console\/events\/(\d+)\/schedule\/(\d+)\/$/, (m) => ['schedule_item_form', { event_id: +m[1], item_id: +m[2] }]],
     [/^\/console\/events\/(\d+)\/$/, (m) => ['event_overview', { event_id: +m[1] }]],
+    [/^\/console\/events\/(\d+)\/edit\/$/, (m) => ['event_form', { event_id: +m[1] }, 'Details']],
+    [/^\/console\/events\/(\d+)\/history\/$/, (m) => ['object_history', { event_id: +m[1] }, 'History']],
+    [/^\/console\/new\/$/, () => ['event_new_form', {}, 'New event']],
+    [/^\/console\/$/, () => ({ tab: 'Events' })],
     [/^\/console\/events\/(\d+)\/(locations|schedule|notifications)\/$/, (m) => ({ tab: { locations: 'Locations', schedule: 'Schedule', notifications: 'Updates' }[m[2]], event: +m[1] })],
   ];
   function openUrl(href, opener) {
@@ -1040,7 +1056,7 @@
       if (!m) continue;
       const to = target(m);
       if (to.tab) {
-        if (to.event !== eventId || !tabs.has(to.tab)) return false;
+        if ((to.event && to.event !== eventId) || !tabs.has(to.tab)) return false;
         selectTab(to.tab);
         return true;
       }
@@ -1051,6 +1067,15 @@
     return false;
   }
   window.attndCanvasOpen = openUrl;  // console.js: links in the task tray open here in full screen
+  // The console's own links around the full-screen chat (top bar: Your events, New event) open on the canvas too.
+  if (full) {
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('a[href]');
+      if (!link || e.defaultPrevented || root.contains(link) || canvas?.contains(link) || link.closest('#task-tray, .task-toast')) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || link.target) return;
+      if (openUrl(link.getAttribute('href'), link)) e.preventDefault();
+    });
+  }
 
   function showOverlay(title, items, push) {
     const overlay = canvas.querySelector('[data-canvas-overlay]');
@@ -1166,6 +1191,8 @@
       selectTab('Events');
       return;
     }
+    // Every event and "New event" too, so the whole console is reachable from here.
+    try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
     const parent = { event_id: eventId };
     for (const name of ['event_overview', 'location_row', 'schedule_item_row', 'notification_form', 'notification_row']) {
       let items = [];

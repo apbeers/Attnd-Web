@@ -294,7 +294,7 @@ def _link_priority(link: str) -> int:
     return 0 if any(w in lower for w in _PRIORITY_WORDS) else 1
 
 
-def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int = 60) -> str:
+def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int = 60, on_page=None) -> str:
     """
     BFS crawl starting at url.  Stays on the same origin, visits at most
     max_pages pages up to max_depth levels deep, returns combined text.
@@ -334,6 +334,8 @@ def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int =
             text = _page_text(html)
             if text:
                 parts.append(f"## Source: {current_url}\n\n{text}")
+                if on_page:
+                    on_page(current_url)
 
             if depth < max_depth:
                 new_links = _same_origin_links(html, current_url)
@@ -474,13 +476,13 @@ def _normalize(data: dict) -> dict:
     return data
 
 
-def gather_sources(urls: list[str], crawl: bool = True) -> str:
+def gather_sources(urls: list[str], crawl: bool = True, on_page=None) -> str:
     """Read the URLs. With crawl=False only the pages themselves (the website watcher re-reads just
-    the pages that changed)."""
+    the pages that changed). `on_page(url)` is called for every page read (the task tray's step)."""
     parts = []
     for url in urls:
         try:
-            parts.append(_crawl(url) if crawl else _crawl(url, max_depth=0, max_pages=1))
+            parts.append(_crawl(url, on_page=on_page) if crawl else _crawl(url, max_depth=0, max_pages=1, on_page=on_page))
         except Exception as exc:  # one bad URL should not sink the rest
             logger.warning("Crawl failed for %s: %s", url, exc)
     return "\n\n---\n\n".join(p for p in parts if p)
@@ -668,17 +670,31 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
 
 def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None = None, text: str = "",
                  attachments: list | None = None, current: dict | None = None,
-                 instructions: str = "", enrich: bool = True, crawl: bool = True) -> dict:
+                 instructions: str = "", enrich: bool = True, crawl: bool = True, progress=None) -> dict:
     """
     Read the sources and return a normalized extraction dict (see EVENT_SCHEMA).
 
     Geocoding enrichment fills coordinates only for things that have none.
-    Raises ValueError when nothing usable can be extracted.
+    Raises ValueError when nothing usable can be extracted. `progress(text, done=…)` (optional) starts a friendly
+    step for the task tray (scrape.jobs.Steps); `progress.update(text)` changes the current one.
     """
+    from urllib.parse import urlparse
     urls = list(urls or ([url] if url else []))
+    say = progress or (lambda *a, **k: None)
+    update = getattr(progress, 'update', None) or (lambda *a, **k: None)
+    read = []
+
+    def on_page(page_url):
+        read.append(page_url)
+        update(f'Reading web pages: {len(read)} so far ({urlparse(page_url).netloc or page_url})…',
+               done=f'Read {len(read)} web page{"s" if len(read) != 1 else ""}')
+    if urls:
+        hosts = list(dict.fromkeys(urlparse(u).netloc or u for u in urls))
+        say(f'Reading {", ".join(hosts[:2])}{" and more" if len(hosts) > 2 else ""}…',
+            done='Couldn’t read any web pages')
     logger.info("scrape_event: %d urls, %d chars text, %d attachments, refresh=%s",
                 len(urls), len(text), len(attachments or []), current is not None)
-    content = gather_sources(urls, crawl=crawl) if urls else ""
+    content = gather_sources(urls, crawl=crawl, on_page=on_page) if urls else ""
     # Every web page that was read, so the website watcher can fingerprint them (scrape.watch).
     pages = list(dict.fromkeys(re.findall(r"^## Source: (https?://\S+)", content, flags=re.M)))
     if text:
@@ -686,9 +702,15 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
     if not content.strip() and not attachments:
         raise ValueError("No content could be retrieved from that URL.")
 
+    if text or attachments:
+        what = ' and '.join(filter(None, ['your notes' if text else '', 'the file you attached' if attachments else '']))
+        say(f'Reading {what}…', done=f'Read {what}')
+    say('Finding the locations and the schedule…' if current is None else 'Looking for what changed…',
+        done='Understood the event' if current is None else 'Read the latest information')
     data = _extract(content, current=current, attachments=attachments, instructions=instructions)
 
     if google_api_key and enrich:
+        say('Checking addresses on the map…', done='Checked addresses on the map')
         data = _enrich_with_places(data, google_api_key)
     data["source_pages"] = pages
     return data

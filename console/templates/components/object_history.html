@@ -1,0 +1,17 @@
+{% load console_tags %}{% comment %} object_history: who changed what and when (LogEntry, console/history.py), newest first; field
+old → new, how it was made, and Undo while the change can still be undone. {% endcomment %}<div class="stack stack--tight component component--object_history">
+  <h3 class="title-4">{% if d.scope == 'item' %}History{% else %}Changes{% endif %}</h3>
+  {% if d.rows %}<ol class="timeline">
+  {% for r in d.rows %}<li class="timeline__row">
+      <span class="status-mark status-mark--{% if r.flag == 'added' %}added{% elif r.flag == 'deleted' %}danger{% else %}success{% endif %}" aria-hidden="true">{% if r.flag == 'added' %}+{% elif r.flag == 'deleted' %}×{% else %}✓{% endif %}</span>
+      <div class="grow">
+        <div><strong>{{ r.title }}</strong></div>
+        <div class="small muted">{{ r.who }} · <time datetime="{{ r.iso }}">{{ r.when }}</time>{% if r.via %} · {{ r.via }}{% endif %}</div>
+        {% if r.changes %}<ul class="timeline__changes small">{% for c in r.changes %}<li><span class="strong">{{ c.field }}</span>: <span class="diff-old">{{ c.old }}</span> → <span class="diff-new">{{ c.new }}</span></li>{% endfor %}{% if r.more %}<li class="muted">+{{ r.more }} more</li>{% endif %}</ul>
+        {% elif r.message %}<div class="small">{{ r.message }}</div>{% endif %}
+      </div>
+      {% if r.undo_url %}<form method="post" action="{{ r.undo_url }}"{% if surface == 'chat' %} data-component-form{% endif %}>{% csrf_token %}<button class="button button--outline button--small">{% icon "undo" %} Undo</button></form>{% endif %}
+    </li>
+  {% endfor %}</ol>
+  {% else %}<p class="small muted">No changes recorded yet.{% if d.scope == 'event' %} Everything you or Ask Attnd changes from now on shows here.{% endif %}</p>{% endif %}
+</div>

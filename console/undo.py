@@ -60,6 +60,7 @@ class Recorder:
         self.user = user
         self.ops = {}  # (model, pk) -> {'op', 'before', 'related'}
         self.unsupported = False
+        self.deleted_events = []  # serialized events deleted in this request (History only: not undoable)
 
     def key(self, obj):
         return (_label(obj), str(obj.pk))
@@ -116,7 +117,8 @@ def _pre_delete(sender, instance, **kwargs):
     if rec is None:
         return
     if _label(instance) == 'events.event':
-        rec.unsupported = True  # deleting a whole event isn't undoable
+        rec.unsupported = True  # deleting a whole event isn't undoable (History still records it)
+        rec.deleted_events.append(serialize(instance))
         return
     if _label(instance) not in TRACKED:
         return
@@ -160,11 +162,25 @@ def _event_id(model, pk, fields):
     return (fields or {}).get('event')
 
 
-def finalize(rec, label, reverses=None):
-    """The UndoEntry for what the recorder saw (None when nothing undoable changed)."""
-    from console.models import UndoEntry
-    if rec is None or rec.unsupported or not rec.ops or not getattr(rec.user, 'is_authenticated', False):
+def finalize(rec, label, reverses=None, via=''):
+    """The UndoEntry for what the recorder saw (None when nothing undoable changed). Everything it saw also goes into
+    the history of everything (console/history.py: a LogEntry per row, with the same operations), undoable or not."""
+    from console import history
+    from console.models import HistoryRecord
+    if rec is None or not getattr(rec.user, 'is_authenticated', False) or not (rec.ops or rec.deleted_events):
         return None
+    operations = _operations(rec)
+    via = HistoryRecord.VIA_UNDO if reverses is not None else via
+    entry = None
+    if not rec.unsupported and operations and len(operations) <= MAX_OPERATIONS:
+        entry = _undo_entry(rec, operations, label, reverses)
+    deleted = [{'model': 'events.event', 'pk': row['pk'], 'op': 'delete', 'before': row, 'event': row['pk']}
+               for row in rec.deleted_events]
+    history.record(rec.user, operations + deleted, entry, via)
+    return entry
+
+
+def _operations(rec):
     operations = []
     for (model, pk), op in rec.ops.items():
         cls = apps.get_model(model)
@@ -188,8 +204,11 @@ def finalize(rec, label, reverses=None):
             out['related'] = op.get('related') or {}
             out['event'] = _event_id(model, pk, op['before']['fields'])
         operations.append(out)
-    if not operations or len(operations) > MAX_OPERATIONS:
-        return None
+    return operations
+
+
+def _undo_entry(rec, operations, label, reverses):
+    from console.models import UndoEntry
     event_id = next((o['event'] for o in operations if o.get('event')), None)
     from events.models import Event
     if event_id and not Event.objects.filter(pk=event_id).exists():
@@ -372,6 +391,16 @@ def _label_from_messages(request):
     return ''
 
 
+def _via(request):
+    from agent.context import current
+    from console.models import HistoryRecord
+    if current() is not None:
+        return HistoryRecord.VIA_AGENT  # Ask Attnd's internal request (also a confirmed chat button)
+    if request.headers.get('X-Attnd-Component'):
+        return HistoryRecord.VIA_CHAT  # a form or button in a chat card, posted by the browser
+    return HistoryRecord.VIA_CONSOLE
+
+
 class UndoMiddleware:
     """Records each console POST's changes (console/undo.py) and offers Undo for them."""
 
@@ -384,10 +413,10 @@ class UndoMiddleware:
             return self.get_response(request)
         with recording(request.user) as rec:
             response = self.get_response(request)
-        if not rec.ops or response.status_code >= 400:
+        if not (rec.ops or rec.deleted_events) or response.status_code >= 400:
             return response
         try:
-            entry = finalize(rec, _label_from_messages(request))
+            entry = finalize(rec, _label_from_messages(request), via=_via(request))
         except Exception:  # never let bookkeeping break a save that worked
             logger.exception('Recording undo failed')
             return response

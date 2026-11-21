@@ -10,5 +10,6 @@
   {% component "schedule_item_form" event=event item=item form=form part="form" %}
 </div>
 {% component "schedule_item_form" event=event item=item form=form part="actions" %}
+{% if item.pk %}<div class="panel">{% component "object_history" event=event item=item %}</div>{% endif %}
 </div>
 {% endblock %}

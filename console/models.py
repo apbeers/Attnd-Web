@@ -111,3 +111,22 @@ class UndoEntry(models.Model):
 
     def __str__(self):
         return f'Undo {self.pk}: {self.label[:60]}'
+
+
+class HistoryRecord(models.Model):
+    """What Attnd adds to one `django.contrib.admin.models.LogEntry` (the history of everything, the Django way;
+    console/history.py): the event it belongs to (also after the row is deleted), how it was made (console, Ask Attnd,
+    a chat card, an undo), the values before → after where the Undo capture had them, and the UndoEntry that can still
+    reverse it. The LogEntry itself is the record (the admin's History pages show it)."""
+    VIA_CONSOLE, VIA_AGENT, VIA_CHAT, VIA_UNDO = '', 'ask_attnd', 'chat', 'undo'
+    VIA_CHOICES = [(VIA_CONSOLE, 'Console'), (VIA_AGENT, 'Ask Attnd'), (VIA_CHAT, 'Ask Attnd chat card'),
+                   (VIA_UNDO, 'Undo')]
+
+    log_entry = models.OneToOneField('admin.LogEntry', on_delete=models.CASCADE, related_name='attnd')
+    event_id = models.IntegerField(null=True, blank=True, db_index=True)  # kept when the event or row is deleted
+    via = models.CharField(max_length=16, blank=True, choices=VIA_CHOICES)
+    values = models.JSONField(default=dict, blank=True)  # {field: [before, after]} (text trimmed)
+    undo = models.ForeignKey('UndoEntry', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def __str__(self):
+        return f'History {self.log_entry_id} ({self.via or "console"})'

@@ -103,7 +103,9 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   `event_tile` (Your events; tap → `event_overview`), `event_header` (every event page's header; base.html),
   `event_stats` (timing, numbers, most liked), `live_on_phone`, `needs_review`, `event_overview` (a composite of those
   four), `location_row` / `location_form`, `schedule_item_row` / `schedule_item_form`, `notification_row` /
-  `notification_form`. The **generic form component** (`form_json` + `_form.html`, `_form_rows.html`, `_field.html`,
+  `notification_form`, `event_form` (an event's details), `event_new_form` (no ids: the AI import as a background
+  task, or an empty draft) and `object_history` (an event's or one item's history, see History). The **generic form
+  component** (`form_json` + `_form.html`, `_form_rows.html`, `_field.html`,
   `_widget.html`) turns a bound Django form into JSON (fields, labels, help, values, choices, errors, required, the
   widget's exact attributes, a layout of rows) and draws it with the same names and ids as Django, so the agent's
   prefill and `maps.js` see the same form; the location map picker and address autocomplete stay page-only (the page's
@@ -112,7 +114,23 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   `parts` registered components (`console/tests_components.py`); bespoke screens (Studio editor, diagnostics, the AI
   review, prospects, history, usage, team) stay plain pages and are not shown in the chat. With the header
   `X-Attnd-Component: <name>` a page POST whose form has errors answers with just that component's chat rendering
-  (`console.middleware.ComponentFragmentMiddleware`).
+  (`console.middleware.ComponentFragmentMiddleware`). `form_json` output may carry `hidden` (extra hidden inputs) and
+  `background` (the form submits as a background task, `data-background`, instead of a chat form).
+- **History of everything, the Django way** (`console/history.py`, owner Nov 21, 2026): every create / update /
+  delete the Undo capture sees (console POSTs, Ask Attnd's internal requests, the chat's cards, undos; Event,
+  Location, ScheduledItem, Notification, EventMember, EventInvite; also whole-event deletions, which Undo can't
+  reverse) becomes a `django.contrib.admin.models.LogEntry` (ADDITION / CHANGE / DELETION, `change_message` in
+  Django's JSON format with the changed fields' verbose names; deletions have none, like the admin), attributed to the
+  signed-in person. `undo.finalize` writes them from the same operations as the UndoEntry, so both stay in sync. A
+  `console.HistoryRecord` next to each LogEntry keeps `event_id` (also after the row or event is gone), `via` (console
+  / `ask_attnd` / `chat` / `undo`), the values before → after (text trimmed, long JSON fields only named) and the
+  UndoEntry. The admin's History pages (EventAdmin, LocationAdmin, ScheduledItemAdmin, NotificationAdmin, and the new
+  EventMemberAdmin / EventInviteAdmin; `object_history_template = admin/attnd_object_history.html`) show Django's
+  message plus "(Ask Attnd)" and old → new. The console's event **History** page starts with the `object_history`
+  timeline (who, when, how, field old → new, **Undo** while possible) above the `EventRevision` snapshots (rollback,
+  unchanged); location and schedule item pages and their details on the full-screen canvas show the item's own
+  history. Not recorded: `QuerySet.update()` writes (drag-to-reorder) and background jobs outside a request (website
+  watching). Tests: `console/tests_history.py`.
 - **Undo for every change** (`console/undo.py`, owner Nov 21, 2026): per change, never a whole-event rollback.
   `UndoMiddleware` (after MessageMiddleware) wraps every console POST (also Ask Attnd's internal requests and the
   chat's component forms; not `/console/undo/` or `/console/agent/`) in a `Recorder` (context variable) that the
@@ -145,7 +163,7 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   only side padding (`--gutter`); long text and forms keep `--read-width` (46rem: `.prose`, `.field`, paragraphs in
   panels and stacks; fields in grids and clusters are free). Phones: the event sections are one scrolling row of pills.
 - **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs` (links use `aria-current="page"`), `data-table` (`--compact`), `code-block` (pre), `link-button`, `meter`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
-- **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. Web app manifest at `/console/manifest.webmanifest`.
+- **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. The tray is a button (`aria-expanded`) that opens a panel of running and recent tasks; each task expands to its **friendly steps** (`IngestJob.steps`, written by `scrape.jobs.Steps`: "Read 3 web pages", "Understood the event", "Found 12 locations and 34 schedule items", "Checked addresses on the map", "Found 4 changes: waiting for your review"; states running / done / failed / waiting, with status marks and a spinner), updated live from the same feed (`task_json.steps`, `result_label`); a finished task links to its result ("Open the event" / "Review the changes"). On the full-screen chat the tray sits at the canvas's top-right (away from the composer) and opens downward, and result links open on the canvas (`window.attndCanvasOpen`); Esc closes it. Web app manifest at `/console/manifest.webmanifest`.
 - **Likes** (API-009 hearts; the apps say "like", the heart icon stays): net likes (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted` (code and metric names keep "heart"; labels say "likes" / "liked"): Usage page, counts on the Locations and Schedule lists, "Most liked" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
 - **Google Maps** (`console/static/console/maps.js`) when `GOOGLE_MAPS_BROWSER_KEY` is set: Places autocomplete on addresses, draggable pin map; otherwise the OpenStreetMap picker.
@@ -339,6 +357,14 @@ on Save does; there is no second copy of any business logic.
   animate between them, none with `prefers-reduced-motion`. Always-ask buttons work before anything was asked: with
   no run, `components/act` starts a quiet one (`BUTTONS_GOAL`, status done, no model call; `run_json.buttons`, its
   goal isn't drawn as a message) to hold the confirmation.
+  **Everything in full screen** (owner, Nov 21, 2026): the Events tab (every event, toolbar **New event** → the
+  `event_new_form` in the overlay: the AI import runs as a background task with its steps in the tray, an empty event
+  opens full screen for it); Overview (the overview with publish / unpublish behind the confirm and the live-on-your-
+  phone QR; toolbar **Edit details** → `event_form`, **History** → `object_history`); Locations and Schedule (add,
+  edit with the item's history under the form, hide / show, delete with confirm, reorder locations); Updates
+  (compose, schedule, send with confirm, send now / delete scheduled ones). Tapping another event's tile opens full
+  screen for that event; links in cards, the top bar's Your events / New event and the task tray's results stay on the
+  canvas. Bespoke screens (Studio, the AI review, diagnostics, prospects, the map pin picker) still open as pages.
 - **Rows that open for editing** (`location_row`, `schedule_item_row`, pages and chat alike): the whole row is the
   tap target (the title link stretches over it, `row-link__target::after`; buttons and the drag handle sit above), a
   chevron with "Edit" on hover/focus (always on touch), hover / focus / pressed states, and an accessible name ("Edit

@@ -212,6 +212,7 @@
 .canvas__section + .canvas__section { margin-top: var(--space-5); }
 /* (the compose form gets a soft card on the canvas) */
 .canvas [data-section=notification_form] .agent__card { padding: var(--space-4) var(--space-5); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.canvas [data-section=event_overview] .canvas__cards, .canvas__level .canvas__cards { grid-template-columns: 1fr; }
 .canvas__heading { margin: 0 0 var(--space-2); }
 .canvas__none { padding: var(--space-5) 0; text-align: center; }
 .canvas [data-sortable] > .agent__card.dragging { opacity: .4; }

@@ -154,6 +154,7 @@
     const buttonsByTask = {};   // task id -> the button that started it
     let lastTasks = [];
     let fallbackTimer = null;
+    const expanded = new Set();  // task ids whose steps are open
     const seenDone = new Set(JSON.parse(sessionStorage.getItem('attnd.tasksSeen') || '[]'));
 
     const escapeHtml = (text) => String(text || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -167,14 +168,26 @@
       toggle.querySelector('.task-count').textContent = active.length
         ? `${active.length} running` : `${tasks.length} finished`;
       toggle.classList.toggle('is-active', active.length > 0);
+      // Each task opens to its friendly steps ("Reading 3 web pages", "Found 12 locations…", "Waiting for your
+      // review"), updated live by the same feed; a finished one links to its result.
       list.innerHTML = tasks.map((t) => {
         const running = t.status === 'queued' || t.status === 'running';
         const status = running ? `<span class="spinner"></span>${escapeHtml(t.progress || 'Working…')}`
           : t.status === 'failed' ? `<span class="tone-danger">${escapeHtml(t.error || 'Failed')}</span>`
           : escapeHtml(t.summary || 'Done');
-        const link = !running && t.url ? `<a href="${escapeHtml(t.url)}">Open</a>` : '';
-        return `<li class="task-item task-${t.status}"><div class="task-title">${escapeHtml(t.title)}</div>
-                <div class="task-status">${status} ${link}</div></li>`;
+        const open = expanded.has(t.id);
+        const steps = (t.steps || []).map((st) => {
+          const mark = st.state === 'running' ? '<span class="spinner" aria-hidden="true"></span>'
+            : `<span class="status-mark status-mark--${{ done: 'success', failed: 'danger', waiting: 'warning' }[st.state] || 'info'}" aria-hidden="true">${{ done: '✓', failed: '×', waiting: '!' }[st.state] || '•'}</span>`;
+          return `<li class="task-step task-step--${escapeHtml(st.state)}">${mark}<span>${escapeHtml(st.text)}</span></li>`;
+        }).join('');
+        const link = !running && t.url ? `<a class="button button--outline button--small task-result" href="${escapeHtml(t.url)}">${escapeHtml(t.result_label || 'Open')}</a>` : '';
+        return `<li class="task-item task-${t.status}${open ? ' is-open' : ''}">
+          <button type="button" class="task-head" aria-expanded="${open}" aria-controls="task-steps-${escapeHtml(t.id)}" data-task="${escapeHtml(t.id)}">
+            <span class="task-title">${escapeHtml(t.title)}</span><span class="task-status">${status}</span>
+            <span class="task-chevron" aria-hidden="true">›</span></button>
+          <div class="task-body" id="task-steps-${escapeHtml(t.id)}"${open ? '' : ' hidden'}>
+            ${steps ? `<ol class="task-steps">${steps}</ol>` : ''}${link}</div></li>`;
       }).join('');
       tasks.forEach((t) => {
         const button = buttonsByTask[t.id];
@@ -203,7 +216,11 @@
       const el = document.createElement('div');
       el.className = 'task-toast' + (t.status === 'failed' ? ' is-failed' : '');
       el.innerHTML = `<strong>${escapeHtml(t.title)}</strong><div>${escapeHtml(t.status === 'failed' ? t.error : t.summary)}</div>
-        ${t.url ? `<a href="${escapeHtml(t.url)}">Open</a>` : ''}`;
+        ${t.url ? `<a href="${escapeHtml(t.url)}">${escapeHtml(t.result_label || 'Open')}</a>` : ''}`;
+      el.addEventListener('click', (e) => {
+        const link = e.target.closest('a[href]');
+        if (link && window.attndCanvasOpen && window.attndCanvasOpen(link.getAttribute('href'), link)) { e.preventDefault(); el.remove(); }
+      });
       document.body.appendChild(el);
       setTimeout(() => el.classList.add('is-leaving'), 7000);
       setTimeout(() => el.remove(), 7600);
@@ -242,7 +259,42 @@
         if (e.data && e.data.type === 'tasks') render(e.data.tasks);
       });
     }
-    tray.querySelector('.task-toggle').addEventListener('click', () => tray.classList.toggle('is-open'));
+    const toggle = tray.querySelector('.task-toggle');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-controls', 'task-panel');
+    tray.querySelector('.task-panel').id = 'task-panel';
+    toggle.addEventListener('click', () => {
+      const open = tray.classList.toggle('is-open');
+      toggle.setAttribute('aria-expanded', String(open));
+      if (open) {  // the newest task opens to its steps
+        if (!expanded.size && lastTasks[0]) expanded.add(lastTasks[0].id);
+        render(lastTasks);
+        watch();
+      }
+    });
+    tray.addEventListener('click', (e) => {
+      const head = e.target.closest('[data-task]');
+      if (head) {
+        const id = head.dataset.task;
+        if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
+        render(lastTasks);
+        return;
+      }
+      // Full-screen Ask Attnd: a task's result opens on its canvas instead of leaving the chat.
+      const link = e.target.closest('a[href]');
+      if (link && window.attndCanvasOpen && window.attndCanvasOpen(link.getAttribute('href'), link)) {
+        e.preventDefault();
+        tray.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && tray.classList.contains('is-open')) {
+        tray.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.focus();
+      }
+    });
     poll().then(() => { if (lastTasks.some((t) => t.status === 'queued' || t.status === 'running')) watch(); });
 
     document.addEventListener('submit', async (e) => {

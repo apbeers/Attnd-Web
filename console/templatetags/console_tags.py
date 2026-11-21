@@ -167,3 +167,10 @@ def tag_id(extra_tags, prefix):
         if tag.startswith(prefix + '-') and tag[len(prefix) + 1:].isdigit():
             return int(tag[len(prefix) + 1:])
     return ''
+
+
+@register.filter
+def history_message(entry):
+    """A LogEntry's message for the admin's History page (console/history.py)."""
+    from console.history import admin_message
+    return admin_message(entry)

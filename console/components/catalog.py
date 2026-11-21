@@ -498,3 +498,85 @@ def notification_form(user, event_id=None, event=None, form=None):
         'urgent_left': push.urgent_sends_left(event), 'form': data,
         'actions': [{'name': 'send_notification'}],
     }
+
+
+# ---------------------------------------------------------------------------
+# History (console/history.py: LogEntry, the Django way)
+# ---------------------------------------------------------------------------
+
+HISTORY_MODELS = (('location_id', 'events.location'), ('item_id', 'events.scheduleditem'),
+                  ('notification_id', 'events.notification'))
+
+
+@component('object_history', 'History', "Who changed what and when: an event's history (every location, schedule "
+           'item, update and team change), or one location / schedule item / update with its id; field old → new, '
+           'Undo while a change can still be undone.', ids=('event_id',),
+           optional_ids=('location_id', 'item_id', 'notification_id'),
+           page=lambda ids: reverse('console:history', args=[ids['event_id']]))
+def object_history(user, event_id=None, location_id=None, item_id=None, notification_id=None, event=None,
+                   location=None, item=None, notification=None, limit=None):
+    from console import history
+    event = editable_event(user, event_id, event)
+    location_id = location_id or getattr(location, 'pk', None)
+    item_id = item_id or getattr(item, 'pk', None)
+    notification_id = notification_id or getattr(notification, 'pk', None)
+    model, object_id = None, None
+    for key, label in HISTORY_MODELS:
+        value = {'location_id': location_id, 'item_id': item_id, 'notification_id': notification_id}[key]
+        if value:
+            model, object_id = label, value
+            break
+    with timezone.override(_tz(event)):
+        rows = history.timeline(event.pk, user, model=model, object_id=object_id, limit=limit or (12 if model else 50))
+    for r in rows:
+        r['undo_url'] = reverse('console:undo', args=[r['undo_id']]) if r['undo_id'] else ''
+    return {'event_id': event.pk, 'scope': 'item' if model else 'event', 'rows': rows,
+            'url': reverse('console:history', args=[event.pk])}
+
+
+# ---------------------------------------------------------------------------
+# Event details and new events (the full-screen chat manages everything without leaving it)
+# ---------------------------------------------------------------------------
+
+@component('event_form', 'Event details', "Edit an event's details: name, description, start, end, time zone, "
+           'address and map position, flyer, accent colour, logo, details for the assistant.',
+           page=lambda ids: reverse('console:event_edit', args=[ids['event_id']]))
+def event_form(user, event_id=None, event=None, form=None):
+    from console.forms.event_forms import EventForm
+    event = editable_event(user, event_id, event)
+    with timezone.override(_tz(event)):
+        form = form or EventForm(instance=event)
+        locked = list(event.locked_fields or [])
+        layout = ['name', 'description', ('grid', 'start_time', 'end_time'), 'timezone',
+                  ('note', f'Times are in the event’s time zone ({event.timezone}).', 'info'), 'address',
+                  ('grid', 'latitude', 'longitude'), 'flyer', ('split', 'logo_url', 'accent_color'),
+                  _context_details(form, locked)]
+        data = form_json(form, layout, action=reverse('console:event_edit', args=[event.pk]),
+                         submit=[{'label': 'Save', 'style': 'primary'}], locked=locked)
+    return {'id': event.pk, 'name': event.name, 'title': f'{event.name}: details', 'form': data}
+
+
+def _new_event_forms(user):
+    from console.forms.event_forms import AIImportForm, BlankEventForm
+    from studio.access import is_staff
+    ai = form_json(AIImportForm(prefix='ai'), ['urls', 'text', 'upload', 'instructions'],
+                   action=reverse('console:event_new'),
+                   submit=[{'label': 'Create with AI', 'style': 'primary', 'icon': 'stars'}])
+    ai['hidden'] = {'mode': 'ai'}
+    ai['background'] = 'Reading your event…'  # runs as a background task (the tray shows its steps)
+    if is_staff(user):
+        ai['hidden'].update({'studio_import_shown': '1', 'studio_import': '1'})
+    with timezone.override('America/Chicago'):
+        blank = form_json(BlankEventForm(prefix='blank'), ['name', ('grid', 'start_time', 'timezone'), 'address'],
+                          action=reverse('console:event_new'), submit=[{'label': 'Create empty event',
+                                                                        'style': 'outline'}])
+    blank['hidden'] = {'mode': 'blank'}
+    return ai, blank
+
+
+@component('event_new_form', 'New event', 'Create an event: from its website(s), pasted text or a flyer with the AI '
+           'import (runs in the background, the task tray shows each step), or an empty draft.', ids=(),
+           page=lambda ids: reverse('console:event_new'))
+def event_new_form(user):
+    ai, blank = _new_event_forms(user)
+    return {'title': 'New event', 'ai': ai, 'blank': blank}
