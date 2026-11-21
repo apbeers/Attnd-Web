@@ -132,6 +132,28 @@ def _pre_delete(sender, instance, **kwargs):
     rec.ops[key] = {'op': 'delete', 'before': before, 'related': related}
 
 
+def same(a, b):
+    """Equal values, treating numbers written with a different scale ("-97.3320272" / "-97.33202720000") as equal."""
+    if a == b:
+        return True
+    if isinstance(a, (str, int, float)) and isinstance(b, (str, int, float)) and not isinstance(a, bool):
+        from decimal import Decimal, InvalidOperation
+        try:
+            return Decimal(str(a)) == Decimal(str(b))
+        except (InvalidOperation, ValueError):
+            return False
+    return False
+
+
+def _numeric(value):
+    from decimal import Decimal, InvalidOperation
+    try:
+        Decimal(str(value))
+        return True
+    except (InvalidOperation, ValueError):
+        return False
+
+
 def _event_id(model, pk, fields):
     if model == 'events.event':
         return int(pk)
@@ -154,7 +176,7 @@ def finalize(rec, label, reverses=None):
             after = serialize(obj)['fields']
             if op['op'] == 'update':
                 before = op['before']['fields']
-                changed = [f for f, v in after.items() if f not in BOOKKEEPING and before.get(f) != v]
+                changed = [f for f, v in after.items() if f not in BOOKKEEPING and not same(before.get(f), v)]
                 if not changed:
                     continue
             else:
@@ -238,7 +260,7 @@ def _check(entry, op, user):
                 return None  # already gone
             raise CannotUndo(f'{_cap(name)} was deleted since, so this can’t be undone.')
         now = serialize(current)['fields']
-        moved = [f for f in op['fields'] if now.get(f) != op['after'].get(f)]
+        moved = [f for f in op['fields'] if not same(now.get(f), op['after'].get(f))]
         if moved:
             who = _newer_by(entry, op['model'], op['pk'], user)
             what = ', '.join(cls._meta.get_field(f).verbose_name for f in moved[:3])
@@ -272,7 +294,7 @@ def undo(entry, user):
             for op, current in zip(ops, currents):
                 cls = apps.get_model(op['model'])
                 before = op.get('before')
-                name = _name(op['model'], op.get('after') or (before or {}).get('fields'))
+                name = _name(op['model'], (before or {}).get('fields') or op.get('after'))
                 if op['op'] == 'create':
                     if current is not None:
                         current.delete()
@@ -285,8 +307,10 @@ def undo(entry, user):
                         setattr(current, field.attname, getattr(old, field.attname))
                         names.append(fname)
                     current.save(update_fields=names)
-                    shown = [f'{cls._meta.get_field(f).verbose_name} “{str(before["fields"].get(f))[:40]}”'
-                             for f in names if not isinstance(before['fields'].get(f), (dict, list))][:2]
+                    texts = [f for f in names if isinstance(before['fields'].get(f), str) and not same(before['fields'][f], 0)
+                             and not _numeric(before['fields'][f])]
+                    texts.sort(key=lambda f: f not in ('name', 'title'))
+                    shown = [f'{cls._meta.get_field(f).verbose_name} “{before["fields"][f][:40]}”' for f in texts][:2]
                     said.append(f'{name}: ' + (', '.join(shown) if shown else 'restored') + ' again')
                 else:
                     obj = deserialize(before)
