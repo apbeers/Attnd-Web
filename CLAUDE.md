@@ -569,6 +569,14 @@ payload → the plain join page; unknown event → the join 404; opens count as 
 
 Link origin (`attnd/links.py`, Nov 20, 2026): join and shared-plan links (QR codes, posters, `join_url` in the API, share pages) are `https://attnd.app/...`, except on the dev server (`SITE_URL` https://dev.attnd.app), which makes `https://dev.attnd.app/...` links so a dev event opened in a browser reaches the dev server instead of production's 404. iOS lists both domains as associated domains; Android App Links are verified for attnd.app only, so dev links open in the browser on Android.
 
+**Open in Attnd** (Nov 21, 2026): on phones the console's QR card (`live_on_phone`, page and chat) shows an **Open in
+Attnd** button (people can't scan their own screen); the code and QR stay as they are. `attnd.links.open_in_app_links`:
+iPhone → `attnd://join/<code>` (iOS doesn't open a Universal Link to the domain Safari is showing; the iOS app, not the
+App Clip, registers the scheme) and, if the page is still visible ~1.5 s later (`visibilitychange`), the join page
+(App Store / App Clip); Android → Chrome's `intent://<host>/join/<code>/#Intent;scheme=https;package=<ANDROID_PACKAGE_NAME>;S.browser_fallback_url=<join link>;end`.
+`console.js` picks the platform from the User-Agent (`data-open-app`, `window.attndOpenApp` for chat cards); desktop
+shows no button.
+
 Well-known files served from `join/views.py`:
 - `/.well-known/apple-app-site-association` — iOS Universal Links + App Clips (`/join/*` and `/p/*`, QR images excluded)
 - `/.well-known/assetlinks.json` — Android App Links (domain-wide; the app's intent filter picks `/join/` and `/p/`)

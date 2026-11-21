@@ -41,6 +41,37 @@
   document.addEventListener('change', e => { if (e.target.form) showIf(e.target.form); });
   showIf();
 
+  // "Open in Attnd" on the QR card (<a data-open-app>): phones only, since people can't scan their own screen.
+  // iPhone: the app's own scheme (attnd://join/<code>; Safari won't open a Universal Link to the domain it shows),
+  // and if the page is still visible ~1.5 s later the app isn't installed: the join page (App Store / App Clip).
+  // Android: Chrome's intent:// URL with the join link as its fallback. Desktop: hidden.
+  const ua = navigator.userAgent || '';
+  const phoneOs = /Android/i.test(ua) ? 'android'
+    : (/iPhone|iPod|iPad/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) ? 'ios' : '';
+  function showOpenApp(scope) {
+    if (!phoneOs) return;
+    (scope || document).querySelectorAll('[data-open-app]').forEach((a) => {
+      a.href = a.dataset[phoneOs] || a.dataset.fallback;
+      a.hidden = false;
+    });
+  }
+  window.attndOpenApp = showOpenApp;
+  showOpenApp();
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-open-app]');
+    if (!a || phoneOs !== 'ios') return;
+    e.preventDefault();
+    let left = false;
+    const away = () => { if (document.visibilityState === 'hidden') left = true; };
+    document.addEventListener('visibilitychange', away);
+    window.addEventListener('pagehide', away, { once: true });
+    window.location.href = a.dataset.ios;
+    setTimeout(() => {
+      document.removeEventListener('visibilitychange', away);
+      if (!left && document.visibilityState === 'visible') window.location.href = a.dataset.fallback;
+    }, 1500);
+  });
+
   // Tabs: <div data-tabs> holds <button data-tab-target="#panel"> buttons. Clicking one selects it
   // (aria-selected) and shows its panel; the other buttons' panels get [hidden].
   document.addEventListener('click', e => {

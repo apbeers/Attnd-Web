@@ -582,6 +582,7 @@
     card.querySelector('.agent__card-body')?.remove();
     card.prepend(body);
     window.attndShowIf?.(body);
+    window.attndOpenApp?.(body);
   }
 
   function makeCard(item) {

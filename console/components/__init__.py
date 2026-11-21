@@ -204,7 +204,7 @@ def render(name, data, request=None, surface='page', part=None, uid=''):
 # What the model gets: the component's JSON, trimmed to useful fields (never HTML)
 # ---------------------------------------------------------------------------
 
-DROP_KEYS = {'url', 'qr_url', 'qr_download_url', 'poster_url', 'image_url', 'review_url', 'usage_url', 'action',
+DROP_KEYS = {'url', 'open_app', 'qr_url', 'qr_download_url', 'poster_url', 'image_url', 'review_url', 'usage_url', 'action',
              'multipart', 'layout', 'attrs', 'id_attr'}
 
 

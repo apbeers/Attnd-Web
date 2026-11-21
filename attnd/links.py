@@ -30,6 +30,27 @@ def join_url(event_or_code) -> str:
     return f'{app_link_origin()}/join/{code}/'
 
 
+def open_in_app_links(event_or_code) -> dict:
+    """The "Open in Attnd" button on a phone (the console's QR card: people can't scan their own screen).
+
+    A plain https join link won't do: iOS doesn't open a Universal Link when you tap a link to the domain Safari is
+    showing (dev.attnd.app → dev.attnd.app/join/…), so iPhones get the app's own scheme `attnd://join/<code>` (the
+    app, not the App Clip, registers it; the page falls back to the join link after ~1.5 s if the app didn't open).
+    Android gets Chrome's intent URL for the join link with the app's package and the join link as the browser
+    fallback (`intent://<host>/join/<code>/#Intent;scheme=https;package=…;S.browser_fallback_url=…;end`)."""
+    from urllib.parse import quote
+    code = getattr(event_or_code, 'event_code', event_or_code)
+    fallback = join_url(code)
+    host = urlsplit(fallback).netloc
+    package = getattr(settings, 'ANDROID_PACKAGE_NAME', '') or 'com.arcu.attnd'
+    return {
+        'ios': f'attnd://join/{quote(code, safe="")}',
+        'android': (f'intent://{host}/join/{quote(code, safe="")}/#Intent;scheme=https;package={package};'
+                    f'S.browser_fallback_url={quote(fallback, safe="")};end'),
+        'fallback': fallback,
+    }
+
+
 def shared_plan_url(event_code: str, payload: str) -> str:
     """API-015 shared plan link `https://attnd.app/p/<code>/<payload>` (no trailing slash, as the apps write it)."""
     return f'{app_link_origin()}/p/{event_code}/{payload.strip().rstrip("=")}'

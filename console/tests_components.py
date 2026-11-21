@@ -127,6 +127,29 @@ class RegistryTests(ComponentTestCase):
         self.assertIn('@container component (max-width: 34rem)', css)
         self.assertNotIn('.schedule-time { width: 6.5rem', css)
 
+    def test_the_qr_card_opens_the_app_on_a_phone(self):
+        from urllib.parse import unquote
+        from attnd.links import open_in_app_links
+        links = open_in_app_links('IFICCK70')
+        self.assertEqual(links['ios'], 'attnd://join/IFICCK70')  # Safari won't open a Universal Link to its own domain
+        self.assertTrue(links['android'].startswith('intent://attnd.app/join/IFICCK70/#Intent;scheme=https;'
+                                                    'package=com.arcu.attnd;S.browser_fallback_url='))
+        self.assertTrue(links['android'].endswith(';end'))
+        self.assertIn(unquote(links['android'].split('S.browser_fallback_url=')[1][:-4]), links['fallback'])
+        self.assertEqual(links['fallback'], 'https://attnd.app/join/IFICCK70/')
+        with override_settings(SITE_URL='https://dev.attnd.app'):
+            self.assertTrue(open_in_app_links('X')['android'].startswith('intent://dev.attnd.app/join/X/'))
+        data = C.load(self.owner, 'live_on_phone', self.ids['live_on_phone'])
+        for surface in ('page', 'chat'):
+            html = C.render('live_on_phone', data, self.request(), surface=surface)
+            self.assertIn('data-open-app', html)
+            self.assertIn('data-ios="attnd://join/PRAIRIE"', html)
+            self.assertIn('hidden>', html)  # shown only on phones (console.js)
+        self.assertNotIn('attnd://', C.model_json(data))
+        js = open('console/static/console/console.js').read()
+        self.assertIn("visibilitychange", js)
+        self.assertIn('1500', js)
+
     def test_no_coloured_left_border_accents(self):
         # Owner, Nov 21, 2026: no rounded boxes with a coloured left border; status is a small leading mark.
         import re

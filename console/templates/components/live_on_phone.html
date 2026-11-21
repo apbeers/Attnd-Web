@@ -11,6 +11,9 @@
   {% if d.draft %}<p class="small tone-warning">Drafts can only be opened by your team. Publish to let attendees join.</p>{% endif %}
 </div>{% endpartialdef %}
 <div class="stack stack--tight component component--live_on_phone">{% partial panel %}
+      {# Phones only (console.js shows it for iPhone / Android): people can't scan their own screen. #}
+      <a class="button button--primary button--block open-in-app" href="{{ d.open_app.fallback }}" data-open-app
+         data-ios="{{ d.open_app.ios }}" data-android="{{ d.open_app.android }}" data-fallback="{{ d.open_app.fallback }}" hidden>{% icon "phone" %} Open in Attnd</a>
       <div class="cluster cluster--center">
         <a class="button button--secondary button--small" href="{{ d.qr_download_url }}">{% icon "download" %} QR</a>
         <a class="button button--secondary button--small" href="{{ d.poster_url }}" target="_blank">{% icon "printer" %} Poster</a>
