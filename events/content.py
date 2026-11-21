@@ -66,7 +66,8 @@ def _abs(request, url):
 # Phone-sized images (v2 only): Cloudinary delivers a resized, recompressed copy in the best format the app
 # accepts (f_auto: WebP/AVIF/JPEG), so the apps download a fraction of an organizer's original photo.
 # Deterministic, so the URL stays the same for the same image (the apps cache images by URL).
-APP_IMAGE_WIDTH = {'location': 1200, 'logo': 512, 'flyer': 2000}
+APP_IMAGE_WIDTH = {'location': 1200, 'logo': 512, 'flyer': 2000,
+                   'thumb': 96, 'preview': 192, 'flyer_preview': 800}  # the last three: console (stage H)
 _CLOUDINARY_UPLOAD = re.compile(r'^(https?://res\.cloudinary\.com/[^/]+/image/upload/)(.+)$')
 _RASTER = ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.avif', '.bmp', '.tif', '.tiff')
 _TRANSFORM_SEGMENT = re.compile(r'^[a-z]{1,3}_[^/]*$')  # e.g. w_800,c_fill (already transformed: leave it)

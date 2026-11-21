@@ -8,6 +8,7 @@ the templates in console/templates/components/ draw only from it.
 import json
 from datetime import timedelta
 
+from django.contrib.humanize.templatetags.humanize import naturaltime
 from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.http import Http404
@@ -15,9 +16,10 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import dateformat, timezone
 from django.utils.text import Truncator
-from django.utils.timesince import timesince, timeuntil
+from django.utils.timesince import timeuntil
 
 from console.components import component, form_json
+from events.content import app_image_url
 
 DRAFT_TITLE = "Only your team can see it; attendees can't join yet"
 
@@ -184,7 +186,7 @@ def event_stats(user, event_id=None, event=None):
             when = {'state': 'upcoming', 'label': f'Starts in {timeuntil(event.start_time)}',
                     'detail': fmt(event.start_time, 'D M j, g:i A')}
         else:
-            when = {'state': 'ended', 'label': f'Ended {timesince(event.effective_end)} ago', 'detail': ''}
+            when = {'state': 'ended', 'label': f'Ended {naturaltime(event.effective_end)}', 'detail': ''}
         liked = []
         for row in most_hearted(event):
             obj = row['obj']
@@ -302,7 +304,7 @@ def location_row(user, event_id=None, location_id=None, event=None, location=Non
     items = loc.n_items if hasattr(loc, 'n_items') else loc.scheduleditem_set.count()
     return {
         'id': loc.pk, 'name': loc.name, 'url': reverse('console:location_edit', args=[event.pk, loc.pk]),
-        'image_url': loc.resolved_image_url or '', 'category': loc.category, 'hidden': loc.hidden,
+        'image_url': app_image_url(loc.resolved_image_url, 'thumb') or '', 'category': loc.category, 'hidden': loc.hidden,
         'locked': bool(loc.locked_fields), 'summary': Truncator(loc.snippet or loc.address).chars(90),
         'tags': list(loc.tags or []), 'has_pin': loc.has_coordinates, 'likes': hearts, 'items': items,
         'actions': [{'name': 'toggle_location_hidden', 'label': 'Show' if loc.hidden else 'Hide'},
@@ -360,7 +362,7 @@ def _found_image(loc):
     """Stage D: 'Found automatically · credit' above the image fields when Attnd found the current photo."""
     if not (loc.pk and loc.image_auto and loc.image):
         return None
-    return ('block', 'found_image', {'src': loc.image.url, 'credit': loc.image_credit,
+    return ('block', 'found_image', {'src': app_image_url(loc.image.url, 'preview'), 'credit': loc.image_credit,
                                      'source': loc.image_source_url, 'license': loc.image_license})
 
 

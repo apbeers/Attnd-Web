@@ -295,3 +295,12 @@ class ChatDefaultTests(AgentTestCase):
         self.assertContains(page, 'aria-checked="true"')
         self.client.post(reverse('console:chat_default'), {'on': '0'}, secure=True)
         self.assertEqual(self.client.get(dashboard, secure=True).status_code, 200)
+
+
+class LazyPanelTests(AgentTestCase):
+    def test_pages_load_the_small_loader_and_point_it_at_agent_js(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse('console:event', args=[self.event.pk]) + '?page=1', secure=True)
+        self.assertContains(page, 'agent/agent-loader.js')
+        self.assertNotContains(page, '<script src="/static/agent/agent.js"')
+        self.assertContains(page, 'data-agent-src="/static/agent/agent.js"')

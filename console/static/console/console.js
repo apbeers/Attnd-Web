@@ -691,8 +691,9 @@
     function watch() {
       if (navigator.serviceWorker && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: 'watch' });
-      } else if (!fallbackTimer) {
-        fallbackTimer = setInterval(poll, 2500);
+      } else if (!fallbackTimer) {  // 2.5 s, 10 s while the tab is hidden (stage H)
+        const tick = () => { poll(); fallbackTimer = setTimeout(tick, document.hidden ? 10000 : 2500); };
+        fallbackTimer = setTimeout(tick, 2500);
       }
       poll();
     }

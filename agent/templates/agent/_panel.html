@@ -1,4 +1,5 @@
 {% load console_tags static %}<section class="agent{% if mode == 'full' %} agent--full{% endif %}" id="agent" data-agent data-agent-skip
+  data-agent-src="{% static 'agent/agent.js' %}"
   data-mode="{{ mode|default:'panel' }}"{% if user.is_staff or user.is_superuser %} data-staff{% endif %} data-assistant-url="{% url 'console:assistant' %}"
   data-event-id="{% if agent_event.id %}{{ agent_event.id }}{% elif event.id %}{{ event.id }}{% endif %}"
   {% if mode == 'full' %}data-from="{{ back_url }}"{% endif %}
@@ -62,4 +63,4 @@
     </div>
   </div>
 </section>
-<script src="{% static 'agent/agent.js' %}"></script>
+<script src="{% static 'agent/agent-loader.js' %}"></script>

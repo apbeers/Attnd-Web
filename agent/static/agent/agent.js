@@ -331,6 +331,9 @@
     const waiting = run.status === 'waiting_confirmation' || run.status === 'waiting_reply';
     launcher.classList.toggle('needs-you', waiting);
     busy.hidden = run.status !== 'running';
+    // agent-loader.js loads this file at once on the next page while a run is active (it reloads the page or needs
+    // a reply); otherwise only when Ask Attnd is opened.
+    store.set('sessionStorage', 'attnd.agent.active', run.active ? '1' : '');
     stopButton.hidden = !run.active;
     sendButton.hidden = run.active && run.status === 'running';
     undoButton.hidden = !run.undo || (pending && pending.kind === 'undo');
@@ -413,13 +416,24 @@
   refreshButton.addEventListener('click', () => { store.set('sessionStorage', 'attnd.agent.open', '1'); location.reload(); });
 
   // ---- polling ---------------------------------------------------------------------------
-  function schedule() { if (!timer) timer = setTimeout(poll, 1500); }
+  // Backoff (stage H): 1.5 s while steps arrive, doubling to 6 s while nothing changes, 15 s in a hidden tab.
+  let quietPolls = 0;
+  const pollDelay = () => (document.hidden ? 15000 : Math.min(1500 * 2 ** quietPolls, 6000));
+  function schedule() { if (!timer) timer = setTimeout(poll, pollDelay()); }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && timer) { clearTimeout(timer); timer = null; quietPolls = 0; poll(); }
+  });
   function stopPolling() { clearTimeout(timer); timer = null; }
   async function poll() {
     timer = null;
     if (!run) return;
     const oldest = Math.min(...[...unfinished.values()].map((u) => u.seq - 1), lastSeq);
-    try { renderRun(await get(runUrl(run.id, `?after=${oldest}`))); live = true; }
+    const seqBefore = lastSeq;
+    try {
+      renderRun(await get(runUrl(run.id, `?after=${oldest}`)));
+      live = true;
+      quietPolls = lastSeq === seqBefore ? Math.min(quietPolls + 1, 2) : 0;
+    }
     catch (e) { statusLine.textContent = 'Reconnecting…'; schedule(); }
   }
 
@@ -1536,4 +1550,7 @@
       root.classList.add('is-restored');  // one gentle fade-in (agent.css)
     }
   })();
+  if (root.dataset.openOnLoad) { delete root.dataset.openOnLoad; if (panel.hidden) open(); }  // the click that loaded us
+  window.attndAgentReady = true;  // agent-loader.js: later clicks reach the handlers above directly
+  if (window.attndAgentPending) { const b = window.attndAgentPending; window.attndAgentPending = null; b.click(); }
 })();

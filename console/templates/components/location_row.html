@@ -1,7 +1,7 @@
 {% load console_tags %}{# location_row: one location in the list (drag handle on the page and the full-screen canvas; Hide/Delete buttons in the chat). The whole row opens the location for editing (the title link stretches over it; buttons and the handle sit above). #}<li class="component component--location_row row-link{% if d.hidden %} is-hidden{% endif %}" data-id="{{ d.id }}">
   <div class="row-link__inner">
       {% icon "grip" "drag-handle icon--lg row-link__above" %}
-      {% if d.image_url %}<img src="{{ d.image_url }}" alt="" width="48" height="48" class="thumb">
+      {% if d.image_url %}<img src="{{ d.image_url }}" alt="" width="48" height="48" class="thumb" loading="lazy" decoding="async">
       {% else %}<div class="thumb thumb--empty">{% icon "pin" %}</div>{% endif %}
       <div class="grow row-link__text">
         <a href="{{ d.url }}" class="title-link row-link__target" aria-label="Edit {{ d.name }}{% if d.category %} ({{ d.category }}){% endif %}">{{ d.name }}</a>

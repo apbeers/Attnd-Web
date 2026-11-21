@@ -9,7 +9,7 @@
       <span class="small muted" data-fill-status role="status" aria-live="polite"></span>
     </div>
 {% elif r.name == 'found_image' %}<div class="found-image field">
-      <img src="{{ r.src }}" alt="" width="96" height="64" loading="lazy">
+      <img src="{{ r.src }}" alt="" width="96" height="64" loading="lazy" decoding="async">
       <p class="small"><span class="badge badge--info badge--pill">{% icon "stars" %} Found automatically</span>
         {% if r.credit %}<span class="muted">{{ r.credit }}</span>{% endif %}
         {% if r.source %}· <a href="{{ r.source }}" target="_blank" rel="noopener noreferrer">Source</a>{% endif %}<br>
