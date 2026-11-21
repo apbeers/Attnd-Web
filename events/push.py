@@ -423,6 +423,8 @@ def _send_content_push(event_id):
         event = Event.objects.filter(pk=event_id).exclude(status=Event.STATUS_DRAFT).first()
         if event is not None:
             notify_content_updated(event)
+            from events import plan_suggestions
+            plan_suggestions.schedule(event_id)  # API-021: rewrite them once the edits settle (background)
     except Exception:
         logger.exception('Content push for event %s failed', event_id)
     finally:

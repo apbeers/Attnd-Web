@@ -68,6 +68,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-018 | Rich context for the apps' on-device assistant: `event.context`, `locations[].context`, `schedule[].context` in `bundle/` (about, FAQ, amenities, policies, getting there, weather plan, menus, hours, age limits, performers with bios and genres, links); AI import/refresh extracts it, console "Details for the assistant" edits it (locks), DEMO has it | additive (new keys, `bundle/` only) | ✅ dev (5beae38) · ⬜ prod | ✅ (173575f; tools, search, detail screens) | ⬜ (later) |
 | API-019 | App Clip push topic: optional `app_clip` boolean in `POST events/<id>/join/` and `POST devices/` bodies; iOS sends `true` from the App Clip; the server sends clip devices' pushes (alerts, urgent, silent `content_updated`, Live Activity updates) on the clip's APNs topic | additive (new optional request field) | ✅ dev (4ff0467) · ⬜ prod | ✅ (c07ec37, local, not pushed yet) | n/a (no App Clip) |
 | API-020 | Retire the v1 events API: `SUPPORTED_API_VERSIONS` default `2`, `/api/v1/events/…` → `410` `update_required`; `/api/v1/attest/` unchanged | breaking for v1 only (no current app uses v1) | ✅ dev · ⬜ prod (needs a release + owner go-ahead) | — (uses v2) | — (uses v2) |
+| API-021 | "Plan your day" suggestions written for each event: `plan_suggestions` in `bundle/` (≤ 4 `{text, kind: plan\|question}`; Claude Haiku 5.5 in the background, deterministic fallback from the event's real days, categories and tags) | additive (new key, `bundle/` only) | ✅ dev · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -75,6 +76,29 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-021: "Plan your day" suggestions from the server
+**Why:** the apps made their "Plan your day" examples on the phone from tags and weekdays, which often didn't fit: a
+Thursday-only art walk got "Plan my Saturday around art and evening" (owner, Nov 21, 2026). The server knows the
+event's real days and highlights, so it writes them. Additive: one new key in `bundle/`.
+**Server (attnd-web):** `events/plan_suggestions.py`. `bundle.plan_suggestions` = up to 4 `{text, kind}` (`kind`
+`plan` or `question`), in order: one or two plan requests on the event's real days, parts of the day and highlights
+("Plan my Thursday evening around the galleries"), a short-visit one ("I've got 2 hours — show me the highlights"), a
+family one only when schedule items carry a family tag (kid-friendly, kids, family, all ages, family-friendly), and
+one question last ("What's on near me right now?" or one for this event). Claude Haiku 5.5 writes them (official
+`anthropic` SDK, structured output, cached system prompt, effort `low`), checked in code (only the event's weekdays,
+the family rule, ≤ 80 characters, kinds, ≤ 1 question); stored on `Event.plan_suggestions` with the content version
+they were made for, regenerated in the background ~90 s after content changes (from the debounced content push; at most
+one AI run per event per 10 minutes; `run_scheduled_tasks` catches up) and never in the bundle request. New ones bump
+`content_version` once (so apps refetch). The bundle re-checks stored ones against the current days and otherwise
+uses the deterministic fallback (the event's real dates, categories and tags), so the key is always present.
+Without `ANTHROPIC_API_KEY`, or when the AI fails or refuses, the fallback is used. Tests: `events/tests_plan_suggestions.py`.
+**iOS / Android (later; not started):** decode `plan_suggestions` leniently (missing, `null`, empty, entries without
+`text` or with an unknown `kind` → skip). **When the bundle has at least one usable entry, show those as the "Plan
+your day" examples** (onboarding card, the empty plan page / My plan, the plan card) in the given order: a `plan`
+entry makes the plan from its text (`PlanRequest` path, as the local examples do), a `question` entry asks it (the
+model / router turn, as "What's on near me right now?" does today). **Otherwise keep the local `PlanRequest.examples`
+exactly as now** (offline with an old saved bundle, older servers). No other change; no new usage metrics.
 
 ### API-020: API v1 events API retired
 **Why:** no shipped app calls `/api/v1/events/` any more (owner, Nov 19, 2026: "nobody uses it"); both apps use v2 and

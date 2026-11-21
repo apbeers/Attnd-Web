@@ -161,6 +161,7 @@ def notification_v2(n):
 
 
 def bundle(event, request=None):
+    from events import plan_suggestions
     from events.display import event_stats, resolve_display
 
     locations = list(event.location_set.filter(hidden=False).order_by('sort_order', 'name'))
@@ -189,6 +190,8 @@ def bundle(event, request=None):
         'schedule': item_rows,
         'notifications': [notification_v2(n) for n in notifications],
         'tickets': None,  # API-017: ticketing parked (git branch parked/tickets), always null
+        # API-021: "Plan your day" examples written for this event (stored, re-checked; else the deterministic ones)
+        'plan_suggestions': plan_suggestions.for_bundle(event, locations, items),
     }
 
 

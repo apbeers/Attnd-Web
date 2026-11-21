@@ -111,6 +111,10 @@ class Event(CoordinatesMixin, models.Model):
     # Staff test copies of prospects' events (prospects/): published (joinable by code / QR) but never listed in
     # nearby search, never website-watched, never brought into Studio automatically. Not part of the API.
     testing_only = models.BooleanField(default=False, help_text='Staff test copy: never listed or watched')
+    # API-021: "Plan your day" examples written for this event (events/plan_suggestions.py): {items: [{text, kind}],
+    # version: the content_version they were made for, source: ai | fallback, at, cost_usd}. Kept up to date in the
+    # background after content changes; the bundle falls back to the deterministic ones when empty or stale.
+    plan_suggestions = models.JSONField(default=dict, blank=True)
     flyer = models.FileField(upload_to=get_file_path, blank=True)
     address = models.CharField(max_length=512, blank=True)
     order_id = models.CharField(max_length=512, blank=True)

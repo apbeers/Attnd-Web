@@ -66,9 +66,18 @@ Returns everything the app shows, in one response.
   "locations": [<Location>],
   "schedule": [<ScheduleItem>],
   "notifications": [<Notification>],
-  "tickets": null
+  "tickets": null,
+  "plan_suggestions": [{"text": "Plan my Thursday evening around the galleries", "kind": "plan"}, …]
 }
 ```
+`plan_suggestions` (API-021): up to 4 "Plan your day" examples written for this event, in order, each
+`{"text": string, "kind": "plan" | "question"}`: plan requests on the event's real days and highlights, a short-visit
+one ("I've got 2 hours — show me the highlights"), a family one only when items have a family tag, and at most one
+question, last ("What's on near me right now?" or one for this event). Tapping one sends its `text` to the app's
+planner (`plan`) or asks it (`question`). Written in the background by the server (Claude Haiku 5.5, checked against
+the event's days; a deterministic fallback from the event's real dates, categories and tags otherwise), so it is
+always present in new bundles, but **decode leniently**: a missing key, `null`, an empty list, entries without `text`,
+or an unknown `kind` → ignore that entry (or the key) and keep the app's own local examples. Older servers don't send it.
 `tickets` (API-017): always `null` (ticketing parked, see Tickets). `event.context`, `locations[].context` and `schedule[].context` (API-018): see
 Context. In `bundle/` only; `lookup/` and `nearby/` event objects have no `context` key.
 Hidden locations and items are already filtered out. `locations` are already in the organizer's order, and `schedule` is sorted by `start_time`. `notifications` are newest first.

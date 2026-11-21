@@ -526,6 +526,14 @@ People sign in once a day: the session ends at the next midnight in their own ti
   the ~150 KB bundle budget), used on save, in the bundle (`bundle/` only, `null` when empty), by the AI diff (one
   `context` field per entity, merged key by key, lockable) and the console's "Details for the assistant" section
   (`console/forms/assistant_context.py`: text fields + validated line formats). Contract: `API_V2.md` → Context.
+- **Plan suggestions** (API-021, `events/plan_suggestions.py`): `Event.plan_suggestions` holds the "Plan your day"
+  examples written for the event (≤ 4 `{text, kind: plan|question}`, the content version they were made for, source
+  `ai` / `fallback`, cost). Claude Haiku 5.5 (`PLAN_SUGGESTIONS_MODEL`, default `claude-haiku-5-5`; official SDK,
+  JSON-schema structured output, cached system prompt, effort `low`) writes them in the background ~90 s after a
+  content push (`schedule()`, at most once per event per 10 min; `run_scheduled_tasks` → `refresh_due()`), never in the
+  bundle request; `clean()` drops weekdays the event doesn't have, kid texts without family-tagged items, long or
+  duplicate texts. New AI ones bump `content_version` once. The bundle's `plan_suggestions` = the stored ones while
+  they all still fit, else `fallback()` from the event's real days, parts of the day, categories and tags.
 - **Tags** (API-010) on locations and schedule items are always normalised by `events.models.normalize_tags` (lower case, ≤ 8 × 32 chars; `save()` and the bundle apply it). The AI keeps one small vocabulary per event (`scrape/tags.py` folds spelling variants); `manage.py backfill_tags` tags old events (only things with < 2 tags, never locked ones).
 
 ## API Authentication
@@ -598,7 +606,7 @@ uv run python manage.py runserver
 ## Background work
 
 - **AI jobs** run in a daemon thread of the web dyno by default (`INGEST_RUN_INLINE=1`). To use a worker dyno instead: `heroku ps:scale worker=1` and set `INGEST_RUN_INLINE=0`.
-- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events, keeps the DEMO event happening now and runs a scheduled prospect discovery when it is on and due.
+- **Heroku Scheduler** (every 10 min): `python manage.py run_scheduled_tasks` — sends due notifications, checks watched event websites (AI only on change), re-queues interrupted jobs, purges diagnostics (retention + 250 MB cap), expires unclaimed trial events, keeps the DEMO event happening now and runs a scheduled prospect discovery when it is on and due, and refreshes out-of-date "Plan your day" suggestions (API-021).
 - **Push**: `events/push.py` (APNs token auth over HTTP/2, FCM HTTP v1). Platforms without credentials are skipped and logged. Urgent notifications (API-011) go to every device with a token (time-sensitive APNs alert, high-priority FCM data message) plus an APNs `liveactivity` update to every `Device.live_activity_token` in the event; at most `URGENT_MAX_PER_HOUR` (3) per event, beyond that they go out as normal. iOS tokens are sent per APNs topic (API-019, `send_apns_groups`): App Clip devices (`Device.app_clip`) on `APNS_CLIP_TOPIC` (default `<APNS_TOPIC>.clip`, Live Activities `+ .push-type.liveactivity`), the app's on `APNS_TOPIC`.
 
 ## Running Tests
@@ -677,6 +685,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `AGENT_ANTHROPIC_MODEL` | No | Ask Attnd on Anthropic, default `claude-haiku-5-5` (owner, Nov 21, 2026) |
 | `AGENT_REFUSAL_MODEL` | No | OpenAI model a run continues on when Claude declines it (Haiku has no server-side fallback), default `gpt-5-mini` |
 | `AGENT_MODEL` / `AGENT_FALLBACK_MODEL` | No | Ask Attnd (console agent) on OpenAI, default `gpt-5-mini` (the cheaper model, owner Nov 21, 2026) / `gpt-5` (fallback only when the model is unavailable) |
+| `PLAN_SUGGESTIONS_MODEL` | No | API-021 "Plan your day" suggestions, default `claude-haiku-5-5` (needs `ANTHROPIC_API_KEY`; without it the deterministic fallback is used) |
 | `AGENT_DAILY_SPEND_CAP_USD` | No | Ask Attnd AI spend per person per UTC day, default `2` |
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
 | `AGENT_EFFORT` | No | Ask Attnd's reasoning effort, one for every call of a run and the whole conversation (so the prompt cache holds), default `medium`. Replaces `AGENT_PLANNING_EFFORT` (still read as a fallback) and `AGENT_STEP_EFFORT` (ignored) |

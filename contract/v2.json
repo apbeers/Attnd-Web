@@ -193,6 +193,12 @@
           "title": "string"
         }
       ],
+      "plan_suggestions": [
+        {
+          "kind": "string",
+          "text": "string"
+        }
+      ],
       "schedule": [
         {
           "context": {

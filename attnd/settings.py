@@ -392,6 +392,7 @@ PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # OpenAI's web_search tool: $10 per 1,000 c
 # is set; the official SDK, Claude Haiku 5.5) or openai (these models).
 AGENT_PROVIDER = os.getenv('AGENT_PROVIDER', '').strip().lower() or ('anthropic' if ANTHROPIC_API_KEY else 'openai')
 AGENT_ANTHROPIC_MODEL = os.getenv('AGENT_ANTHROPIC_MODEL', 'claude-haiku-5-5')  # owner, Nov 21, 2026
+PLAN_SUGGESTIONS_MODEL = os.getenv('PLAN_SUGGESTIONS_MODEL', 'claude-haiku-5-5')  # API-021 (events/plan_suggestions.py)
 # Claude Haiku has no server-side refusal fallback: a declined run continues on OpenAI with this model.
 AGENT_REFUSAL_MODEL = os.getenv('AGENT_REFUSAL_MODEL', 'gpt-5-mini')
 AGENT_MODEL = os.getenv('AGENT_MODEL', 'gpt-5-mini')  # owner, Nov 21, 2026: the cheaper model (was gpt-5.5)

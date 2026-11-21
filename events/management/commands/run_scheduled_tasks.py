@@ -81,6 +81,16 @@ class Command(BaseCommand):
             import logging
             logging.getLogger(__name__).exception('Prospect discovery failed')
 
+        # API-021: "Plan your day" suggestions of events whose content changed (Claude Haiku 5.5; skipped without a key).
+        try:
+            from events.plan_suggestions import refresh_due
+            refreshed = refresh_due()
+            if refreshed:
+                self.stdout.write(f'plan suggestions refreshed: {refreshed}')
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Plan suggestions failed')
+
         # Inline jobs run in daemon threads; give them a moment to finish in this one-off dyno.
         import threading
         import time
