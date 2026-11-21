@@ -228,12 +228,24 @@ Built Nov 20, 2026 (`agent/`, CLAUDE.md → Ask Attnd). Later:
 The server sends `plan_suggestions` in every bundle (API_CHANGES.md → API-021). iOS and Android: show them as the
 "Plan your day" examples when present (plan → make the plan, question → ask it), else keep the local examples.
 
-## API-023 in the apps (not started; web done Nov 21, 2026)
+## API-023 in the apps (web done Nov 21, 2026; iOS built Nov 21, 2026; Android not started)
 The bundle's `event.theme` carries each event's colours (light and dark × primary / secondary / tertiary, already
 contrast-adjusted; `null` without a theme or when the organizer turned "Use custom theme in the apps" off;
 API_CHANGES.md → API-023). iOS and Android: decode it leniently and, when set, use it instead of `accent_color` for
 the event's tint (primary), soft surfaces (secondary) and highlights (tertiary), following the system's light / dark
 mode; `null` → today's behaviour (`accent_color`, else the brand purple).
+
+## Android: adopt My schedule and the iOS assistant architecture (iOS built Nov 21, 2026)
+iOS replaced likes and the separate AI plan with **My schedule** (items, places at a time, saved places; per-entry
+reminders; "+ Add" / "In my schedule"; Schedule tab section, Home "Up next in my schedule", organizer-change hints;
+migration from hearts and plans; API-009 heart metrics unchanged), removed Ask About This and the Demo badge, and moved
+the assistant to: conversation memory ("it", "the second one"), the router's My schedule grammar (add / remove / move /
+remind, clashes), tool-calling model turns with a token budget, one component catalogue shared by chat answers and
+API-024 layouts (catalogue version 2: `my_schedule` on Home; `plan_today` / `liked` map to it), and My plan as one
+continuous chat. Spec: `ios-my-schedule.md` (owner-approved) and the iOS CLAUDE.md sections My schedule / Assistant
+architecture / One component catalogue. Android: port `MySchedule`, `ConversationContext`, `Component` and the router
+changes into `domain/` with the iOS test cases (the shared fixtures now diverge; CLAUDE.md lists each), then the UI.
+Server: when ready, add `my_schedule` to `events/layout.py`'s catalogue as version 2 (the apps already map the old names).
 
 ## API-024 server-driven screens: Android, and later sections (iOS + web built Nov 21, 2026)
 - **Android adopts it** (phase 5 of the plan): port `ScreenLayout` (catalogue, validation, overrides, conditions, facts;
