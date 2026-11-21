@@ -882,3 +882,51 @@ body:has(.assistant) .task-toast { top: 9rem; bottom: auto; right: 2.5rem; }
 .walk__step.is-done .walk__mark { border-color: var(--color-success-line); }
 .walk__step.is-current { color: var(--color-brand-text); background: var(--color-brand-soft); font-weight: 600; }
 .walk__step.is-current .walk__mark { color: var(--color-on-brand); background: var(--color-brand); border-color: var(--color-brand); }
+
+/* Screens editor (API-024): the section list beside a phone-shaped preview drawn by components/screen/<type>.html. */
+.screens-block { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--space-5); align-items: start;
+  padding-block: var(--space-4); border-top: 1px solid var(--color-border); }
+.component--app_screens { container: screens / inline-size; }
+@container screens (max-width: 46rem) { .screens-block { grid-template-columns: minmax(0, 1fr); } }
+.screens-list { list-style: none; margin: 0; padding: 0; }
+.screens-row { display: grid; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); }
+.screens-row:last-child { border-bottom: 0; }
+.screens-row.is-off { color: var(--color-muted); background: var(--color-surface-2); }
+.screens-row.dragging { opacity: .5; }
+.screens-row__main { gap: var(--space-2); flex-wrap: nowrap; }
+.screens-row__main .check { margin-right: 0; min-width: 0; }
+.screens-row__move { display: inline-flex; gap: 2px; }
+.screens-row__move .button { min-width: 2rem; padding-inline: .4rem; }
+.screens-row__parts { border: 0; margin: 0 0 0 2rem; padding: 0; gap: var(--space-1) var(--space-3); }
+.screens-row__parts legend { float: left; margin-right: var(--space-2); }
+.screens-row__more { margin-left: 2rem; }
+.screens-row__more .field { max-width: 18rem; }
+.screens-add { align-items: end; }
+.screen-phone { width: 100%; max-width: 280px; margin-inline: auto; border: 1px solid var(--color-border); border-radius: 28px;
+  background: var(--color-surface); box-shadow: var(--shadow); overflow: hidden; }
+.screen-phone__bar { padding: var(--space-3) var(--space-4) var(--space-2); font-weight: 700; font-size: var(--text-sm);
+  text-align: center; border-bottom: 1px solid var(--color-border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.screen-phone__screen { padding: var(--space-3); max-height: 520px; overflow: auto; font-size: var(--text-xs); }
+.screen-phone__note { padding: 0 var(--space-3) var(--space-3); margin: 0; }
+.pv-section { padding: var(--space-2); border-radius: var(--radius); background: var(--color-surface-2); }
+.pv-section p { margin: 0 0 2px; }
+.pv-title { font-size: var(--text-md); font-weight: 800; }
+.pv-heading { font-weight: 700; }
+.pv-muted { color: var(--color-muted); }
+.pv-accent, .pv-link { color: var(--color-brand-text); font-weight: 600; }
+.pv-live { color: var(--color-danger-text); font-weight: 700; }
+.pv-row { display: flex; justify-content: space-between; gap: var(--space-2); }
+.pv-big { font-size: var(--text-xl); font-weight: 800; font-variant-numeric: tabular-nums; }
+.pv-button { padding: .35rem .6rem; text-align: center; font-weight: 700; border-radius: 999px; color: var(--color-on-brand); background: var(--color-brand); }
+.pv-button--soft { color: var(--color-brand-text); background: var(--color-brand-soft); }
+.pv-chip { display: inline-block; padding: .2rem .55rem; border-radius: 999px; background: var(--color-surface); border: 1px solid var(--color-border); }
+.pv-card { padding: var(--space-2); border-radius: var(--radius); background: var(--color-surface); border: 1px solid var(--color-border); }
+.pv-card--urgent { background: var(--color-danger-soft); border-color: var(--color-danger-line); }
+.pv-hero { height: 84px; margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) var(--space-2); border-radius: var(--radius) var(--radius) 0 0;
+  background: linear-gradient(135deg, var(--color-brand-soft), var(--color-brand-mid)); }
+.pv-hero--small { height: 56px; margin: var(--space-1) 0 0; border-radius: var(--radius); }
+.pv-map { height: 64px; border-radius: var(--radius); background:
+  repeating-linear-gradient(45deg, var(--color-surface) 0 6px, var(--color-surface-2) 6px 12px); border: 1px solid var(--color-border); }
+.pv-carousel { display: flex; gap: 6px; }
+.pv-carousel span { flex: 1; height: 38px; border-radius: var(--radius); background: var(--color-brand-soft); }
+.screens-row__when { margin: 0 0 0 2rem; }

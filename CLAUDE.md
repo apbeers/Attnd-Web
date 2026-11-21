@@ -187,6 +187,18 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   `--color-secondary` / `--color-tertiary` are new tokens (decorative; `--color-brand-mid` is the readable highlight).
   The join and shared-plan pages (`join/landing.html`, `<html data-scheme="auto">`, the only pages with site.css's
   dark mode) get `theme.site_css` (brand, `--brand-gradient` primary → tertiary, the QR panel from secondary).
+- **Screens** (API-024, owner Nov 21, 2026; component `app_screens` in `console/components/catalog_screens.py`, on the
+  App layout page under `#screens`): per app screen (Home tab, event info, schedule item, place, map, Options) the
+  sections from `events/layout.py`'s catalogue in order, with on / off switches, the header's parts, an own heading and
+  a list size (`limit`), drag or ↑ / ↓ to reorder (console.js `enhanceSectionLists`, hidden `order`), autosave (the
+  status line gets an **Undo** from `X-Attnd-Undo`), orders of their own for a category or tag on the detail screens
+  (add / remove), **Reset to automatic**, and a phone-shaped preview beside each order drawn by one small template per
+  section type (`components/screen/<type>.html`, `_screen_preview.html`) from a sample subject (the place / item with
+  the most data; the apps' visibility rules in Python: `layout.visible`). The view is `console:event_screens`
+  (`event_screens`; JSON answers carry the new preview); Ask Attnd: `update_screen_layout` (screen, match, sections as
+  JSON), `reset_screen_layout`, `add_screen_override`, `remove_screen_override`. A screen saved once stores its whole
+  spec (with the automatic per-category orders of that moment) in `Event.layout_config`; untouched screens follow the
+  automatic layout. The Home tab itself is turned on in Tabs (never automatic). Tests: `console/tests_screens.py`.
 - **Likes** (API-009 hearts; the apps say "like", the heart icon stays): net likes (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted` (code and metric names keep "heart"; labels say "likes" / "liked"): Usage page, counts on the Locations and Schedule lists, "Most liked" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
 - **Maps and addresses** (`console/static/console/maps.js` with `GOOGLE_MAPS_BROWSER_KEY`, else console.js's
@@ -707,7 +719,7 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
 
 | Model | Key fields |
 |-------|------------|
-| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, accent_color, theme + theme_web / theme_apps (API-023), content_version, source_urls, refresh_schedule (off/watch), update_mode, sources_checked_at, context (API-018), locked_fields; `user` = owner, null = unassigned (owner deleted; admins reassign from Team) |
+| `Event` | name, event_code (unique), status, timezone, start/end_time, lat/lng (nullable), paid, public, flyer, address, display_config, layout_config (API-024), accent_color, theme + theme_web / theme_apps (API-023), content_version, source_urls, refresh_schedule (off/watch), update_mode, sources_checked_at, context (API-018), locked_fields; `user` = owner, null = unassigned (owner deleted; admins reassign from Team) |
 | `Location` | name, snippet, description, category, tags, context (API-018), sort_order, hidden, image/image_url, lat/lng (nullable), address, locked_fields — FK to Event |
 | `ScheduledItem` | name, description, start/end_time, tags, context (API-018), hidden, locked_fields — FK to Event, optional FK to Location |
 | `Notification` | title, body, send_time, priority (normal/urgent, API-011), sent, sent_at, delivered/failed counts — FK to Event |
@@ -758,6 +770,14 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
   a theme a person edited (`'theme'` in `locked_fields`) is kept. `theme_web` / `theme_apps` switch it on for the website
   and the bundle (`event.theme`, adjusted colours or `null`); `theme_web` is bookkeeping (no `content_version` bump).
   Backfill: `manage.py generate_themes [--event CODE] [--force]`; DEMO has a fixed one.
+- **Screen layouts** (API-024, `events/layout.py`): `bundle.layout` for apps that send `X-Attnd-Sections: <catalogue
+  version>` (none → `null`, and `display.tabs` drops `home`; the ETag and the cached bundle are per version, `-s1`).
+  `CATALOGUE` (screens × section types: label, `since` version, needed facts, parts) mirrors iOS `SectionCatalogue`;
+  `DEFAULTS` are the apps' built-in screens; `automatic()` leaves out sections nothing in the event could fill, leads
+  food places with menus with the menu and tags with performers with the performers, and picks Home by preset;
+  `clean_config` validates `Event.layout_config`; `resolve_layout` puts organizer screens over automatic ones and
+  filters by version. A new section type = a new catalogue version (`since`), an app release, and `API_V2.md` →
+  Layout. Tests: `events/tests_layout.py`.
 - **Tags** (API-010) on locations and schedule items are always normalised by `events.models.normalize_tags` (lower case, ≤ 8 × 32 chars; `save()` and the bundle apply it). The AI keeps one small vocabulary per event (`scrape/tags.py` folds spelling variants); `manage.py backfill_tags` tags old events (only things with < 2 tags, never locked ones).
 
 ## API Authentication

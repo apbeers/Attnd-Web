@@ -457,3 +457,72 @@ def editor_screen(event, locations, items, screen, preset='standard', website_ur
             'overrides': [{'match': o['match'], 'types': [x['type'] for x in o['sections']],
                            'labels': [CATALOGUE[screen][x['type']]['label'] for x in o['sections']]}
                           for o in spec.get('overrides') or []]}
+
+
+# ---------------------------------------------------------------------------
+# Preview (the console's phone-shaped preview: the apps' visibility rules on a sample subject)
+# ---------------------------------------------------------------------------
+
+def holds(condition, facts):
+    """One condition, as the apps evaluate it (unknown → false, also when negated)."""
+    c = (condition or '').strip().lower()
+    if c.startswith('not:'):
+        return valid_condition(c[4:]) and not holds(c[4:], facts)
+    if c == 'has_plan':
+        return 'plan' in facts
+    if c.startswith('has:'):
+        return c[4:] in FACTS and c[4:] in facts
+    if c.startswith('day:'):
+        return bool(_DATE.match(c[4:])) and c in facts
+    return c in STATES and c in facts
+
+
+def visible(screen, sections, facts):
+    out = []
+    for s in sections:
+        needs = CATALOGUE[screen][s['type']]['needs']
+        if needs and not any(n in facts for n in needs):
+            continue
+        if all(holds(c, facts) for c in s.get('when') or []):
+            out.append(s)
+    return out
+
+
+def _ctx_facts(prefix_keys, ctx_value):
+    c = ctx_value or {}
+    facts = {f'context.{k}' for k in prefix_keys if _filled(c.get(k))}
+    if facts:
+        facts.add('context')
+    return facts
+
+
+def item_facts(item, location=None):
+    facts = _ctx_facts(('about', 'performers', 'price', 'age_limit', 'accessibility', 'links'), item.context)
+    if item.description:
+        facts.add('description')
+    if item.tags:
+        facts.add('tags')
+    facts.add('upcoming')
+    if location is not None and location.latitude is not None and location.longitude is not None:
+        facts.add('coordinate')
+    return facts
+
+
+def place_facts(location, items_here=False):
+    facts = _ctx_facts(('about', 'menu', 'hours', 'accessibility', 'age_limit', 'links'), location.context)
+    for fact, present in (('description', location.description), ('tags', location.tags),
+                          ('category', location.category), ('image', location.image or location.image_url),
+                          ('coordinate', location.latitude is not None and location.longitude is not None),
+                          ('website', location.website), ('items_here', items_here)):
+        if present:
+            facts.add(fact)
+    return facts
+
+
+def event_facts(event, locations, items, website_url=None):
+    facts = data_facts(event, locations, items, website_url)['event'] | {'updates'}
+    return facts
+
+
+# What the preview assumes about the attendee: the on-device AI, a plan, likes, the event on.
+PREVIEW_STATE = {'model_available', 'plan', 'likes', 'during', 'now_playing', 'within_walk'}

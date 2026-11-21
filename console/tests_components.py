@@ -62,6 +62,7 @@ class ComponentTestCase(TestCase):
             'event_readiness': {'event_id': self.event.pk}, 'attention': {},
             'usage_answer': {'event_id': self.event.pk}, 'event_rollover': {'event_id': self.event.pk},
             'first_run': {}, 'event_theme': {'event_id': self.event.pk},
+            'app_screens': {'event_id': self.event.pk},  # API-024
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -77,7 +78,7 @@ class ComponentTestCase(TestCase):
             'event_versions': 'No saved versions yet', 'event_exports': 'CSV files',
             'change_preview': 'Move sets later', 'event_readiness': 'to fix',
             'attention': 'What needs attention', 'usage_answer': 'numbers', 'event_rollover': 'Make the copy', 'first_run': 'Get started',
-            'event_theme': 'Where the colours show',
+            'event_theme': 'Where the colours show', 'app_screens': 'What each screen of the apps shows',
         }
 
     def request(self, user=None):

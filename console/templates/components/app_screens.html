@@ -1,0 +1,54 @@
+{% load console_tags %}{# app_screens (API-024): which sections the apps show on each screen, in which order; a phone preview per order; saves as you change it. #}<div class="stack component component--app_screens">
+  <div class="cluster">
+    <h2 class="grow {% if surface == 'chat' %}title-4{% else %}title-3{% endif %}">{% icon "phone" "tone-brand" %} Screens</h2>
+  </div>
+  <p class="small muted">What each screen of the apps shows, top to bottom. Drag to reorder, switch sections off, choose what the header shows. Sections only appear when there is something to show (a menu only on places with a menu). Attnd picks a layout from your event’s data until you change a screen; <strong>Reset to automatic</strong> goes back.</p>
+  <p class="small muted" data-autosave-status role="status" aria-live="polite"></p>
+  <div class="tabs screens-tabs" data-tabs role="tablist" aria-label="App screens">{% for sc in d.screens %}
+    <button type="button" class="tabs__tab" role="tab" data-tab-target="#{{ uid }}screen-{{ sc.screen }}" aria-controls="{{ uid }}screen-{{ sc.screen }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">{{ sc.label }}{% if sc.custom %} <span class="badge badge--pill badge--neutral">Yours</span>{% endif %}</button>{% endfor %}
+  </div>
+  {% for sc in d.screens %}
+  <section class="stack screens-screen" id="{{ uid }}screen-{{ sc.screen }}" role="tabpanel" data-screen="{{ sc.screen }}"{% if not forloop.first %} hidden{% endif %}>
+    <div class="cluster">
+      <span class="badge badge--pill {% if sc.custom %}badge--primary{% else %}badge--neutral{% endif %}">{% if sc.custom %}Chosen by your team{% else %}Automatic{% endif %}</span>
+      <span class="grow"></span>
+      {% if sc.actions %}{% include 'components/_actions.html' with actions=sc.actions %}{% endif %}
+    </div>
+    {% if sc.screen == 'home' and not d.home_on %}<p class="notice notice--info small">The Home tab is off. Turn it on under <a href="{{ d.display_url }}">Tabs</a>: <em>Choose tabs myself</em>, then tick <em>Home</em>. Apps from Nov 2026 show it; older ones keep their tabs.</p>{% endif %}
+    {% for b in sc.blocks %}
+    <div class="screens-block" data-screen-block>
+      <div class="stack stack--tight screens-editor">
+        <div class="cluster"><h3 class="title-4 grow">{{ b.label }}</h3>{% if b.actions %}{% include 'components/_actions.html' with actions=b.actions %}{% endif %}</div>
+        <form method="post" action="{{ sc.action }}" data-autosave data-screens-form>{% csrf_token %}
+          <input type="hidden" name="screen" value="{{ sc.screen }}"><input type="hidden" name="match" value="{{ b.match }}"><input type="hidden" name="order" value="">
+          <ol class="list list--boxed screens-list" data-section-sortable aria-label="Sections of {{ sc.label }}, top to bottom">{% for r in b.rows %}
+            <li class="screens-row{% if not r.on %} is-off{% endif %}" data-section="{{ r.type }}">
+              <div class="cluster screens-row__main">
+                {% icon "grip" "drag-handle" %}
+                <label class="check grow" for="{{ uid }}{{ sc.screen }}-{{ forloop.parentloop.counter }}-{{ r.type }}"><input type="checkbox" name="on" value="{{ r.type }}" id="{{ uid }}{{ sc.screen }}-{{ forloop.parentloop.counter }}-{{ r.type }}"{% if r.on %} checked{% endif %}> {{ r.label }}</label>
+                <span class="screens-row__move"><button type="button" class="button button--ghost button--small" data-move="up" aria-label="Move {{ r.label }} up">↑</button><button type="button" class="button button--ghost button--small" data-move="down" aria-label="Move {{ r.label }} down">↓</button></span>
+              </div>
+              {% if r.when %}<p class="small muted screens-row__when">Shows only: {{ r.when|lower }}</p>{% endif %}
+              {% if r.parts %}<fieldset class="cluster screens-row__parts"><legend class="small muted">Shows</legend>{% for p in r.parts %}<label class="check small"><input type="checkbox" name="show_{{ r.type }}" value="{{ p.name }}"{% if p.on %} checked{% endif %}> {{ p.label }}</label>{% endfor %}</fieldset>{% endif %}
+              <details class="screens-row__more"><summary class="small">Heading{% if r.limited %} and size{% endif %}</summary>
+                <div class="cluster">
+                  <label class="field small">Own heading <input type="text" name="title_{{ r.type }}" value="{{ r.title }}" maxlength="60" placeholder="{{ r.label }}"></label>
+                  {% if r.limited %}<label class="field small">How many <input type="number" name="limit_{{ r.type }}" value="{{ r.limit }}" min="1" max="20" inputmode="numeric"></label>{% endif %}
+                </div>
+              </details>
+            </li>{% endfor %}
+          </ol>
+          <noscript><button class="button button--secondary button--small">Save</button></noscript>
+        </form>
+      </div>
+      <div class="screens-preview" data-screen-preview aria-label="Preview of {{ b.label }}">{% include 'components/_screen_preview.html' with p=b.preview screen=sc.screen %}</div>
+    </div>
+    {% endfor %}
+    {% if sc.matches %}<form method="post" action="{{ sc.action }}" class="cluster screens-add">{% csrf_token %}
+      <input type="hidden" name="screen" value="{{ sc.screen }}"><input type="hidden" name="action" value="add_override">
+      <label class="field small grow">Own order for <select name="match">{% for m in sc.matches %}<option value="{{ m.value }}">{{ m.label }}</option>{% endfor %}</select></label>
+      <button class="button button--outline button--small">{% icon "plus" %} Add</button>
+    </form>{% endif %}
+  </section>
+  {% endfor %}
+</div>

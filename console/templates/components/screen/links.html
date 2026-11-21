@@ -1,0 +1,1 @@
+{# links: the organizer's links (https), and a place's website #}<p class="pv-heading">{{ s.title|default:"Links" }}</p>{% for l in x.context.links|slice:":3" %}<p class="pv-link">{{ l.title }}</p>{% endfor %}{% if screen == 'place_detail' and x.website %}<p class="pv-link">Visit website</p>{% endif %}

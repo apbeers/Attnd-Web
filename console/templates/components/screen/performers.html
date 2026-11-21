@@ -1,0 +1,1 @@
+{# performers: names, genres, bios (API-018) #}<p class="pv-heading">{{ s.title|default:"Performers" }}</p>{% for p in x.context.performers|slice:":2" %}<p class="pv-text"><strong>{{ p.name }}</strong>{% if p.genres %} · {{ p.genres|join:", " }}{% endif %}</p>{% endfor %}

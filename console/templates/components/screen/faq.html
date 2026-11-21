@@ -1,0 +1,1 @@
+{# faq: questions and answers (event info; highlights on Home) #}<p class="pv-heading">{{ s.title|default:"FAQ" }}</p>{% for q in x.context.faq|slice:":3" %}<p class="pv-row">{{ q.q }} <span class="pv-muted">⌄</span></p>{% endfor %}

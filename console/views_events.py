@@ -899,6 +899,153 @@ def display_settings(request, event):
 
 
 # ---------------------------------------------------------------------------
+# Screens (API-024): which sections the apps show on each screen
+# ---------------------------------------------------------------------------
+
+def _screen_types():
+    from events import layout as L
+    return '; '.join(f'{screen}: {", ".join(L.CATALOGUE[screen])}' for screen in L.SCREENS)
+
+
+_SCREEN = P('string', 'The app screen: home (the Home tab), event_info (the event\'s info page), item_detail (every '
+            'schedule item), place_detail (every place), map_overlay (the map\'s Now playing strip and pin card), '
+            'options_event (the event rows in Options)', enum=['home', 'event_info', 'item_detail', 'place_detail',
+                                                              'map_overlay', 'options_event'])
+_MATCH = P('string', "Only for one category or tag: 'category:<category>' (places of that category; schedule items "
+           "at them) or 'tag:<tag>'. null = the whole screen. Only item_detail and place_detail.", nullable=True)
+
+
+@agent_action('update_screen_layout', 'Which sections an app screen shows and in which order (API-024). sections is a '
+              'JSON list in order; types not listed are turned off. Each entry: {"type": …, "show": [parts], '
+              '"title": "own heading", "limit": 1-20, "when": [conditions]}. Header parts: item_detail time, status, '
+              'tags; place_detail image, category, tags, address, distance, now_next; event_info website. Conditions: '
+              'before_start, during, after_end, not:after_end, has_plan, model_available, has:<fact>. Types per '
+              'screen: ' + _screen_types() + '. The Home tab must also be on in the app layout\'s tabs '
+              '(update_app_layout).',
+              params={'screen': _SCREEN, 'match': _MATCH,
+                      'sections': P('string', 'JSON list of sections in order, e.g. [{"type": "menu"}, '
+                                    '{"type": "hours"}, {"type": "header", "show": ["image", "category"]}]')},
+              fixed={'mode': 'json'}, title='Saved a screen of the app')
+@agent_action('reset_screen_layout', "Put an app screen back to Attnd's automatic layout (undoable).",
+              params={'screen': _SCREEN}, fixed={'action': 'reset'}, title='Reset a screen to automatic')
+@agent_action('add_screen_override', 'Give the places of one category (or the items / places with one tag) their own '
+              'section order on an app screen, starting from the screen\'s order; then change it with '
+              'update_screen_layout and the same match.',
+              params={'screen': _SCREEN, 'match': P('string', "'category:<category>' or 'tag:<tag>'")},
+              fixed={'action': 'add_override'}, title='Added an order for a category or tag')
+@agent_action('remove_screen_override', 'Remove the own section order of one category or tag from an app screen.',
+              params={'screen': _SCREEN, 'match': P('string', "'category:<category>' or 'tag:<tag>'")},
+              fixed={'action': 'remove_override'}, title='Removed an order for a category or tag')
+@event_view
+def event_screens(request, event):
+    import copy
+    from console.components.catalog_screens import _subjects, preview
+    from events import layout as L
+    from events.content import _website_url
+    back = reverse('console:display', args=[event.pk]) + '#screens'
+    if request.method != 'POST':
+        return redirect(back)
+
+    def fail(text):
+        if _wants_json(request):
+            return JsonResponse({'saved': False, 'error': text}, status=400)
+        messages.error(request, text)
+        return redirect(back)
+
+    screen = request.POST.get('screen', '')
+    if screen not in L.SCREENS:
+        return fail('Pick one of the app\'s screens.')
+    action = request.POST.get('action') or 'save'
+    raw_match = (request.POST.get('match') or '').strip()
+    match = L.clean_match(raw_match) if raw_match else ''
+    if raw_match and (not match or screen not in ('item_detail', 'place_detail')):
+        return fail('A category or tag order works on the schedule item and place screens only, as category:<name> '
+                    'or tag:<tag>.')
+    locations, items = _subjects(event)
+    website = _website_url(event)
+    preset = resolve_display(event, event_stats(event, locations), sections=LAYOUT_CATALOGUE)['resolved_preset']
+    screens = copy.deepcopy(L.clean_config(event.layout_config).get('screens') or {})
+    current = screens.get(screen) or L.automatic(event, locations, items, preset, website)[screen]
+    label = L.SCREEN_LABELS[screen]
+
+    def find(spec):
+        return next((o for o in spec.get('overrides') or [] if o['match'].lower() == match.lower()), None)
+
+    if action == 'reset':
+        if screen not in screens:
+            return fail(f'The {label} screen already uses the automatic layout.')
+        screens.pop(screen)
+        text = f'The {label} screen uses the automatic layout again.'
+    elif action in ('add_override', 'remove_override'):
+        if not match:
+            return fail('Say which category or tag.')
+        if action == 'add_override':
+            if find(current):
+                return fail('That category or tag already has its own order.')
+            if len(current.get('overrides') or []) >= L.MAX_OVERRIDES:
+                return fail(f'At most {L.MAX_OVERRIDES} orders per screen.')
+            current.setdefault('overrides', []).append({'match': match, 'sections': copy.deepcopy(current['sections'])})
+            text = f'Added an order for {match.split(":", 1)[1]} on the {label} screen.'
+        else:
+            if not find(current):
+                return fail('That category or tag has no order of its own.')
+            current['overrides'] = [o for o in current['overrides'] if o['match'].lower() != match.lower()]
+            text = f'Removed the order for {match.split(":", 1)[1]} on the {label} screen.'
+        screens[screen] = current
+    else:
+        target = find(current) if match else current
+        if target is None:
+            return fail('That category or tag has no order of its own yet: add it first.')
+        old = {s['type']: s for s in target['sections']}
+        if request.POST.get('mode') == 'json' or 'sections' in request.POST:
+            try:
+                raw = json.loads(request.POST.get('sections') or '[]')
+            except (TypeError, ValueError):
+                return fail('sections must be a JSON list.')
+            sections = L.clean_sections(raw, screen)
+        else:
+            on = set(request.POST.getlist('on'))
+            order = [t for t in (request.POST.get('order') or '').split(',') if t in L.CATALOGUE[screen]]
+            order += [t for t in L.CATALOGUE[screen] if t not in order]
+            raw = []
+            for t in order:
+                if t not in on:
+                    continue
+                s = {'type': t}
+                parts = L.CATALOGUE[screen][t]['parts']
+                if parts:
+                    shown = [p for p in request.POST.getlist(f'show_{t}') if p in parts]
+                    if shown and shown != parts:
+                        s['show'] = shown
+                title = (request.POST.get(f'title_{t}') or '').strip()
+                if title:
+                    s['title'] = title
+                limit = (request.POST.get(f'limit_{t}') or '').strip()
+                if limit.isdigit():
+                    s['limit'] = int(limit)
+                if old.get(t, {}).get('when'):
+                    s['when'] = old[t]['when']
+                raw.append(s)
+            sections = L.clean_sections(raw, screen)
+        if not sections:
+            return fail('Keep at least one section on the screen.')
+        target['sections'] = sections
+        screens[screen] = current
+        text = f'Saved the {label} screen.' if not match else f'Saved the order for {match.split(":", 1)[1]}.'
+    event.layout_config = L.clean_config({'screens': screens})
+    event.save(update_fields=['layout_config'])
+    if _wants_json(request):
+        spec = (event.layout_config.get('screens') or {}).get(screen) or \
+            L.automatic(event, locations, items, preset, website)[screen]
+        shown = (find(spec) or spec) if match else spec
+        html = render_to_string('components/_screen_preview.html', {
+            'p': preview(event, screen, shown['sections'], locations, items, match, website), 'screen': screen})
+        return JsonResponse({'saved': True, 'message': text, 'preview': html})
+    messages.success(request, text)
+    return redirect(back)
+
+
+# ---------------------------------------------------------------------------
 # Colour theme (API-023)
 # ---------------------------------------------------------------------------
 

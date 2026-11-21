@@ -1,0 +1,1 @@
+{# now_next: what's on now and next (here, or across the event on Home) #}<p class="pv-heading">{{ s.title|default:"Now & next" }}</p><p class="pv-row"><span class="pv-live">● Now</span> {{ x.items.0|default:"Something on" }}</p>{% if x.items.1 %}<p class="pv-row"><span class="pv-accent">Next 7:30</span> {{ x.items.1 }}</p>{% endif %}

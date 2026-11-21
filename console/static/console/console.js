@@ -518,6 +518,7 @@
     const list = form.querySelector('[data-tab-sortable]');
     const order = form.querySelector('input[name=tab_order]');
     if (list && order) order.value = [...list.querySelectorAll('[data-tab]')].map((li) => li.dataset.tab).join(',');
+    syncSectionOrder(form);
     const csrf = form.querySelector('[name=csrfmiddlewaretoken]');
     if (status) status.textContent = 'Saving…';
     try {
@@ -531,7 +532,24 @@
         reason.textContent = `Currently using ${p.charAt(0).toUpperCase() + p.slice(1)}: ${d.resolved.reason}.`;
         reveal(reason, 'pulse');
       }
-      if (status) status.textContent = 'Saved. Open apps update within a few seconds.';
+      // The Screens editor (API-024): the preview of the order just saved.
+      const preview = d.preview && form.closest('[data-screen-block]')?.querySelector('[data-screen-preview]');
+      if (preview) { preview.innerHTML = d.preview; reveal(preview, 'pulse'); }
+      if (status) {
+        status.textContent = 'Saved. Open apps update within a few seconds.';
+        const undo = r.headers.get('X-Attnd-Undo');
+        if (undo && /^\d+$/.test(undo)) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'link-button'; b.textContent = 'Undo';
+          b.addEventListener('click', async () => {
+            b.disabled = true;
+            const u = await fetch(`/console/undo/${undo}/`, { method: 'POST', credentials: 'same-origin',
+              headers: { Accept: 'application/json', 'X-CSRFToken': csrf ? csrf.value : '' } }).catch(() => null);
+            if (u && u.ok) location.reload(); else { b.disabled = false; status.textContent = 'Couldn’t undo that.'; }
+          });
+          status.append(' ', b);
+        }
+      }
     } catch (e) {
       if (status) status.textContent = 'Couldn’t save. Check your connection and try again.';
     }
@@ -546,6 +564,35 @@
     const form = e.target.closest && e.target.closest('form[data-autosave]');
     if (form) { e.preventDefault(); e.stopImmediatePropagation(); autosave(form); }
   }, true);
+  // Screens editor (API-024): the section list's order goes into the form's hidden order; drag or ↑ / ↓ reorder it.
+  function syncSectionOrder(form) {
+    const list = form.querySelector('[data-section-sortable]');
+    const order = form.querySelector('input[name=order]');
+    if (list && order) order.value = [...list.querySelectorAll('[data-section]')].map((li) => li.dataset.section).join(',');
+  }
+  function enhanceSectionLists(scope) {
+    scope.querySelectorAll('[data-section-sortable]:not([data-ready])').forEach((list) => {
+      list.dataset.ready = '1';
+      const form = list.closest('form');
+      if (form) syncSectionOrder(form);
+      window.makeSortable?.(list, { handle: '.drag-handle', onEnd: () => form && autosave(form) });
+      list.addEventListener('click', (e) => {
+        const button = e.target.closest('[data-move]');
+        if (!button) return;
+        const row = button.closest('[data-section]');
+        const other = button.dataset.move === 'up' ? row.previousElementSibling : row.nextElementSibling;
+        if (!other) return;
+        button.dataset.move === 'up' ? list.insertBefore(row, other) : list.insertBefore(other, row);
+        button.focus();
+        reveal(row, 'pulse');
+        if (form) autosave(form);
+      });
+      list.addEventListener('change', (e) => {
+        const box = e.target.closest('input[name=on]');
+        if (box) box.closest('[data-section]')?.classList.toggle('is-off', !box.checked);
+      });
+    });
+  }
   function enhanceTabLists(scope) {
     scope.querySelectorAll('[data-tab-sortable]:not([data-ready])').forEach((list) => {
       list.dataset.ready = '1';
@@ -650,6 +697,7 @@
     enhanceLockPreview(scope);
     enhanceTimeZones(scope);
     enhanceTabLists(scope);
+    enhanceSectionLists(scope);
     scope.querySelectorAll('form').forEach((form) => { enhanceMaps(form); enhanceFill(form); });
     enhanceEventMaps(scope);
   };
