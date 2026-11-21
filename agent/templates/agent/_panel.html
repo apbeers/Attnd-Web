@@ -4,7 +4,7 @@
   data-event-id="{% if agent_event.id %}{{ agent_event.id }}{% elif event.id %}{{ event.id }}{% endif %}"
   {% if mode == 'full' %}data-from="{{ back_url }}"{% endif %}
   data-start-url="{% url 'agent:start' %}" data-runs-url="{% url 'agent:runs' %}" data-attach-url="{% url 'agent:attach' %}"
-  data-run-url="{% url 'agent:run' 0 %}" data-components-url="{% url 'agent:component_render' %}" data-batch-url="{% url 'agent:component_batch' %}"
+  data-run-url="{% url 'agent:run' 0 %}" data-contact-url="{% url 'agent:contact' %}" data-components-url="{% url 'agent:component_render' %}" data-batch-url="{% url 'agent:component_batch' %}"
   data-pick-url="{% url 'agent:component_pick' %}" data-act-url="{% url 'agent:component_act' %}"
   data-undo-url="{% url 'console:undo' 0 %}" data-reorder-url="{% url 'console:locations_reorder' 0 %}">
   <button type="button" class="agent__launcher" aria-expanded="false" aria-controls="agent-panel" data-agent-open>
@@ -48,6 +48,7 @@
         <button type="button" class="link-button small" data-agent-undo hidden>{% icon "undo" %} Undo all changes from this run</button>
         <button type="button" class="link-button small" data-agent-refresh hidden>Updated · Refresh</button>
       </div>
+      <div class="agent__person"><button type="button" class="link-button small" data-agent-person>Talk to a person</button></div>
       <div class="agent__suggest" data-agent-suggest role="group" aria-label="Suggestions" hidden></div>
       <div class="agent__target" data-agent-target hidden><span class="small" data-agent-target-text></span>
         <button type="button" class="link-button small" data-agent-target-clear aria-label="Stop filling this form">×</button></div>

@@ -401,6 +401,40 @@ def feedback(request, run_id):
 
 @login_required
 @require_POST
+def contact(request):
+    """Stage I18: "Talk to a person". Emails the Attnd team (ADMIN_EMAILS) the person's message with the context
+    that helps (their email to reply to, the run id, its request and outcome, the page and event); never session keys,
+    attachments or anything a page showed."""
+    from django.core.mail import EmailMessage
+
+    from attnd.ratelimit import RateLimit
+    from console.mail import email_enabled, site_url
+    message = (request.POST.get('message') or '').strip()[:4000]
+    if not message:
+        return _error('Write what you need help with.')
+    limit = RateLimit('agent_contact_user')
+    if limit.hit(request.user.pk) > limit.limit:
+        return _error('You’ve sent a few messages already; the team will reply by email.', status=429)
+    recipients = [email for _, email in settings.ADMINS]
+    if not recipients or not email_enabled():
+        return _error('Messages can’t be sent right now. Email support from the help page instead.', status=503)
+    run = None
+    if str(request.POST.get('run') or '').isdigit():
+        run = AgentRun.objects.filter(pk=int(request.POST['run']), user=request.user).first()
+    lines = [message, '', '—', f'From: {request.user.email}', f'Page: {(request.POST.get("page") or "")[:300]}']
+    if run is not None:
+        lines += [f'Ask Attnd run: {run.pk} ({run.status}, {run.created_at:%Y-%m-%d %H:%M} UTC)',
+                  f'Request: {run.goal[:500]}', f'Outcome: {(run.summary or run.error)[:500]}']
+        if run.event_id:
+            lines.append(f'Event: {run.event_id} {getattr(run.event, "name", "")}')
+        lines.append(f'Admin: {site_url("/" + settings.ADMIN_URL_PATH + f"agent/agentrun/{run.pk}/change/")}')
+    EmailMessage(subject=f'Attnd help request from {request.user.email}', body='\n'.join(lines),
+                 to=recipients, reply_to=[request.user.email]).send(fail_silently=True)
+    return JsonResponse({'sent': True, 'text': f'Sent to the Attnd team. We’ll reply to {request.user.email} by email.'})
+
+
+@login_required
+@require_POST
 def undo(request, run_id):
     r = _run(request, run_id)
     try:

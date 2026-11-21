@@ -375,7 +375,10 @@
       chip.type = 'button';
       chip.className = 'agent__chip';
       chip.textContent = text;
-      chip.addEventListener('click', () => { input.value = text; fitInput(); form.requestSubmit(); });
+      chip.addEventListener('click', () => {
+        if (/^talk to a person$/i.test(text.trim())) { talkToPerson(); return; }  // stage I18: no model call
+        input.value = text; fitInput(); form.requestSubmit();
+      });
       suggestBox.appendChild(chip);
     });
   }
@@ -751,6 +754,35 @@
     row.appendChild(pages);
     suggestBox.before(row);
   })();
+
+  // Stage I18: "Talk to a person": a short form in the chat; the message goes to the Attnd team by email with this
+  // chat's run id and page (never anything secret), and the reply comes by email.
+  function talkToPerson() {
+    if (log.querySelector('.agent__contact')) { log.querySelector('.agent__contact textarea').focus(); return; }
+    const box = document.createElement('form');
+    box.className = 'agent__contact stack stack--tight';
+    box.innerHTML = '<label class="small strong" for="agent-contact-text">Write to the Attnd team</label>'
+      + '<textarea id="agent-contact-text" rows="3" maxlength="4000" required></textarea>'
+      + '<div class="cluster"><button class="button button--primary button--small">Send</button>'
+      + '<button type="button" class="button button--ghost button--small" data-cancel>Cancel</button></div>';
+    const text = box.querySelector('textarea');
+    text.placeholder = run?.error || run?.summary ? 'What went wrong, or what you need…' : 'What do you need help with?';
+    box.querySelector('[data-cancel]').addEventListener('click', () => box.remove());
+    box.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const data = await post(root.dataset.contactUrl, { message: text.value, run: run ? run.id : '',
+                                                           page: full ? fromPage : location.pathname });
+        box.remove();
+        stepLine(data.text, 'changed');
+      } catch (err) { bubble('error', err.message); }
+    });
+    log.appendChild(box);
+    window.attndReveal?.(box, 'in');
+    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    text.focus();
+  }
+  $('[data-agent-person]')?.addEventListener('click', talkToPerson);
 
   // Stage I8: speak instead of typing (the browser's own Web Speech API; hidden where it isn't available).
   (function voice() {

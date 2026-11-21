@@ -276,3 +276,29 @@ class LongPollTests(HarnessCase):
         from agent.views import _wait_for_news
         run.status = 'done'
         self.assertFalse(_wait_for_news(run, 0, '10'))  # finished runs answer at once
+
+
+class ContactTests(HarnessCase):
+    def test_talk_to_a_person_emails_the_team_with_context_but_no_secrets(self):
+        from unittest import mock
+
+        from django.core import mail
+        from django.test import override_settings
+        from django.urls import reverse
+        run = self.make_run(goal='Publish my event')
+        AgentRun.objects.filter(pk=run.pk).update(error='Something broke', status='failed')
+        with override_settings(ADMINS=[('Team', 'team@example.com')],
+                               EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'), \
+                mock.patch('console.mail.email_enabled', return_value=True):
+            data = self.client.post(reverse('agent:contact'), {'message': 'It keeps failing', 'run': run.pk,
+                                                               'page': '/console/'}).json()
+            self.assertTrue(data['sent'])
+            sent = mail.outbox[0]
+            self.assertEqual(sent.to, ['team@example.com'])
+            self.assertEqual(sent.reply_to, ['owner@example.com'])
+            self.assertIn(f'Ask Attnd run: {run.pk}', sent.body)
+            self.assertIn('Publish my event', sent.body)
+            self.assertNotIn(run.session_key or 'no-session', sent.body)
+            for _ in range(3):
+                self.client.post(reverse('agent:contact'), {'message': 'again'})
+            self.assertEqual(self.client.post(reverse('agent:contact'), {'message': 'again'}).status_code, 429)

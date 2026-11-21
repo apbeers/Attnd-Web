@@ -73,6 +73,7 @@ EXCLUDED = {
     'agent:stop': 'Ask Attnd\'s own endpoints.',
     'agent:undo': 'Ask Attnd\'s own endpoints.',
     'agent:feedback': 'Ask Attnd\'s own endpoints (the person\'s 👍 / 👎).',
+    'agent:contact': 'Ask Attnd\'s own endpoints (the person writes to the Attnd team themselves).',
     'agent:proposal_apply': 'Ask Attnd\'s own endpoints (only the person\'s Apply on a change preview).',
     'agent:attach': 'Ask Attnd\'s own endpoints.',
     'agent:component_render': 'Ask Attnd\'s own endpoints (the chat\'s components).',

@@ -242,7 +242,8 @@ RATE_LIMITS = {
     'place_search_user': _rate('place_search_user', '60/600'),  # the location form's address searches per person
     'location_fill_user': _rate('location_fill_user', '30/3600'),  # "Fill from this website?" per person, 1 hour
     'agent_quiet_runs': _rate('agent_quiet_runs', '60/3600'),  # chat buttons that start a quiet run, per person
-    'agent_start_user': _rate('agent_start_user', '30/600'),  # Ask Attnd requests started per person, 10 minutes
+    'agent_start_user': _rate('agent_start_user', '30/600'),
+    'agent_contact_user': _rate('agent_contact_user', '3/3600'),  # "Talk to a person" messages per person, an hour  # Ask Attnd requests started per person, 10 minutes
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
