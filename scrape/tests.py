@@ -370,6 +370,24 @@ class RefreshJobTests(RunJobsInline, TestCase):
         self.assertEqual(job.result["auto_applied"], 1)
         self.assertEqual(job.result["pending"], 1)
 
+    def test_automatic_mode_keeps_locked_fields_waiting_in_review(self):
+        """Batch 5 (dev's Third Thursday): the organizer set the dates by hand; the website says another day. In
+        automatic mode the rest of the event update applies, and the dates wait in Review instead of vanishing."""
+        Event.objects.filter(pk=self.event.pk).update(locked_fields=["start_time", "end_time"])
+        self.event.refresh_from_db()
+        data = _sample_data(description="New words", start_time="2026-07-02T18:00:00", end_time="2026-07-02T23:00:00")
+        data["locations"][0]["existing_id"] = self.stage.id
+        data["locations"][1]["existing_id"] = self.event.location_set.get(name="Food Court").id
+        job = self._run_refresh(data)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.description, "New words")
+        self.assertEqual(self.event.start_time.day, 4)  # the hand-set date stays
+        waiting = Change.objects.filter(changeset_id=job.result["changeset_id"], status=Change.PENDING,
+                                        entity=Change.ENTITY_EVENT).get()
+        self.assertEqual(set(waiting.data), {"start_time", "end_time"})
+        self.assertEqual(set(waiting.conflict_fields), {"start_time", "end_time"})
+        self.assertEqual(job.result["pending"], 1)
+
     def test_refresh_without_sources_fails_cleanly(self):
         self.event.source_urls = []
         self.event.save()
