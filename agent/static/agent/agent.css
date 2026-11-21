@@ -172,7 +172,21 @@
 .agent--full .agent__panel { width: 100%; height: 100%; box-shadow: var(--shadow); }
 .canvas { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: var(--space-4) var(--space-5) 0;
   background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; }
-.canvas__tabs { flex: none; margin-bottom: var(--space-4); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-right: 8.5rem; }
+.canvas__tabs { flex: none; margin-bottom: var(--space-4); flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x; scrollbar-width: none; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { .canvas__tabs { scroll-behavior: auto; } }
+/* More tabs past an edge: a soft fade on that side (mask, so it follows the theme) and a chevron that scrolls a page */
+.canvas__tabs-wrap { position: relative; flex: none; margin-bottom: var(--space-4); }
+.canvas__tabs-wrap > .canvas__tabs { margin-bottom: 0; }
+.canvas__tabs-wrap.has-left .canvas__tabs { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 2.5rem); mask-image: linear-gradient(to right, transparent 0, #000 2.5rem); }
+.canvas__tabs-wrap.has-right .canvas__tabs { -webkit-mask-image: linear-gradient(to left, transparent 0, #000 2.5rem); mask-image: linear-gradient(to left, transparent 0, #000 2.5rem); }
+.canvas__tabs-wrap.has-left.has-right .canvas__tabs { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 2.5rem, #000 calc(100% - 2.5rem), transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 2.5rem, #000 calc(100% - 2.5rem), transparent 100%); }
+.canvas__tabs-more { position: absolute; top: 50%; transform: translateY(-60%); z-index: 2; width: 1.75rem; height: 1.75rem; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-surface);
+  color: var(--color-text); box-shadow: var(--shadow-sm, 0 1px 3px rgb(0 0 0 / .12)); cursor: pointer; }
+.canvas__tabs-more[hidden] { display: none; }
+.canvas__tabs-more--left { left: 0; }
+.canvas__tabs-more--right { right: 0; }
 .canvas__tabs::-webkit-scrollbar { display: none; }
 .canvas__tabs .tabs__tab { flex: none; }
 /* A count next to a tab's name: a filled badge when it waits for the person (Review), muted when it only informs. */
@@ -246,9 +260,7 @@
 
 .agent__group { margin: var(--space-3) 0 var(--space-1); }
 .canvas__cards--rows > .agent__group { padding: 0 var(--space-2); }
-.agent__target { display: flex; align-items: center; gap: var(--space-2); align-self: flex-start; margin: 0 var(--space-3) var(--space-1);
-  padding: .15rem .3rem .15rem .7rem; color: var(--color-brand-text); background: var(--color-brand-soft); border-radius: var(--radius-pill); }
-.agent__target[hidden] { display: none; }
+.agent__target-line { display: flex; align-items: center; gap: var(--space-2); }
 
 /* Restoring the conversation on load (A21): hidden until it is complete and scrolled, then one gentle fade-in */
 .agent.is-restoring [data-agent-log] { visibility: hidden; }

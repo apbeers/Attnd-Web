@@ -752,6 +752,8 @@
                                                           target: target ? JSON.stringify({ component: target.component, ids: target.ids }) : '',
                                                           thread: thread() });
         setThread(data.run?.thread);
+        targetLine?.remove();  // the run's own thinking line and steps take over (the form stays the target)
+        targetLine = null;
         store.remove('sessionStorage', 'attnd.agent.fresh');
         if (data.run && data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
         attachments = [];
@@ -1247,15 +1249,27 @@
   // The sparkle button above a form opens the chat with a prompt for that thing and remembers the form; what the
   // person then says is sent with it, and the agent's fill_form puts values into that same form in front of them
   // (highlighted, in sequence). Nothing is saved until they press Save (or say "save it": submit).
-  let target = null;  // {component, ids, form}
-  const targetChip = $('[data-agent-target]');
+  let target = null;  // {component, ids, form, label}
+  // While it waits for the request, the form it is about is a line in the chat (like a step, with × to cancel);
+  // once sent, the run's own thinking line and steps take over (owner, Nov 21, 2026: no pill above the composer).
+  let targetLine = null;
   function setTarget(t) {
     target = t;
-    if (!targetChip) return;
-    targetChip.hidden = !t;
-    if (t) targetChip.querySelector('[data-agent-target-text]').textContent = t.label;
+    targetLine?.remove();
+    targetLine = null;
+    if (!t) { input.placeholder = input.dataset.placeholder || input.placeholder; return; }
+    targetLine = document.createElement('div');
+    targetLine.className = 'agent__step agent__target-line';
+    targetLine.setAttribute('role', 'status');
+    targetLine.innerHTML = '<span class="status-mark status-mark--info" aria-hidden="true">✎</span><span class="grow"></span>'
+      + '<button type="button" class="link-button small" aria-label="Don\u2019t fill this form">×</button>';
+    targetLine.querySelector('.grow').textContent = t.label;
+    targetLine.querySelector('button').addEventListener('click', () => { setTarget(null); input.focus(); });
+    log.appendChild(targetLine);
+    if (!thinking.hidden) log.appendChild(thinking);
+    stick(true);
+    window.attndReveal?.(targetLine, 'in');
   }
-  targetChip?.querySelector('[data-agent-target-clear]')?.addEventListener('click', () => { setTarget(null); input.focus(); });
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-add-with-ai]');
     if (!b) return;
@@ -1264,8 +1278,9 @@
     let ids = {};
     try { ids = JSON.parse(b.dataset.aiIds || '{}'); } catch (err) { ids = {}; }
     setTarget({ component: b.dataset.aiComponent, ids, form: form && form.matches('form') ? form : null,
-                label: `Filling: ${b.closest('.agent__card')?.dataset.title || document.title.split(' · ')[0]}` });
+                label: `${b.textContent.trim().startsWith('Edit') ? 'Editing' : 'Filling in'} ${b.closest('.agent__card')?.dataset.title || document.title.split(' · ')[0]} · tell Attnd what to change` });
     if (!full) open(false);
+    if (!input.dataset.placeholder) input.dataset.placeholder = input.placeholder;
     input.placeholder = b.dataset.aiPrompt;
     input.focus();
     window.attndReveal?.(input.closest('form') || input, 'pulse');
@@ -1577,6 +1592,17 @@
   }
   const reveal = (el, kind, opts) => (window.attndReveal ? window.attndReveal(el, kind, opts) : Promise.resolve());
 
+  // A toolbar button's label: "+" only for adding things; Edit gets a pencil (owner, Nov 21, 2026).
+  const TOOL_ICONS = { plus: '<path d="M12 5v14M5 12h14"/>', edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>' };
+  function toolLabel(b, tool) {
+    const icon = tool.icon || (tool.plain ? '' : 'plus');
+    b.textContent = '';
+    if (icon) {
+      b.insertAdjacentHTML('beforeend', `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TOOL_ICONS[icon]}</svg>`);
+      b.append(' ');
+    }
+    b.append(tool.text);
+  }
   function toolbarFor(label) {
     const add = (text, name, title) => ({ text, run: (b) => openComponent(name, { event_id: eventId }, title, b) });
     if (label === 'Locations' && eventId) return [add('Add location', 'location_form', 'New location')];
@@ -1589,7 +1615,7 @@
     'AI spend': [{ text: 'AI limits', plain: true, run: (b) => openComponent('ai_limits_form', {}, 'AI limits', b) },
                  { text: 'Overrides', plain: true, run: (b) => openComponent('ai_limit_overrides', {}, 'AI credit overrides', b) }],
     Events: [{ text: 'New event', run: (b) => openComponent('event_new_form', {}, 'New event', b) }],
-    Overview: [{ text: 'Edit details', needsEvent: true, run: (b) => openComponent('event_form', { event_id: eventId }, 'Details', b) },
+    Overview: [{ text: 'Edit details', icon: 'edit', needsEvent: true, run: (b) => openComponent('event_form', { event_id: eventId }, 'Details', b) },
                { text: 'History', needsEvent: true, plain: true, run: (b) => openComponent('object_history', { event_id: eventId }, 'History', b) }],
   };
 
@@ -1621,7 +1647,7 @@
         const b = document.createElement('button');
         b.type = 'button';
         b.className = `button button--${tool.plain ? 'outline' : 'primary'} button--small`;
-        b.textContent = tool.plain ? tool.text : `+ ${tool.text}`;
+        toolLabel(b, tool);
         b.addEventListener('click', () => tool.run(b));
         row.appendChild(b);
       });
@@ -1638,6 +1664,54 @@
     bar.hidden = false;
     return t;
   }
+  // The tab bar scrolls sideways only: a fade and a chevron on each side that has more tabs, the active tab kept in
+  // view (owner, Nov 21, 2026). Vertical wheel turns into sideways scrolling; ResizeObserver keeps the edges right.
+  (function tabEdges() {
+    const bar = canvas?.querySelector('[data-canvas-tabs]');
+    if (!bar) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'canvas__tabs-wrap';
+    bar.before(wrap);
+    wrap.appendChild(bar);
+    const chevron = (side) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `canvas__tabs-more canvas__tabs-more--${side}`;
+      b.setAttribute('aria-label', side === 'left' ? 'Earlier tabs' : 'More tabs');
+      b.tabIndex = -1;  // keyboard users move with the arrow keys
+      b.innerHTML = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${side === 'left' ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'}"/></svg>`;
+      b.hidden = true;
+      b.addEventListener('click', () => bar.scrollBy({ left: (side === 'left' ? -1 : 1) * bar.clientWidth * 0.8, behavior: reduceMotion.matches ? 'auto' : 'smooth' }));
+      wrap.appendChild(b);
+      return b;
+    };
+    const left = chevron('left'), right = chevron('right');
+    const update = () => {
+      const more = bar.scrollWidth - bar.clientWidth;
+      const l = more > 1 && bar.scrollLeft > 1;
+      const r = more > 1 && bar.scrollLeft < more - 1;
+      wrap.classList.toggle('has-left', l);
+      wrap.classList.toggle('has-right', r);
+      left.hidden = !l;
+      right.hidden = !r;
+    };
+    bar.addEventListener('scroll', update, { passive: true });
+    bar.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && bar.scrollWidth > bar.clientWidth) {
+        e.preventDefault();
+        bar.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
+    if ('ResizeObserver' in window) new ResizeObserver(update).observe(bar);
+    new MutationObserver(update).observe(bar, { childList: true });
+    const keepActive = () => {
+      const active = bar.querySelector('[aria-selected="true"]');
+      active?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+      update();
+    };
+    new MutationObserver(keepActive).observe(bar, { subtree: true, attributes: true, attributeFilter: ['aria-selected'] });
+    requestAnimationFrame(keepActive);
+  })();
   canvas?.querySelector('[data-canvas-tabs]').addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     const list = [...tabs.values()].sort((a, b) => ORDER.indexOf(a.label) - ORDER.indexOf(b.label));
@@ -1968,7 +2042,7 @@
           const b = document.createElement('button');
           b.type = 'button';
           b.className = `button button--${tool.plain ? 'outline' : 'primary'} button--small`;
-          b.textContent = tool.plain ? tool.text : `+ ${tool.text}`;
+          toolLabel(b, tool);
           b.addEventListener('click', () => tool.run(b));
           row.appendChild(b);
         });

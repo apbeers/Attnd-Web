@@ -531,7 +531,7 @@ on Save does; there is no second copy of any business logic.
   .canvas__section { width: 100%; max-width: none }`); a section with one card spans the row; tabs with several sections
   put them in columns on wide canvases (container `pane` ≥ 48rem: Notifications compose | Sent and scheduled; Settings,
   Metrics and History in auto-fit columns, App layout across the row; Team: members beside the invite form); forms
-  inside keep readable field widths. A new canvas tab with several sections needs its column rule. **Tab counts**:
+  inside keep readable field widths. A new canvas tab with several sections needs its column rule. **Tab bar** (owner, Nov 21, 2026): scrolls sideways only (`overflow-y: hidden`, vertical wheel → sideways), a themed edge fade (mask) and a chevron on each side with more tabs (ResizeObserver), the active tab kept in view; toolbar buttons get "+" only for adding (Edit details has a pencil). **Add / Edit with AI** shows its form as a pending line in the chat (✎ "Filling in X · tell Attnd what to change", × cancels) instead of a pill above the composer; once sent, the run's thinking line and steps take over. **Tab counts**:
   `canvas.ALERT_COUNTS` (Review) are filled badges (`.tab-count--alert`, `--color-danger` / `--color-on-danger`,
   defined for light and dark), informational counts are muted (`.tab-count`); agent.js `setTabCount`. **Height**: on
   desktop the full-screen chat fills exactly `100dvh` under the top bar (body flex column, no outer scroll).
