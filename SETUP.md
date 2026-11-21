@@ -34,9 +34,10 @@ Do these steps once, in order. Each step says which values go where. For any sin
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
 - [x] iOS manual CI signing (Nov 19, 2026; first manually signed build 145 uploaded): an Apple Distribution
-      certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). No App Group: the "Now & Next"
-      widget, its only user, was removed (Nov 19, 2026; Live Activities only); `group.com.arcu.Attnd` can stay
-      registered unused. WeatherKit is no longer used (removed from iOS Nov 19, 2026: not offered for App Clip App
+      certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). App Group `group.com.arcu.Attnd`
+      back on `com.arcu.Attnd` and `com.arcu.Attnd.clip` (Nov 21, 2026: the App Clip hands its event, My schedule,
+      chat and settings to the full app; app, clip and widgets profiles regenerated and their secrets updated; the
+      app's App ID also has Push Notifications → Broadcast ticked, unused). WeatherKit is no longer used (removed from iOS Nov 19, 2026: not offered for App Clip App
       IDs); the capability can be unticked on `com.arcu.Attnd` whenever its profile is regenerated.
 - [x] Google Weather API **disabled** (Nov 19, 2026, owner): it was enabled in `attnd-df28e` and on the Android Maps key
       `af7cec96-…` the same day for planner weather, which neither app builds now. Nothing is billed.
@@ -370,6 +371,10 @@ with a stored **Apple Distribution** certificate and three **App Store** provisi
 | `IOS_PROFILE_APP_B64` | App Store profile "Attnd AppStore" for `com.arcu.Attnd` |
 | `IOS_PROFILE_WIDGETS_B64` | "Attnd Widgets AppStore" for `com.arcu.Attnd.widgets` |
 | `IOS_PROFILE_CLIP_B64` | "Attnd Clip AppStore" for `com.arcu.Attnd.clip` |
+| `IOS_PROFILE_CLIP_WIDGETS_B64` | "Attnd Clip Widgets AppStore" for `com.arcu.Attnd.clip.widgets` |
+
+App Group `group.com.arcu.Attnd` (Nov 21, 2026): enabled on `com.arcu.Attnd` and `com.arcu.Attnd.clip` only (the
+widget extensions don't use it); both entitlements files list it, so those two profiles must include it.
 
 Set them from the folder:
 ```
