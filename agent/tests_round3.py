@@ -189,3 +189,35 @@ class LocationHelperTests(AgentTestCase):
         self.assertEqual(fields['image_url'], 'https://x.example/p.jpg')
         self.assertEqual(fields['ctx_hours'], '11 AM - 9 PM')
         self.assertEqual(self.event.location_set.count(), 2)  # nothing saved
+
+
+class FillFormConfirmGateTests(AgentTestCase):
+    """The audit's confirm-gate fix: fill_form never submits a form that always asks."""
+
+    def test_submit_is_refused_on_forms_that_always_ask(self):
+        ids = {'event_id': self.event.pk}
+        run, provider = self.run_with([
+            [('fill_form', {'component': 'notification_form', 'ids': ids, 'submit': True, 'values': [
+                {'name': 'title', 'value': 'Gates open'}, {'name': 'body', 'value': 'Now'}]})],
+            [('finish', {'summary': 'Filled.', 'suggest': []})],
+        ])
+        step = run.steps.get(tool='fill_form')
+        self.assertFalse(step.arguments['submit'])
+        self.assertIn('NOT submitted', dict(provider.results)['fill_form'])
+        self.assertFalse(self.event.notification_set.exists())
+
+    def test_ordinary_forms_may_still_be_saved_on_request(self):
+        ids = {'event_id': self.event.pk, 'location_id': self.stage.pk}
+        run, provider = self.run_with([
+            [('fill_form', {'component': 'location_form', 'ids': ids, 'submit': True,
+                            'values': [{'name': 'snippet', 'value': 'Big'}]})],
+            [('finish', {'summary': 'Saved.', 'suggest': []})],
+        ])
+        self.assertTrue(run.steps.get(tool='fill_form').arguments['submit'])
+
+    def test_the_panel_fills_only_its_own_cards_and_never_submits_gated_forms(self):
+        from pathlib import Path
+        js = (Path(__file__).parent / 'static/agent/agent.js').read_text()
+        self.assertIn("const inCard = (f) => !!(f && f.closest('.agent__card')", js)
+        self.assertIn(".filter((f) => f.dataset.formIds === want && inCard(f))", js)
+        self.assertIn('if (submit && inCard(form) && !form.dataset.confirmAction)', js)

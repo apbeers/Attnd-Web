@@ -737,11 +737,14 @@
     window.attndReveal?.(input.closest('form') || input, 'pulse');
   });
 
+  // Only forms in Ask Attnd's own cards (chat or canvas): never a page's form, whose buttons bypass the confirm card.
+  const inCard = (f) => !!(f && f.closest('.agent__card') && (log.contains(f) || (canvas && canvas.contains(f))));
   function findForm(name, ids) {
     const want = JSON.stringify(Object.fromEntries(Object.entries(ids || {}).sort()));
-    if (target && target.form && document.contains(target.form) && target.component === name
+    if (target && inCard(target.form) && document.contains(target.form) && target.component === name
         && target.form.dataset.formIds === want) return target.form;
-    const all = [...document.querySelectorAll(`form[data-form-component="${name}"]`)].filter((f) => f.dataset.formIds === want);
+    const all = [...document.querySelectorAll(`form[data-form-component="${name}"]`)]
+      .filter((f) => f.dataset.formIds === want && inCard(f));
     return all.find((f) => f.offsetParent !== null) || all[0] || null;
   }
   function applyFill(form, values, submit) {
@@ -765,7 +768,8 @@
       n += 1;
     });
     window.attndShowIf?.(form);
-    if (submit) {
+    // Never submit a form that always asks (its Send goes through the confirm card when the person presses it).
+    if (submit && inCard(form) && !form.dataset.confirmAction) {
       const save = form.querySelector('button:not([type=button]):not([name])') || form.querySelector('button:not([type=button])');
       setTimeout(() => (save ? form.requestSubmit(save) : form.requestSubmit()), 300);
     }

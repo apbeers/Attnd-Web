@@ -126,6 +126,12 @@ def fill_tool(run, call, args):
         return ('Error: nothing to fill. Fields: ' + ', '.join(f.split('-')[-1] for f in list(fields)[:40])
                 + (f'. Skipped: {", ".join(skipped)}' if skipped else ''))
     submit = bool(args.get('submit'))
+    # Forms that always ask (sending a notification, a team invite) are never submitted by the agent: the person
+    # presses Send there, which goes through the confirm card (the audit's confirm-gate fix).
+    gated = [f.get('confirm_action') for f in forms if f.get('confirm_action')]
+    refused_submit = submit and bool(gated)
+    if refused_submit:
+        submit = False
     title = C.get(name).title
     loop.add_step(run, kind=AgentStep.KIND_COMPONENT, tool='fill_form', call_id=call.id,
                   arguments={'component': name, 'items': [ids], 'picked': False, 'fill': values, 'submit': submit},
@@ -134,6 +140,9 @@ def fill_tool(run, call, args):
                        f'in {data.get("title") or title}', result=json.dumps(values, ensure_ascii=False)[:4000])
     note = (' It is being saved now (the page answers with any errors).' if submit else
             ' Nothing is saved: the person reviews it and presses Save, or tells you to save it.')
+    if refused_submit:
+        note = (' NOT submitted: this form always asks the person to confirm. Tell them to check it and press '
+                f'{"Send" if "send" in gated[0] else "the button"} themselves (it shows the confirmation).')
     return (f'Filled {", ".join(k.split("-")[-1] for k in values)} in the {title.lower()} on screen.{note}'
             + (f' Skipped: {", ".join(skipped)}.' if skipped else ''))
 
