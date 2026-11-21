@@ -32,6 +32,10 @@ class AgentRun(models.Model):
     suggestions = models.JSONField(default=list, blank=True)  # follow-up chips (finish's `suggest`)
     target = models.JSONField(default=dict, blank=True)  # Add with AI: the form being filled {component, ids}
     undone_at = models.DateTimeField(null=True, blank=True)
+    # 👍 / 👎 on the answer (stage I), for staff review in the admin; the note is the person's own words (≤ 500).
+    feedback = models.SmallIntegerField(null=True, blank=True, choices=[(1, 'Helpful'), (-1, 'Not helpful')])
+    feedback_note = models.CharField(max_length=500, blank=True)
+    feedback_at = models.DateTimeField(null=True, blank=True)
     # The person's own session (internal requests use it read-only) and where they were.
     session_key = models.CharField(max_length=64, blank=True)
     host = models.CharField(max_length=255, blank=True)

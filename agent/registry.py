@@ -71,6 +71,7 @@ EXCLUDED = {
     'agent:reply': 'Ask Attnd\'s own endpoints.',
     'agent:stop': 'Ask Attnd\'s own endpoints.',
     'agent:undo': 'Ask Attnd\'s own endpoints.',
+    'agent:feedback': 'Ask Attnd\'s own endpoints (the person\'s 👍 / 👎).',
     'agent:attach': 'Ask Attnd\'s own endpoints.',
     'agent:component_render': 'Ask Attnd\'s own endpoints (the chat\'s components).',
     'agent:component_batch': 'Ask Attnd\'s own endpoints (several components in one request).',

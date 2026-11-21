@@ -186,7 +186,7 @@ def run_json(run):
                     'kind': pending.kind} if pending else None,
         'question': question.text if question else None,
         'options': (question.arguments.get('options') or []) if question else [],
-        'undo': loop.undo_available(run), 'undone': run.undone_at is not None,
+        'undo': loop.undo_available(run), 'undone': run.undone_at is not None, 'feedback': run.feedback,
         'suggestions': suggestions(run),
         'changed_events': sorted({c['event_id'] for c in changed if c['event_id']}),
         'changed_urls': sorted({c['url'] for c in changed if c['url']}),
@@ -324,6 +324,22 @@ def reply(request, run_id):
 @require_POST
 def stop(request, run_id):
     r = loop.stop(_run(request, run_id))
+    return JsonResponse({'run': run_json(r)})
+
+
+@login_required
+@require_POST
+def feedback(request, run_id):
+    """👍 / 👎 on a finished answer (stage I): stored with the run for staff review; changing it again is fine."""
+    from django.utils import timezone
+    r = _run(request, run_id)
+    value = request.POST.get('value')
+    if value not in ('1', '-1', ''):
+        return _error('Choose helpful or not helpful.')
+    r.feedback = int(value) if value else None
+    r.feedback_note = (request.POST.get('note') or '').strip()[:500]
+    r.feedback_at = timezone.now()
+    r.save(update_fields=['feedback', 'feedback_note', 'feedback_at'])
     return JsonResponse({'run': run_json(r)})
 
 

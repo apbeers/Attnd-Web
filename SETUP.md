@@ -55,6 +55,9 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` added as a Developer user. Plan: `docs/specs/tickets_spec.md` on branch `parked/tickets`.
 - [ ] ⏸ Tickets: parked on git branch `parked/tickets` (Nov 19, 2026; Eventbrite for now), not a task now. Optional: drop
       dev's orphan `tickets_*` tables (step 16).
+- [ ] Ask Attnd harness (stage I, Nov 21, 2026): add an Anthropic key for the nightly quality run (a throwaway test
+  database; a few cents a night): `gh secret set ANTHROPIC_HARNESS_KEY -R apbeers/Attnd-Web`, then run it once with
+  `gh workflow run agent-harness.yml -R apbeers/Attnd-Web`. Without the secret the workflow skips.
 - [ ] Background tasks (F5, Nov 21, 2026, optional): try Django's task queue on dev, then decide on production. Dev:
   `heroku config:set TASKS_BACKEND=database -a attnd-dev` (the scheduler then runs queued tasks every 10 minutes);
   for seconds instead of minutes add a worker: `heroku ps:scale tasks=1:basic -a attnd-dev` (a second Basic dyno, billed like

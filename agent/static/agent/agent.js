@@ -393,8 +393,35 @@
     if (last && last.classList.contains('agent__msg--assistant') && sameText(last.textContent, text.replace(LINK_RE, '$1'))) return last;
     return bubble('assistant', text);
   }
+  // 👍 / 👎 under a finished answer (stage I): stored with the run for staff review.
+  function addFeedback(msg, r) {
+    if (!msg || msg.nextElementSibling?.matches?.('.agent__feedback') || r.buttons) return;
+    const row = document.createElement('div');
+    row.className = 'agent__feedback';
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Was this helpful?');
+    [['1', '👍', 'Helpful'], ['-1', '👎', 'Not helpful']].forEach(([value, mark, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'agent__feedback-button';
+      b.textContent = mark;
+      b.setAttribute('aria-label', label);
+      b.setAttribute('aria-pressed', String(String(r.feedback) === value));
+      b.addEventListener('click', async () => {
+        const on = b.getAttribute('aria-pressed') !== 'true';
+        try {
+          await post(runUrl(r.id, 'feedback/'), { value: on ? value : '' });
+          row.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+          b.setAttribute('aria-pressed', String(on));
+          window.attndReveal?.(b, 'pulse');
+        } catch (e) { /* not important enough to show an error */ }
+      });
+      row.appendChild(b);
+    });
+    msg.after(row);
+  }
   function finished() {
-    if (run.summary) answerOnce(run.summary);
+    if (run.summary) addFeedback(answerOnce(run.summary), run);
     if (run.error && run.status !== 'done') bubble('error', run.error);
     if (full) {  // full screen: fresh copies on the canvas instead of a reload
       run.changed_events.forEach((id) => refreshKeys([`event:${id}`]));

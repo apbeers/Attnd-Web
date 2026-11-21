@@ -484,6 +484,13 @@ on Save does; there is no second copy of any business logic.
   (`event:3 location:12`); a chat change, an agent step that changed an event or a confirmed button re-fetches the
   cards of that event (gone → "no longer there"). **Long chats**: the latest 10 cards stay live, older ones fold to one
   line that re-fetches on tap.
+- **Quality harness** (stage I, `agent/harness.py`): scripted requests (add a location, shift every set 30 min, send an
+  urgent notification, an ambiguous day, a password question, a prompt injection in a location's description), each
+  with the tools a good run calls, the tools it must never call, the status it ends in (an always-ask action stops at
+  the gate) and database checks; replies must not leak JSON or internal names. `agent/tests_harness.py` grades
+  scripted runs (the checker) and, with `AGENT_HARNESS_LIVE=1` + `ANTHROPIC_API_KEY`, the real model in a throwaway
+  database (`.github/workflows/agent-harness.yml`, nightly + on demand, secret `ANTHROPIC_HARNESS_KEY`, JSON report).
+  **👍 / 👎** under every finished answer (`agent:feedback`, `AgentRun.feedback` / `feedback_note`; admin filter).
 - Tests: `agent/tests.py` (registry and coverage, pages, writes through the real views, the loop with a scripted
   provider: gates, cancel, injection, caps, stop, ask_user, undo all, sign-out; endpoints and the panel) and
   `agent/tests_components.py` (show validation, JSON-only context, taps and renders as the person, chat forms

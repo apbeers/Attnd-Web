@@ -223,3 +223,10 @@
 .agent.is-restored [data-agent-log] { animation: agent-restored .22s ease-out both; }
 @keyframes agent-restored { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .agent.is-restored [data-agent-log] { animation: none; } }
+
+/* 👍 / 👎 under an answer (stage I) */
+.agent__feedback { display: flex; gap: var(--space-1); align-self: flex-start; margin-top: calc(var(--space-1) * -1); }
+.agent__feedback-button { border: 1px solid transparent; background: none; border-radius: 999px; padding: .1rem .45rem;
+  font-size: .85rem; line-height: 1.4; opacity: .55; cursor: pointer; }
+.agent__feedback-button:hover, .agent__feedback-button:focus-visible { opacity: 1; border-color: var(--color-border); }
+.agent__feedback-button[aria-pressed="true"] { opacity: 1; background: var(--color-brand-soft); border-color: var(--color-brand); }

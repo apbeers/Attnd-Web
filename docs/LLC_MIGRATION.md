@@ -106,6 +106,8 @@ Accounts and services:
   Type ID certificate; already-issued passes keep working but stop updating).
 - Google Wallet: issuer id + `attnd-wallet` service-account JSON key on Heroku (`GOOGLE_WALLET_*`, SETUP 16c on the branch; not set); Event
   Ticket classes `attnd-event-<id>` / `attnd-dev-event-<id>`.
+- GitHub secret `ANTHROPIC_HARNESS_KEY` (Attnd-Web, Nov 21, 2026): the Anthropic key of the nightly Ask Attnd quality
+  harness; re-create it under the LLC's Anthropic account.
 - Place photos found automatically (API-022, Nov 21, 2026): stored in Cloudinary with their source and credit;
   Wikimedia Commons photos carry their authors' licences (CC BY / BY-SA need the credit shown, which the apps do);
   Wikimedia's API needs no account. Mention third-party photo credits in the Terms when they are written.

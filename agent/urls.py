@@ -17,4 +17,5 @@ urlpatterns = [
     path('runs/<int:run_id>/reply/', views.reply, name='reply'),
     path('runs/<int:run_id>/stop/', views.stop, name='stop'),
     path('runs/<int:run_id>/undo/', views.undo, name='undo'),
+    path('runs/<int:run_id>/feedback/', views.feedback, name='feedback'),
 ]
