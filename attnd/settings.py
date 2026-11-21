@@ -392,7 +392,14 @@ if '*' not in ALLOWED_HOSTS:
         if _site.hostname == 'attnd.app':
             ALLOWED_HOSTS.append('www.attnd.app')
     if SITES_HOST:
-        ALLOWED_HOSTS.append(SITES_HOST.split(':')[0])  # the Studio sites host (today the app's herokuapp.com name)
+        ALLOWED_HOSTS.append(SITES_HOST.split(':')[0])  # the Studio sites host (attnd.site / dev.attnd.site)
+# The sites' old host (the Heroku app's herokuapp.com name) once SITES_HOST names a real domain: it only answers 301s
+# from a site's path to the same path on SITES_HOST (studio.middleware); everything else there is a 404.
+OLD_SITES_HOST = _HEROKU_SITES_HOSTS.get(_site.hostname or '', '')
+if OLD_SITES_HOST == SITES_HOST.split(':')[0]:
+    OLD_SITES_HOST = ''
+if OLD_SITES_HOST and '*' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(OLD_SITES_HOST)
 SITES_ORIGIN = f"{'http' if DEBUG and SITES_HOST.startswith(('127.0.0.1', 'localhost')) else 'https'}://{SITES_HOST}"
 # Console origins allowed to frame hosted pages (the editor's preview); nobody else may frame them.
 STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))

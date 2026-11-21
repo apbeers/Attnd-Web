@@ -23,6 +23,18 @@ def sites_host():
     return _strip_port(getattr(settings, 'SITES_HOST', ''))
 
 
+def is_old_sites_request(request):
+    """The sites' old host (settings.OLD_SITES_HOST, the herokuapp.com name) after the move to a real domain."""
+    old = getattr(settings, 'OLD_SITES_HOST', '')
+    if not old:
+        return False
+    try:
+        requested = request.get_host()
+    except Exception:  # DisallowedHost
+        requested = request.META.get('HTTP_HOST', '')
+    return _strip_port(requested) == old
+
+
 def is_sites_request(request):
     host = sites_host()
     if not host:

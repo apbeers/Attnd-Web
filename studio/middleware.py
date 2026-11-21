@@ -4,6 +4,9 @@ from studio import hosting
 
 # Paths other middleware would answer on any host (WhiteNoise: static files and the public/ root files).
 _BLOCKED_PREFIXES = ('/static/', '/media/', '/favicon.ico', '/apple-touch-icon', '/.well-known/')
+# First path segments that are the app's, never a site slug (on the old sites host: 404, never redirected).
+_APP_PREFIXES = {'console', 'api', 'accounts', 'join', 'p', 'home', 'manage-attnd', 'admin', 'health', 'csp-report',
+                 'start', 'claim', 'privacy'}
 
 
 class SitesHostMiddleware:
@@ -21,6 +24,8 @@ class SitesHostMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        if hosting.is_old_sites_request(request):
+            return self.harden(self.moved(request))
         if not hosting.is_sites_request(request):
             return self.get_response(request)
         request.urlconf = 'studio.urls_sites'
@@ -32,6 +37,19 @@ class SitesHostMiddleware:
         else:
             response = self.get_response(request)
         return self.harden(response)
+
+    @staticmethod
+    def moved(request):
+        """The old sites host (herokuapp.com) after the move to attnd.site: a site's path → 301 to the same path on
+        SITES_HOST; the console, API, admin, accounts and static files don't exist there (404)."""
+        from django.http import HttpResponsePermanentRedirect
+        path = request.path
+        first = path.strip('/').split('/', 1)[0]
+        if (path.startswith(_BLOCKED_PREFIXES) or first in _APP_PREFIXES or not first
+                or request.headers.get('Service-Worker')):
+            return HttpResponseNotFound('Not found', content_type='text/plain')
+        query = request.META.get('QUERY_STRING', '')
+        return HttpResponsePermanentRedirect(hosting.sites_origin() + path + (f'?{query}' if query else ''))
 
     @staticmethod
     def harden(response):

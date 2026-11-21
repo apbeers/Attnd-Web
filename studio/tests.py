@@ -723,3 +723,36 @@ class DesignWebsiteTests(StudioTestCase):
         page = self.client.get(reverse('console:assistant') + f'?event={self.event.pk}&tab=website')
         self.assertContains(page, 'data-tab="Website"')
         self.assertContains(page, 'component--website_overview')
+
+
+class SitesDomainMoveTests(StudioTestCase):
+    """attnd.site (owner, Nov 21, 2026): the old herokuapp.com sites host only redirects site paths to the new host."""
+
+    def setUp(self):
+        super().setUp()
+        self.enterContext(override_settings(
+            SITES_HOST='dev.attnd.site', OLD_SITES_HOST='attnd-dev-7ab893f37020.herokuapp.com',
+            ALLOWED_HOSTS=['testserver', 'dev.attnd.site', 'attnd-dev-7ab893f37020.herokuapp.com']))
+
+    def old(self, path):
+        return Client().get(path, HTTP_HOST='attnd-dev-7ab893f37020.herokuapp.com', secure=True)
+
+    def test_old_host_redirects_site_paths_and_nothing_else(self):
+        response = self.old(f'/{self.site.slug}/about.html?x=1')
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response['Location'], f'https://dev.attnd.site/{self.site.slug}/about.html?x=1')
+        for path in ('/console/', '/api/v2/app-status/', '/accounts/login/', '/static/console/console.css', '/'):
+            self.assertEqual(self.old(path).status_code, 404, path)
+        self.assertNotIn('Set-Cookie', response)
+
+    def test_addresses_follow_the_sites_host(self):
+        from studio import publishing
+        self.publish()
+        self.assertEqual(self.site.public_url(), f'https://dev.attnd.site/{self.site.slug}/')
+        self.assertEqual(publishing.website_url(self.event), f'https://dev.attnd.site/{self.site.slug}/')
+        from io import StringIO
+
+        from django.core.management import call_command
+        version = Event.objects.get(pk=self.event.pk).content_version
+        call_command('refresh_site_addresses', stdout=StringIO())
+        self.assertGreater(Event.objects.get(pk=self.event.pk).content_version, version)

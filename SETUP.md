@@ -45,8 +45,14 @@ Do these steps once, in order. Each step says which values go where. For any sin
 - [x] App Review sample events: FWFM2026, ATIS2026 and DACN2026 on production are **kept on purpose**: App Review uses
       them (owner, Nov 19, 2026). The release phase's `seed_test_data` keeps them current; don't delete them or the
       command.
-- [ ] Attnd Studio (step 15): buy a separate domain for Studio sites (e.g. `attnd.site`; owner, Nov 21, 2026: until
-      then sites stay on the herokuapp.com hostname), then
+- [ ] Studio sites on **attnd.site** (owner bought it, Nov 21, 2026). Done: the Heroku domains `dev.attnd.site` on
+      attnd-dev (DNS target `genetic-salmon-1jo14r3peboo8qusoemv7xrz.herokudns.com`) and `attnd.site` on attnd-web
+      (DNS target `encircled-eggplant-pbyuddr6oxnp2ggjecvwc5be.herokudns.com`), automatic certificates (ACM) on both.
+      Owner: the DNS records at the registrar (CNAME `dev` → the dev target; ALIAS / ANAME / flattened CNAME `@` → the
+      production target). Then, once each certificate is issued: `SITES_HOST=dev.attnd.site` on attnd-dev and
+      `SITES_HOST=attnd.site` on attnd-web (production, owner), and `heroku run -a <app> python manage.py
+      refresh_site_addresses` so the apps pick up the new `website_url`. The old herokuapp.com sites host then only
+      301s site paths to the new host. Older note (step 15):
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
       with a go-ahead; until then sites are served on the Heroku hostnames. (`ANTHROPIC_API_KEY`: done, step 18.)
 - [x] Tickets prep (Wallet passes, not payments; nothing built yet; done Nov 15, 2026): Apple Pass Type ID `pass.com.arcu.attnd.tickets`

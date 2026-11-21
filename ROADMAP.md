@@ -155,11 +155,6 @@ already exists and staff switch it by hand; checkout would set it (and `paid`) f
 (owner, Nov 15, 2026): **$299 per event** = bring an event in, **$499 per event** = Studio + ticketing. The home page
 already says "$299 per event, flat"; add the $499 tier there when Studio leaves beta.
 
-### A separate domain for Studio sites
-Owner decision (Nov 21, 2026): Studio sites stay on the Heroku app's herokuapp.com hostname for now (it isolates them
-from attnd.app). **Buy a separate domain for Studio sites (e.g. `attnd.site`), then set `SITES_HOST` on dev and
-production** (SETUP.md step 15). The console shows a site's address only once it is published.
-
 ### Studio custom domains
 Let organizers use their own domain for their Studio site (spec §13): `Site.custom_domain` + DNS verification, add it
 with the Heroku Platform API (`POST /apps/attnd-web/domains`, ACM certificate), show the DNS target, serve the site at
