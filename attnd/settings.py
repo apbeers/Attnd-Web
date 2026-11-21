@@ -385,7 +385,7 @@ PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # OpenAI's web_search tool: $10 per 1,000 c
 
 # Ask Attnd (agent/): the console's AI agent. Every tool runs the real console view as the signed-in person.
 # Provider: the same as Studio's (STUDIO_AI_PROVIDER / ANTHROPIC_API_KEY); on OpenAI these models.
-AGENT_MODEL = os.getenv('AGENT_MODEL', 'gpt-5.5')
+AGENT_MODEL = os.getenv('AGENT_MODEL', 'gpt-5-mini')  # owner, Nov 21, 2026: the cheaper model (was gpt-5.5)
 AGENT_FALLBACK_MODEL = os.getenv('AGENT_FALLBACK_MODEL', 'gpt-5')  # only when AGENT_MODEL is unavailable
 AGENT_DAILY_SPEND_CAP_USD = float(os.getenv('AGENT_DAILY_SPEND_CAP_USD', '2'))  # per person per UTC day
 AGENT_MAX_STEPS = int(os.getenv('AGENT_MAX_STEPS', '40'))  # model calls per run

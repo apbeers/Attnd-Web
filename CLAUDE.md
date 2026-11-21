@@ -254,7 +254,7 @@ on Save does; there is no second copy of any business logic.
   is an always-ask step that restores those revisions through the History view. It can't unsend updates.
 - **Panel** (`agent/static/agent/agent.js`, `agent.css`): launcher "Ask Attnd", chat with live steps, confirm card,
   `ask_user` replies, Stop, file attach (`/console/agent/attach/`, PDF/images/text ≤ `AGENT_MAX_ATTACHMENT_MB`;
-  file fields take the attachment id), recent requests, Undo all. **Background** (default): when a run that changed
+  file fields take the attachment id), recent requests, Undo all. **One conversation**: new requests are added below the earlier ones (sessionStorage `attnd.agent.chat` = the run ids, `attnd.agent.scroll` = the log's scroll position), so taps, follow-ups and page loads keep the chat; "+" (New chat) starts over; a request picked from the history list starts a conversation with it. "Open page ↗" keeps the chat open at the same place over the new page on wide screens (phones close the sheet). On phones the sheet takes the whole visible height. **Background** (default): when a run that changed
   the current event or page ends, the page reloads (or shows "Updated · Refresh" with unsaved input). **Watch**
   (`localStorage` `attnd.agent.watch`, wider screens only): each changed step opens its page. On phones (≤ 600px)
   it is a bottom sheet that always works in the background (no Watch switch; header = title, status, history,
@@ -536,7 +536,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `PROSPECT_MODEL` / `PROSPECT_FALLBACK_MODEL` | No | Prospects discovery (staff), default `gpt-5.5` / `gpt-5` (fallback only when the model is unavailable); uses `OPENAI_API_KEY` and OpenAI's web search tool |
 | `PROSPECT_DAILY_SPEND_CAP_USD` | No | AI spend of all prospect runs per UTC day, default `5` |
 | `PROSPECT_RUN_MAX_MINUTES` | No | Wall clock per prospect run, default `20` (stops and keeps what it found) |
-| `AGENT_MODEL` / `AGENT_FALLBACK_MODEL` | No | Ask Attnd (console agent) on OpenAI, default `gpt-5.5` / `gpt-5` (fallback only when the model is unavailable); the provider follows `STUDIO_AI_PROVIDER` / `ANTHROPIC_API_KEY` |
+| `AGENT_MODEL` / `AGENT_FALLBACK_MODEL` | No | Ask Attnd (console agent) on OpenAI, default `gpt-5-mini` (the cheaper model, owner Nov 21, 2026) / `gpt-5` (fallback only when the model is unavailable); the provider follows `STUDIO_AI_PROVIDER` / `ANTHROPIC_API_KEY` |
 | `AGENT_DAILY_SPEND_CAP_USD` | No | Ask Attnd AI spend per person per UTC day, default `2` |
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
 | `AGENT_PLANNING_EFFORT` / `AGENT_STEP_EFFORT` | No | Reasoning effort for the first call of a run (and after a reply) / routine steps, default `medium` / `low` |

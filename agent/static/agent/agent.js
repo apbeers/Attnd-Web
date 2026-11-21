@@ -83,9 +83,8 @@
     html.classList.add('agent-sheet-open');
     const visible = vv ? vv.height : window.innerHeight;
     const top = vv ? vv.offsetTop : 0;
-    // Keyboard closed: 85% of the screen. Open: everything above the keyboard (the log takes the rest).
-    const keyboard = vv && vv.height < window.innerHeight * 0.8;
-    const height = Math.round(keyboard ? visible : Math.min(visible, window.innerHeight * 0.85));
+    // The whole visible height: the full screen, or everything above the keyboard when it is open.
+    const height = Math.round(visible);
     root.style.setProperty('--agent-sheet-height', `${height}px`);
     root.style.setProperty('--agent-sheet-top', `${Math.round(top + visible - height)}px`);
   }
@@ -224,10 +223,44 @@
     catch (e) { statusLine.textContent = 'Reconnecting…'; schedule(); }
   }
 
-  async function show(id, isLive) {
+  // ---- the conversation: every request of this chat stays in the log (and across page loads) ----
+  const chatIds = () => { try { return JSON.parse(store.get('sessionStorage', 'attnd.agent.chat') || '[]'); } catch (e) { return []; } };
+  const setChatIds = (ids) => store.set('sessionStorage', 'attnd.agent.chat', JSON.stringify(ids.slice(-20)));
+  let scrollTimer = null;
+  log.addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop)), 150);
+  });
+  window.addEventListener('pagehide', () => store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop)));
+
+  function newChat() {
+    stopPolling();
     log.textContent = '';
     lastSeq = 0;
     renderedSteps.clear();
+    run = null;
+    wasActive = false;
+    setChatIds([]);
+    store.remove('sessionStorage', 'attnd.agent.scroll');
+    statusLine.textContent = '';
+    confirmBox.hidden = true;
+    stopButton.hidden = true;
+    sendButton.hidden = false;
+    input.placeholder = 'What should Attnd do?';
+    input.focus();
+  }
+  $('[data-agent-new]').addEventListener('click', newChat);
+
+  // A request from the history list: shown on its own (a new conversation that starts with it).
+  async function show(id, isLive) {
+    log.textContent = '';
+    renderedSteps.clear();
+    setChatIds([id]);
+    await appendRun(id, isLive);
+  }
+
+  async function appendRun(id, isLive) {
+    lastSeq = 0;
     live = false;
     const data = await get(runUrl(id, '?after=0'));
     bubble('user', data.run.goal);
@@ -250,10 +283,11 @@
         renderRun(await post(runUrl(run.id, 'reply/'), { text }));
         live = true;
       } else {
-        if (!run || !run.active) { log.textContent = ''; lastSeq = 0; renderedSteps.clear(); }
+        if (!run || !run.active) { lastSeq = 0; }
         bubble('user', text);
         const data = await post(root.dataset.startUrl, { goal: text, page: location.pathname + location.search,
                                                           event_id: eventId || '', attachments: attachments.map((a) => a.id).join(',') });
+        if (data.run && data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
         attachments = [];
         filesList.textContent = '';
         refreshButton.hidden = true;
@@ -356,6 +390,11 @@
       const link = document.createElement('a');
       link.href = item.url;
       link.className = 'agent__open-page';
+      // Wide screens: the chat stays open where it was over the new page. Phones: the sheet closes to show it.
+      link.addEventListener('click', () => {
+        store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop));
+        if (phone.matches) store.remove('sessionStorage', 'attnd.agent.open');
+      });
       link.textContent = 'Open page ↗';
       foot.appendChild(link);
     }
@@ -555,7 +594,19 @@
     try {
       const data = await get(root.dataset.runsUrl);
       const active = data.runs.find((r) => r.active);
-      if (active) { await show(active.id, true); if (active.status !== 'running') open(false); }
+      let ids = chatIds().filter((id) => data.runs.some((r) => r.id === id));
+      if (active && !ids.includes(active.id)) ids = ids.concat([active.id]);
+      setChatIds(ids);
+      if (ids.length) {
+        log.textContent = '';
+        for (const id of ids) {
+          const r = data.runs.find((x) => x.id === id);
+          await appendRun(id, id === ids[ids.length - 1] && r && r.active);
+        }
+        const saved = parseInt(store.get('sessionStorage', 'attnd.agent.scroll') || '', 10);
+        if (!Number.isNaN(saved)) log.scrollTop = saved;
+      }
+      if (active && active.status !== 'running') open(false);
     } catch (e) { /* offline: the panel still opens */ }
   })();
 })();

@@ -95,9 +95,9 @@
    Inputs are 16px so iOS doesn't zoom the page when one is focused. */
 @media (max-width: 600px) {
   .agent { right: var(--space-3); bottom: var(--space-3); }
-  .agent.is-open { left: 0; right: 0; bottom: auto; top: var(--agent-sheet-top, 15dvh); }
-  .agent__panel { width: 100vw; height: 85vh; height: var(--agent-sheet-height, 85dvh); max-height: none;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0; }
+  .agent.is-open { left: 0; right: 0; bottom: auto; top: var(--agent-sheet-top, 0); }
+  .agent__panel { width: 100vw; height: 85vh; height: var(--agent-sheet-height, 100dvh); max-height: none;
+    border-radius: 0; border: 0; }
   .agent__switch { display: none; }
   .agent__log { overscroll-behavior: contain; }
   .agent textarea, .agent input, .agent select, .agent__form textarea { font-size: 16px; }
