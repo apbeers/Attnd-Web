@@ -112,6 +112,7 @@ def ai_limits_form(user, form=None):
                      action=reverse('credit:limits'), confirm_action='save_ai_limits',
                      submit=[{'label': 'Save limits', 'style': 'primary',
                               'confirm': 'Change the AI limits for everyone? It takes effect within a minute.'}])
+    data['no_ai'] = True  # numbers a person decides, not something to draft with AI
     return {'name': 'AI limits', 'form': data, 'actions': [{'name': 'save_ai_limits'}],
             'updated': fmt(conf.updated_at, 'M j, g:i A') if conf.pk and conf.updated_at else '',
             'updated_by': conf.updated_by.email if conf.pk and conf.updated_by_id else ''}
@@ -138,6 +139,7 @@ def ai_limit_overrides(user, form=None):
     data = form_json(form or OverrideForm(), [('grid', 'email', 'monthly_usd'), 'unlimited', 'note'],
                      action=reverse('credit:override'), confirm_action='set_ai_limit_override',
                      submit=[{'label': 'Save override', 'style': 'primary', 'confirm': "Change this person's AI credit?"}])
+    data['no_ai'] = True
     return {'name': 'AI credit overrides', 'rows': rows, 'form': data,
             'default': f'{ledger.limits().monthly_default_usd:,.0f}',
             'actions': [a for r in rows for a in r['actions']] + [{'name': 'set_ai_limit_override'}]}

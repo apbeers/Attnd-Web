@@ -5,7 +5,7 @@
   <div class="grid grid--4 grid--stats">
     <div class="metric"><div class="stat__value">${{ d.total }}</div><div class="eyebrow">Spent</div></div>
     <div class="metric"><div class="stat__value">{{ d.calls }}</div><div class="eyebrow">AI calls</div></div>
-    <div class="metric"><div class="stat__value">${{ d.exempt }}</div><div class="eyebrow">Not counted (staff, demo)</div></div>
+    <div class="metric"><div class="stat__value">${{ d.exempt }}</div><div class="eyebrow">Not counted (Prospects, demo)</div></div>
     <div class="metric"><div class="stat__value">${{ d.visitors.cost }}</div><div class="eyebrow">{{ d.visitors.count }} visitor{{ d.visitors.count|pluralize }}</div></div>
   </div>
   {% if d.alert != '0' %}<p class="small muted">Alert at ${{ d.alert }} this month: {{ d.alert_percent }}% reached.</p>
