@@ -61,6 +61,7 @@ class ComponentTestCase(TestCase):
             'change_preview': {'event_id': self.event.pk, 'proposal_id': self.proposal.pk},
             'event_readiness': {'event_id': self.event.pk}, 'attention': {},
             'usage_answer': {'event_id': self.event.pk}, 'event_rollover': {'event_id': self.event.pk},
+            'first_run': {},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -75,7 +76,7 @@ class ComponentTestCase(TestCase):
             'event_flyer': 'No flyer yet', 'sharing_kit': 'PRAIRIE', 'event_lifecycle': 'Now:',
             'event_versions': 'No saved versions yet', 'event_exports': 'CSV files',
             'change_preview': 'Move sets later', 'event_readiness': 'to fix',
-            'attention': 'What needs attention', 'usage_answer': 'numbers', 'event_rollover': 'Make the copy',
+            'attention': 'What needs attention', 'usage_answer': 'numbers', 'event_rollover': 'Make the copy', 'first_run': 'Get started',
         }
 
     def request(self, user=None):
@@ -355,3 +356,19 @@ class RolloverTests(ComponentTestCase):
         self.assertEqual(copy.location_set.count(), self.event.location_set.count())
         self.assertTrue(EventMember.objects.filter(event=copy, user=helper).exists())
         self.assertFalse(Notification.objects.filter(event=copy).exists())
+
+
+class WalkthroughTests(ComponentTestCase):
+    def test_steps_follow_the_event_and_skip_hides_it_for_good(self):
+        from django.urls import reverse
+
+        from console.components.catalog_chat import show_walkthrough
+        data = C.load(self.owner, 'first_run', {})
+        done = {s['key']: s['done'] for s in data['steps']}
+        self.assertTrue(done['import'])
+        self.assertFalse(done['review'])  # a change set is waiting
+        self.assertEqual(data['current']['key'], 'review')
+        self.assertTrue(show_walkthrough(self.owner))
+        self.client.force_login(self.owner)
+        self.client.post(reverse('console:walkthrough_skip'), secure=True)
+        self.assertFalse(show_walkthrough(self.owner))

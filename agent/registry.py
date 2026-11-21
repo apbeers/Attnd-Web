@@ -52,6 +52,7 @@ EXCLUDED = {
     'console:signup': 'Off-limits: creating accounts (and the agent only runs for signed-in people).',
     'console:account': 'Off-limits: account security (email, password, passkeys, two-factor, recovery codes).',
     'console:service_worker': 'A static script for the browser, no content.',
+    'console:walkthrough_skip': 'The chat\'s own "Skip" on the first-run walkthrough (a person\'s choice, no content).',
     'console:manifest': 'The web app manifest, no content.',
     'console:event_qr': 'A PNG image of the join QR code (the overview has the join link).',
     'console:event_poster': 'A printable poster; the overview has the same join link and code.',
@@ -85,6 +86,7 @@ POST_EXCLUDED = {
     'console:signup': EXCLUDED['console:signup'],
     'console:account': EXCLUDED['console:account'],
     'console:location_fill': EXCLUDED['console:location_fill'],
+    'console:walkthrough_skip': EXCLUDED['console:walkthrough_skip'],
 }
 
 NAMESPACE_AUDIENCE = {'diagnostics': 'staff', 'prospects': 'staff', 'studio': 'studio'}

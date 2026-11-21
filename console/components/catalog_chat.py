@@ -237,3 +237,70 @@ def event_rollover(user, event_id=None, event=None, form=None):
               'team': event.members.count()}
     return {'event_id': event.pk, 'name': event.name, 'form': data, 'preview': preview, 'counts': counts,
             'shift_days': shift.days}
+
+
+WALK_STEPS = [
+    ('import', 'Import', 'Paste your event\'s website or drop a flyer, and the AI builds the event.'),
+    ('review', 'Review', 'Check what the AI found: locations, schedule, details.'),
+    ('layout', 'Layout', 'Pick the tabs and the look attendees see in the app.'),
+    ('publish', 'Publish', 'Publish it so attendees can join.'),
+    ('share', 'Share', 'Print the QR code or share the link.'),
+]
+
+
+def walkthrough_state(user):
+    """(event or None, {step: done}) for the person's newest event."""
+    from django.db.models import Q
+
+    from events.models import Event, EventMember, UsageCount
+    from scrape.models import ChangeSet
+    event = (Event.objects.filter(Q(user=user) | Q(id__in=EventMember.objects.filter(user=user).values('event_id')))
+             .order_by('-created_at').first())
+    done = {key: False for key, _, _ in WALK_STEPS}
+    if event is None:
+        return None, done
+    done['import'] = event.location_set.exists() or event.scheduleditem_set.exists()
+    done['review'] = done['import'] and not ChangeSet.objects.filter(event=event, status=ChangeSet.PENDING).exists()
+    done['layout'] = bool(event.display_config)
+    done['publish'] = event.status == Event.STATUS_PUBLISHED
+    done['share'] = done['publish'] and (event.device_set.exists() or UsageCount.objects.filter(
+        event=event, metric='link_open').exists())
+    return event, done
+
+
+def show_walkthrough(user):
+    """Open the chat on the walkthrough? Only until it is finished or skipped, and for people with ≤ 2 events."""
+    from django.db.models import Q
+
+    from console.models import ConsolePreference
+    from events.models import Event, EventMember
+    if ConsolePreference.objects.filter(user=user, walkthrough_done=True).exists():
+        return False
+    count = Event.objects.filter(Q(user=user) | Q(id__in=EventMember.objects.filter(user=user).values('event_id'))).count()
+    return count <= 2
+
+
+@component('first_run', 'Get started', 'The first-run walkthrough for a new organizer: import → review → layout → '
+           'publish → share as progress chips, the current step with its action; skippable, shown once.', ids=(),
+           chat_only='The chat\'s opening card for new organizers.')
+def first_run(user):
+    from console.models import ConsolePreference
+    if not show_walkthrough(user):  # finished, skipped, or not a new organizer: the chat shows the briefing instead
+        return {'show': False, 'steps': [], 'current': None, 'link_url': '', 'event': '', 'done_count': 0,
+                'skip_url': ''}
+    event, done = walkthrough_state(user)
+    steps = []
+    current = next((key for key, _, _ in WALK_STEPS if not done[key]), None)
+    for key, label, text in WALK_STEPS:
+        steps.append({'key': key, 'label': label, 'text': text, 'done': done[key], 'current': key == current})
+    if current is None and event is not None:  # all done: never again
+        ConsolePreference.objects.update_or_create(user=user, defaults={'walkthrough_done': True})
+    links = {}
+    if event is not None:
+        links = {'review': reverse('console:changesets', args=[event.pk]),
+                 'layout': reverse('console:display', args=[event.pk]),
+                 'publish': reverse('console:event', args=[event.pk]),
+                 'share': reverse('console:event_poster', args=[event.pk])}
+    now = next((s for s in steps if s['current']), None)
+    return {'show': True, 'steps': steps, 'current': now, 'link_url': links.get(current, ''), 'event': event.name if event else '',
+            'done_count': sum(1 for s in steps if s['done']), 'skip_url': reverse('console:walkthrough_skip')}

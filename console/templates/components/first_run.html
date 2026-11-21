@@ -1,0 +1,14 @@
+{% load console_tags %}{# first_run (stage I17): the walkthrough for a new organizer, as progress chips. #}{% if not d.show %}<div class="component component--first_run" data-tour-hidden hidden></div>{% else %}<div class="stack component component--first_run">
+  <h3 class="title-4">{% icon "stars" %} Get started{% if d.event %} with {{ d.event }}{% endif %}</h3>
+  <ol class="walk" aria-label="Steps, {{ d.done_count }} of 5 done">{% for s in d.steps %}
+    <li class="walk__step{% if s.done %} is-done{% elif s.current %} is-current{% endif %}"{% if s.current %} aria-current="step"{% endif %}>
+      <span class="walk__mark" aria-hidden="true">{% if s.done %}✓{% else %}{{ forloop.counter }}{% endif %}</span>{{ s.label }}</li>{% endfor %}
+  </ol>
+  {% if d.current %}<p>{{ d.current.text }}</p>
+    <div class="cluster">
+      {% if d.current.key == 'import' %}<span class="small muted">Paste a link below, or drop a flyer or a schedule on this chat.</span>
+      {% elif d.link_url %}<a class="button button--primary button--small" href="{{ d.link_url }}">{% if d.current.key == 'publish' %}Publish{% elif d.current.key == 'share' %}Print the QR poster{% else %}Open {{ d.current.label|lower }}{% endif %}</a>{% endif %}
+      <form method="post" action="{{ d.skip_url }}"{% if surface == 'chat' %} data-component-form{% endif %}>{% csrf_token %}<button class="button button--ghost button--small">Skip the tour</button></form>
+    </div>
+  {% else %}<p class="small">{% icon "check" %} All set. Your event is live: ask for anything any time.</p>{% endif %}
+</div>{% endif %}

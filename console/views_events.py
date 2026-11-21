@@ -100,6 +100,17 @@ def _chat_landing(request, event=None):
     return redirect(reverse('console:assistant') + '?' + urlencode(params))
 
 
+@require_POST
+@login_required
+def walkthrough_skip(request):
+    """Stage I17: hide the first-run walkthrough for good (the chat's "Skip" button)."""
+    from console.models import ConsolePreference
+    ConsolePreference.objects.update_or_create(user=request.user, defaults={'walkthrough_done': True})
+    if _wants_json(request) or request.headers.get('X-Attnd-Component'):
+        return JsonResponse({'saved': True, 'messages': ['Skipped. Ask Attnd anything any time.']})
+    return redirect('console:dashboard')
+
+
 @agent_action('set_chat_default', 'Make the full-screen chat the default view when the person opens the console or '
               'an event (or turn that off).', params={'on': P('boolean', 'true = chat first, false = the pages')},
               title='Changed the default view')

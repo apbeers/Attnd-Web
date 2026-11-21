@@ -878,7 +878,9 @@
     if (briefed || !hello || log.querySelector('.agent__brief')) return;
     briefed = true;
     try {
-      const [item] = await fetchCards('attention', [{}]);
+      // Stage I17: new organizers get the tour (the card says show: false otherwise), everyone else the briefing.
+      let [item] = root.dataset.firstRun ? await fetchCards('first_run', [{}]) : [null];
+      if (!item || item.html.includes('data-tour-hidden')) [item] = await fetchCards('attention', [{}]);
       if (!item || !$('[data-agent-hello]')) return;
       const box = document.createElement('div');
       box.className = 'agent__component agent__brief';

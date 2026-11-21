@@ -141,6 +141,8 @@ class ConsolePreference(models.Model):
     phone_chat = models.BooleanField(default=True)
     # Stage I16: which organizer emails this person wants ({kind: bool}, console/organizer_mail.KINDS; all on).
     notify = models.JSONField(default=dict, blank=True)
+    # Stage I17: the first-run walkthrough was finished or skipped (shown once).
+    walkthrough_done = models.BooleanField(default=False)
     # What Ask Attnd should remember for this person (stage I11): [{id, text, event_id (or null = every event),
     # created}], ≤ 30, learned from corrections ("always call it Main Stage"); shown and removable in Account.
     agent_notes = models.JSONField(default=list, blank=True)
@@ -184,12 +186,21 @@ class ConsolePreference(models.Model):
         I15): on by default, the same switch turns it off there."""
         if not getattr(user, 'is_authenticated', False):
             return False
+        return cls._prefs(user)[1 if phone else 0]
+
+    @classmethod
+    def _prefs(cls, user):
+        """(chat_default, phone_chat, walkthrough_done), one query per request (cached on the user object)."""
         cached = getattr(user, '_chat_prefs', None)
         if cached is None:
-            row = cls.objects.filter(user=user).values_list('chat_default', 'phone_chat').first()
-            cached = row or (False, True)
+            row = cls.objects.filter(user=user).values_list('chat_default', 'phone_chat', 'walkthrough_done').first()
+            cached = row or (False, True, False)
             user._chat_prefs = cached
-        return cached[1] if phone else cached[0]
+        return cached
+
+    @classmethod
+    def walkthrough_pending(cls, user):
+        return bool(getattr(user, 'is_authenticated', False)) and not cls._prefs(user)[2]
 
     @staticmethod
     def is_phone(request):

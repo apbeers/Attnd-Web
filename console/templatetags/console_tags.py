@@ -180,6 +180,13 @@ def history_message(entry):
 
 
 @register.simple_tag(takes_context=True)
+def first_run(context):
+    """Stage I17: open the chat on the walkthrough (until it is finished or skipped)?"""
+    from console.models import ConsolePreference
+    return ConsolePreference.walkthrough_pending(getattr(context.get('request'), 'user', None))
+
+
+@register.simple_tag(takes_context=True)
 def chat_default(context):
     """Is "Chat as my default view" on for the signed-in person (the top bar's switch)?"""
     from console.models import ConsolePreference
