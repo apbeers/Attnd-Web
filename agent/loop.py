@@ -61,6 +61,15 @@ FIXED_TOOLS = [
                                              'billing) with the exact console page links to give.',
      'parameters': {'type': 'object', 'additionalProperties': False, 'required': [], 'properties': {}},
      'strict': True},
+    {'name': 'remember', 'description': 'Remember a lasting preference or correction of the person\'s for next time '
+                                        '("always call it Main Stage", "notifications short and friendly", "24-hour '
+                                        'times", "default category Food"). Only when they say it should apply from '
+                                        'now on, or correct you twice. Not facts about the event (those go in the '
+                                        'event), never secrets.',
+     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['note', 'event_id'], 'properties': {
+         'note': {'type': 'string', 'description': 'one short sentence, e.g. "Call the big stage Main Stage"'},
+         'event_id': {'type': ['integer', 'null'], 'description': 'only for this event, or null for every event'}}},
+     'strict': True},
     {'name': 'finish', 'description': 'End the run with a short summary for the person, and 2-4 follow-ups they '
                                       'might tap next.',
      'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['summary', 'suggest'],
@@ -487,6 +496,21 @@ def _call(run, call):
             return _tool_pages(run, call, args)
         if name in ('list_events', 'search_events'):
             return _tool_events(run, call, args)
+        if name == 'remember':  # stage I11: the person's preferences, shown and removable in Account
+            from console.models import ConsolePreference
+            note = str(args.get('note') or '').strip()
+            event_id = args.get('event_id') if isinstance(args.get('event_id'), int) else None
+            if not note:
+                return 'Error: nothing to remember.'
+            if event_id is not None:
+                from events.models import Event
+                event = Event.objects.filter(pk=event_id).first()
+                if event is None or not event.can_edit(run.user):
+                    return 'Error: not one of the person\'s events.'
+            ConsolePreference.remember(run.user, note, event_id)
+            add_step(run, tool='remember', call_id=call.id, arguments={'note': note, 'event_id': event_id},
+                     text=f'Remembered: {note[:120]}')
+            return 'Remembered (the person can see and remove it in Account).'
         if name == 'propose_changes':  # several changes previewed for the person to apply (agent/proposals.py)
             from agent import proposals
             return proposals.propose_tool(run, call, args)

@@ -232,3 +232,19 @@ class LiveOpsTests(HarnessCase):
         self.assertEqual(response['next']['component'], 'notification_form')
         self.assertEqual(response['next']['fill']['urgent'], False)
         self.assertFalse(Notification.objects.exists())  # drafted, never sent by Apply
+
+
+class MemoryTests(HarnessCase):
+    def test_remembered_preferences_reach_the_next_request_and_can_be_removed(self):
+        from django.urls import reverse
+
+        from agent.prompts import context_block
+        from console.models import ConsolePreference
+        run, _ = self.run_with([[('remember', {'note': 'Call the big stage Main Stage', 'event_id': None})],
+                                [('finish', {'summary': 'Noted.', 'suggest': None})]])
+        self.assertIn('Call the big stage Main Stage', context_block(self.make_run()))
+        note = ConsolePreference.notes_for(self.owner)[0]
+        page = self.client.get(reverse('console:account'), secure=True)
+        self.assertContains(page, 'Call the big stage Main Stage')
+        self.client.post(reverse('console:account'), {'action': 'forget_note', 'note': note['id']}, secure=True)
+        self.assertEqual(ConsolePreference.notes_for(self.owner), [])

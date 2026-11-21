@@ -134,6 +134,10 @@ def context_block(run):
     data = {'now_utc': timezone.now().strftime('%Y-%m-%dT%H:%M:%SZ'),
             'person': {'staff': bool(run.user.is_staff or run.user.is_superuser)},
             'current_page': run.page_url or None}
+    from console.models import ConsolePreference
+    notes = ConsolePreference.notes_for(run.user, run.event_id)
+    if notes:  # stage I11: what the person asked to be remembered (follow these unless the request says otherwise)
+        data['remembered_preferences'] = [n['text'] for n in notes]
     if run.event_id and run.event is not None:
         data['current_event'] = event_context(run.event, run.user)
     else:

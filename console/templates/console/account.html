@@ -119,6 +119,15 @@
       <button class="button button--secondary button--small">{% if recovery_codes_left %}New recovery codes{% else %}Set up recovery codes{% endif %}</button></form>
   </div>
   {% endif %}
+  <div class="panel span-all" id="ask-attnd-memory">
+    <h2 class="title-4">{% icon "stars" %} What Ask Attnd remembers</h2>
+    {% if agent_notes %}<p class="small muted">Ask Attnd follows these in every request (it learns them when you say something should always apply). Remove any you no longer want.</p>
+    <ul class="list list--boxed">{% for n in agent_notes %}<li class="cluster">
+      <span class="grow">{{ n.text }}<span class="small muted"> · {% if n.event %}{{ n.event }}{% else %}every event{% endif %}</span></span>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="forget_note"><input type="hidden" name="note" value="{{ n.id }}">
+        <button class="button button--ghost button--small">Remove</button></form></li>{% endfor %}</ul>
+    {% else %}<p class="small muted">Nothing yet. Tell Ask Attnd what should always apply (“always call it Main Stage”, “keep notifications short”) and it shows up here.</p>{% endif %}
+  </div>
 </div>
 </div>
 {% endblock %}

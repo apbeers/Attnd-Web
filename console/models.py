@@ -137,7 +137,39 @@ class ConsolePreference(models.Model):
     (/console/, an event's overview) in Ask Attnd's full-screen chat instead of the page."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='console_preference')
     chat_default = models.BooleanField(default=False)
+    # What Ask Attnd should remember for this person (stage I11): [{id, text, event_id (or null = every event),
+    # created}], ≤ 30, learned from corrections ("always call it Main Stage"); shown and removable in Account.
+    agent_notes = models.JSONField(default=list, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    MAX_NOTES = 30
+
+    @classmethod
+    def notes_for(cls, user, event_id=None):
+        pref = cls.objects.filter(user=user).first()
+        notes = pref.agent_notes if pref else []
+        return [n for n in notes if n.get('event_id') in (None, event_id)]
+
+    @classmethod
+    def remember(cls, user, text, event_id=None):
+        import uuid
+
+        from django.utils import timezone
+        pref, _ = cls.objects.get_or_create(user=user)
+        text = ' '.join(str(text).split())[:300]
+        notes = [n for n in pref.agent_notes if n.get('text', '').lower() != text.lower()]
+        notes.append({'id': uuid.uuid4().hex[:12], 'text': text, 'event_id': event_id,
+                      'created': timezone.now().isoformat()})
+        pref.agent_notes = notes[-cls.MAX_NOTES:]
+        pref.save(update_fields=['agent_notes', 'updated_at'])
+        return pref.agent_notes[-1]
+
+    @classmethod
+    def forget(cls, user, note_id):
+        pref = cls.objects.filter(user=user).first()
+        if pref is not None:
+            pref.agent_notes = [n for n in pref.agent_notes if n.get('id') != note_id]
+            pref.save(update_fields=['agent_notes', 'updated_at'])
 
     def __str__(self):
         return f'{self.user_id}: chat {"on" if self.chat_default else "off"}'

@@ -121,6 +121,11 @@ def account(request):
             return response
     elif action in ('passkey_rename', 'passkey_remove'):
         return _passkey_action(request, action)
+    elif action == 'forget_note':  # stage I11: what Ask Attnd remembers
+        from console.models import ConsolePreference
+        ConsolePreference.forget(request.user, request.POST.get('note', ''))
+        messages.success(request, 'Ask Attnd won’t remember that any more.')
+        return redirect('console:account')
     elif request.method == 'POST' and request.POST.get('action') == 'email':
         email_form = EmailChangeForm(request.user, request.POST, prefix='email')
         if email_form.is_valid():
@@ -142,7 +147,16 @@ def account(request):
     required = twofactor.is_required(user)
     for key in keys:
         key.removable = passkeys.can_remove(user, key)
+    from console.models import ConsolePreference
+    from events.models import Event
+    pref = ConsolePreference.objects.filter(user=user).first()
+    notes = list(reversed(pref.agent_notes)) if pref else []
+    names = dict(Event.objects.filter(pk__in=[n['event_id'] for n in notes if n.get('event_id')])
+                 .values_list('pk', 'name'))
+    for note in notes:
+        note['event'] = names.get(note.get('event_id'), '')
     return render(request, 'console/account.html', {
+        'agent_notes': notes,
         'email_form': email_form, 'password_form': password_form, 'section': 'account',
         'two_factor': device, 'two_factor_required': required,
         'recovery_codes': recovery_codes,
