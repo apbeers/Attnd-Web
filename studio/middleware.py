@@ -32,6 +32,10 @@ class SitesHostMiddleware:
         request.is_sites_host = True
         if request.path.startswith(_BLOCKED_PREFIXES) or request.headers.get('Service-Worker'):
             response = HttpResponseNotFound('Not found', content_type='text/plain')
+        elif request.path == '/':  # the bare sites host: Attnd's home page (unknown slugs stay 404)
+            from django.conf import settings
+            from django.http import HttpResponsePermanentRedirect
+            response = HttpResponsePermanentRedirect(settings.SITE_URL.rstrip('/') + '/home/')
         elif request.path == '/robots.txt':
             response = HttpResponse('User-agent: *\nAllow: /\nDisallow: /*/_preview/\n', content_type='text/plain')
         else:

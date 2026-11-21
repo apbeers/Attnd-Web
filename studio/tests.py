@@ -184,8 +184,9 @@ class SitesHostTests(StudioTestCase):
     def test_only_site_routes_exist_on_the_sites_host(self):
         self.publish()
         for path in ('/console/', f'/{settings.ADMIN_URL_PATH}', '/api/v2/events/lookup/?q=ARTS1', '/accounts/login/',
-                     '/static/console/console.css', '/favicon.ico', '/join/ARTS1/', '/', '/health/'):
+                     '/static/console/console.css', '/favicon.ico', '/join/ARTS1/', '/health/'):
             self.assertEqual(self.sites(path).status_code, 404, path)
+        self.assertEqual(self.sites('/').status_code, 301)  # the bare root → Attnd's home page
 
     def test_no_cookies_csp_and_framing(self):
         self.publish()
@@ -744,6 +745,15 @@ class SitesDomainMoveTests(StudioTestCase):
         for path in ('/console/', '/api/v2/app-status/', '/accounts/login/', '/static/console/console.css', '/'):
             self.assertEqual(self.old(path).status_code, 404, path)
         self.assertNotIn('Set-Cookie', response)
+
+    @override_settings(SITE_URL='https://dev.attnd.app')
+    def test_bare_sites_root_goes_to_attnd_home_and_unknown_slugs_stay_404(self):
+        new = Client()
+        response = new.get('/', HTTP_HOST='dev.attnd.site', secure=True)
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response['Location'], 'https://dev.attnd.app/home/')
+        self.assertNotIn('Set-Cookie', response)
+        self.assertEqual(new.get('/no-such-site/', HTTP_HOST='dev.attnd.site', secure=True).status_code, 404)
 
     def test_addresses_follow_the_sites_host(self):
         from studio import publishing
