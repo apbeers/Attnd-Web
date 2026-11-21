@@ -48,9 +48,9 @@ Do these steps once, in order. Each step says which values go where. For any sin
 - [ ] Studio sites on **attnd.site** (owner bought it, Nov 21, 2026). Done: the Heroku domains `dev.attnd.site` on
       attnd-dev (DNS target `genetic-salmon-1jo14r3peboo8qusoemv7xrz.herokudns.com`) and `attnd.site` on attnd-web
       (DNS target `encircled-eggplant-pbyuddr6oxnp2ggjecvwc5be.herokudns.com`), automatic certificates (ACM) on both.
-      Owner: the DNS records at the registrar (CNAME `dev` → the dev target; ALIAS / ANAME / flattened CNAME `@` → the
-      production target). Then, once each certificate is issued: `SITES_HOST=dev.attnd.site` on attnd-dev and
-      `SITES_HOST=attnd.site` on attnd-web (production, owner), and `heroku run -a <app> python manage.py
+      DNS records set and both certificates issued (dev.attnd.site and attnd.site); **dev is switched**
+      (`SITES_HOST=dev.attnd.site` on attnd-dev, Nov 21, 2026). Owner: `SITES_HOST=attnd.site` on attnd-web
+      (production), then `heroku run -a <app> python manage.py
       refresh_site_addresses` so the apps pick up the new `website_url`. The old herokuapp.com sites host then only
       301s site paths to the new host. Older note (step 15):
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
@@ -94,6 +94,11 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `AIzaSyD5d9fk…` Android) are deleted or restricted; turn on GitHub secret scanning + push protection on all three
       repos (`gh api -X PATCH repos/apbeers/<repo> -F security_and_analysis[secret_scanning][status]=enabled
       -F security_and_analysis[secret_scanning_push_protection][status]=enabled`).
+- [x] Keys rotated (owner, Nov 21, 2026; dev config values had been exposed in a session log): the Anthropic keys on
+      attnd-dev and attnd-web (now separate keys per app, the old ones deleted), the dev static `API_KEY` on attnd-dev,
+      and the GitHub secrets `ATTND_API_KEY` (Attnd-iOS, Attnd-Android) and `ATTND_DEV_API_KEY` (Attnd-Web).
+- [ ] Low priority: rotate the APNs key (`7Q3H2446BU`, step 3a), deliberately deferred on Nov 21, 2026. Make a new key,
+      set `APNS_KEY_ID` / `APNS_AUTH_KEY` on both apps (the `read -s` way below), test a push, then revoke the old key.
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
@@ -113,6 +118,14 @@ Notes:
 | **GitHub environment secrets** | Keys the CI/CD pipelines use. | No, write-only |
 | **Heroku config vars** | Keys the running server uses. | Yes (`heroku config:get`) |
 | **Claude cloud environment** ("Attnd Cloud Environment") | Network secrets that give Claude API access. Currently: a Heroku API token for `api.heroku.com`. Claude never sees the value. | No, write-only |
+
+**Setting a secret without exposing it** (Nov 21, 2026): `heroku config:set` prints the values it set, so type the
+value into a hidden prompt and throw the output away, and never paste a key copied from instructions or the clipboard
+history:
+```
+read -s VALUE && heroku config:set -a attnd-dev ANTHROPIC_API_KEY="$VALUE" > /dev/null; unset VALUE
+```
+For GitHub, pipe it the same way: `read -s VALUE && printf %s "$VALUE" | gh secret set NAME -R apbeers/<repo>; unset VALUE`.
 
 Never keep keys only on your Mac. Once a key is in the password manager and wherever it's used, delete the downloaded file (`.p8`, `.jks`, `.json`).
 
