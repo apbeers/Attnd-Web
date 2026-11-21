@@ -20,4 +20,13 @@
         <button type="button" class="button button--secondary button--small" data-copy="{{ d.join_url }}">{% icon "link" %} Copy link</button>
       </div>
       <div class="small muted break center">{{ d.join_url }}</div>
+      <p class="small center" data-phones-line data-phones-url="{{ d.phones_url }}" data-version="{{ d.phones.version }}" role="status">{{ d.phones.text }}</p>
+      <details class="preview-phone stack stack--tight"{% if d.phones.previews %} open{% endif %}>
+        <summary class="small strong">{% icon "phone" %} Preview on my phone</summary>
+        <p class="small muted">Your phone sees every change the moment you make it, before attendees (they get it within seconds). It isn't counted as an attendee. The code works for 7 days and only for you.</p>
+        <img class="center-block" src="{{ d.preview_qr_url }}" alt="QR code to preview {{ d.name }} on your phone" width="150" height="150" loading="lazy">
+        <a class="button button--secondary button--block open-in-app" href="{{ d.preview_open.fallback }}" data-open-app
+           data-ios="{{ d.preview_open.ios }}" data-android="{{ d.preview_open.android }}" data-fallback="{{ d.preview_open.fallback }}" hidden>{% icon "phone" %} Open as preview</a>
+        {% if d.phones.previews %}<ul class="list list--inset small" data-preview-phones>{% for p in d.phones.previews %}<li class="cluster"><span class="grow">{{ p.label }}<br><span class="muted" data-preview-state="{{ p.id }}">{{ p.state }}</span></span>{% include 'components/_actions.html' with actions=p.actions %}</li>{% endfor %}</ul>{% endif %}
+      </details>
     </div>

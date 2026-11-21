@@ -7,7 +7,7 @@ PUBLIC = {
     # site
     'health', 'django.contrib.sitemaps.views.sitemap', 'homepage', 'home_page', 'privacy', 'csp_report',
     # the apps' API (API keys / attestation, never a session)
-    'nearby', 'lookup', 'bundle', 'join', 'leave', 'usage', 'device', 'diagnostics_logs', 'diagnostics_reports',
+    'nearby', 'lookup', 'bundle', 'join', 'changes', 'leave', 'usage', 'device', 'diagnostics_logs', 'diagnostics_reports',
     'app_status', 'symbols', 'symbolicate', 'attest-nonce', 'attest-ios', 'attest-android',
     # join links, shared plans, well-known files
     'join_event', 'join_qr', 'shared_plan_qr', 'shared_plan', 'aasa', 'android_asset_links',

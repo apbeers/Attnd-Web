@@ -31,6 +31,9 @@ urlpatterns = [
     path('events/<int:event_id>/refresh/', v.event_refresh, name='event_refresh'),
     path('events/<int:event_id>/delete/', v.event_delete, name='event_delete'),
     path('events/<int:event_id>/qr.png', v.event_qr, name='event_qr'),
+    path('events/<int:event_id>/preview.png', v.event_preview_qr, name='event_preview_qr'),
+    path('events/<int:event_id>/phones/', v.event_phones, name='event_phones'),
+    path('events/<int:event_id>/preview/remove/', v.event_preview_remove, name='event_preview_remove'),
     path('events/<int:event_id>/poster/', v.event_poster, name='event_poster'),
     path('events/<int:event_id>/export/<slug:kind>.csv', v.export_csv, name='export'),
 

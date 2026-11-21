@@ -96,7 +96,7 @@ def annotated_events(user):
     return (events_for_user(user)
             .annotate(n_locations=_count(Location.objects.all()),
                       n_items=_count(ScheduledItem.objects.all()),
-                      n_devices=_count(Device.objects.real()),
+                      n_devices=_count(Device.objects.attendees()),
                       n_pending=_count(ChangeSet.objects.filter(status=ChangeSet.PENDING)))
             .order_by('-start_time'))
 
@@ -212,7 +212,7 @@ def nearby_action(user, event, **extra):
 
 def _audience(event):
     from events.models import Device
-    return Device.objects.real().filter(event=event).aggregate(  # one query instead of five
+    return Device.objects.attendees().filter(event=event).aggregate(  # one query instead of five
         joined=Count('pk'),
         subscribed=Count('pk', filter=Q(subscribed=True) & ~Q(push_token='')),
         active_today=Count('pk', filter=Q(last_seen__gte=timezone.now() - timedelta(hours=24))),
@@ -263,14 +263,25 @@ def event_stats(user, event_id=None, event=None):
 
 
 @component('live_on_phone', 'Live on your phone', "The event's QR code, code and join link (open it in the Attnd "
-           'app), with the QR download and the poster.', page=event_url)
+           'app), with the QR download and the poster; the Preview on my phone QR (that phone sees every change at '
+           'once and isn\'t counted as an attendee); how many phones have the latest version.', page=event_url,
+           actions=(('remove_preview_phone', 'Remove'),))
 def live_on_phone(user, event_id=None, event=None):
     from attnd.links import join_url, open_in_app_links
+    from events import preview
     event = editable_event(user, event_id, event)
     qr = reverse('console:event_qr', args=[event.pk])
+    phones = preview.phones(event)
+    for p in phones['previews']:
+        p['actions'] = [{'name': 'remove_preview_phone', 'style': 'ghost', 'fields': {'device': p['id']},
+                         'confirm_text': 'Remove this preview phone? It leaves the event.'}]
+    actions = [a for p in phones['previews'] for a in p['actions']]
     return {'name': event.name, 'code': event.event_code, 'qr_url': qr, 'qr_download_url': f'{qr}?download=1',
             'poster_url': reverse('console:event_poster', args=[event.pk]), 'join_url': join_url(event),
-            'open_app': open_in_app_links(event), 'draft': event.status == 'draft'}
+            'open_app': open_in_app_links(event), 'draft': event.status == 'draft',
+            'preview_qr_url': reverse('console:event_preview_qr', args=[event.pk]),
+            'preview_open': preview.open_links(event, user), 'phones': phones,
+            'phones_url': reverse('console:event_phones', args=[event.pk]), 'actions': actions}
 
 
 @component('needs_review', 'AI updates to review', 'How many AI updates of an event wait for review, and the latest '
@@ -805,7 +816,7 @@ def event_metrics(user, event_id=None, event=None, usage=None):
     event = editable_event(user, event_id, event)
     tz = _tz(event)
     u = usage or event_usage(event, tz)  # the Usage page passes what it already counted
-    devices = Device.objects.real().filter(event=event)
+    devices = Device.objects.attendees().filter(event=event)
     by_platform = dict(devices.values_list('platform').annotate(n=Count('id')).values_list('platform', 'n'))
     in_event = sum(by_platform.values())
     split = u['platforms']

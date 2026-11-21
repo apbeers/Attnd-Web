@@ -965,3 +965,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .website-empty__icon { color: var(--color-brand-text); }
 .website-empty p { margin: 0; }
 .website-empty form { margin: 0; }
+
+/* API-026: the QR card's preview phone */
+.center-block { display: block; margin-inline: auto; }
+.preview-phone summary { cursor: pointer; }

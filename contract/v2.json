@@ -4,6 +4,7 @@
     "diagnostics/logs/",
     "diagnostics/reports/",
     "events/<int:event_id>/bundle/",
+    "events/<int:event_id>/changes/",
     "events/<int:event_id>/join/",
     "events/<int:event_id>/leave/",
     "events/<int:event_id>/usage/",
@@ -565,6 +566,7 @@
       },
       "content_version": "integer",
       "event_id": "integer",
+      "jitter_ms": "integer",
       "type": "string"
     },
     "apns:liveactivity": {
@@ -620,6 +622,7 @@
       "data": {
         "content_version": "integer",
         "event_id": "integer",
+        "jitter_ms": "integer",
         "type": "string"
       },
       "notification": "null"

@@ -409,6 +409,15 @@ class DeviceQuerySet(models.QuerySet):
         """Devices of real people: without the automated test devices (``ci-…`` ids)."""
         return self.exclude(id__startswith=CI_DEVICE_PREFIX)
 
+    def attendees(self):
+        """Real devices of attendees: without CI devices and the organizers' preview phones (API-026)."""
+        return self.real().filter(preview_by__isnull=True, preview_until__isnull=True)
+
+    def previews(self, now=None):
+        """Preview phones whose preview hasn't expired (API-026)."""
+        from django.utils import timezone
+        return self.filter(preview_until__gt=now or timezone.now())
+
 
 class Device(models.Model):
     id = models.CharField(max_length=128, primary_key=True)
@@ -428,6 +437,12 @@ class Device(models.Model):
     # API version can be retired: see API_CHANGES.md and `manage.py api_usage`.
     api_version = models.PositiveSmallIntegerField(null=True, blank=True)
     joined_at = models.DateTimeField(null=True, blank=True)
+    # API-026: the organizer's preview phone (joined with a preview_token from the console). Not an attendee: not
+    # counted, no free spot, no random wait; may hold the changes long-poll until preview_until.
+    preview_until = models.DateTimeField(null=True, blank=True)
+    preview_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    # The content_version of the last bundle this device fetched ("Updated on 31 of 37 phones").
+    last_version = models.PositiveIntegerField(null=True, blank=True)
 
     objects = DeviceQuerySet.as_manager()
 

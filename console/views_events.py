@@ -696,6 +696,37 @@ def event_qr(request, event):
 
 
 @event_view
+def event_preview_qr(request, event):
+    """API-026: the "Preview on my phone" QR: the join link plus a preview token made for this person (7 days)."""
+    from events import preview
+    resp = HttpResponse(qr_png(preview.link(event, request.user), box_size=16), content_type='image/png')
+    resp['Cache-Control'] = 'private, max-age=3600'
+    return resp
+
+
+@event_view
+def event_phones(request, event):
+    """JSON for the QR card's live line: "Updated on 31 of 37 phones" and the preview phones (polled while shown)."""
+    from events import preview
+    return JsonResponse(preview.phones(event))
+
+
+@agent_action('remove_preview_phone', "Remove one of the event's preview phones (an organizer's phone that sees "
+              'changes instantly): it leaves the event and stops previewing.',
+              params={'device': P('string', "The preview phone's id (from the Live on your phone card).")},
+              title='Removed a preview phone')
+@event_view
+@require_POST
+def event_preview_remove(request, event):
+    from events import preview
+    removed = preview.remove(event, request.POST.get('device', ''))
+    if 'application/json' in request.headers.get('Accept', ''):
+        return JsonResponse({'removed': bool(removed)})
+    messages.success(request, 'Removed the preview phone.' if removed else 'That phone isn’t previewing any more.')
+    return redirect('console:event', event.pk)
+
+
+@event_view
 def event_poster(request, event):
     paper = 'a4' if request.GET.get('paper') == 'a4' else 'letter'
     layout = 'tent' if request.GET.get('layout') == 'tent' else 'poster'
@@ -1597,7 +1628,7 @@ def _email_invite(event, email, inviter):
 def usage(request, event):
     from console.usage import event_usage
     data = event_usage(event, _tz(event))
-    audience = Device.objects.real().filter(event=event)
+    audience = Device.objects.attendees().filter(event=event)
     return render(request, 'console/usage.html', _ctx(event, 'usage', usage=data, in_event_now=audience.count()))
 
 

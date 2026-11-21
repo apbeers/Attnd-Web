@@ -540,6 +540,26 @@
   document.addEventListener('visibilitychange', () => { liveSync(); if (!document.hidden) liveTick(); });
   liveSync();
 
+  // API-026: the QR card's live line ("Updated on 31 of 37 phones") and the preview phones' state, every 10 s while
+  // the page is visible (one small JSON request per card; pages and chat / canvas cards alike).
+  async function phonesTick() {
+    if (document.hidden) return;
+    for (const line of document.querySelectorAll('[data-phones-line]')) {
+      try {
+        const r = await fetch(line.dataset.phonesUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        if (!r.ok) continue;
+        const d = await r.json();
+        if (line.textContent !== d.text) { line.textContent = d.text; reveal(line, 'pulse'); }
+        const card = line.closest('.component') || document;
+        (d.previews || []).forEach((p) => {
+          const state = card.querySelector(`[data-preview-state="${CSS.escape(p.id)}"]`);
+          if (state && state.textContent !== p.state) { state.textContent = p.state; reveal(state, 'pulse'); }
+        });
+      } catch (e) { /* offline: next time */ }
+    }
+  }
+  setInterval(phonesTick, 10000);
+
   // The top bar's "Chat as default" switch: it flips (animated) before the page goes on.
   document.addEventListener('submit', (e) => {
     const form = e.target.closest && e.target.closest('.chat-switch-form');

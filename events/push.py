@@ -230,10 +230,12 @@ def send_fcm(tokens, data, notification=None, priority='high', collapse_key=None
 CONTENT_PUSH_TTL = 3600
 
 
-def _recipients(event, silent=False):
+def _recipients(event, silent=False, devices=None):
     """Push tokens: ``((iOS app, iOS App Clip), Android)`` (API-019). Visible alerts go only to devices that opted
-    in (``subscribed``); silent ``content_updated`` pushes go to every device in the event with a token (API-007)."""
-    devices = list(Device.objects.real().filter(event=event).exclude(push_token='')
+    in (``subscribed``); silent ``content_updated`` pushes go to every device in the event with a token (API-007).
+    `devices` narrows them (a queryset of the event's devices: attendees or preview phones, API-026)."""
+    base = devices if devices is not None else Device.objects.real()
+    devices = list(base.filter(event=event).exclude(push_token='')
                    .filter(**({} if silent else {'subscribed': True})))
     android = [d.push_token for d in devices if d.platform == 'android']
     return ios_token_groups(devices), android
@@ -244,7 +246,7 @@ def _forget(tokens):
         Device.objects.filter(push_token__in=tokens).update(push_token='')
 
 
-def deliver(event, alert=None, data=None, silent=False, urgent=False):
+def deliver(event, alert=None, data=None, silent=False, urgent=False, devices=None):
     """Send one message to the event's devices. Returns a merged SendResult.
 
     Alerts go to subscribed devices only. Silent pushes go to every device with a token, collapse per
@@ -252,7 +254,7 @@ def deliver(event, alert=None, data=None, silent=False, urgent=False):
     every device with a token, ``subscribed`` or not: APNs time-sensitive, FCM high-priority data message.
     """
     data = {'event_id': event.id, **(data or {})}
-    ios, android = _recipients(event, silent=silent or urgent)
+    ios, android = _recipients(event, silent=silent or urgent, devices=devices)
 
     if urgent:
         apns_payload = {'aps': {'alert': alert, 'sound': 'default', 'interruption-level': 'time-sensitive',
@@ -381,9 +383,28 @@ def send_due_notifications(now=None):
     return count
 
 
+def jitter_ms(n_devices):
+    """API-026: the random wait apps take before refetching, scaled to the event's size (real devices with a push
+    token): under 100 phones 0–1 s, under 1,000 0–5 s, else the full 0–10 s. Sent in the push as `jitter_ms`."""
+    if n_devices < 100:
+        return 1000
+    if n_devices < 1000:
+        return 5000
+    return 10000
+
+
 def notify_content_updated(event):
-    return deliver(event, data={'type': 'content_updated', 'content_version': event.content_version},
-                   silent=True)
+    """The silent `content_updated` push: attendees with `jitter_ms` scaled to the event, preview phones with 0."""
+    attendees = Device.objects.attendees()
+    n = attendees.filter(event=event).exclude(push_token='').count()
+    data = {'type': 'content_updated', 'content_version': event.content_version}
+    result = deliver(event, data={**data, 'jitter_ms': jitter_ms(n)}, silent=True, devices=attendees)
+    previews = Device.objects.real().filter(event=event).exclude(preview_by__isnull=True, preview_until__isnull=True)
+    if previews.exclude(push_token='').exists():
+        more = deliver(event, data={**data, 'jitter_ms': 0}, silent=True, devices=previews)
+        result = SendResult(delivered=result.delivered + more.delivered, failed=result.failed + more.failed,
+                            skipped=result.skipped + more.skipped)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -391,9 +412,9 @@ def notify_content_updated(event):
 # ---------------------------------------------------------------------------
 # Push is the primary live-update signal (API-007): it goes to every device in the event with a token,
 # and apps refetch only when the pushed content_version is newer. Edits come in bursts (an organizer
-# typing, an AI update applying many changes), so pushes are debounced per event: one push
-# CONTENT_PUSH_DELAY seconds after the last change, and at most one per CONTENT_PUSH_MIN_INTERVAL
-# seconds. The pushes collapse per event, so a device that was offline only gets the latest.
+# typing, an AI update applying many changes), so pushes are grouped per event (API-026): the first change
+# goes out at once (after CONTENT_PUSH_DELAY, default 0), later ones within CONTENT_PUSH_MIN_INTERVAL seconds
+# become one follow-up push. The pushes collapse per event, so a device that was offline only gets the latest.
 
 _timers = {}
 _last_sent = {}
@@ -408,11 +429,13 @@ def content_changed(event_id):
 
 
 def _schedule(event_id):
-    delay = getattr(settings, 'CONTENT_PUSH_DELAY', 3)
+    """API-026: the first change goes out at once; changes while a follow-up waits join it; a change within
+    CONTENT_PUSH_MIN_INTERVAL of the last push waits for the rest of it (one grouped follow-up)."""
+    delay = getattr(settings, 'CONTENT_PUSH_DELAY', 0)
     min_interval = getattr(settings, 'CONTENT_PUSH_MIN_INTERVAL', 15)
     with _timers_lock:
         if event_id in _timers:
-            _timers[event_id].cancel()
+            return  # a follow-up is already waiting; it sends the newest content_version
         since_last = time.monotonic() - _last_sent.get(event_id, -10 ** 9)
         timer = threading.Timer(max(delay, min_interval - since_last), _send_content_push, args=[event_id])
         timer.daemon = True

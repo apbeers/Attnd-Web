@@ -72,6 +72,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-022 | Place images found automatically: `locations[].image_credit` (credit / licence of a photo Attnd found and stores itself, or null) | additive (new key) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-023 | Per-event colour themes: `event.theme` in `bundle/` (`{light, dark}` × `primary` / `secondary` / `tertiary` hex, contrast-adjusted; `null` without a theme or when the organizer turned it off for the apps). Made by the AI import, edited in the console; used on the website now. **Apps: later, not in this change** (iOS built Nov 21, 2026) | additive (new key, `bundle/` only) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: tint, card wash, progress; the Live Activity's full theme, light / dark × primary / secondary / tertiary, 24c2b1c) · ⬜ prod | ⬜ (later) |
 | API-024 | Server-driven screens: `layout` in `bundle/` (per screen an ordered list of sections from a closed catalogue, overrides per category / tag, on-device conditions) for apps that send `X-Attnd-Sections: <catalogue version>` (ETag `-s<version>`); `home` in `display.tabs` for those apps; console App layout → Screens editor, Ask Attnd `update_screen_layout` | additive (new key, new optional request header, new `display.tabs` value only for apps that send the header) | ✅ dev (6630ce5, 3d4e0b9) · ⬜ prod | ✅ dev (8bd7bd3, 0f25083; TestFlight 2.0.161) | ⬜ (later) |
+| API-026 | Faster live updates: the first change pushed at once (later ones grouped), `jitter_ms` in `content_updated` scaled to the event's size; organizer preview phones (`preview_token` on `join/`, `GET events/<id>/changes/` long-poll, `preview` in the join answer); `bundle/` records the version a device fetched | additive (new optional request field, new response and push keys, new endpoint) | 🚧 built · ⬜ prod | ⬜ | ⬜ (parked) |
 | API-025 | Free limit: an unpaid event takes 20 different devices on `join/`; a new device beyond it gets `409 {error: "event_full_free", message, limit}` (rejoin always works; paid, DEMO, App Review sample and showcase events exempt) | additive (new error answer on an existing endpoint, for unpaid events only) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
@@ -80,6 +81,27 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-026: Faster live updates and the organizer's preview phone
+**Why:** organizers edit with the app open on their phone and want to see changes at once; attendees should get them
+within seconds without anyone holding connections open on a sync server (owner, Nov 21, 2026).
+**Server (attnd-web):** `events/push.py`: the first `content_updated` of a burst goes out at once, later changes within
+15 s become one follow-up; attendee pushes carry `jitter_ms` (real devices with a token: < 100 → 1,000, < 1,000 →
+5,000, else 10,000), preview phones `jitter_ms: 0`. `events/preview.py`: signed tokens (person + event, 7 days, salt
+`attnd.preview.v1`), `join/` takes `preview_token` (a valid one marks `Device.preview_until` / `preview_by`, frees the
+device's free-limit spot, at most 3 live preview phones per event: a fourth ends the oldest), `GET events/<id>/changes/
+?since=` (preview phones only; ≤ 25 s; the database connection goes back to the pool while it sleeps; at most 2 waiting
+per process, shared with Ask Attnd's long-poll in `events/longpoll.py`, 3 per event; over a cap `retry_after: 15`).
+`bundle/` writes `Device.last_version` once per device per change. Preview phones are excluded from attendee counts
+(`Device.objects.attendees()`), never from pushes. Console: the "Live on your phone" card gets **Preview on my phone**
+(QR, Open as preview on phones), the preview phones with Remove (`remove_preview_phone`), and a live "Updated on 31 of
+37 phones" line (attendee phones seen in the last day, polled every 10 s). Tests: `events/tests_preview.py`.
+**iOS:** read `preview` from the join link (Universal Link, App Clip invocation URL, scanned QR, `attnd://join/<code>
+?preview=`; `DeepLink.httpsURL(fromAppScheme:)` must keep the query) and send it once as `preview_token` with `join/`;
+when the answer has `preview: true`, hold `changes/?since=<content_version>` while in the foreground (refetch at once
+on `changed`, honour `retry_after`, stop on `preview: false`); use `jitter_ms` from `content_updated` (0–`jitter_ms`
+ms, else 0–10 s). Old builds ignore all of it.
+**Android:** parked (owner, Nov 21, 2026). Builds ignore the new keys; `jitter_ms` would be the only easy win.
 
 ### API-025: Free limit on unpaid events
 **Why:** anyone can now sign up and create demo events (owner, Nov 21, 2026); going live stays invite-only (an admin

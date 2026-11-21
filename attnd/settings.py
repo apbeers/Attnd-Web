@@ -202,7 +202,7 @@ if TESTING:
 
 # Silent "content_updated" push whenever attendee-visible content changes (events.push.content_changed).
 CONTENT_PUSH_ENABLED = not TESTING and os.getenv('CONTENT_PUSH_ENABLED', '1') not in ('0', 'false', 'False')
-CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '3'))
+CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '0'))  # API-026: the first change goes out at once
 CONTENT_PUSH_MIN_INTERVAL = int(os.getenv('CONTENT_PUSH_MIN_INTERVAL', '15'))
 
 # Rate limits (attnd.ratelimit), the bundle cache, component and place-search caches live in the database cache

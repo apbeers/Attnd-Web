@@ -343,11 +343,11 @@ def run(request, run_id):
 
 
 # Long-poll (stage I14): `?wait=10` answers the moment a step lands or the run's state changes (≤ 10 s), so the chat
-# feels instant without a 1.5 s poll. At most LONG_POLLS requests of a process wait at once (gunicorn has 4 threads);
+# feels instant without a 1.5 s poll. At most `longpoll.MAX_WAITING` requests of a process wait at once (gunicorn has 4 threads);
 # beyond that the request answers at once like a plain poll. The database connection goes back to the pool while it
 # waits.
-LONG_POLLS = 2
-_waiting = threading.BoundedSemaphore(LONG_POLLS)
+# The cap is shared with the preview phones' changes poll (events/longpoll.py, API-026).
+from events import longpoll as _longpoll
 
 
 def _wait_for_news(r, after, wait):
@@ -356,7 +356,7 @@ def _wait_for_news(r, after, wait):
         return False
     if r.steps.filter(seq__gt=after).exists():
         return False
-    if not _waiting.acquire(blocking=False):
+    if not _longpoll.acquire():
         return False
     try:
         deadline = time.monotonic() + min(int(wait), 10)
@@ -369,7 +369,7 @@ def _wait_for_news(r, after, wait):
                 break
         return True
     finally:
-        _waiting.release()
+        _longpoll.release()
 
 
 @login_required

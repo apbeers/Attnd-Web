@@ -41,14 +41,17 @@ Finds an event by exact code, case-insensitive, then by exact name. Unlisted eve
 ### `GET events/<id>/bundle/`
 Returns everything the app shows, in one response.
 - **Caching:** send `If-None-Match: <ETag from last response>`. You get `304 Not Modified` if nothing changed.
-- **Device tracking:** optionally send `X-Device-Id: <device id>`, which updates the device's last-seen time for organizer stats.
+- **Device tracking:** optionally send `X-Device-Id: <device id>`, which updates the device's last-seen time and the
+  content version it last fetched (API-026: the console's "Updated on 31 of 37 phones") for organizer stats.
 - **When to call it:**
   - on join
   - when the app comes to the foreground
   - on pull-to-refresh
   - when a `content_updated` push arrives (API-007), **only if its `content_version` is newer than the bundle you have**, after
-    a random 0–10 s delay so every phone in the event doesn't refresh at the same moment. The server sends it about 3 s after the
-    last change, at most once every 15 s per event, and collapses it per event (an offline device gets only the latest).
+    a random delay so every phone in the event doesn't refresh at the same moment: 0 to `jitter_ms` milliseconds when the
+    push carries it (API-026: 1,000 under 100 phones, 5,000 under 1,000, else 10,000; 0 for a preview phone), else 0–10 s.
+    The server sends the first change at once and groups later ones into one follow-up at most every 15 s per event, and
+    collapses it per event (an offline device gets only the latest). (Before API-026: about 3 s after the last change.)
   - **while the app is open (foreground) and in an event, as a safety poll** (catches lost or throttled pushes):
     - every **60 seconds** when the device has **no push token** (push unavailable or not granted, the iOS App Clip);
     - every **5 minutes** when it has one.
@@ -97,6 +100,30 @@ before (also after leaving) always joins again. A new device beyond the limit ge
 The device is not registered. Show `message` (it is written for attendees) with a way back to the launch screen; until
 an app knows the code it shows its generic join error. Paid events, the DEMO event, the App Review sample events and
 Attnd's showcase events have no limit; `ci-` test devices never count.
+
+**Preview phones (API-026).** The organizer console's **Preview on my phone** QR is the join link with a
+`preview` query parameter: `https://attnd.app/join/<code>/?preview=<token>` (also `attnd://join/<code>?preview=<token>`).
+Send it as `preview_token` in the join body:
+```json
+{ "device_id": "uuid", "platform": "ios", "preview_token": "…" }
+```
+→ `{ "status": "ok", "content_version": 15, "preview": true }`. A valid token (made for someone on the event's team, 7
+days) makes the device that event's preview phone: it isn't an attendee (not counted, never refused by the free limit),
+its `content_updated` pushes carry `jitter_ms: 0`, and while the app is on screen it may hold `changes/` (below). An
+invalid or expired token is ignored (an ordinary join, no `preview` key). Joining another event or leaving ends it; the
+console can remove a preview phone (it leaves the event). Keep the token only for that join; never show it.
+
+### `GET events/<id>/changes/?since=<content_version>` (API-026, preview phones only)
+Send `X-Device-Id`. Answers at once when the event's `content_version` is past `since`, else after about 25 s:
+```json
+{ "content_version": 16, "changed": true, "preview": true, "retry_after": 0 }
+```
+- `changed: true` → refetch `bundle/` at once (no random wait), then call `changes/` again with the new version.
+- `changed: false`, `retry_after: 0` → call again at once.
+- `retry_after` > 0 → wait that many seconds first (the server is busy: at most 2 waiting requests per server process,
+  3 preview phones per event; or the device isn't a preview phone: `preview: false`, `retry_after: 300` — stop and
+  keep the normal polling).
+- Only while the app is in the foreground; never for attendees (their live updates stay push + slow poll).
 
 ### `POST events/<id>/leave/`
 ```json
@@ -640,11 +667,14 @@ The server sends pushes through APNs (iOS) and FCM HTTP v1 (Android) to devices 
     local update.
   - `timestamp` and `stale-date` are UNIX seconds; `stale-date` = sent + 12 h.
 - **Content updated:**
-  - Silent push, sent about 3 s after any attendee-visible change (at most once every 15 s per event).
-  - Custom data: `type = "content_updated"`, `event_id`, `content_version` (on Android all strings, as for every data value).
+  - Silent push, sent at once after an attendee-visible change; later changes within 15 s are grouped into one follow-up
+    (API-026; before: about 3 s after the last change).
+  - Custom data: `type = "content_updated"`, `event_id`, `content_version`, `jitter_ms` (API-026: the longest random
+    wait before refetching, in milliseconds; 0 for preview phones) (on Android all strings, as for every data value).
   - iOS: `content-available: 1`, no alert; `apns-push-type: background`, priority 5, `apns-collapse-id: content-<event_id>`,
     expires after about an hour. Background delivery is best-effort (iOS throttles it); in the foreground it arrives at once.
   - Android: data-only message, priority `normal`, `collapse_key: content_<event_id>`, TTL 1 hour.
-  - The app refetches the bundle only if `content_version` is newer than its own, after a random 0–10 s delay (see `bundle/`).
+  - The app refetches the bundle only if `content_version` is newer than its own, after a random delay of 0 to `jitter_ms`
+    (0–10 s without it; see `bundle/`).
 
 When the app is opened from a notification, it should open the Notifications tab for that event.

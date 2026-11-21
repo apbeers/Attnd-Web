@@ -58,6 +58,8 @@ EXCLUDED = {
     'console:event_poster': 'A printable poster; the overview has the same join link and code.',
     'studio:version_preview': 'Redirects to a signed preview link on the sites host (outside the console).',
     'credit:export': 'CSV download of the month\'s AI calls; the AI spend page shows the same numbers.',
+    'console:event_preview_qr': 'An image (the preview QR code), no content.',
+    'console:event_phones': 'JSON for the QR card\'s live phone line; the card shows the same.',
     'prospects:export': 'CSV download of organizer contacts; the list and detail pages show the same data.',
     'diagnostics:session_export': 'A .jsonl file download; the session page and entries.json have the entries.',
     'console:place_search': 'Address search for the location form\'s Find button (JSON); the agent fills addresses itself.',

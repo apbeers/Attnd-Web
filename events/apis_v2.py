@@ -20,7 +20,7 @@ from django.core.cache import caches
 
 cache = caches['local']  # per process: rebuilt from content_version, no database round trip
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db.models import Q
+from django.db.models import Case, F, PositiveIntegerField, Q, Value, When
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -114,15 +114,21 @@ def _bundle_bytes(event, request, sections=0):
     return body
 
 
-def _touch_device(request):
+def _touch_device(request, event_id=None, version=None):
     device_id = request.headers.get('X-Device-Id')
     if not device_id or (is_ci_request(request) and not is_ci_device(device_id)):
         return
     now = timezone.now()
-    # Only rows that need it: a poll every minute would otherwise rewrite the device row every minute.
-    (Device.objects.filter(id=device_id[:128])
-     .filter(Q(last_seen__isnull=True) | Q(last_seen__lt=now - LAST_SEEN_RESOLUTION) | ~Q(api_version=API_VERSION))
-     .update(last_seen=now, api_version=API_VERSION))
+    # Only rows that need it: a poll every minute would otherwise rewrite the device row every minute. A new content
+    # version is written at once (API-026: "Updated on 31 of 37 phones"), once per device per change.
+    needs = Q(last_seen__isnull=True) | Q(last_seen__lt=now - LAST_SEEN_RESOLUTION) | ~Q(api_version=API_VERSION)
+    values = {'last_seen': now, 'api_version': API_VERSION}
+    if version is not None:
+        needs |= Q(event_id=event_id) & (Q(last_version__isnull=True) | Q(last_version__lt=version))
+        # the version belongs to the event the device joined
+        values['last_version'] = Case(When(event_id=event_id, then=Value(version)), default=F('last_version'),
+                                       output_field=PositiveIntegerField())
+    Device.objects.filter(id=device_id[:128]).filter(needs).update(**values)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -132,7 +138,7 @@ class BundleV2(ApiKeyRequired, View):
     def get(self, request, event_id):
         events = live_events().filter(id=event_id)
         sections = screen_layout.sections_header(request)
-        etag = None
+        etag = version = None
         if_none_match = request.headers.get('If-None-Match')
         if if_none_match:
             # The usual poll: answer 304 from the version alone, without loading the event or its content.
@@ -147,10 +153,11 @@ class BundleV2(ApiKeyRequired, View):
             if event is None:
                 return JsonResponse({'error': 'Not found'}, status=404)
             etag = _etag(event, sections)
+            version = event.content_version
             resp = HttpResponse(_bundle_bytes(event, request, sections), content_type='application/json')
         resp['ETag'] = etag
         resp['Cache-Control'] = 'no-cache'
-        _touch_device(request)
+        _touch_device(request, event_id, version)
         return resp
 
 
@@ -170,12 +177,48 @@ class JoinV2(ApiKeyRequired, View):
             return refused
         body.pop('event', None)
         body.pop('api_version', None)
+        # API-026: the organizer's preview phone (a token from the console's "Preview on my phone" QR). An invalid or
+        # expired token just joins as an attendee.
+        from events import preview
+        preview_user = preview.read_token(body.pop('preview_token', None), event)
         # API-025: an unpaid event takes FREE_DEVICE_LIMIT different devices; a device that joined before always can.
+        # A preview phone never uses one of them.
         from events import free_limit
-        if not free_limit.admit(event, device_id):
+        if preview_user is None and not free_limit.admit(event, device_id):
             return JsonResponse(free_limit.refusal(), status=409)
-        register_device(device_id, event=event, api_version=API_VERSION, **body)
-        return JsonResponse({'status': 'ok', 'content_version': event.content_version})
+        device = register_device(device_id, event=event, api_version=API_VERSION, **body)
+        answer = {'status': 'ok', 'content_version': event.content_version}
+        if preview_user is not None:
+            preview.mark(device, event, preview_user)
+            answer['preview'] = True
+        return JsonResponse(answer)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ChangesV2(ApiKeyRequired, View):
+    """GET events/<id>/changes/?since=<content_version> (API-026): only for preview phones (X-Device-Id).
+
+    Answers at once when the version is past `since`, else waits up to ~25 s; never holds a database connection
+    while it waits. Not a preview phone, or a cap reached → at once, with `retry_after` (seconds)."""
+    ci_scope = 'event'
+
+    def get(self, request, event_id):
+        from events import preview
+        version = live_events().filter(id=event_id).values_list('content_version', flat=True).first()
+        if version is None:
+            return JsonResponse({'error': 'Not found'}, status=404)
+        since = request.GET.get('since', '')
+        since = int(since) if since.isdigit() else 0
+        device_id = (request.headers.get('X-Device-Id') or '')[:128]
+        is_preview = bool(device_id) and Device.objects.previews().filter(id=device_id, event_id=event_id).exists()
+        if not is_preview:
+            return JsonResponse({'content_version': version, 'changed': version > since, 'preview': False,
+                                 'retry_after': 300})
+        version, changed, waited = preview.wait_for_change(event_id, since)
+        if version is None:
+            return JsonResponse({'error': 'Not found'}, status=404)
+        return JsonResponse({'content_version': version, 'changed': changed, 'preview': True,
+                             'retry_after': 0 if waited else preview.RETRY_SECONDS})
 
 
 @method_decorator(csrf_exempt, name='dispatch')
