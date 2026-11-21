@@ -1,7 +1,7 @@
 {% load console_tags %}{# live_on_phone: QR to join + how live editing works, with QR download, poster and the join link. #}
 {% partialdef panel %}<div class="panel live-panel">
   <div class="live-pill"><span class="live-dot"></span> Live on your phone</div>
-  <img src="{{ d.qr_url }}" alt="QR code to open {{ d.name }} in the Attnd app">
+  <img src="{{ d.qr_url }}" alt="QR code to open {{ d.name }} in the Attnd app" width="180" height="180">
   <div class="display-code">{{ d.code }}</div>
   <ol class="small">
     <li>Scan the code with your phone's camera. It opens the Attnd app, or an instant App Clip on iPhone with nothing to install.</li>

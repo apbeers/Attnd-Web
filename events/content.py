@@ -11,6 +11,7 @@ import threading
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
 from attnd.links import join_url
+from attnd.images import event_logo_url
 
 from events import context as ctx
 from events.models import Event, EventRevision, Location, Notification, ScheduledItem, normalize_tags
@@ -68,23 +69,13 @@ def _abs(request, url):
 # Deterministic, so the URL stays the same for the same image (the apps cache images by URL).
 APP_IMAGE_WIDTH = {'location': 1200, 'logo': 512, 'flyer': 2000,
                    'thumb': 96, 'preview': 192, 'flyer_preview': 800}  # the last three: console (stage H)
-_CLOUDINARY_UPLOAD = re.compile(r'^(https?://res\.cloudinary\.com/[^/]+/image/upload/)(.+)$')
-_RASTER = ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.avif', '.bmp', '.tif', '.tiff')
-_TRANSFORM_SEGMENT = re.compile(r'^[a-z]{1,3}_[^/]*$')  # e.g. w_800,c_fill (already transformed: leave it)
 
 
 def app_image_url(url, kind):
-    """`url` with Cloudinary delivery transformations for phones, or unchanged (other hosts, PDFs, GIFs,
-    URLs that already carry a transformation)."""
-    if not url:
-        return url
-    match = _CLOUDINARY_UPLOAD.match(url)
-    if not match:
-        return url
-    rest = match.group(2)
-    if not rest.split('?', 1)[0].lower().endswith(_RASTER) or _TRANSFORM_SEGMENT.match(rest.split('/', 1)[0]):
-        return url
-    return f'{match.group(1)}f_auto,q_auto,c_limit,w_{APP_IMAGE_WIDTH[kind]}/{rest}'
+    """`url` at the width the apps / console need (attnd/images.py: Cloudinary delivery transforms, or a local
+    resized copy without Cloudinary), or unchanged (other hosts, PDFs, GIFs, already transformed URLs)."""
+    from attnd.images import variant
+    return variant(url, APP_IMAGE_WIDTH[kind]) if url else url
 
 
 def event_v2(event, request=None):
@@ -104,7 +95,7 @@ def event_v2(event, request=None):
         'is_demo': not event.paid,
         'flyer_url': app_image_url(_abs(request, event.flyer.url), 'flyer') if event.flyer else None,
         'accent_color': event.accent_color or None,
-        'logo_url': app_image_url(event.logo_url, 'logo') or None,
+        'logo_url': app_image_url(_abs(request, event_logo_url(event)), 'logo') or None,
         'content_version': event.content_version,
         'join_url': join_url(event),
         # API-016: the event's Attnd Studio website while it is published, else null.

@@ -713,6 +713,33 @@ before the removal, tag `tickets-parked-2026-11-19` on the same commit). On `dev
 `bundle.tickets` stay in v2 and are always `null` (installed apps decode them; `events/tests_contract.py` checks it);
 the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-picking from that branch.
 
+## Images (owner, Nov 21, 2026; `attnd/images.py`, `{% img %}` in `console/templatetags/attnd_images.py`)
+
+- **One pipeline** for every image the platform draws or ships: `images.variant(url, w, h=None, crop=False)` →
+  Cloudinary delivery transforms (`f_auto,q_auto` + `c_limit`, or `c_fill,g_auto` where a card crops) at exact pixels.
+  Our media files on Cloudinary have **no file extension**, so everything under `image/upload` is transformed except
+  `.pdf` / `.gif` / `.svg` and already-transformed URLs (before Nov 21 the extension check skipped them all: the API and
+  the console served originals). Without Cloudinary (local dev, `IMAGE_LOCAL_VARIANTS`) Pillow makes resized copies of
+  our media files once (`variants/` in the media storage); static files, SVG QR codes and other hosts pass through.
+  `events.content.app_image_url` (API: locations 1200, logo 512, flyer 2000; console thumb / preview) uses it.
+- **`{% load attnd_images %}{% img url width height alt=… crop=True sizes=… priority=True cls=… %}`**: `src` at 1x,
+  a width-descriptor `srcset` for 1x / 2x / 3x, `sizes` (default `<width>px`), `width` / `height` always (no layout
+  shift), `loading=lazy` unless `priority` (`fetchpriority=high`, the first cover on the home page), `decoding=async`.
+  Used by the home page cards (384×216 crop), location rows (48×48), found place photos (96×64), the flyer preview.
+  `attnd/tests_images.py` fails on any `<img>` in our templates without width and height and checks the content images
+  go through the tag; a budget test checks the home page covers' sizes and that no Google Places photo appears.
+- **Self-hosting** (`images.self_host`: Studio's SSRF-guarded fetcher, Pillow re-encode to JPEG ≤ 2000 px, no EXIF /
+  GPS): a location's outside `image_url` becomes `Location.image` (`image_source_url` keeps where it came from) and an
+  outside `Event.logo_url` becomes `Event.logo_image` (`logo_source_url` = the `logo_url` it was made from; the API's
+  `logo_url` and `display.logo_url` ship our copy, `images.event_logo_url`). Google Places photo links
+  (`googleusercontent` / Places media) are never copied: dropped, and the place-image finder looks for another. After
+  every save (`events/signals.py`, background thread, `IMAGE_SELF_HOST_ON_SAVE`) and by `manage.py self_host_images
+  [--dry-run] [--event CODE]`. Studio assets stay on Cloudinary *raw* storage (no transforms; Studio pages only).
+- **Paint cost** (home page): the sticky nav keeps its `backdrop-filter` blur; shadows use small blur radii; the phone
+  mock-up and cards get `contain: layout paint` (no blanket `will-change`); sections below the fold
+  `content-visibility: auto` + `contain-intrinsic-size`; `home.js` has no scroll handlers. `/join/<code>/qr.svg` and
+  shared-plan QR codes: `max-age=86400, stale-while-revalidate=604800` (`join.views.QR_CACHE`).
+
 ## Performance
 
 - **Search** (`attnd/search.py`, F3): Postgres full text (English stemming, weighted fields, `websearch`) plus pg_trgm

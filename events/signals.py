@@ -36,6 +36,25 @@ def _notification_saved(sender, instance, update_fields=None, **kwargs):
 
 
 @receiver(post_save, sender=Location)
+def _location_image_link(sender, instance, raw=False, **kwargs):
+    """An outside image link (an import, an organizer's URL) is copied into our storage (attnd/images.py)."""
+    if raw or not instance.image_url or instance.image:
+        return
+    from attnd import images
+    if not images.is_ours(instance.image_url):
+        images.schedule_location(instance.pk)
+
+
+@receiver(post_save, sender=Event)
+def _event_logo_link(sender, instance, raw=False, update_fields=None, **kwargs):
+    if raw or not instance.logo_url or (update_fields and 'logo_url' not in update_fields):
+        return
+    from attnd import images
+    if not images.is_ours(instance.logo_url) and instance.logo_source_url != instance.logo_url:
+        images.schedule_event_logo(instance.pk)
+
+
+@receiver(post_save, sender=Location)
 def _location_created(sender, instance, created, raw=False, **kwargs):
     """Stage D: a new place without an image gets one looked for in the background (events.place_images)."""
     if created and not raw:

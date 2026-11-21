@@ -304,7 +304,7 @@ def location_row(user, event_id=None, location_id=None, event=None, location=Non
     items = loc.n_items if hasattr(loc, 'n_items') else loc.scheduleditem_set.count()
     return {
         'id': loc.pk, 'name': loc.name, 'url': reverse('console:location_edit', args=[event.pk, loc.pk]),
-        'image_url': app_image_url(loc.resolved_image_url, 'thumb') or '', 'category': loc.category, 'hidden': loc.hidden,
+        'image_url': app_image_url(loc.resolved_image_url, 'thumb') or '', 'image_src': loc.resolved_image_url or '', 'category': loc.category, 'hidden': loc.hidden,
         'locked': bool(loc.locked_fields), 'summary': Truncator(loc.snippet or loc.address).chars(90),
         'tags': list(loc.tags or []), 'has_pin': loc.has_coordinates, 'likes': hearts, 'items': items,
         'actions': [{'name': 'toggle_location_hidden', 'label': 'Show' if loc.hidden else 'Hide'},
@@ -362,7 +362,7 @@ def _found_image(loc):
     """Stage D: 'Found automatically · credit' above the image fields when Attnd found the current photo."""
     if not (loc.pk and loc.image_auto and loc.image):
         return None
-    return ('block', 'found_image', {'src': app_image_url(loc.image.url, 'preview'), 'credit': loc.image_credit,
+    return ('block', 'found_image', {'src': app_image_url(loc.image.url, 'preview'), 'raw': loc.image.url, 'credit': loc.image_credit,
                                      'source': loc.image_source_url, 'license': loc.image_license})
 
 

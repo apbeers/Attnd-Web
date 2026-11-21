@@ -533,6 +533,12 @@ SECURE_CSP_REPORT_ONLY = CSP_POLICY if CSP_MODE == 'report' else {}
 if os.getenv('CLOUDINARY_URL'):
     STORAGES['default']['BACKEND'] = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
+# Images (attnd/images.py): without Cloudinary (local dev) pages get Pillow-made resized copies of our media files;
+# outside image links (location image_url, event logo_url) are copied into our storage after a save.
+IMAGE_LOCAL_VARIANTS = (os.getenv('IMAGE_LOCAL_VARIANTS', '1' if DEBUG else '0') != '0'
+                        and not os.getenv('CLOUDINARY_URL') and not TESTING)
+IMAGE_SELF_HOST_ON_SAVE = os.getenv('IMAGE_SELF_HOST_ON_SAVE', '1') != '0' and not TESTING
+
 
 LOGGING = {
     "version": 1,

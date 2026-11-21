@@ -140,6 +140,10 @@ class Event(CoordinatesMixin, models.Model):
     layout_config = models.JSONField(default=dict, blank=True)
     accent_color = models.CharField(max_length=7, blank=True, help_text='#RRGGBB')
     logo_url = models.URLField(max_length=1024, blank=True)
+    # Our own copy of an outside logo_url (attnd/images.py: self-hosted, re-encoded); logo_source_url = the logo_url it
+    # was made from, so a changed logo_url is copied again. The API and pages show the copy (images.event_logo_url).
+    logo_image = models.FileField(upload_to=get_file_path, blank=True)
+    logo_source_url = models.URLField(max_length=1024, blank=True)
     # API-023: the event's colour theme (events/theme.py): {light: {primary, secondary, tertiary}, dark: {…}, source:
     # ai | site | manual | default, made_at, reason}. {} = Attnd's purple. Made by the AI import (events/theme_ai.py),
     # edited in the console (an edit locks it); theme_web / theme_apps switch it on for the website and the apps.

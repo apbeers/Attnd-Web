@@ -21,7 +21,7 @@
 
 /* Composer */
 .composer { margin: var(--space-3, .75rem) 0 var(--space-2, .5rem); padding: var(--space-3, .75rem); background: var(--color-surface, #fff);
-  border: 1.5px solid var(--color-border); border-radius: 22px; box-shadow: 0 10px 40px rgba(67, 31, 134, .12); }
+  border: 1.5px solid var(--color-border); border-radius: 22px; box-shadow: 0 4px 14px rgba(67, 31, 134, .1); }
 .composer:focus-within { border-color: var(--color-brand-mid, var(--color-brand)); }
 .composer textarea { display: block; width: 100%; min-height: 2.6rem; padding: .4rem .5rem; font: inherit; font-size: 1.05rem; line-height: 1.5;
   color: var(--color-text); background: transparent; border: 0; outline: none; resize: vertical; }
@@ -42,7 +42,8 @@
 /* The live phone preview (HTML/CSS, the showcase looks) */
 /* The phone stays short enough that it never makes the hero taller than its text column. */
 .hero-phone__frame { position: relative; width: min(100%, 196px); aspect-ratio: 9 / 19; margin: 0 auto; padding: 10px; background: #0f0d16;
-  border-radius: 44px; box-shadow: 0 30px 80px rgba(20, 5, 50, .3), inset 0 0 0 2px #2a2636; }
+  border-radius: 44px; box-shadow: 0 12px 28px rgba(20, 5, 50, .25), inset 0 0 0 2px #2a2636;
+  contain: layout paint; }  /* its own paint box; no blanket will-change */
 .hero-phone__screen { position: absolute; inset: 10px; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; overflow: hidden;
   color: #15171c; background: #fff; border-radius: 34px; opacity: 0; transform: scale(.98); transition: opacity .35s ease, transform .35s ease; }
 .hero-phone__screen.is-active { opacity: 1; transform: none; }
@@ -90,7 +91,7 @@
 .pill.is-on { color: var(--color-text); background: var(--color-surface, #fff); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
 .event-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.5rem), 1fr)); gap: 1.1rem; margin: 0; padding: 0; list-style: none; }
 .event-card { display: flex; flex-direction: column; overflow: hidden; background: var(--color-surface, #fff); border: 1px solid var(--color-border);
-  border-radius: 20px; box-shadow: var(--shadow, 0 6px 24px rgba(0, 0, 0, .05)); }
+  border-radius: 20px; box-shadow: var(--shadow, 0 2px 8px rgba(0, 0, 0, .05)); contain: layout paint; }
 .event-card[hidden] { display: none; }
 .event-card__cover { position: relative; aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--c1), var(--c3)); }
 .event-card__cover img { width: 100%; height: 100%; object-fit: cover; }
@@ -119,6 +120,10 @@
 .gallery__map-pin { cursor: pointer; }
 .gallery__map-pin circle { stroke: #fff; stroke-width: 3; }
 .gallery__map-pin text { font: 700 14px var(--font, sans-serif); fill: var(--color-text); }
+
+/* Below the fold: skipped by layout and paint until near the viewport (smooth scrolling on long pages). */
+#features, #how, .onb-again, #download { content-visibility: auto; contain-intrinsic-size: auto 900px; }
+#how, .onb-again, #download { contain-intrinsic-size: auto 520px; }
 
 /* Feature sections (home page) */
 .features { display: grid; gap: clamp(2rem, 5vw, 3.5rem); }

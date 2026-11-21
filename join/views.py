@@ -196,13 +196,17 @@ class SharedPlanRedirect(View):
         })
 
 
+# A code's QR never changes (the link is fixed per code): a day fresh, then served stale while it revalidates.
+QR_CACHE = 'public, max-age=86400, stale-while-revalidate=604800'
+
+
 def join_qr(request, event_code):
     """SVG QR code for the join link (the desktop page shows it)."""
     event = Event.objects.filter(event_code__iexact=event_code).exclude(status=Event.STATUS_DRAFT).first()
     if event is None:
         raise Http404
     response = HttpResponse(qr_svg(join_url(event), box_size=12), content_type='image/svg+xml')
-    response['Cache-Control'] = 'public, max-age=3600'
+    response['Cache-Control'] = QR_CACHE
     return response
 
 
@@ -214,7 +218,7 @@ def shared_plan_qr(request, event_code, payload):
         raise Http404
     response = HttpResponse(qr_svg(shared_plan_url(event.event_code, payload), box_size=12,
                                    error_correction=qrcode.constants.ERROR_CORRECT_L), content_type='image/svg+xml')
-    response['Cache-Control'] = 'public, max-age=3600'
+    response['Cache-Control'] = QR_CACHE
     return response
 
 

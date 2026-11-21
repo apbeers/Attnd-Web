@@ -1,7 +1,7 @@
-{% load console_tags %}{# event_flyer: the flyer (image or PDF) with a preview; upload, replace, remove. #}<div class="stack component component--event_flyer">
+{% load console_tags attnd_images %}{# event_flyer: the flyer (image or PDF) with a preview; upload, replace, remove. #}<div class="stack component component--event_flyer">
   {% if surface == 'chat' %}<h3 class="title-4">{% icon "image" %} {{ d.name }}</h3>{% endif %}
   {% if d.flyer_url %}{% if d.is_pdf %}<p><a class="button button--outline button--small" href="{{ d.flyer_url }}" target="_blank" rel="noopener">{% icon "download" %} Open the PDF flyer</a></p>
-  {% else %}<img class="flyer-preview" src="{{ d.flyer_url }}" alt="The event’s flyer" loading="lazy">{% endif %}
+  {% else %}{% img d.flyer_url 352 470 alt="The event’s flyer" cls="flyer-preview" %}{% endif %}
   {% else %}<p class="small muted">No flyer yet. The apps show it in the Flyer tab when the layout lists it.</p>{% endif %}
   {% include 'components/_form.html' with form=d.form %}
 </div>

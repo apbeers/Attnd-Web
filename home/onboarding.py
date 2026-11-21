@@ -89,8 +89,11 @@ def _cover(event):
             return event.cover.url, event.cover_credit
         except Exception:
             pass
-    loc = event.location_set.filter(hidden=False).exclude(image_url='').exclude(image_url__isnull=True).first()
-    return (loc.image_url if loc else '') or event.logo_url or '', ''
+    from attnd.images import event_logo_url, is_google_places_photo
+    for loc in event.location_set.filter(hidden=False).exclude(image_url='').exclude(image_url__isnull=True)[:5]:
+        if not is_google_places_photo(loc.image_url):  # never a Google Places photo (their terms)
+            return loc.image_url, ''
+    return event_logo_url(event), ''
 
 
 def _website(event):
@@ -152,7 +155,11 @@ def gallery(near=None):
         if near is None or (c['miles'] is not None and c['miles'] <= NEAR_MILES):
             near_you.append(c)
     near_you.sort(key=lambda c: (c['miles'] if c['miles'] is not None else 10 ** 6, c['name']))
-    return near_you[:8], showcase
+    near_you = near_you[:8]
+    first = next((c for c in near_you + showcase if c['cover']), None)
+    if first is not None:
+        first['priority'] = True  # the first cover is the page's first content image
+    return near_you, showcase
 
 
 def categories(cards):

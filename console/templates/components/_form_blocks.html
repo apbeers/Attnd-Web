@@ -1,4 +1,4 @@
-{% load console_tags %}{# Named 'block' rows of the console's forms (the pin map and Fill from this website: console.js attndEnhance wires them, on pages and in the chat). #}{% if r.name == 'datalist' %}<datalist id="{{ uid }}{{ r.id }}">{% for c in r.options %}<option value="{{ c }}">{% endfor %}</datalist>
+{% load console_tags attnd_images %}{# Named 'block' rows of the console's forms (the pin map and Fill from this website: console.js attndEnhance wires them, on pages and in the chat). #}{% if r.name == 'datalist' %}<datalist id="{{ uid }}{{ r.id }}">{% for c in r.options %}<option value="{{ c }}">{% endfor %}</datalist>
 {% elif r.name == 'pin_map' %}<div class="pin-map-block" data-pin-block>
       {% if not r.has_pin %}<p class="form-note" data-pin-empty>{% icon "pin" %} No map pin yet · Set it: search the address above or tap the map.</p>{% endif %}
       <div class="pin-map" data-pin-map data-center="{{ r.center }}" data-zoom="{{ r.zoom }}" data-others="{{ r.others }}" data-places-url="{{ r.places_url }}" data-pin-svg="{% filter force_escape %}{% icon 'pin-fill' %}{% endfilter %}" role="application" aria-label="Map: tap to place this location’s pin"></div>
@@ -16,7 +16,7 @@
       <span class="small muted">Title <span data-count-title>0/60</span> · Text <span data-count-body>0/256</span></span>
     </div>
 {% elif r.name == 'found_image' %}<div class="found-image field">
-      <img src="{{ r.src }}" alt="" width="96" height="64" loading="lazy" decoding="async">
+      {% img r.raw|default:r.src 96 64 crop=True %}
       <p class="small"><span class="badge badge--info badge--pill">{% icon "stars" %} Found automatically</span>
         {% if r.credit %}<span class="muted">{{ r.credit }}</span>{% endif %}
         {% if r.source %}· <a href="{{ r.source }}" target="_blank" rel="noopener noreferrer">Source</a>{% endif %}<br>

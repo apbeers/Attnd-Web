@@ -222,7 +222,14 @@ def resolve_display(event, stats=None, sections=0):
         'resolved_preset': resolved_preset,
         'reason': reason,
         'accent_color': event.accent_color or None,
-        'logo_url': event.logo_url or None,
+        'logo_url': _logo(event),
         'stats': stats,
     })
     return cfg
+
+
+def _logo(event):
+    """Our self-hosted copy of the logo when there is one, at the apps' logo width (attnd/images.py)."""
+    from attnd.images import event_logo_url
+    from events.content import app_image_url
+    return app_image_url(event_logo_url(event), 'logo') or None

@@ -25,14 +25,14 @@
 <body>
   {% if tent %}<div class="tent">{% for half in '12' %}<div class="half">
     <h1>{{ event.name }}</h1>
-    <img src="{% url 'console:event_qr' event.id %}" alt="QR code">
+    <img src="{% url 'console:event_qr' event.id %}" alt="QR code" width="400" height="400">
     <div class="how">Scan with your camera, or open Attnd and enter</div>
     <div class="code">{{ event.event_code }}</div>
     <div class="brand">attnd.app</div></div>{% endfor %}</div>
   {% else %}
   <h1>{{ event.name }}</h1>
   <div class="sub">Map, schedule &amp; live updates on your phone</div>
-  <img src="{% url 'console:event_qr' event.id %}" alt="QR code">
+  <img src="{% url 'console:event_qr' event.id %}" alt="QR code" width="400" height="400">
   <div class="how">Scan with your camera — or open the Attnd app and enter</div>
   <div class="code">{{ event.event_code }}</div>
   <div class="brand">attnd.app</div>
