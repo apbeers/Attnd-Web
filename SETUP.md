@@ -46,12 +46,12 @@ Do these steps once, in order. Each step says which values go where. For any sin
 - [x] App Review sample events: FWFM2026, ATIS2026 and DACN2026 on production are **kept on purpose**: App Review uses
       them (owner, Nov 19, 2026). The release phase's `seed_test_data` keeps them current; don't delete them or the
       command.
-- [ ] Studio sites on **attnd.site** (owner bought it, Nov 21, 2026). Done: the Heroku domains `dev.attnd.site` on
+- [x] Studio sites on **attnd.site** (owner bought it, Nov 21, 2026; production `SITES_HOST=attnd.site` set and verified Nov 21, 2026). Done: the Heroku domains `dev.attnd.site` on
       attnd-dev (DNS target `genetic-salmon-1jo14r3peboo8qusoemv7xrz.herokudns.com`) and `attnd.site` on attnd-web
       (DNS target `encircled-eggplant-pbyuddr6oxnp2ggjecvwc5be.herokudns.com`), automatic certificates (ACM) on both.
       DNS records set and both certificates issued (dev.attnd.site and attnd.site); **dev is switched**
-      (`SITES_HOST=dev.attnd.site` on attnd-dev, Nov 21, 2026). Owner: `SITES_HOST=attnd.site` on attnd-web
-      (production), then `heroku run -a <app> python manage.py
+      (`SITES_HOST=dev.attnd.site` on attnd-dev, Nov 21, 2026) and **production is switched** (`SITES_HOST=attnd.site` on
+      attnd-web, verified Nov 21, 2026); after a switch run `heroku run -a <app> python manage.py
       refresh_site_addresses` so the apps pick up the new `website_url`. The old herokuapp.com sites host then only
       301s site paths to the new host. Older note (step 15):
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
@@ -114,8 +114,9 @@ Do these steps once, in order. Each step says which values go where. For any sin
         robots.txt). Later, optional: a ChatGPT app (Apps SDK) for organizers.
   - [~] Apple Business (Business Connect): organization "Attnd" submitted for review Nov 21, 2026 (Org ID 552089622879).
         After approval:
-        - [ ] verify attnd.app under Domains;
-        - [ ] add the Attnd brand (logo, description, website, the App Store app);
+        - [x] verify attnd.app under Domains (done, owner, Nov 21, 2026);
+        - [x] link the App Store app (done, owner, Nov 21, 2026);
+        - [ ] the rest of the brand (logo, description, website) once approved;
         - [ ] optional: Branded Mail (needs a DMARC policy of quarantine or reject on mg.attnd.app);
         - no public Location listing (no storefront; the organization's address is private and never goes in the repo).
   - [ ] Perplexity, Claude and other AI search: allowed by robots.txt and `llms.txt`; nothing to submit.
