@@ -124,19 +124,54 @@ def spread_km(points):
 
 def event_stats(event, locations=None):
     """`locations`: the event's visible locations when the caller has them already (saves a query)."""
+    from events.content import models_q_visible_location
     if locations is not None:
         locations = [(loc.latitude, loc.longitude, loc.category) for loc in locations]
     else:
         locations = list(event.location_set.filter(hidden=False).values_list('latitude', 'longitude', 'category'))
-    item_count = event.scheduleditem_set.filter(hidden=False).count()
+    # What the apps actually list: visible items whose location (if any) is visible too (ended items count), and
+    # the sent notifications; one query with two counting subqueries.
+    from django.db.models import Count, IntegerField, OuterRef, Subquery
+
+    from events.models import Event, Notification, ScheduledItem
+
+    def counted(qs):
+        return Subquery(qs.order_by().values('event').annotate(n=Count('pk')).values('n')[:1],
+                        output_field=IntegerField())
+    row = Event.objects.filter(pk=event.pk).annotate(
+        items=counted(ScheduledItem.objects.filter(event=OuterRef('pk'), hidden=False)
+                      .filter(models_q_visible_location())),
+        sent=counted(Notification.objects.filter(event=OuterRef('pk'), sent=True)),
+    ).values('items', 'sent').first() or {}
+    item_count, sent_count = row.get('items') or 0, row.get('sent') or 0
     categories = sorted({c for _, _, c in locations if c})
     return {
         'location_count': len(locations),
+        'mappable_count': sum(1 for lat, lng, _ in locations if lat is not None and lng is not None
+                              and not (abs(float(lat)) < 1e-6 and abs(float(lng)) < 1e-6)),
+        'sent_count': sent_count,
         'item_count': item_count,
         'spread_km': spread_km((lat, lng) for lat, lng, _ in locations),
         'category_count': len(categories),
         'has_flyer': bool(event.flyer),
     }
+
+
+def empty_tabs(stats):
+    """Tabs that would show nothing: Schedule without visible items, Places without visible locations, the Map
+    without a location that has coordinates, the Flyer without a flyer, Updates without a sent notification."""
+    out = set()
+    if not stats.get('item_count'):
+        out.add('schedule')
+    if not stats.get('location_count'):
+        out.add('locations')
+    if not stats.get('mappable_count', stats.get('location_count')):
+        out.add('map')
+    if not stats.get('has_flyer'):
+        out.add('flyer')
+    if not stats.get('sent_count', 1):
+        out.add('notifications')
+    return out
 
 
 def auto_preset(stats):
@@ -198,10 +233,12 @@ def resolve_display(event, stats=None, sections=0):
         cfg['default_tab'] = 'locations'
     if stats['category_count'] >= 3 and stats['location_count'] > 12:
         cfg['group_by_category'] = True
-    if stats['item_count'] == 0:
-        cfg['tabs'] = [t for t in cfg['tabs'] if t != 'schedule']
-        if cfg['secondary_pane'] in ('schedule', 'now_next'):
-            cfg['secondary_pane'] = 'locations'
+    if stats['item_count'] == 0 and cfg['secondary_pane'] in ('schedule', 'now_next'):
+        cfg['secondary_pane'] = 'locations'
+    # Automatic tabs (owner, Nov 21, 2026): Home first and the default for apps that draw it (X-Attnd-Sections), and
+    # no tab with nothing to show. An organizer's own tab list (App layout) wins; the console notes empty ones.
+    cfg['tabs'] = ['home'] + [t for t in cfg['tabs'] if t not in empty_tabs(stats)]
+    auto_default, cfg['default_tab'] = cfg['default_tab'], 'home'
 
     cfg.update({k: v for k, v in overrides.items() if k != 'preset'})
 
@@ -210,6 +247,10 @@ def resolve_display(event, stats=None, sections=0):
         cfg['tabs'] = [t for t in cfg['tabs'] if t != 'flyer']
     if not sections or sections < 1:
         cfg['tabs'] = [t for t in cfg['tabs'] if t != 'home']
+        if cfg['default_tab'] == 'home' and 'default_tab' not in overrides:
+            cfg['default_tab'] = auto_default
+    if len(cfg['tabs']) > MAX_TABS and 'tabs' not in overrides and 'flyer' in cfg['tabs']:
+        cfg['tabs'].remove('flyer')  # Home + five: the flyer goes first (Updates stays)
     cfg['tabs'] = cfg['tabs'][:MAX_TABS]  # the apps show at most five (never a "More" tab)
     if not cfg['tabs']:
         cfg['tabs'] = ['map', 'notifications']

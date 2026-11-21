@@ -27,7 +27,7 @@
         <span class="field__help">Studio copies every page, image, font and PDF of the website and the AI builds a matching site.</span></label>
 {% elif r.name == 'layout_reason' %}<div class="notice notice--neutral small" data-layout-reason>{{ r.text }}</div>
 {% elif r.name == 'tab_list' %}<ul class="list list--boxed field tab-list" data-tab-sortable>{% for t in r.tabs %}
-        <li class="cluster" data-tab="{{ t.value }}">{% icon "grip" "drag-handle" %}<label class="check" for="{{ uid }}tab-{{ t.value }}"><input type="checkbox" name="tabs" value="{{ t.value }}" id="{{ uid }}tab-{{ t.value }}"{% if t.checked %} checked{% endif %}> {{ t.label }}</label></li>{% endfor %}
+        <li class="cluster" data-tab="{{ t.value }}">{% icon "grip" "drag-handle" %}<label class="check" for="{{ uid }}tab-{{ t.value }}"><input type="checkbox" name="tabs" value="{{ t.value }}" id="{{ uid }}tab-{{ t.value }}"{% if t.checked %} checked{% endif %}> {{ t.label }}</label>{% if t.empty %}<span class="small tone-warning">{{ t.empty }}{% if t.checked %} · the apps would show an empty tab{% else %} · left out automatically{% endif %}</span>{% endif %}</li>{% endfor %}
       </ul>
 {% elif r.name == 'accent' %}<div class="field"><span class="field__label">Accent colour</span>
         <div class="cluster"><input type="color" name="accent_color" value="{{ r.value }}" aria-label="Accent colour">

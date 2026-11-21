@@ -491,7 +491,7 @@ This object holds the organizer's layout choices, already resolved by the server
 
 | Key | Values | Meaning |
 |---|---|---|
-| `tabs` | ordered subset of `home`, `map`, `locations`, `schedule`, `flyer`, `notifications`, at most 5 | The visible tabs, in order. Unknown values are ignored. `home` (API-024) only appears for apps that send `X-Attnd-Sections` ≥ 1 and only when the organizer turned it on; it is the `home` screen of `layout`. |
+| `tabs` | ordered subset of `home`, `map`, `locations`, `schedule`, `flyer`, `notifications`, at most 5 | The visible tabs, in order. Unknown values are ignored. `home` (API-024) only appears for apps that send `X-Attnd-Sections` ≥ 1; it is the `home` screen of `layout`. See the tab rules below. |
 | `default_tab` | one of `tabs` | The tab selected after joining. |
 | `locations_style` | `cards` \| `list` \| `grouped` | `cards`: large image cards. `list`: compact rows with a thumbnail. `grouped`: sections by `category`. |
 | `schedule_style` | `timeline` \| `by_day` \| `by_location` \| `now_next` | `timeline`: one chronological list. `by_day`: sections per day in the event's time zone. `by_location`: sections per location. `now_next`: a "Happening now" section, then "Up next" (the next 2 hours), then "Later". |
@@ -503,7 +503,18 @@ This object holds the organizer's layout choices, already resolved by the server
 | `secondary_pane` | `locations` \| `schedule` \| `now_next` \| `none` | On an unfolded foldable (iPhone Duo inner display, Android foldable inner display), what sits beside the map. |
 | `accent_color` | `#RRGGBB` \| null | The app's tint colour for this event. `null` means the default brand colour. |
 | `logo_url` | URL \| null | Shown in the event header. |
-| `preset`, `resolved_preset`, `reason`, `stats`, `schema_version` | — | Informational only. Clients may ignore them. |
+| `preset`, `resolved_preset`, `reason`, `stats`, `schema_version` | — | Informational only. Clients may ignore them. `stats` also has `mappable_count` (visible locations with coordinates) and `sent_count` (sent notifications) since Nov 21, 2026. |
+
+Tab rules (server behaviour, Nov 21, 2026; the contract's types are unchanged):
+- Automatic tabs (no organizer tab list): `home` first and `default_tab: home` for apps that send `X-Attnd-Sections`
+  ≥ 1 (older apps keep the preset's default tab), then the preset's tabs **minus the ones with nothing to show**:
+  `schedule` without a visible item (ended items count; hidden items and items at hidden locations don't),
+  `locations` without a visible location, `map` without a visible location that has coordinates, `flyer` without a
+  flyer, `notifications` without a sent notification. Home plus five: the flyer is left out first. An app that gets
+  `home` and nothing else shows the Home tab alone; an older app that would get no tab gets `[map, notifications]`.
+- An organizer's own tab list (App layout) is sent as chosen (the console notes tabs that would be empty), except
+  `flyer` without a flyer.
+- Apps list ended schedule items (greyed) when nothing is left to come, rather than an empty Schedule tab.
 
 Client defaults when `display` or a key is missing:
 - `tabs`: `[map, locations, schedule, notifications]`, plus `flyer` if `flyer_url` is set

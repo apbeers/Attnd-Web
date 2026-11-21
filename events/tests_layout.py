@@ -183,10 +183,59 @@ class AutomaticLayoutTests(TestCase):
         self.event.flyer = 'flyers/x.png'
         self.assertEqual(len(resolve_display(self.event, sections=1)['tabs']), 5)
 
-    def test_automatic_tabs_never_add_home(self):
+    def test_automatic_tabs_lead_with_home_for_apps_that_draw_it(self):
+        """Batch 5 (owner, Nov 21, 2026): Home first and the default tab for apps sending X-Attnd-Sections; never
+        for older apps."""
         for preset in ('intimate', 'standard', 'festival'):
             self.event.display_config = {'preset': preset}
-            self.assertNotIn('home', resolve_display(self.event, sections=1)['tabs'])
+            cfg = resolve_display(self.event, sections=1)
+            self.assertEqual((cfg['tabs'][0], cfg['default_tab']), ('home', 'home'))
+            old = resolve_display(self.event, sections=0)
+            self.assertNotIn('home', old['tabs'])
+            self.assertNotEqual(old['default_tab'], 'home')
+        self.event.display_config = {'tabs': ['schedule', 'map'], 'default_tab': 'schedule'}
+        self.assertEqual(resolve_display(self.event, sections=1)['tabs'], ['schedule', 'map'])  # the organizer's own
+
+
+class EmptyTabsTests(TestCase):
+    """No tab with nothing to show (owner, Nov 21, 2026): ended items still count, hidden ones don't."""
+
+    def setUp(self):
+        from events.models import Location, Notification, ScheduledItem
+        user = User.objects.create_user('e', 'e@example.com', 'pw')
+        self.event = Event.objects.create(name='Walk', event_code='WALK1', user=user, start_time=timezone.now(),
+                                          status=Event.STATUS_PUBLISHED)
+        self.L, self.N, self.S = Location, Notification, ScheduledItem
+
+    def tabs(self, sections=1):
+        return resolve_display(self.event, sections=sections)['tabs']
+
+    def test_nothing_yet_is_home_only(self):
+        self.assertEqual(self.tabs(), ['home'])
+        self.assertEqual(self.tabs(0), ['map', 'notifications'])  # older apps always get something
+
+    def test_each_tab_needs_its_content(self):
+        place = self.L.objects.create(event=self.event, name='Gallery')  # no coordinates
+        self.assertEqual(self.tabs(), ['home', 'locations'])
+        place.latitude, place.longitude = 32.7, -97.3
+        place.save()
+        self.assertEqual(self.tabs(), ['home', 'map', 'locations'])
+        past = timezone.now() - timedelta(days=2)
+        item = self.S.objects.create(event=self.event, name='Opening', start_time=past, end_time=past + timedelta(hours=2),
+                                     location=place)
+        self.assertIn('schedule', self.tabs())  # ended items still count
+        item.hidden = True
+        item.save()
+        self.assertNotIn('schedule', self.tabs())
+        item.hidden = False
+        item.save()
+        place.hidden = True
+        place.save()
+        self.assertNotIn('schedule', self.tabs())  # its only item sits at a hidden place
+        self.N.objects.create(event=self.event, title='Hi', body='x', send_time=timezone.now())
+        self.assertNotIn('notifications', self.tabs())  # scheduled, not sent
+        self.N.objects.update(sent=True)
+        self.assertIn('notifications', self.tabs())
 
 
 @override_settings(API_KEY='layout-key')

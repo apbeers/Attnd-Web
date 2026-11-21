@@ -92,6 +92,8 @@
           "has_flyer": "boolean",
           "item_count": "integer",
           "location_count": "integer",
+          "mappable_count": "integer",
+          "sent_count": "integer",
           "spread_km": "number"
         },
         "tabs": [
@@ -278,6 +280,8 @@
           "has_flyer": "boolean",
           "item_count": "integer",
           "location_count": "integer",
+          "mappable_count": "integer",
+          "sent_count": "integer",
           "spread_km": "number"
         },
         "tabs": [

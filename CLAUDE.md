@@ -198,7 +198,7 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   (`event_screens`; JSON answers carry the new preview); Ask Attnd: `update_screen_layout` (screen, match, sections as
   JSON), `reset_screen_layout`, `add_screen_override`, `remove_screen_override`. A screen saved once stores its whole
   spec (with the automatic per-category orders of that moment) in `Event.layout_config`; untouched screens follow the
-  automatic layout. The Home tab itself is turned on in Tabs (never automatic). Tests: `console/tests_screens.py`.
+  automatic layout. The Home tab is first and the default tab automatically for apps that send `X-Attnd-Sections` (Nov 21, 2026), and automatic tabs leave out tabs with nothing to show (`events.display.empty_tabs`: Schedule without visible items (ended ones count), Places without visible locations, Map without pins, Flyer without a flyer, Updates without a sent notification); an organizer's own tab list wins and App layout notes tabs that would be empty. Tests: `console/tests_screens.py`.
 - **Likes** (API-009 hearts; the apps say "like", the heart icon stays): net likes (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted` (code and metric names keep "heart"; labels say "likes" / "liked"): Usage page, counts on the Locations and Schedule lists, "Most liked" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
 - **Maps and addresses** (`console/static/console/maps.js` with `GOOGLE_MAPS_BROWSER_KEY`, else console.js's

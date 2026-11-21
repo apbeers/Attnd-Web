@@ -85,6 +85,13 @@ def changeset_review(user, event_id=None, changeset_id=None, event=None, changes
 # b. App layout · c. Website watching · d. Event details for the assistant · e. Flyer
 # ---------------------------------------------------------------------------
 
+EMPTY_NOTES = {
+    'schedule': 'Empty: no visible schedule items', 'locations': 'Empty: no visible locations',
+    'map': 'Empty: no location has a pin', 'flyer': 'Empty: no flyer uploaded',
+    'notifications': 'Empty: no notification sent yet',
+}
+
+
 @component('app_layout', 'App layout', "How the event looks in the apps: preset, tabs, default tab, list and schedule "
            'styles, map options, accent colour. Saves as you change it.',
            page=lambda ids: reverse('console:display', args=[ids['event_id']]))
@@ -100,11 +107,14 @@ def app_layout(user, event_id=None, event=None, form=None):
     order += [t for t in TABS if t not in order]
     chosen = set(initial.get('tabs') or [])
     stats = event_stats(event)
+    from events.display import empty_tabs
+    empty = empty_tabs(stats)  # the apps leave these out automatically; chosen by hand, they'd show nothing
     resolved = resolve_display(event, stats, sections=CATALOGUE_VERSION)  # the newest apps' tabs (Home included)
     data = form_json(form, [('choices', 'preset'),
                             ('block', 'layout_reason', {'text': f"Currently using {str(resolved.get('resolved_preset', '')).capitalize()}: {resolved.get('reason', '')}."}),
                             'customize_tabs',
-                            ('block', 'tab_list', {'tabs': [{'value': t, 'label': LABELS['tabs'].get(t, t), 'checked': t in chosen}
+                            ('block', 'tab_list', {'tabs': [{'value': t, 'label': LABELS['tabs'].get(t, t), 'checked': t in chosen,
+                                                             'empty': EMPTY_NOTES.get(t) if t in empty else ''}
                                                             for t in order]}),
                             ('grid', 'default_tab', 'secondary_pane'), ('grid', 'locations_style', 'schedule_style'),
                             ('grid', 'map_clustering', 'map_fit_all'), ('grid', 'show_location_images', 'enable_search'),
