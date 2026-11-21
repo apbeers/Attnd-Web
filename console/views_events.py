@@ -1056,6 +1056,16 @@ def _theme_done(request, event, text):
     return redirect(reverse('console:event', args=[event.pk]) + '#theme')
 
 
+@event_view
+def event_theme_css(request, event):
+    """The event's theme CSS for console.js to swap into <style data-event-theme> without a reload (empty when off),
+    plus the six swatches of the compact Colours card."""
+    from events import theme as T
+    theme = T.normalize(event.theme) or T.default_theme()
+    return JsonResponse({'css': (T.css(event.theme) or '') if event.theme_web else '',
+                         'swatches': [theme[m][r] for m in T.MODES for r in T.ROLES]})
+
+
 @agent_action('update_event_theme', "An event's colour theme as exact #RRGGBB codes: for light and for dark mode a "
               'primary (buttons, active chips, links), a secondary (soft tints) and a tertiary (highlights, hovers). '
               'Pass only what changes. Text contrast is adjusted automatically, so any colour is allowed. Saving '

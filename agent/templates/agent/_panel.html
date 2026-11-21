@@ -35,6 +35,8 @@
       <span class="agent__thinking-spinner" aria-hidden="true"></span>
       <span class="agent__thinking-text" data-agent-stage aria-live="polite">Thinking…</span>
     </div>
+    {# Background tasks started from here (theme, import, updates, photos): a working line, then a done line (console.js). #}
+    <div class="agent__tasks" data-agent-tasks aria-live="polite"></div>
     <div class="agent__confirm" data-agent-confirm hidden role="alertdialog" aria-labelledby="agent-confirm-title" aria-describedby="agent-confirm-text">
       <div class="agent__confirm-title" id="agent-confirm-title">{% icon "warning" %} Confirm</div>
       <p class="agent__confirm-text" id="agent-confirm-text" data-agent-confirm-text></p>

@@ -428,6 +428,25 @@ on Save does; there is no second copy of any business logic.
   (compose, schedule, send with confirm, send now / delete scheduled ones). Tapping another event's tile opens full
   screen for that event; links in cards, the top bar's Your events / New event and the task tray's results stay on the
   canvas. Bespoke screens (Studio, the AI review, diagnostics, prospects, the map pin picker) still open as pages.
+- **Canvas layout rules** (owner, Nov 21, 2026; `agent/tests_canvas_width.py`): **any canvas tab must use the full
+  width**: no `--read-width` or other max-width on a pane, its grid or a section (`.canvas__pane, .canvas__grid,
+  .canvas__section { width: 100%; max-width: none }`); a section with one card spans the row; tabs with several sections
+  put them in columns on wide canvases (container `pane` ≥ 48rem: Notifications compose | Sent and scheduled; Settings,
+  Metrics and History in auto-fit columns, App layout across the row; Team: members beside the invite form); forms
+  inside keep readable field widths. A new canvas tab with several sections needs its column rule. **Tab counts**:
+  `canvas.ALERT_COUNTS` (Review) are filled badges (`.tab-count--alert`, `--color-danger` / `--color-on-danger`,
+  defined for light and dark), informational counts are muted (`.tab-count`); agent.js `setTabCount`. **Height**: on
+  desktop the full-screen chat fills exactly `100dvh` under the top bar (body flex column, no outer scroll).
+  **Background tasks in the chat**: a working line with the thinking ring and the task's current friendly step above
+  the composer (`[data-agent-tasks]`, console.js `renderChatLines`), then a done line with its result link; the task
+  tray on the desktop full screen sits bottom-left with the chat and opens upward (elsewhere near the launcher).
+- **Colours apply at once** (owner, Nov 21, 2026): `{% event_theme_style %}` always draws `<style
+  data-event-theme="<id>">` on an event's pages (empty without a theme or with the website switch off); after a save,
+  switch, Reset or a finished Generate with AI, `window.attndRefreshTheme()` fetches `console:event_theme_css` (`{css,
+  swatches}`) and swaps it in place, with the compact card's swatches. The Overview's **Colours** card is compact
+  (`event_theme`: six swatches, the two switches, Generate with AI, **Edit**); Edit opens the full editor in a native
+  `<dialog>` on pages (`data-dialog-open`, console.js; Esc closes, focus returns) and as the canvas overlay in the chat
+  (`event_theme_editor`, also the theme page).
 - **Rows that open for editing** (`location_row`, `schedule_item_row`, pages and chat alike): the whole row is the
   tap target (the title link stretches over it, `row-link__target::after`; buttons and the drag handle sit above), a
   chevron with "Edit" on hover/focus (always on touch), hover / focus / pressed states, and an accessible name ("Edit

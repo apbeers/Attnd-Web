@@ -211,11 +211,11 @@ def event_theme_style(context):
     from events.models import Event
     event = context.get('event') if context.get('section') and context.get('section') != 'studio' else None
     event = event or context.get('agent_event')
-    if not isinstance(event, Event) or not event.theme_web:
+    if not isinstance(event, Event):
         return ''
-    css = T.css(event.theme)
-    if not css:
-        return ''
+    # Always there on the event's pages (empty without a theme or with the website switch off), so a change made
+    # here (Save, Generate with AI finishing, a switch) swaps the colours in place (console.js, event_theme_css).
+    css = (T.css(event.theme) or '') if event.theme_web else ''
     nonce = context.get('csp_nonce')
     nonce = '' if nonce is None else str(nonce)  # (a LazyNonce is falsy until first used: str() makes it)
     return mark_safe(f'<style nonce="{escape(nonce)}" data-event-theme="{event.pk}">{css}</style>')

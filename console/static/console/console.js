@@ -72,6 +72,46 @@
     }, 1500);
   });
 
+  // API-023: a changed colour theme applies at once (owner, Nov 21, 2026): after a save, a switch, Reset or a finished
+  // Generate with AI, every <style data-event-theme="<id>"> on the page gets the new tokens and the compact card its
+  // swatches, without a reload. Nothing changes visually while "Use custom theme on the website" is off.
+  window.attndRefreshTheme = async function () {
+    const style = document.querySelector('style[data-event-theme]');
+    if (!style) return;
+    const id = style.dataset.eventTheme;
+    try {
+      const r = await fetch(`/console/events/${id}/theme/css/`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+      if (!r.ok) return;
+      const d = await r.json();
+      document.querySelectorAll(`style[data-event-theme="${id}"]`).forEach((s) => { if (s.textContent !== d.css) s.textContent = d.css; });
+      document.querySelectorAll('.theme-swatches').forEach((list) => {
+        list.querySelectorAll('.theme-swatch').forEach((li, i) => { if (d.swatches[i]) li.style.setProperty('--swatch', d.swatches[i]); });
+      });
+    } catch (e) { /* offline: the next page load has it */ }
+  };
+
+  // Native dialogs: [data-dialog-open="#id"] opens <dialog id> as a modal (the browser traps focus and Esc closes);
+  // [data-dialog-close] inside closes it; a click on the backdrop closes it too. Focus goes back to the opener.
+  document.addEventListener('click', (e) => {
+    const opener = e.target.closest('[data-dialog-open]');
+    if (opener) {
+      const dialog = document.querySelector(opener.dataset.dialogOpen);
+      if (dialog && typeof dialog.showModal === 'function' && !dialog.open) {
+        dialog._opener = opener;
+        dialog.showModal();
+        window.attndEnhance?.(dialog);
+      }
+      return;
+    }
+    const closer = e.target.closest('[data-dialog-close]');
+    if (closer) { closer.closest('dialog')?.close(); return; }
+    if (e.target.tagName === 'DIALOG' && e.target.open) {
+      const box = e.target.getBoundingClientRect();
+      if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) e.target.close();
+    }
+  });
+  document.addEventListener('close', (e) => { if (e.target.tagName === 'DIALOG') e.target._opener?.focus(); }, true);
+
   // Tabs: <div data-tabs> holds <button data-tab-target="#panel"> buttons. Clicking one selects it
   // (aria-selected) and shows its panel; the other buttons' panels get [hidden].
   document.addEventListener('click', e => {
@@ -535,6 +575,7 @@
       // The Screens editor (API-024): the preview of the order just saved.
       const preview = d.preview && form.closest('[data-screen-block]')?.querySelector('[data-screen-preview]');
       if (preview) { preview.innerHTML = d.preview; reveal(preview, 'pulse'); }
+      if (/\/theme\//.test(form.getAttribute('action') || '')) window.attndRefreshTheme();
       if (status) {
         status.textContent = 'Saved. Open apps update within a few seconds.';
         const undo = r.headers.get('X-Attnd-Undo');
@@ -772,15 +813,49 @@
         }
         if ((t.status === 'done' || t.status === 'failed') && !seenDone.has(t.id) && tray.dataset.ready) {
           seenDone.add(t.id);
+          if (t.status === 'done') window.attndRefreshTheme?.();
           sessionStorage.setItem('attnd.tasksSeen', JSON.stringify([...seenDone].slice(-50)));
           toast(t);
         } else if (t.status === 'done' || t.status === 'failed') {
           seenDone.add(t.id);
         }
       });
+      renderChatLines(tasks);
       tray.dataset.ready = '1';
       if (!active.length && fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null; }
     }
+
+    // The chat column's lines (Ask Attnd panel, [data-agent-tasks]): every running task with the thinking ring and its
+    // current friendly step, and the ones that finished while this page was open with their result link.
+    const watchedHere = new Set();
+    function renderChatLines(tasks) {
+      const boxes = document.querySelectorAll('[data-agent-tasks]');
+      if (!boxes.length) return;
+      const lines = tasks.filter((t) => {
+        const running = t.status === 'queued' || t.status === 'running';
+        if (running) watchedHere.add(t.id);
+        return running || watchedHere.has(t.id);
+      }).slice(0, 3).map((t) => {
+        const running = t.status === 'queued' || t.status === 'running';
+        const step = (t.steps || []).filter((st) => st.state === 'running').pop();
+        if (running) {
+          return `<div class="agent__task"><span class="agent__thinking-spinner" aria-hidden="true"></span>
+            <span>${escapeHtml(step ? step.text : (t.progress || `${t.title}…`))}</span></div>`;
+        }
+        if (t.status === 'failed') {
+          return `<div class="agent__task agent__task--failed"><span class="status-mark status-mark--danger" aria-hidden="true">×</span>
+            <span>${escapeHtml(t.title)}: ${escapeHtml(t.error || 'that didn’t work')}</span></div>`;
+        }
+        const link = t.url ? ` · <a href="${escapeHtml(t.url)}" data-task-result>${escapeHtml(t.result_label || 'Open')}</a>` : '';
+        return `<div class="agent__task agent__task--done"><span class="status-mark status-mark--success" aria-hidden="true">✓</span>
+          <span>${escapeHtml(t.summary || t.title)}${link}</span></div>`;
+      }).join('');
+      boxes.forEach((box) => { if (box.innerHTML !== lines) box.innerHTML = lines; });
+    }
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('[data-agent-tasks] a[href]');
+      if (link && window.attndCanvasOpen && window.attndCanvasOpen(link.getAttribute('href'), link)) e.preventDefault();
+    });
 
     function toast(t) {
       const el = document.createElement('div');

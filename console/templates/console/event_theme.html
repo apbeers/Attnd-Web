@@ -5,5 +5,5 @@
 {% block crumbs_more %}<li><span aria-current="page">Colours</span></li>{% endblock %}
 {% block crumb_back %}{% url 'console:event' event.id %}{% endblock %}
 {% block event_content %}
-<div class="panel panel--roomy">{% component "event_theme" event=event form=form %}</div>
+<div class="panel panel--roomy">{% component "event_theme_editor" event=event form=form %}</div>
 {% endblock %}

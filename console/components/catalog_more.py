@@ -125,7 +125,9 @@ def app_layout(user, event_id=None, event=None, form=None):
            actions=(('reset_event_theme', 'Reset to Attnd’s colours'),), ai_subject='colour theme',
            ai_prompt='Pick colours for this event from its website, logo and photos.',
            page=lambda ids: reverse('console:event_theme', args=[ids['event_id']]))
-def event_theme(user, event_id=None, event=None, form=None):
+def event_theme(user, event_id=None, event=None, form=None, full=False):
+    """The compact card (swatches, switches, Generate with AI, Edit); `full` = the manual editor itself
+    (event_theme_editor: the theme page, the canvas overlay; on pages the compact card opens it in a <dialog>)."""
     from console.forms.event_forms import EventThemeForm, EventThemeSwitchesForm, ThemeGenerateForm
     from events import theme as T
     event = editable_event(user, event_id, event)
@@ -154,8 +156,17 @@ def event_theme(user, event_id=None, event=None, form=None):
                          action=reverse('console:event_theme_generate', args=[event.pk]),
                          submit=[{'label': 'Generate with AI', 'style': 'outline', 'icon': 'stars'}])
     generate['background'] = 'Picking colours…'
+    # The compact card's one-button version (no instruction field; the full editor has it).
+    generate_quick = form_json(ThemeGenerateForm(), [], action=reverse('console:event_theme_generate', args=[event.pk]),
+                               submit=[{'label': 'Generate with AI', 'style': 'outline', 'icon': 'stars'}])
+    generate_quick.update(background='Picking colours…', no_ai=True)
     source = theme.get('source', '') if theme else ''
+    swatches = [{'mode': mode, 'role': role, 'hex': shown[mode][role],
+                 'label': f'{"Light" if mode == "light" else "Dark"} {role}: {shown[mode][role]}'}
+                for mode in T.MODES for role in T.ROLES]
     return {
+        'swatches': swatches, 'generate_quick': generate_quick, 'full': full,
+        'editor_url': reverse('console:event_theme', args=[event.pk]),
         'event_id': event.pk, 'name': f'Colours · {event.name}', 'form': colours, 'switches': switches,
         'generate': generate, 'custom': bool(theme), 'locked': 'theme' in (event.locked_fields or []),
         'source': {'ai': 'Picked by the AI', 'site': 'From your website’s colours', 'manual': 'Chosen by your team'
@@ -164,6 +175,15 @@ def event_theme(user, event_id=None, event=None, form=None):
         'web': event.theme_web, 'apps': event.theme_apps,
         'actions': [{'name': 'reset_event_theme', 'style': 'ghost'}] if theme else [],
     }
+
+
+@component('event_theme_editor', 'Colour theme editor', "The full manual editor of an event's colours: the six hex "
+           'codes with pickers and contrast notes, a preview per mode, Save, Generate with AI with an instruction, Reset.',
+           actions=(('reset_event_theme', 'Reset to Attnd’s colours'),), ai_subject='colour theme',
+           ai_prompt='Pick colours for this event from its website, logo and photos.', template='components/event_theme.html',
+           page=lambda ids: reverse('console:event_theme', args=[ids['event_id']]))
+def event_theme_editor(user, event_id=None, event=None, form=None):
+    return event_theme(user, event_id=event_id, event=event, form=form, full=True)
 
 
 @component('website_watching', 'Website watching', "The event's source websites, whether Attnd watches them for "

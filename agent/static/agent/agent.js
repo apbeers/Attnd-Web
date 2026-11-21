@@ -1221,6 +1221,7 @@
       const data = await response.json();
       if (data.html) { setBody(card, data.html); return; }  // errors, in place
       if (!data.saved) throw new Error(data.error || 'Not saved. Open the page to see why.');
+      if (/\/theme\//.test(form.getAttribute('action') || '')) window.attndRefreshTheme?.();  // colours apply at once
       const savedLine = stepLine((data.messages || []).join(' ') || 'Saved', 'changed');
       const ids0 = JSON.parse(card.dataset.ids);
       if (data.undo) addUndo(savedLine, data.undo, 'available', ids0.event_id);
@@ -1302,6 +1303,18 @@
                   event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
                   prospect_row: 'Prospects', prospect_detail: 'Prospects', prospect_run_row: 'Prospects',
                   prospect_settings_form: 'Prospects' };
+  // A count beside a tab's name (agent/canvas.py ALERT_COUNTS): a filled alert badge when it waits for the person.
+  function setTabCount(label, count, alert) {
+    const tab = tabs.get(label);
+    if (!tab) return;
+    const button = tab.button;
+    button.textContent = label;
+    const badge = document.createElement('span');
+    badge.className = 'tab-count' + (alert ? ' tab-count--alert' : '');
+    badge.setAttribute('aria-label', `${count} waiting`);
+    badge.textContent = String(count);
+    button.append(' ', badge);
+  }
   const ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
                  'History', 'Prospects'];
   const SECTION_ORDER = ['event_tile', 'event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports',
@@ -1765,7 +1778,7 @@
       try { items = await fetchCards(name, [parent]); } catch (e) { /* none yet: the section says so */ }
       if (name === 'changeset_review' && !items.length) continue;  // the Review tab only while something waits
       toCanvas(name, items, parent, true);
-      if (name === 'changeset_review') tabs.get('Review').button.textContent = `Review · ${items.length}`;
+      if (name === 'changeset_review') setTabCount('Review', items.length, true);
     }
     selectTab('Overview');
   }

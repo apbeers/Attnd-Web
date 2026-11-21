@@ -63,6 +63,7 @@ EXCLUDED = {
     'console:place_search': 'Address search for the location form\'s Find button (JSON); the agent fills addresses itself.',
     'console:location_fill': 'Suggestions for the location form from a website (JSON, saves nothing; the person reviews).',
     'console:export': 'CSV downloads (schedule, locations, notifications, metrics); the pages show the same data.',
+    'console:event_theme_css': 'JSON the page reads to swap its colours in place; event_theme_page shows the same theme.',
     'console:assistant': 'Ask Attnd\'s own full-screen chat page: the agent never drives itself.',
     'agent:start': 'Ask Attnd\'s own endpoints: the agent never drives itself.',
     'agent:runs': 'Ask Attnd\'s own endpoints.',

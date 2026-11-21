@@ -236,10 +236,37 @@ class ConsoleThemeTests(TestCase):
     def test_overview_shows_the_card_and_no_style_without_a_theme(self):
         html = self.client.get(reverse('console:event', args=[self.event.pk]), secure=True).content.decode()
         self.assertIn('component--event_theme', html)
-        self.assertIn('Where the colours show', html)
+        # Compact on the Overview (owner, Nov 21, 2026): swatches + switches + Generate + Edit; the editor is a dialog.
+        self.assertIn('theme-compact', html)
+        self.assertIn('theme-swatch', html)
+        self.assertIn('data-dialog-open', html)
+        self.assertIn('<dialog class="dialog theme-dialog"', html)
         self.assertIn('Use custom theme on the website', html)
         self.assertIn('Use custom theme in the apps', html)
-        self.assertNotIn('data-event-theme', html)
+        # The style block is always there (empty without a theme), so a change can swap the colours in place.
+        self.assertIn(f'data-event-theme="{self.event.pk}"></style>', html)
+        # The theme page and the canvas overlay show the full editor.
+        page = self.client.get(self.url, secure=True).content.decode()
+        self.assertIn('Where the colours show', page)
+        self.assertNotIn('theme-compact', page)
+
+    def test_theme_css_endpoint_for_swapping_in_place(self):
+        url = reverse('console:event_theme_css', args=[self.event.pk])
+        empty = self.client.get(url, secure=True).json()
+        self.assertEqual(empty['css'], '')
+        self.assertEqual(len(empty['swatches']), 6)
+        self.event.theme = SUNSET
+        self.event.save()
+        data = self.client.get(url, secure=True).json()
+        self.assertIn('--color-brand', data['css'])
+        self.assertEqual(data['swatches'][0], '#B23A1E')
+        self.event.theme_web = False
+        self.event.save()
+        self.assertEqual(self.client.get(url, secure=True).json()['css'], '', 'website switch off: nothing changes')
+        other = User.objects.create_user('other-css', 'other-css@example.com', 'pw')
+        c = Client()
+        c.force_login(other)
+        self.assertEqual(c.get(url, secure=True).status_code, 404)
 
     def test_save_locks_bumps_and_offers_undo(self):
         version = self.event.content_version
@@ -285,7 +312,9 @@ class ConsoleThemeTests(TestCase):
         self.event.theme_web = False
         self.event.save()
         html = self.client.get(reverse('console:locations', args=[self.event.pk]), secure=True).content.decode()
-        self.assertNotIn('data-event-theme', html)
+        # Website switch off: the block stays (so turning it on swaps in place) but is empty.
+        self.assertIn(f'data-event-theme="{self.event.pk}"></style>', html)
+        self.assertNotIn('--color-brand:#B23A1E', html)
 
     def test_switches_are_independent(self):
         self.event.theme = SUNSET

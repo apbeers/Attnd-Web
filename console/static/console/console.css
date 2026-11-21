@@ -35,6 +35,7 @@
   --color-strong: #120f22;         /* the darkest text (logo, current nav item) */
   --color-success: #198754;  --color-success-soft: #e7f6ee; --color-success-line: #b9e3c9; --color-success-text: #146c43;
   --color-danger: #c62828;   --color-danger-soft: #fdeeee;  --color-danger-line: #f5c7c7; --color-danger-text: #b11f1f;
+  --color-on-danger: #ffffff;  /* text on a danger fill (alert badges) */
   --color-warning: #f2b705;  --color-warning-soft: #fff7df; --color-warning-line: #f4e0a3; --color-warning-text: #8a6100;
   --color-info: #0b8bd6;     --color-info-soft: #e8f4fd;    --color-info-line: #bfe1f7;
   --color-code: #a3195b;
@@ -78,6 +79,8 @@
     --color-strong: #fff;
     --color-success: #3fb47a; --color-success-soft: #15291f; --color-success-line: #22533a; --color-success-text: #79d6a3;
     --color-danger: #ef5b5b;  --color-danger-soft: #2f1719;  --color-danger-line: #5d2629; --color-danger-text: #ff9b9b;
+  --color-on-danger: #1d0c0d;
+    --color-on-danger: #1d0c0d;
     --color-warning: #f2b705; --color-warning-soft: #2c2412; --color-warning-line: #5a4815; --color-warning-text: #f2c94c;
     --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b;
     --color-code: #ff8fc0;
@@ -590,10 +593,12 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .task-result { margin-top: var(--space-1); }
 /* Full-screen Ask Attnd: the tray sits at the canvas's top-right corner (next to its tabs), far from the composer,
    and its panel opens downward. */
-body:has(.assistant) .task-tray { top: 5.75rem; bottom: auto; right: 2.5rem; flex-direction: column; }
-body:has(.assistant) .task-panel { order: 1; max-height: min(60vh, 34rem); }
-body:has(.assistant) .task-toast { top: 9rem; bottom: auto; right: 2.5rem; }
-@media (max-width: 1023px) { body:has(.assistant) .task-tray { top: 4.5rem; right: 1rem; } body:has(.assistant) .task-toast { right: 1rem; } }
+/* Full-screen chat on desktop: the tray sits with the chat, bottom-left above the composer, and opens upward. */
+@media (min-width: 1024px) {
+  body:has(.assistant) .task-tray { top: auto; bottom: 5rem; left: 2.25rem; right: auto; align-items: flex-start; }
+  body:has(.assistant) .task-panel { max-height: min(60vh, 34rem); }
+  body:has(.assistant) .task-toast { top: auto; bottom: 9.5rem; left: 2.25rem; right: auto; }
+}
 .task-inline-result { margin-left: var(--space-2); font-size: var(--text-sm); }
 .task-toast { position: fixed; right: 1rem; bottom: 4.5rem; z-index: 1060; width: min(22rem, calc(100vw - 2rem)); padding: .75rem 1rem;
   color: #fff; background: var(--color-brand); border-radius: var(--radius-lg); box-shadow: 0 10px 40px rgba(30, 10, 60, .3); transition: opacity .5s, transform .5s; }
@@ -605,6 +610,26 @@ body:has(.assistant) .task-toast { top: 9rem; bottom: auto; right: 2.5rem; }
 .dialog { max-width: 30rem; padding: var(--space-6); color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); }
 .dialog::backdrop { background: rgba(20, 10, 40, .45); }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* The colour editor's dialog (the compact Colours card's Edit) */
+.theme-dialog { width: min(56rem, calc(100vw - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); padding: 0; overflow: hidden; }
+.theme-dialog[open] { display: flex; flex-direction: column; }
+.theme-dialog .dialog__head { padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-border); }
+.theme-dialog .dialog__body { padding: var(--space-5); overflow: auto; }
+/* The compact Colours card (Overview): one row of swatches, the switches, Generate with AI, Edit */
+.theme-compact { gap: var(--space-3); }
+.theme-compact__row { gap: var(--space-3); align-items: center; }
+.theme-compact__title { margin: 0; }
+.theme-swatches { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.theme-swatch { width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--swatch); border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border); }
+.theme-swatch--dark:first-of-type, .theme-swatch--light + .theme-swatch--dark { margin-left: var(--space-2); }
+.theme-compact__switches form { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0; }
+.theme-compact__switches .field { display: flex; align-items: center; gap: .45rem; margin: 0; max-width: none; }
+.theme-compact__switches .field__help { display: none; }
+.theme-compact__generate form { margin: 0; }
+.theme-compact__generate .action-bar { position: static; padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; }
+.theme-compact__generate .button { padding-block: .35rem; font-size: var(--text-sm); }
 
 /* Two-factor sign-in */
 .two-factor-qr { max-width: 220px; margin: 0 auto var(--space-2); }

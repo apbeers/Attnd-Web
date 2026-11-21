@@ -55,13 +55,19 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` added as a Developer user. Plan: `docs/specs/tickets_spec.md` on branch `parked/tickets`.
 - [ ] ⏸ Tickets: parked on git branch `parked/tickets` (Nov 19, 2026; Eventbrite for now), not a task now. Optional: drop
       dev's orphan `tickets_*` tables (step 16).
-- [ ] Ask Attnd harness (stage I, Nov 21, 2026): add an Anthropic key for the nightly quality run (a throwaway test
-  database; a few cents a night): `gh secret set ANTHROPIC_HARNESS_KEY -R apbeers/Attnd-Web`, then run it once with
-  `gh workflow run agent-harness.yml -R apbeers/Attnd-Web`. Without the secret the workflow skips.
-- [ ] Background tasks (F5, Nov 21, 2026, optional): try Django's task queue on dev, then decide on production. Dev:
-  `heroku config:set TASKS_BACKEND=database -a attnd-dev` (the scheduler then runs queued tasks every 10 minutes);
-  for seconds instead of minutes add a worker: `heroku ps:scale tasks=1:basic -a attnd-dev` (a second Basic dyno, billed like
-  the web one). Production only after that works: the same two commands with `-a attnd-web`.
+- [x] Ask Attnd harness (stage I): `ANTHROPIC_HARNESS_KEY` Actions secret set on apbeers/Attnd-Web (owner, Nov 21,
+  2026). Only remaining: the nightly run starts once `agent-harness.yml` is on `main` (the next production release);
+  then run it once with `gh workflow run agent-harness.yml -R apbeers/Attnd-Web`.
+- [x] Anthropic monthly spend limit **$20** set in the Anthropic Console (owner, Nov 21, 2026). It covers everything:
+  the nightly Ask Attnd harness and all dev and production AI (Ask Attnd, Studio, imports, website checks, themes,
+  place photos, plan suggestions, prospects). Keep the per-feature daily caps under it (`AGENT_DAILY_SPEND_CAP_USD`,
+  `STUDIO_DAILY_SPEND_CAP_USD`, `PROSPECT_DAILY_SPEND_CAP_USD`, `PLACE_IMAGES_DAILY_CAP_USD`, the new accounts' import
+  cap): one busy day of Studio on its own default ($10 per event) could use half the month.
+- [x] Background tasks on dev (F5, owner Nov 21, 2026): `TASKS_BACKEND=database` set on attnd-dev and a `tasks` dyno
+  scaled to 1 Basic. Production only after it has proved itself on dev: `heroku config:set TASKS_BACKEND=database -a
+  attnd-web` and `heroku ps:scale tasks=1:basic -a attnd-web` (with a go-ahead).
+- [x] DEMO reloaded on dev with its theme (owner, Nov 21, 2026). Production: the same `load_demo_event` with a go-ahead
+  after the release.
 - [ ] Later (before outside organizers or payments): move everything to a Texas LLC — `docs/LLC_MIGRATION.md`.
 - [x] Repos made public (Nov 19, 2026); history scan found old secrets: the OpenAI key in `_set_heroku_env.command`
       (revoked Apr 29, 2026) and the 2021 service-account keys `attnd-prod` (`bf9dce7d…`) and `attnd-742` (`73dbb440…`),
@@ -952,8 +958,8 @@ Anthropic:
 heroku config:set -a attnd-dev ANTHROPIC_API_KEY=sk-ant-… STUDIO_AI_PROVIDER=anthropic STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5
 heroku config:set -a attnd-web ANTHROPIC_API_KEY=sk-ant-… STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5
 ```
-To be done in the Anthropic Console: a monthly spend limit as a second cap behind `AGENT_DAILY_SPEND_CAP_USD` /
-`STUDIO_DAILY_SPEND_CAP_USD`, and no training on customer data (docs/LLC_MIGRATION.md).
+✅ Anthropic Console monthly spend limit: $20 (owner, Nov 21, 2026), a second cap behind the per-feature daily caps.
+Still to check there: no training on customer data (docs/LLC_MIGRATION.md).
 
 
 ## Rotating SECRET_KEY (stage G, Nov 21, 2026)

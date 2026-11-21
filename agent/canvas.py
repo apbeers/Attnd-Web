@@ -19,6 +19,8 @@ KINDS = {
     'event_context_form': 'Settings', 'event_flyer': 'Settings', 'object_history': 'History', 'event_theme': 'Overview',
     'event_versions': 'History', 'prospect_run_row': 'Prospects', 'prospect_row': 'Prospects',
 }
+# Tab counts that wait for the person's action are drawn as a filled alert badge (.tab-count--alert); others muted.
+ALERT_COUNTS = {'Review'}
 ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
          'History', 'Prospects']
 EVENT_SECTIONS = ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'event_rollover',
@@ -81,11 +83,11 @@ def build(request, event=None):
     active = 'Overview' if event is not None else 'Events'
     out = []
     for label in sorted(tabs, key=ORDER.index):
-        text = label
-        if label == 'Review':
-            text = f'Review · {len(tabs[label][0]["items"])}'
-        out.append({'label': label, 'text': text, 'id': f'canvas-{label.lower()}', 'active': label == active,
-                    'sections': tabs[label]})
+        count, alert = None, False
+        if label == 'Review':  # AI suggestions wait for the person: an alert badge
+            count, alert = len(tabs[label][0]['items']), True
+        out.append({'label': label, 'text': label, 'count': count, 'alert': alert, 'id': f'canvas-{label.lower()}',
+                    'active': label == active, 'sections': tabs[label]})
     return out
 
 
@@ -104,7 +106,7 @@ ROUTES = [
     (r'^/console/events/(?P<event_id>\d+)/team/$', 'event_team', 'Team'),
     (r'^/console/events/(?P<event_id>\d+)/usage/$', 'event_metrics', 'Metrics'),
     (r'^/console/events/(?P<event_id>\d+)/display/$', 'app_layout', 'Settings'),
-    (r'^/console/events/(?P<event_id>\d+)/theme/$', 'event_theme', 'Overview'),
+    (r'^/console/events/(?P<event_id>\d+)/theme/$', 'event_theme_editor', None),
     (r'^/console/events/(?P<event_id>\d+)/changes/$', 'changeset_review', 'Review'),
     (r'^/console/events/(?P<event_id>\d+)/$', 'event_overview', 'Overview'),
     (r'^/console/new/$', 'event_new_form', None),
