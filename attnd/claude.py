@@ -78,49 +78,119 @@ def _create(api, kwargs):
     return api.messages.create(**kwargs)
 
 
+# Schemas the API refused as structured output in this process (too large a grammar): go straight to the tool.
+_TOO_LARGE = set()
+MAX_OUTPUT = 64000
+
+
+def _schema_key(schema):
+    import hashlib
+    return hashlib.sha256(json.dumps(schema, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def parse_json(text):
+    """The first JSON object in a model's text (``` fences, prose around it), or raises ValueError."""
+    text = (text or '').strip()
+    start = text.find('{')
+    if start < 0:
+        raise ValueError('no object')
+    obj, _end = json.JSONDecoder().raw_decode(text[start:])
+    if not isinstance(obj, dict):
+        raise ValueError('not an object')
+    return obj
+
+
+def _request_id(response):
+    return getattr(response, '_request_id', None) or getattr(response, 'id', '') or ''
+
+
 def structured(*, system, content, schema, model=None, effort='low', max_tokens=4096, timeout=90.0, api=None, meta=None):
-    """(parsed JSON, cost in USD). `content` is the user message: text or a list of content blocks. When the API
-    refuses the schema itself (too large or complex for structured output), the same request goes again with the
-    schema in the prompt and the JSON parsed from the answer."""
+    """(parsed JSON, cost in USD). `content` is the user message: text or a list of content blocks.
+
+    1. Structured output (`output_config.format` json_schema): the answer is guaranteed to match.
+    2. When the API refuses the schema itself (e.g. "the compiled grammar is too large" for the import's event schema),
+       the schema becomes the input schema of one `submit` tool the model must call: tool input is always a JSON
+       object (no fences, no prose around it). Remembered per process, so later calls skip step 1.
+    `stop_reason`: max_tokens → once more with twice the room (≤ 64K); refusal → a clear error. Every failure is logged
+    with the request id."""
     import anthropic
     if api is None and not available():
         raise ClaudeError('No ANTHROPIC_API_KEY.')
     model = model or fast_model()
     api = api or client(timeout)
-    kwargs = dict(model=model, max_tokens=max_tokens,
-                  system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
-                  messages=[{'role': 'user', 'content': content}],
-                  output_config={'effort': effort, 'format': {'type': 'json_schema', 'schema': adapt_schema(schema)}})
-    try:
-        response = _create(api, kwargs)
-    except anthropic.BadRequestError as exc:
-        text = str(getattr(exc, 'message', exc)).lower()
-        if not any(w in text for w in ('schema', 'grammar', 'output_config', 'format')):
-            raise ClaudeError(f'Claude: BadRequestError: {getattr(exc, "message", exc)}'[:300]) from exc
-        logger.warning('Structured output refused (%s): asking for JSON in the prompt instead', text[:120])
-        kwargs['output_config'] = {'effort': effort}
-        kwargs['system'] = [{'type': 'text', 'cache_control': {'type': 'ephemeral'},
-                             'text': system + '\n\nAnswer with ONE JSON object and nothing else, matching this JSON '
-                                              'schema:\n' + json.dumps(schema, separators=(',', ':'))}]
+    key = _schema_key(schema)
+    base = dict(model=model, max_tokens=max_tokens, messages=[{'role': 'user', 'content': content}])
+    cost = Decimal(0)
+
+    def with_format():
+        return dict(base, system=[{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}],
+                    output_config={'effort': effort, 'format': {'type': 'json_schema', 'schema': adapt_schema(schema)}})
+
+    def with_tool():
+        return dict(base, system=[{'type': 'text', 'cache_control': {'type': 'ephemeral'},
+                                   'text': system + '\n\nGive your answer by calling the submit tool exactly once with '
+                                                    'the complete result. Don\'t answer in text.'}],
+                    output_config={'effort': effort},
+                    tools=[{'name': 'submit', 'description': 'Submit the complete answer.',
+                            'input_schema': adapt_schema(schema)}],
+                    tool_choice={'type': 'auto'})
+
+    def call(kwargs):
+        nonlocal cost
         try:
             response = _create(api, kwargs)
-        except anthropic.APIError as exc2:
-            raise ClaudeError(f'Claude: {exc2.__class__.__name__}: {getattr(exc2, "message", exc2)}'[:300]) from exc2
-    except anthropic.APIError as exc:
-        raise ClaudeError(f'Claude: {exc.__class__.__name__}: {getattr(exc, "message", exc)}'[:300]) from exc
-    cost = cost_of(model, response.usage)
-    if meta is not None:  # (callers that log usage themselves)
-        meta.update(model=model, input=(getattr(response.usage, 'input_tokens', 0) or 0)
-                    + (getattr(response.usage, 'cache_read_input_tokens', 0) or 0),
-                    output=getattr(response.usage, 'output_tokens', 0) or 0,
-                    cached=getattr(response.usage, 'cache_read_input_tokens', 0) or 0, cost=cost)
-    if response.stop_reason != 'end_turn':
-        raise ClaudeError(f'Claude stopped: {response.stop_reason}')
-    text = ''.join(b.text for b in response.content if b.type == 'text').strip()
-    start, end = text.find('{'), text.rfind('}')
+        except anthropic.APIError as exc:
+            raise exc
+        cost += cost_of(model, response.usage)
+        if meta is not None:  # (callers that log usage themselves)
+            meta.update(model=model, input=(getattr(response.usage, 'input_tokens', 0) or 0)
+                        + (getattr(response.usage, 'cache_read_input_tokens', 0) or 0),
+                        output=getattr(response.usage, 'output_tokens', 0) or 0,
+                        cached=getattr(response.usage, 'cache_read_input_tokens', 0) or 0, cost=cost)
+        return response
+
+    def run(build):
+        kwargs = build()
+        response = call(kwargs)
+        if response.stop_reason == 'max_tokens' and kwargs['max_tokens'] < MAX_OUTPUT:
+            logger.warning('Claude ran out of room (%s output tokens, request %s): once more with twice the room',
+                           kwargs['max_tokens'], _request_id(response))
+            kwargs['max_tokens'] = min(MAX_OUTPUT, kwargs['max_tokens'] * 2)
+            response = call(kwargs)
+        return response
+
     try:
-        return json.loads(text if text.startswith('{') else text[start:end + 1]), cost
+        if key in _TOO_LARGE:
+            response = run(with_tool)
+        else:
+            try:
+                response = run(with_format)
+            except anthropic.BadRequestError as exc:
+                text = str(getattr(exc, 'message', exc)).lower()
+                if not any(w in text for w in ('schema', 'grammar', 'output_config', 'format')):
+                    raise
+                logger.warning('Structured output refused (%s): answering through a submit tool instead', text[:120])
+                _TOO_LARGE.add(key)
+                response = run(with_tool)
+    except anthropic.APIError as exc:
+        logger.warning('Claude call failed: %s (request %s)', exc.__class__.__name__, getattr(exc, 'request_id', ''))
+        raise ClaudeError(f'Claude: {exc.__class__.__name__}: {getattr(exc, "message", exc)}'[:300]) from exc
+
+    rid = _request_id(response)
+    if response.stop_reason == 'refusal':
+        logger.warning('Claude declined (request %s)', rid)
+        raise ClaudeError('Claude declined to read this')
+    if response.stop_reason == 'max_tokens':
+        logger.warning('Claude ran out of room twice (request %s)', rid)
+        raise ClaudeError('the answer was too long for one reply; try fewer sources')
+    for block in response.content:
+        if block.type == 'tool_use' and block.name == 'submit' and isinstance(block.input, dict):
+            return block.input, cost
+    text = ''.join(b.text for b in response.content if b.type == 'text')
+    try:
+        return parse_json(text), cost
     except ValueError as exc:
+        logger.warning('Claude returned no JSON (stop %s, request %s): %r', response.stop_reason, rid, text[:200])
         raise ClaudeError('Claude returned no JSON.') from exc
 
 

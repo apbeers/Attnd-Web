@@ -12,6 +12,14 @@ def reply(data, stop='end_turn'):
                                                  cache_creation_input_tokens=0))
 
 
+def tool_reply(data, stop='tool_use'):
+    """The model calling attnd.claude's `submit` tool with `data` (the fallback for schemas too large to enforce)."""
+    return SimpleNamespace(content=[SimpleNamespace(type='tool_use', name='submit', input=data, id='toolu_1')],
+                           stop_reason=stop, usage=SimpleNamespace(input_tokens=100, output_tokens=50,
+                                                                   cache_read_input_tokens=0,
+                                                                   cache_creation_input_tokens=0))
+
+
 class FakeClaude:
     def __init__(self, *answers):
         self.answers = list(answers)

@@ -176,16 +176,29 @@ class ServiceTests(TestCase):
         self.assertEqual(data["schedule"][0]["location_name"], "Stage")
         self.assertIsNone(data["schedule"][0]["start_time"])
 
-    def test_a_schema_the_api_refuses_falls_back_to_json_in_the_prompt(self):
+    def test_a_schema_the_api_refuses_falls_back_to_a_submit_tool(self):
+        """Batch 5: Third Thursday's refresh failed with "Claude returned no JSON." The event schema is too large a
+        grammar for structured output, and the old fallback (JSON in the prompt) depended on the model's text."""
         import anthropic
         import httpx
-        refused = anthropic.BadRequestError('The compiled grammar is too large for this schema', response=httpx.Response(
+
+        from attnd import claude as C
+        from attnd.testing import tool_reply
+        C._TOO_LARGE.clear()
+        refused = anthropic.BadRequestError('the compiled grammar is too large', response=httpx.Response(
             400, request=httpx.Request('POST', 'https://api.anthropic.com/v1/messages')), body=None)
-        with fake_claude(refused, _sample_data()) as claude:
+        with fake_claude(refused, tool_reply(_sample_data())) as claude:
             data = scrape_event(text="Fair on Saturday")
         self.assertEqual(data["name"], "Test County Fair")
         self.assertNotIn("format", claude.last["output_config"])
-        self.assertIn("matching this JSON schema", claude.last["system"][0]["text"])
+        self.assertEqual(claude.last["tools"][0]["name"], "submit")
+        self.assertEqual(claude.last["tool_choice"], {"type": "auto"})  # (forced tool use isn't allowed with thinking)
+        # Remembered: the next call goes straight to the tool.
+        with fake_claude(tool_reply(_sample_data())) as claude:
+            scrape_event(text="Fair on Saturday")
+        self.assertEqual(len(claude.calls), 1)
+        self.assertIn("tools", claude.calls[0])
+        C._TOO_LARGE.clear()
 
 
 # ---------------------------------------------------------------------------
