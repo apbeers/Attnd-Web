@@ -69,6 +69,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Off production (dev.attnd.app, dev.attnd.site): robots.txt disallows everything, X-Robots-Tag noindex.
+    'attnd.middleware.NoIndexMiddleware',
     # Attnd Studio's hosted sites (SITES_HOST): only site routes there, no cookies, the sites' own CSP.
     'studio.middleware.SitesHostMiddleware',
     # First, so it times the whole request: one JSON line per /api/ request + X-Request-Id (API-013).
@@ -492,6 +494,8 @@ PLAN_SUGGESTIONS_MODEL = os.getenv('PLAN_SUGGESTIONS_MODEL', 'claude-haiku-5-5')
 AGENT_REFUSAL_MODEL = os.getenv('AGENT_REFUSAL_MODEL', 'claude-sonnet-5-5')
 AGENT_DAILY_SPEND_CAP_USD = float(os.getenv('AGENT_DAILY_SPEND_CAP_USD', '2'))  # per person per UTC day
 # AI credit (credit/): first defaults of the staff-editable "AI limits" (the database row wins once saved).
+# schema.org sameAs on the home page: the company's profiles once they exist (comma-separated URLs; SETUP.md).
+SOCIAL_PROFILES = os.getenv('SOCIAL_PROFILES', '')
 AI_MONTHLY_CREDIT_USD = float(os.getenv('AI_MONTHLY_CREDIT_USD', '30'))  # per person per calendar month (UTC)
 AI_VISITOR_CREDIT_USD = float(os.getenv('AI_VISITOR_CREDIT_USD', '5'))  # signed-out visitors, carried over at sign-up
 AI_PLATFORM_ALERT_USD = float(os.getenv('AI_PLATFORM_ALERT_USD', '100'))  # all AI spend this month → email admins

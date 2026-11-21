@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if canonical %}<link rel="canonical" href="{{ canonical }}">{% endif %}
+  {% if noindex %}<meta name="robots" content="noindex">{% endif %}
   <title>{% if shared_plan %}A shared plan for {{ event.name }}{% else %}{{ event.name }} on Attnd{% endif %}</title>
   {% if shared_plan %}<meta name="robots" content="noindex">{% endif %}
   <meta name="description" content="Follow {{ event.name }} in the Attnd app: map, schedule and live updates. Event code {{ event.event_code }}.">

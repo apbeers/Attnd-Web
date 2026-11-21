@@ -1,0 +1,21 @@
+# Attnd
+
+> Attnd turns an event's website, flyer or spreadsheet into a live event app: a map of every place, the schedule,
+> push updates and an on-device assistant for attendees, kept in sync as the organizer edits. Free to try for
+> organizers; attendees join by scanning a QR code (iPhone App Clip, nothing to install, or the Android app).
+
+Attnd is for organizers of festivals, markets, fairs, conferences, races, art walks and other events where people
+move between several places. Organizers build the event with AI from their existing website or flyer, edit it in the
+console (or by asking Attnd's assistant), preview changes on their own phone and publish them to attendees.
+
+## Key pages
+
+- [Home](https://attnd.app/): what Attnd does, live examples, "Try it on your event"
+- [Privacy policy](https://attnd.app/privacy/)
+- Join an event: `https://attnd.app/join/<EVENT CODE>/` (opens the app or App Clip; the code is on the event's QR code)
+- [Attnd on the App Store](https://apps.apple.com/us/app/attnd/id1470627406)
+- [Attnd on Google Play](https://play.google.com/store/apps/details?id=com.arcu.attnd)
+
+## Support
+
+Organizers reach the Attnd team from the console's assistant ("Talk to a person", or type /contact).

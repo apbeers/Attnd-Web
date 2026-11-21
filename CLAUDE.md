@@ -943,6 +943,14 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
   `attnd.public.public()` / `public_include()` (the API, join and shared-plan links, the home page, sign-in, sign-up,
   password reset, passkey endpoints, well-known files, health, CSP reports, Studio's sites) and
   `attnd/tests_public.py` lists every one of them.
+- **Search engines** (owner, Nov 21, 2026): off production (`SITE_URL` not `https://attnd.app`: dev.attnd.app and
+  dev.attnd.site) `attnd.middleware.NoIndexMiddleware` (first in MIDDLEWARE) answers robots.txt with `Disallow: /` and
+  sends `X-Robots-Tag: noindex, nofollow` on everything. Self-canonicals on the home page, privacy and join / shared
+  plan pages (`SITE_URL`-based, no query); join pages of events that aren't published + listed + paid (test, showcase,
+  demo, shared plans) say `noindex`; `sitemap.xml` lists the static pages and those events' join pages
+  (`home/sitemaps.py`); the sites host has its own `sitemap.xml` of published sites and each site page a canonical
+  to its address. `public/llms.txt` says what Attnd is; the home page's JSON-LD has Organization (+ `sameAs` from
+  `SOCIAL_PROFILES`), WebSite and SoftwareApplication. Tests: `home/tests_seo.py`.
 - **Admin** lives at `ADMIN_URL_PATH` (default `manage-attnd/`); `/admin/` is a 404. Link to it with `{% url 'admin:index' %}`.
 
 ## Data Models (`events/models.py`)

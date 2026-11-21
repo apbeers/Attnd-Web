@@ -37,7 +37,9 @@ class SitesHostMiddleware:
             from django.http import HttpResponsePermanentRedirect
             response = HttpResponsePermanentRedirect(settings.SITE_URL.rstrip('/') + '/home/')
         elif request.path == '/robots.txt':
-            response = HttpResponse('User-agent: *\nAllow: /\nDisallow: /*/_preview/\n', content_type='text/plain')
+            from studio import hosting as _h
+            response = HttpResponse('User-agent: *\nAllow: /\nDisallow: /*/_preview/\n'
+                                    f'Sitemap: {_h.sites_origin()}/sitemap.xml\n', content_type='text/plain')
         else:
             response = self.get_response(request)
         return self.harden(response)

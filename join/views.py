@@ -76,6 +76,10 @@ def _landing(request, event, kind, extra=None):
             'app_store_id': _app_store_id(),
             'clip_bundle_id': f"{os.getenv('APPLE_APP_BUNDLE_ID', 'com.arcu.Attnd')}.clip",
         }
+        from home.sitemaps import indexable_event
+        site = getattr(settings, 'SITE_URL', 'https://attnd.app').rstrip('/')
+        context['canonical'] = site + request.path.split('?')[0]
+        context['noindex'] = not indexable_event(event) or bool(extra)  # shared plans: personal, never indexed
         context.update(extra or {})
         response = render(request, 'join/landing.html', context)
     response['Cache-Control'] = 'no-cache'

@@ -21,6 +21,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026): moved to git branch `parked/tickets` (API-017), organizers use Eventbrite for now. The setup steps live on that branch. Optional: drop dev's orphan `tickets_*` tables (step 16). |
 | 17. Prospects (staff) | ✅ No setup: it uses `ANTHROPIC_API_KEY` (Claude Sonnet's web search, ~$0.01 per search + tokens; stage C). The schedule is off until turned on in `/console/prospects/settings/`. Optional: `PROSPECT_MODEL`, `PROSPECT_DAILY_SPEND_CAP_USD` (default 5), `PROSPECT_RUN_MAX_MINUTES` (step 17). |
 | 18. Ask Attnd (console agent) | ✅ Runs on Anthropic's Claude Haiku 5.5 (`ANTHROPIC_API_KEY` set on dev and production, Nov 21, 2026; Studio on Claude Sonnet 5.5, step 18). Without the key it uses the existing `OPENAI_API_KEY` (gpt-5-mini → gpt-5). Optional: `AGENT_PROVIDER`, `AGENT_ANTHROPIC_MODEL`, `AGENT_DAILY_SPEND_CAP_USD` (default 2 per person per UTC day), `AGENT_MAX_STEPS` (40). |
+| 19. Business listings & discoverability | ⬜ Search Console verified for attnd.app (owner, Nov 21, 2026); the rest of the list under Open owner tasks. Code side done: dev never indexed, canonicals, sitemap with listed events, `public/llms.txt`, schema.org `sameAs` from `SOCIAL_PROFILES`. |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
@@ -99,6 +100,21 @@ Do these steps once, in order. Each step says which values go where. For any sin
       and the GitHub secrets `ATTND_API_KEY` (Attnd-iOS, Attnd-Android) and `ATTND_DEV_API_KEY` (Attnd-Web).
 - [ ] Low priority: rotate the APNs key (`7Q3H2446BU`, step 3a), deliberately deferred on Nov 21, 2026. Make a new key,
       set `APNS_KEY_ID` / `APNS_AUTH_KEY` on both apps (the `read -s` way below), test a push, then revoke the old key.
+- **Business listings & discoverability** (owner, Nov 21, 2026; not urgent). Add each profile's URL to `SOCIAL_PROFILES`
+  on attnd-web (comma-separated; the home page's schema.org `sameAs`):
+  - [x] Google Search Console: verify attnd.app (DNS TXT) — done Nov 21, 2026. [ ] Submit https://attnd.app/sitemap.xml.
+  - [ ] Google Business Profile: only as a service-area business (no storefront); optional.
+  - [ ] Bing Webmaster Tools: verify and add the sitemap (import from Search Console); Bing's index feeds ChatGPT
+        search, Copilot and DuckDuckGo.
+  - [ ] ChatGPT: no listing form; it finds Attnd through Bing and OpenAI's crawler (OAI-SearchBot, allowed by
+        robots.txt). Later, optional: a ChatGPT app (Apps SDK) for organizers.
+  - [ ] Apple Business Connect: brand and logo for Apple Maps, Siri and Mail (also verifies the brand for the App Store).
+  - [ ] Perplexity, Claude and other AI search: allowed by robots.txt and `llms.txt`; nothing to submit.
+  - [ ] LinkedIn company page, Crunchbase profile, X and Instagram handles (claim "attnd").
+  - [ ] Software directories AI answers cite: G2, Capterra / GetApp / Software Advice, a Product Hunt launch,
+        AlternativeTo, SaaSHub.
+  - [ ] Event industry: Eventbrite App Marketplace listing (an integration later), EventMB and event-tech directories.
+  - [ ] Wikidata entry, once there is press coverage.
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:

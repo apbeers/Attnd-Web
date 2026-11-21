@@ -9,11 +9,12 @@ from attnd import views as attnd_views
 from attnd.public import mark, public, public_include
 from console import views_auth, views_passkeys
 from events.app_status import app_status_view, retired_api_view
-from home.sitemaps import StaticSitemap
+from home.sitemaps import EventSitemap, StaticSitemap
 from join import views as join_views
 
 sitemaps = {
     'static': StaticSitemap,
+    'events': EventSitemap,  # listed, paid, published events' join pages
 }
 
 urlpatterns = [

@@ -92,6 +92,12 @@ Accounts and services:
   attnd-web). **Ask Attnd** runs on Claude Haiku 5.5 (`AGENT_PROVIDER`, the official `anthropic` SDK) and **Studio** on
   Claude Sonnet 5.5 (`STUDIO_ANTHROPIC_MODEL`); since stage C also AI import, website watching, tags, asset vision, form fills, plan suggestions and prospects (Sonnet web search); like OpenAI before it, Ask Attnd it receives console page text (event content, team emails,
   notes) as the signed-in organizer, so the privacy policy / organizer terms should name Anthropic as a processor.
+- **To create** (business listings, SETUP.md "Business listings & discoverability"; create them under the LLC if it
+  exists by then): Google Search Console property for `attnd.app` (owner set it up Nov 21, 2026: move to the LLC's
+  Google account), Google Business Profile (service-area, optional), Bing Webmaster Tools, Apple Business Connect,
+  LinkedIn company page, Crunchbase, X and Instagram handles "attnd", G2, Capterra / GetApp / Software Advice, Product
+  Hunt, AlternativeTo, SaaSHub, Eventbrite App Marketplace, EventMB / event-tech directories, Wikidata (later). Their
+  URLs go into `SOCIAL_PROFILES` (the home page's schema.org `sameAs`).
 - Prospects data (staff sales pipeline, `prospects/`): organizer contact details scraped from public event pages,
   with do-not-contact flags. Moves with the database; outreach from the LLC must identify the LLC and its physical
   mailing address (CAN-SPAM).

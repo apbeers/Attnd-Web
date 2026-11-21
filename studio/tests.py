@@ -796,3 +796,13 @@ class ProgressStepTests(StudioTestCase):
         steps = run_task(run)['steps']
         self.assertEqual([(s['text'], s['state']) for s in steps],
                          [('Copied 52 images, fonts and PDFs', 'done'), ('Rebuilding the pages', 'running')])
+
+
+class SitesSeoTests(StudioTestCase):
+    def test_canonical_and_the_sites_sitemap(self):
+        self.publish()
+        body = self.sites(f'/{self.site.slug}/').content.decode()
+        self.assertIn(f'<link rel="canonical" href="https://{SITES}/{self.site.slug}/">', body)
+        sitemap = self.sites('/sitemap.xml').content.decode()
+        self.assertIn(f'<loc>https://{SITES}/{self.site.slug}/</loc>', sitemap)
+        self.assertIn('Sitemap:', self.sites('/robots.txt').content.decode())

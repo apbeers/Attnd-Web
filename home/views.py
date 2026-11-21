@@ -20,10 +20,15 @@ def _release() -> str:
 
 
 def _structured_data(site_url):
-    """schema.org for search engines: the organization, the site and the apps."""
+    """schema.org for search engines: the organization (with its profiles, SOCIAL_PROFILES, once they exist), the
+    site and the apps."""
+    same_as = [u.strip() for u in (getattr(settings, 'SOCIAL_PROFILES', '') or '').split(',') if u.strip()]
+    org = {'@context': 'https://schema.org', '@type': 'Organization', 'name': 'Attnd', 'url': f'{site_url}/',
+           'logo': f'{site_url}/icon-512.png'}
+    if same_as:
+        org['sameAs'] = same_as
     return json.dumps([
-        {'@context': 'https://schema.org', '@type': 'Organization', 'name': 'Attnd', 'url': f'{site_url}/',
-         'logo': f'{site_url}/icon-512.png'},
+        org,
         {'@context': 'https://schema.org', '@type': 'WebSite', 'name': 'Attnd', 'url': f'{site_url}/'},
         {'@context': 'https://schema.org', '@type': 'SoftwareApplication', 'name': 'Attnd',
          'applicationCategory': 'LifestyleApplication', 'operatingSystem': 'iOS, Android',
@@ -44,7 +49,8 @@ def home(request):
 
 def privacy(request):
     return render(request, template_name='home/privacy.html',
-                  context={'contact_email': getattr(settings, 'CONTACT_EMAIL', '')})
+                  context={'contact_email': getattr(settings, 'CONTACT_EMAIL', ''),
+                           'site_url': getattr(settings, 'SITE_URL', 'https://attnd.app').rstrip('/')})
 
 
 @require_POST

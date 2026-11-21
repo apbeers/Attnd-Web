@@ -49,3 +49,28 @@ class SecurityHeadersMiddleware:
         if policy and 'Permissions-Policy' not in response:
             response['Permissions-Policy'] = policy
         return response
+
+
+def indexable():
+    """Only production (SITE_URL https://attnd.app) may be indexed; dev.attnd.app and its sites host never."""
+    from django.conf import settings
+    return (getattr(settings, 'SITE_URL', '') or '').rstrip('/') == 'https://attnd.app'
+
+
+class NoIndexMiddleware:
+    """Off production: robots.txt disallows everything and every response says `X-Robots-Tag: noindex, nofollow`
+    (also the Studio sites on dev.attnd.site). First in MIDDLEWARE, so it wraps the sites host too."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if indexable():
+            return self.get_response(request)
+        if request.path == '/robots.txt':
+            from django.http import HttpResponse
+            response = HttpResponse('User-agent: *\nDisallow: /\n', content_type='text/plain')
+        else:
+            response = self.get_response(request)
+        response['X-Robots-Tag'] = 'noindex, nofollow'
+        return response

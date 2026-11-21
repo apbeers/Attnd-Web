@@ -140,13 +140,18 @@ HASH_LINK_SCRIPT = (
     "history.replaceState(null,'',location.pathname+location.search+(id?'#'+id:''));});</script>")
 
 
-def render_page(source, base_href, preview=False, bridge=False):
+_CANONICAL_RE = re.compile(r'<link[^>]+rel=["\']?canonical', re.I)
+
+
+def render_page(source, base_href, preview=False, bridge=False, canonical=''):
     """Insert <base href> (relative links then work at /<slug>/ and later on a custom domain at /), the Attnd footer
     with "Report this site", the preview ribbon and the editor's selection bridge."""
     text = _BASE_RE.sub('', source)
     base = f'<base href="{html.escape(base_href)}">'
     if preview:
         base += '<meta name="robots" content="noindex">'
+    elif canonical and not _CANONICAL_RE.search(text):
+        base += f'<link rel="canonical" href="{html.escape(canonical)}">'
     match = _HEAD_RE.search(text)
     if match:
         text = text[:match.end()] + base + text[match.end():]

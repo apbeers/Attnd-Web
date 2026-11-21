@@ -77,7 +77,8 @@ def _target(slug, token, asset=False):
 
 
 def _page_response(target, text, status=200):
-    body = hosting.render_page(text, target.base, preview=target.preview, bridge=target.preview)
+    canonical = '' if target.preview or status != 200 else hosting.sites_origin() + target.base + getattr(target, 'path', '')
+    body = hosting.render_page(text, target.base, preview=target.preview, bridge=target.preview, canonical=canonical)
     response = HttpResponse(body, content_type=CONTENT_TYPES['html'], status=status)
     response['Cache-Control'] = 'no-store' if target.preview else 'public, max-age=60'
     if target.preview:
@@ -114,6 +115,7 @@ def serve(request, slug, rest=None):
         if candidate in files:
             ext = candidate.rsplit('.', 1)[-1]
             if ext == 'html':
+                target.path = '' if candidate == 'index.html' else (path if not path.endswith('.html') else path)
                 return _page_response(target, files[candidate])
             response = HttpResponse(files[candidate], content_type=CONTENT_TYPES.get(ext, 'text/plain'))
             response['Cache-Control'] = 'no-store' if target.preview else 'public, max-age=60'
@@ -297,3 +299,16 @@ def _report(request, target):
 def not_found(request, exception=None):
     return HttpResponse('Not found', status=404, content_type='text/plain')
 
+
+
+def sitemap(request):
+    """The sites host's sitemap: every published site that is up (not taken down, Studio plan)."""
+    from xml.sax.saxutils import escape
+    sites = (Site.objects.filter(published__isnull=False, suspended=False, event__plan=Event.PLAN_STUDIO)
+             .select_related('event').order_by('pk'))
+    rows = ''.join(f'<url><loc>{escape(hosting.sites_origin() + "/" + s.slug + "/")}</loc>'
+                   f'{"<lastmod>" + s.published_at.date().isoformat() + "</lastmod>" if s.published_at else ""}</url>'
+                   for s in sites)
+    return HttpResponse('<?xml version="1.0" encoding="UTF-8"?>'
+                        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{rows}</urlset>',
+                        content_type='application/xml')
