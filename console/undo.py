@@ -409,7 +409,9 @@ class UndoMiddleware:
 
     def __call__(self, request):
         if (request.method != 'POST' or not request.path.startswith('/console/') or request.path.startswith(SKIP)
-                or not request.user.is_authenticated):
+                or not request.user.is_authenticated or _current.get() is not None):
+            # (an internal request inside an outer recording, e.g. applying a change preview: the outer one
+            # records it, so all of them become one undo entry)
             return self.get_response(request)
         with recording(request.user) as rec:
             response = self.get_response(request)

@@ -131,3 +131,57 @@ class FeedbackTests(HarnessCase):
         other = User.objects.create_user('x', 'x@example.com', 'pw')
         self.client.force_login(other)
         self.assertEqual(self.client.post(url, {'value': '1'}).status_code, 404)
+
+
+class ProposalTests(HarnessCase):
+    def test_a_bulk_shift_is_previewed_then_applied_in_one_undo(self):
+        from django.urls import reverse
+
+        from agent.models import ChangeProposal
+        from console.models import UndoEntry
+        from events.models import ScheduledItem
+        second = ScheduledItem.objects.create(event=self.event, name='Night Owls', location=self.stage,
+                                              start_time=self.start + timedelta(hours=2))
+        fmt = '%Y-%m-%dT%H:%M'
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo('America/Chicago')
+        changes = [{'tool': 'edit_schedule_item', 'label': it.name, 'arguments_json': json.dumps(self.args(
+            'edit_schedule_item', event_id=self.event.pk, item_id=it.pk,
+            start_time=(it.start_time + timedelta(minutes=30)).astimezone(tz).strftime(fmt)))}
+            for it in (self.item, second)]
+        run, provider = self.run_with([[('propose_changes', {'event_id': self.event.pk, 'title': 'Move sets 30 min later',
+                                                             'changes': changes})],
+                                       [('finish', {'summary': 'Here is the preview.', 'suggest': None})]])
+        proposal = ChangeProposal.objects.get()
+        self.assertEqual(len(proposal.changes), 2)
+        self.assertEqual(proposal.changes[0]['rows'][0][0], 'start time')
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.start_time, self.original_start)  # nothing changed yet
+        self.assertEqual(harness.check(harness.by_name('bulk_shift'), self.case(run)), [])
+        card = self.client.get(reverse('agent:component_render'), {
+            'component': 'change_preview', 'items': json.dumps([{'event_id': self.event.pk, 'proposal_id': proposal.pk}])},
+            secure=True)
+        self.assertContains(card, 'Move sets 30 min later')
+        undo_before = UndoEntry.objects.count()
+        response = self.client.post(reverse('agent:proposal_apply', args=[proposal.pk]), {'keep': ['0', '1']},
+                                    HTTP_X_ATTND_COMPONENT='change_preview', secure=True)
+        self.assertEqual(response.json()['messages'], ['Applied 2 changes.'])
+        self.item.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(self.item.start_time - self.original_start, timedelta(minutes=30))
+        self.assertEqual(second.start_time - self.start, timedelta(hours=2, minutes=30))
+        self.assertEqual(UndoEntry.objects.count(), undo_before + 1)  # one Undo for both
+        undo = self.client.post(reverse('console:undo', args=[response.json()['undo']]), secure=True)
+        self.assertLess(undo.status_code, 400)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.start_time, self.original_start)
+        again = self.client.post(reverse('agent:proposal_apply', args=[proposal.pk]), {'keep': ['0']}, secure=True)
+        self.assertEqual(again.status_code, 409)
+
+    def test_always_ask_actions_and_other_events_are_refused(self):
+        changes = [{'tool': 'delete_location', 'label': 'x', 'arguments_json': json.dumps(
+            self.args('delete_location', event_id=self.event.pk, location_id=self.stage.pk))}]
+        run, provider = self.run_with([[('propose_changes', {'event_id': self.event.pk, 'title': 'Clean up',
+                                                             'changes': changes})],
+                                       [('finish', {'summary': 'ok', 'suggest': None})]])
+        self.assertIn('always asks', provider.results[0][1])

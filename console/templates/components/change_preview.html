@@ -1,0 +1,23 @@
+{% load console_tags %}{# change_preview (stage I): Ask Attnd's proposal, old → new per row; Apply the ticked rows (one Undo) or Cancel. #}<div class="stack component component--change_preview">
+  <h3 class="title-4">{% icon "stars" %} {{ d.name }}</h3>
+  {% if d.status == 'pending' %}
+  <form method="post" action="{{ d.url }}" class="stack stack--tight"{% if surface == 'chat' %} data-component-form{% endif %}>{% csrf_token %}
+    <p class="small muted">{{ d.count }} change{{ d.count|pluralize }}, nothing changed yet. Untick any you don’t want.</p>
+    <ul class="list list--boxed change-preview">{% for r in d.rows %}
+      <li><label class="check change-preview__row" for="{{ uid }}keep-{{ r.index }}">
+        <input type="checkbox" name="keep" value="{{ r.index }}" id="{{ uid }}keep-{{ r.index }}" checked>
+        <span class="change-preview__what"><strong>{{ r.label }}</strong>
+          {% for f in r.rows %}<span class="small change-preview__diff"><span class="muted">{{ f.0 }}</span> <del>{{ f.1 }}</del> → <ins>{{ f.2 }}</ins></span>{% empty %}<span class="small muted">{{ r.action }}</span>{% endfor %}</span>
+      </label></li>{% endfor %}
+    </ul>
+    <div class="cluster">
+      <button class="button button--primary button--small">{% icon "check" %} Apply</button>
+      <button class="button button--ghost button--small" name="cancel" value="1" formnovalidate>Cancel</button>
+    </div>
+  </form>
+  {% else %}
+  <p class="small">{% if d.status == 'applied' %}<span class="status-mark status-mark--success" aria-hidden="true">✓</span> Applied {{ d.applied }} of {{ d.count }}{% else %}<span class="status-mark status-mark--info" aria-hidden="true">•</span> Cancelled: nothing changed{% endif %}.</p>
+  {% if d.status == 'applied' %}<ul class="list change-preview change-preview--done">{% for r in d.rows %}{% if r.result %}
+    <li class="small{% if not r.result.ok %} tone-danger{% endif %}">{% if r.result.ok %}✓{% else %}×{% endif %} {{ r.label }}{% if r.result.text %} · {{ r.result.text }}{% endif %}</li>{% endif %}{% endfor %}</ul>{% endif %}
+  {% endif %}
+</div>

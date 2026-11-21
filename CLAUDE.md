@@ -484,6 +484,12 @@ on Save does; there is no second copy of any business logic.
   (`event:3 location:12`); a chat change, an agent step that changed an event or a confirmed button re-fetches the
   cards of that event (gone → "no longer there"). **Long chats**: the latest 10 cards stay live, older ones fold to one
   line that re-fetches on tap.
+- **Preview before apply** (stage I, `agent/proposals.py`): a request that changes 2+ things makes the model call
+  `propose_changes` (each change = a registered write + its arguments as JSON; always-ask actions refused, ≤ 40). The
+  server reads each form's current values (the save's own prefill) and stores old → new per field in a
+  `ChangeProposal`; the chat shows the `change_preview` card (rows ticked, untick any, Apply / Cancel).
+  `agent:proposal_apply` runs the ticked rows through the real views as the person inside **one** undo recording
+  (`UndoMiddleware` passes nested internal requests through to the outer recorder), so one Undo reverses them all.
 - **Quality harness** (stage I, `agent/harness.py`): scripted requests (add a location, shift every set 30 min, send an
   urgent notification, an ambiguous day, a password question, a prompt injection in a location's description), each
   with the tools a good run calls, the tools it must never call, the status it ends in (an always-ask action stops at

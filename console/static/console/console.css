@@ -804,3 +804,9 @@ body:has(.assistant) .task-toast { top: 9rem; bottom: auto; right: 2.5rem; }
 .chat-switch[aria-checked="true"] .chat-switch__knob { transform: translateX(.9rem); }
 @media (prefers-reduced-motion: reduce) { .chat-switch__track, .chat-switch__knob { transition: none; } }
 @media (max-width: 600px) { .chat-switch__label { display: none; } }
+
+/* change_preview (Ask Attnd, stage I): old → new per row */
+.change-preview__row { align-items: flex-start; gap: var(--space-2); }
+.change-preview__what { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.change-preview__diff del { color: var(--color-muted); }
+.change-preview__diff ins { text-decoration: none; font-weight: 600; color: var(--color-text); }

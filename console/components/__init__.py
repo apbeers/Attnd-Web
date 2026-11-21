@@ -30,9 +30,11 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 
 REGISTRY = {}
-ID_NAMES = ('event_id', 'location_id', 'item_id', 'notification_id', 'changeset_id', 'prospect_id', 'prospect_run_id')
+ID_NAMES = ('event_id', 'location_id', 'item_id', 'notification_id', 'changeset_id', 'prospect_id', 'prospect_run_id',
+            'proposal_id')
 ENTITY = {'event_id': 'event', 'location_id': 'location', 'item_id': 'item', 'notification_id': 'notification',
-          'changeset_id': 'changeset', 'prospect_id': 'prospect', 'prospect_run_id': 'prospect_run'}
+          'changeset_id': 'changeset', 'prospect_id': 'prospect', 'prospect_run_id': 'prospect_run',
+          'proposal_id': 'proposal'}
 
 
 @dataclass
@@ -77,6 +79,7 @@ def component(name, title, description, **options):
 
 def registry():
     from console.components import catalog, catalog_more, catalog_prospects  # noqa: F401  (registers the components)
+    from agent import proposals  # noqa: F401  (change_preview, stage I)
     return REGISTRY
 
 

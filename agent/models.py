@@ -127,3 +127,24 @@ class AgentAttachment(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class ChangeProposal(models.Model):
+    """Stage I1: several changes Ask Attnd proposes at once ("move every Saturday set 30 min later"), previewed as a
+    `change_preview` card (old → new per row, untick any) and applied by the person in one undo entry."""
+    PENDING, APPLIED, CANCELLED = 'pending', 'applied', 'cancelled'
+    STATUS_CHOICES = [(PENDING, 'Waiting'), (APPLIED, 'Applied'), (CANCELLED, 'Cancelled')]
+
+    run = models.ForeignKey(AgentRun, on_delete=models.CASCADE, related_name='proposals')
+    event = models.ForeignKey('events.Event', on_delete=models.CASCADE, related_name='+')
+    title = models.CharField(max_length=200)
+    # [{action, args, label, rows: [[field, old, new], …]}]: validated registered writes, never always-ask ones.
+    changes = models.JSONField(default=list)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=PENDING)
+    results = models.JSONField(default=list, blank=True)  # [{index, ok, text}]
+    undo_id = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f'{self.title} ({self.status})'

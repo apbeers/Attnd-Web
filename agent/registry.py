@@ -72,6 +72,7 @@ EXCLUDED = {
     'agent:stop': 'Ask Attnd\'s own endpoints.',
     'agent:undo': 'Ask Attnd\'s own endpoints.',
     'agent:feedback': 'Ask Attnd\'s own endpoints (the person\'s 👍 / 👎).',
+    'agent:proposal_apply': 'Ask Attnd\'s own endpoints (only the person\'s Apply on a change preview).',
     'agent:attach': 'Ask Attnd\'s own endpoints.',
     'agent:component_render': 'Ask Attnd\'s own endpoints (the chat\'s components).',
     'agent:component_batch': 'Ask Attnd\'s own endpoints (several components in one request).',
@@ -215,7 +216,7 @@ def registry():
     return {'writes': writes, 'reads': reads}
 
 
-RESERVED_TOOLS = {'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show',
+RESERVED_TOOLS = {'propose_changes', 'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show',
                   'get_component'}
 
 

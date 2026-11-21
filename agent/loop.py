@@ -166,7 +166,8 @@ def tools_for(user, run=None):
     areas = _areas_for(run)
     writes = [a for a in registry.writes_for(user).values()
               if (a.url_name or '').split(':')[0] not in AREAS or (a.url_name or '').split(':')[0] in areas]
-    return FIXED_TOOLS + components.tool_definitions(user) + [registry.tool_definition(a) for a in writes]
+    from agent.proposals import TOOL as PROPOSE_TOOL
+    return FIXED_TOOLS + [PROPOSE_TOOL] + components.tool_definitions(user) + [registry.tool_definition(a) for a in writes]
 
 
 def _provider(name=None, model=None):
@@ -475,6 +476,9 @@ def _call(run, call):
             return _tool_pages(run, call, args)
         if name in ('list_events', 'search_events'):
             return _tool_events(run, call, args)
+        if name == 'propose_changes':  # several changes previewed for the person to apply (agent/proposals.py)
+            from agent import proposals
+            return proposals.propose_tool(run, call, args)
         if name in ('show', 'get_component', 'fill_form'):  # console components in the chat (agent/components.py)
             from agent import components
             return {'show': components.show_tool, 'get_component': components.get_tool,

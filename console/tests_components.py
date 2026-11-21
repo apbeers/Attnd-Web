@@ -35,6 +35,11 @@ class ComponentTestCase(TestCase):
         self.update = Notification.objects.create(event=self.event, title='Gates open late', body='At 11 instead',
                                                   send_time=start + timedelta(hours=-1))
         self.changeset = ChangeSet.objects.create(event=self.event, summary='2 schedule changes', status=ChangeSet.PENDING)
+        from agent.models import AgentRun, ChangeProposal
+        run = AgentRun.objects.create(user=self.owner, goal='Shift', event=self.event)
+        self.proposal = ChangeProposal.objects.create(run=run, event=self.event, title='Move sets later', changes=[
+            {'action': 'edit_schedule_item', 'args': {}, 'label': 'Prairie Lights',
+             'rows': [['start time', '19:00', '19:30']]}])
         self.ids = {
             'event_tile': {'event_id': self.event.pk}, 'event_header': {'event_id': self.event.pk},
             'event_stats': {'event_id': self.event.pk}, 'live_on_phone': {'event_id': self.event.pk},
@@ -53,6 +58,7 @@ class ComponentTestCase(TestCase):
             'event_context_form': {'event_id': self.event.pk}, 'event_flyer': {'event_id': self.event.pk},
             'sharing_kit': {'event_id': self.event.pk}, 'event_lifecycle': {'event_id': self.event.pk},
             'event_versions': {'event_id': self.event.pk}, 'event_exports': {'event_id': self.event.pk},
+            'change_preview': {'event_id': self.event.pk, 'proposal_id': self.proposal.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -66,6 +72,7 @@ class ComponentTestCase(TestCase):
             'website_watching': 'Source websites', 'event_context_form': 'Only add what attendees may see',
             'event_flyer': 'No flyer yet', 'sharing_kit': 'PRAIRIE', 'event_lifecycle': 'Now:',
             'event_versions': 'No saved versions yet', 'event_exports': 'CSV files',
+            'change_preview': 'Move sets later',
         }
 
     def request(self, user=None):

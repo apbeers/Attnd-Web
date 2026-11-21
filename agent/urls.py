@@ -1,6 +1,6 @@
 from django.urls import path
 
-from agent import components, views
+from agent import components, proposals, views
 
 app_name = 'agent'
 urlpatterns = [
@@ -18,4 +18,5 @@ urlpatterns = [
     path('runs/<int:run_id>/stop/', views.stop, name='stop'),
     path('runs/<int:run_id>/undo/', views.undo, name='undo'),
     path('runs/<int:run_id>/feedback/', views.feedback, name='feedback'),
+    path('proposals/<int:proposal_id>/apply/', proposals.apply, name='proposal_apply'),
 ]
