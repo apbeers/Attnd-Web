@@ -267,6 +267,8 @@ class GalleryFeedbackTests(TestCase):
         self.assertEqual(clean_region('Fort Worth, TX, .'), 'Fort Worth, TX')
         self.assertEqual(clean_region('\n  Austin,, TX ;\nmore'), 'Austin, TX')
         self.assertEqual(clean_region(''), '')
+        self.assertEqual(clean_region('Dallas–Fort Worth, Texas: Dallas, Fort Worth, Arlington, Denton, Plano, Frisco, '),
+                         'Dallas–Fort Worth, Texas')
         html = self.client.get('/home/', secure=True).content.decode()
         self.assertIn('Happening near Fort Worth, TX</h3>', html)
         self.assertNotIn(', .', html)

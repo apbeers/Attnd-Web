@@ -172,11 +172,12 @@ def categories(cards):
 
 
 def clean_region(text):
-    """The prospects region as a short label: its first line, empty parts dropped ("Fort Worth, TX, " → "Fort Worth,
-    TX"), no trailing punctuation."""
+    """The prospects region as a short label: its first line up to a colon, at most two parts, empty parts dropped
+    ("Fort Worth, TX, ." → "Fort Worth, TX"), no trailing punctuation."""
     line = next((ln for ln in (text or '').splitlines() if ln.strip()), '')
+    line = re.split(r'[:(]', line, maxsplit=1)[0]  # "Dallas–Fort Worth, Texas: Dallas, Fort Worth, …" → the name
     parts = [p.strip(' .;:-–—') for p in re.split(r'[,;]', line)]
-    return ', '.join(p for p in parts if p)[:80]
+    return ', '.join([p for p in parts if p][:2])[:60]
 
 
 def region():
