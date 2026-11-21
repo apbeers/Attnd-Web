@@ -413,3 +413,70 @@ class AgentThemeTests(AgentTestCase):
         self.event.refresh_from_db()
         self.assertTrue(self.event.theme_web)
         self.assertFalse(self.event.theme_apps)
+
+
+class ThemeSourcesTests(TestCase):
+    """Generate with AI uses what the event already has (its websites, Studio site, logo, flyer, location photos)
+    straight away; only an event with none of these gets the note that invites a link or an image."""
+
+    PAGE = b'<html><head><meta name="theme-color" content="#e4572e"><style>a{color:#1f7a8c}</style></head></html>'
+    PNG = (b'\x89PNG\r\n\x1a\n' + b'\x00' * 64)
+
+    def setUp(self):
+        cache.clear()
+        from django.core.files.base import ContentFile
+        self.event = _event(source_urls=['https://river.example/'], logo_url='https://river.example/logo.png')
+        self.event.flyer.save('flyer.png', ContentFile(self.PNG), save=True)
+
+    def fake_fetch(self, url, limit):
+        if url.endswith('.png'):
+            return self.PNG, 'image/png', url
+        return self.PAGE, 'text/html', url
+
+    def test_generation_reads_the_event_websites_and_images(self):
+        answer = {'light': {'primary': '#1f3a8c', 'secondary': '#9ec5fe', 'tertiary': '#e0a800'},
+                  'dark': {'primary': '#8fb0ff', 'secondary': '#22335e', 'tertiary': '#ffd24d'}, 'reason': 'River.'}
+        with mock.patch('events.theme_ai._fetch', side_effect=self.fake_fetch) as fetch, fake_claude(answer) as claude:
+            theme = theme_ai.apply(self.event, force=True)
+        fetched = [c.args[0] for c in fetch.call_args_list]
+        self.assertIn('https://river.example/', fetched)
+        self.assertIn('https://river.example/logo.png', fetched)
+        content = claude.last['messages'][0]['content']
+        self.assertEqual([b['type'] for b in content], ['image', 'image', 'text'])  # the flyer and the logo
+        self.assertIn('#e4572e', content[-1]['text'])  # the website's colours, read just now
+        self.assertEqual(theme['page_colors'][0], '#E4572E')
+        self.assertTrue(theme_ai.has_sources(self.event))
+
+    @override_settings(SECURE_SSL_REDIRECT=False)
+    def test_generate_view_notes_only_when_the_event_has_nothing(self):
+        client = Client()
+        client.force_login(self.event.user)
+        url = reverse('console:event_theme_generate', args=[self.event.pk])
+        with mock.patch('scrape.jobs.enqueue'):
+            self.assertEqual(client.post(url, HTTP_ACCEPT='application/json').json()['note'], '')
+            Event.objects.filter(pk=self.event.pk).update(source_urls=[], logo_url='', flyer='')
+            note = client.post(url, HTTP_ACCEPT='application/json').json()['note']
+        self.assertIn('no website, logo, flyer or photos', note)
+
+    def test_studio_site_colours_count(self):
+        from studio import publishing
+        Event.objects.filter(pk=self.event.pk).update(source_urls=[])
+        self.event.refresh_from_db()
+        site = publishing.ensure_site(self.event, self.event.user)
+        publishing.publish(site, publishing.new_version(site, self.event.user, files={
+            'index.html': '<h1 style="color:#2a9d8f">Hi</h1>', 'styles.css': 'body{background:#2a9d8f}'}), self.event.user)
+        self.assertEqual(theme_ai.gather_page_colors(self.event)[0], '#2a9d8f')
+
+
+class AgentGenerateThemeTests(AgentTestCase):
+    def test_generate_runs_without_asking_and_tells_the_model_about_sources(self):
+        from agent import internal, registry
+        Event.objects.filter(pk=self.event.pk).update(source_urls=['https://prairie.example/'])
+        run = self.make_run(goal='Use the link already on the event to do it')
+        with mock.patch('scrape.jobs.enqueue') as enqueue:
+            out = internal.execute(run, registry.registry()['writes']['generate_event_theme'], {'event_id': self.event.pk})
+        self.assertTrue(out['ok'], out)
+        enqueue.assert_called_once()
+        self.assertNotIn('no website', str(out))
+        tool = registry.tool_definition(registry.registry()['writes']['generate_event_theme'])
+        self.assertIn('never ask for a link', tool['description'])

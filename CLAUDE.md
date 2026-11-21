@@ -175,7 +175,10 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   to each `input[data-hex]` and keeps both in sync), a contrast note under each (`theme.checks`), a live preview per
   mode (`--pv-*` properties on the preview), **Save colours** (`update_event_theme`, prefill; locks the theme, Undo),
   **Generate with AI** (`generate_event_theme`: an `IngestJob` of kind `theme`, a background task with its step in the
-  tray, "See the colours"), **Reset to Attnd's colours** (`reset_event_theme`) and two autosaving switches "Use custom
+  tray, "See the colours"; it uses what the event already has without asking: the import's website colours, else its
+  `source_urls` and published Studio site read now through Studio's SSRF-guarded fetcher, plus up to three images: flyer,
+  logo, location photos; only an event with none of these gets a note inviting a link or image; Add with AI on the
+  card and the agent call it instead of asking), **Reset to Attnd's colours** (`reset_event_theme`) and two autosaving switches "Use custom
   theme on the website" / "Use custom theme in the apps" (`set_event_theme_switches`). Applying it:
   `{% event_theme_style %}` in base.html emits a nonce'd `<style data-event-theme>` overriding the tokens in the
   three places console.css defines them (`:root`, the dark media query, `:root[data-theme="dark"]`) on the event's own
@@ -331,10 +334,13 @@ on Save does; there is no second copy of any business logic.
   `STUDIO_AI_PROVIDER`): `AGENT_PROVIDER` = `anthropic` (default when `ANTHROPIC_API_KEY` is set) → `ClaudeProvider`,
   the official `anthropic` SDK, Messages API with our own tool loop, `AGENT_ANTHROPIC_MODEL` `claude-haiku-5-5`
   (owner, Nov 21, 2026): no `thinking` (adaptive is the default), `output_config.effort` = `AGENT_EFFORT`, no
-  temperature/top_p/top_k, no prefill, `strict` only on Ask Attnd's own small tools (`STRICT_TOOLS`: found on dev, the API
-  takes ≤ 20 strict tools and the ~80 form-derived write schemas are a "compiled grammar too large"; the views validate
-  writes; a 400 about strict → resent without, remembered per process), schemas adapted by `claude_schema` (a nullable
-  enum becomes `anyOf` [the enum, null]; min/max/length/pattern dropped), `tool_choice` auto + `disable_parallel_tool_use`, cache breakpoints on the stable system prompt
+  temperature/top_p/top_k, no prefill, `strict` only on Ask Attnd's own small tools (`STRICT_TOOLS`, not show / get_component / fill_form: found on dev, the API
+  takes ≤ 20 strict tools, ≤ 24 optional and ≤ 16 union-typed parameters across strict schemas, and the ~80 form-derived write schemas are a "compiled grammar too large"; the views validate
+  writes; a 400 about strict → resent without, remembered per process), tool schemas sent through `tool_input_schema`
+  ("null = keep" becomes an optional plain-typed property, so no union types; `agent/tests_limits.py` checks every
+  audience and area stays ≤ 8 unions and ≤ 24 strict optionals) and `claude_schema` (min/max/length/pattern dropped); API errors reach the chat
+  only as a friendly line (`providers.FRIENDLY_ERROR`; status, type and request id logged on `attnd.agent`, kept in
+  `AgentRun.error_details` and shown to staff under a folded Details), `tool_choice` auto + `disable_parallel_tool_use`, cache breakpoints on the stable system prompt
   (tools + system) and on the newest message, every assistant block (thinking included) passed back unchanged,
   append-only history; `stop_reason` checked first: `refusal` → the run continues on Claude Sonnet
   (`AGENT_REFUSAL_MODEL` claude-sonnet-5-5, `loop._refusal_fallback`, from the same context block + what was done),

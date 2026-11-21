@@ -122,6 +122,7 @@ def app_layout(user, event_id=None, event=None, form=None):
            '(soft tints) and tertiary (highlights) for light and dark mode as exact hex codes with contrast notes, a '
            'preview, Generate with AI, Reset to Attnd\'s colours, and switches for the website and the apps.',
            actions=(('reset_event_theme', 'Reset to Attnd’s colours'),), ai_subject='colour theme',
+           ai_prompt='Pick colours for this event from its website, logo and photos.',
            page=lambda ids: reverse('console:event_theme', args=[ids['event_id']]))
 def event_theme(user, event_id=None, event=None, form=None):
     from console.forms.event_forms import EventThemeForm, EventThemeSwitchesForm, ThemeGenerateForm

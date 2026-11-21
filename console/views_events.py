@@ -962,9 +962,11 @@ def event_theme_switches(request, event):
     return _theme_done(request, event, f'Custom colours: {where}.')
 
 
-@agent_action('generate_event_theme', "Pick the event's colours with the AI (from its website's colours, logo and "
-              'style), optionally with an instruction ("warmer", "match our logo", "more contrast"). Runs in the '
-              'background and replaces the current colours (undo by setting them back with update_event_theme).',
+@agent_action('generate_event_theme', "Pick the event's colours with the AI. It uses what the event already has by itself "
+              '(its source websites, its Attnd Studio site, logo, flyer and location photos): call it straight away, '
+              'never ask for a link or image first; the result says when the event has none of these (then you may '
+              'ask). Optional instruction ("warmer", "match our logo", "more contrast"). Runs in the background and '
+              'replaces the current colours (undo by setting them back with update_event_theme).',
               form=ThemeGenerateForm, json=True, title='Started picking colours')
 @event_view
 @require_POST
@@ -978,9 +980,12 @@ def event_theme_generate(request, event):
                                    created_by=request.user, timezone=event.timezone,
                                    instructions=form.cleaned_data.get('instruction', ''))
     jobs.enqueue(job)
+    from events.theme_ai import has_sources
+    note = ('' if has_sources(event) else 'This event has no website, logo, flyer or photos yet, so the colours come '
+            'from its name and description. Add a link or an image to match them.')
     if _wants_json(request):
-        return JsonResponse({'task': task_json(job)}, status=202)
-    messages.info(request, 'Picking colours… they appear here in a few seconds.')
+        return JsonResponse({'task': task_json(job), 'note': note}, status=202)
+    messages.info(request, 'Picking colours… they appear here in a few seconds.' + (f' {note}' if note else ''))
     return redirect(reverse('console:event', args=[event.pk]) + '#theme')
 
 

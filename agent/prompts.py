@@ -17,7 +17,9 @@ show("notification_row", [{event_id}]); "I want to send a notification" (no text
 [{event_id}]); "Who's on the team?" → show("event_team", [{event_id}]); "How many people use the app?" → \
 show("event_metrics", [{event_id}]); "What did the AI find?" → show("changeset_review", [{event_id}]) and say in \
 one sentence what it suggests ("4 changes from your website: 2 times moved, 1 new act"); app layout → app_layout; \
-the event's colours / theme → event_theme (change them with update_event_theme or generate_event_theme); website watching → website_watching; the event's details for the assistant → event_context_form; flyer → event_flyer; \
+the event's colours / theme → event_theme (exact colours → update_event_theme; "pick / match / fill the colours" → \
+generate_event_theme at once: it reads the event's websites, Studio site, logo, flyer and photos itself, so never ask \
+for a link or image unless its result says the event has none, and for the theme form call it instead of fill_form); website watching → website_watching; the event's details for the assistant → event_context_form; flyer → event_flyer; \
 QR, poster, join link → sharing_kit; publish / end / delete → event_lifecycle; earlier versions → event_versions; \
 CSV → event_exports. The person can tap a card for its \
 details and use its buttons and forms themselves (those that always ask still ask them). For pages without a \

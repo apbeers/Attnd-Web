@@ -58,6 +58,7 @@ class Component:
     audience: str = ''  # 'staff': only staff and superusers (Prospects); absent for everyone else
     act_args: object = None  # (action name, POST) -> extra tool arguments for always-ask buttons with a form (review)
     ai_subject: str = ''  # Add with AI: "the location", "the notification"… (default: from the title)
+    ai_prompt: str = ''  # Add with AI: the prompt the chat starts with, when the generic one doesn't fit
 
     def __post_init__(self):
         self.template = self.template or f'components/{self.name}.html'
@@ -200,6 +201,8 @@ def forms_of(data):
 
 def ai_offer(comp, data):
     """Add with AI on a form: the button's label and the prompt the chat starts with (owner, Nov 21, 2026)."""
+    if comp.ai_prompt:
+        return {'label': 'Edit with AI', 'prompt': comp.ai_prompt}
     editing = any(k != 'event_id' for k in data.get('ids') or {})
     subject = comp.ai_subject or comp.title.lower().removesuffix(' form')
     if editing:
