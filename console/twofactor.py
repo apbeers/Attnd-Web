@@ -93,7 +93,9 @@ def is_verified(request) -> bool:
 
 
 def mark_verified(request) -> None:
+    from console import recent_auth
     request.session[SESSION_KEY] = str(request.user.pk)
+    recent_auth.mark(request)  # a full sign-in: risky actions are allowed for 20 minutes (console/recent_auth.py)
     request.session.cycle_key()  # new session id once fully signed in (keeps the midnight expiry, session_expiry)
 
 

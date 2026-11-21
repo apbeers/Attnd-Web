@@ -173,8 +173,13 @@ def two_factor_setup(request):
     (JavaScript, views_passkeys), or an authenticator app (open the setup link, scan the QR code or type
     the key, confirm with a code). No recovery codes here: they are optional, from the Account page."""
     next_url = _next_url(request)
-    if twofactor.pending_step(request) == 'verify':
+    pending = twofactor.pending_step(request)
+    if pending == 'verify':
         return redirect(_with_next('two_factor_verify', next_url))
+    if pending is None:  # adding one from the Account page (not staff enrollment): a recent sign-in first
+        from console import recent_auth
+        if (response := recent_auth.require(request, reverse('console:account'))) is not None:
+            return response
     existing = TwoFactorDevice.objects.filter(user=request.user).first()
     if existing is not None and existing.confirmed:
         messages.info(request, 'Your authenticator app is already set up.')
@@ -264,3 +269,53 @@ def account_two_factor_action(request):
         OTP_USER.hit(user.pk)
         messages.error(request, 'That code didn’t work.')
     return None, back
+
+
+@login_required
+def confirm_identity(request):
+    """Confirm it's you (console/recent_auth.py): a passkey (JavaScript, mode "reauth"), or the password plus the
+    second step's code where the account has one. Rate limited like sign-in (per email and IP) and the codes like
+    the second step (per account). Success records the time and goes back to `next`."""
+    from console import recent_auth
+    user = request.user
+    next_url = _next_url(request)
+    step = twofactor.pending_step(request)
+    if step is not None:
+        return redirect(_with_next('two_factor_verify' if step == 'verify' else 'two_factor_setup', next_url))
+    email_on = twofactor.email_codes_on(user)
+    has_totp = twofactor.confirmed_device(user) is not None
+    needs_code = twofactor.has_second_factor(user) and (has_totp or email_on or twofactor.recovery_codes_left(user))
+    error, status, email_sent = None, 200, False
+    ip, email = client_ip(request), user.email or user.username
+    if request.method == 'POST' and request.POST.get('action') == 'send_email':
+        if email_on and not EMAIL_CODE_USER.exceeded(user.pk):
+            EMAIL_CODE_USER.hit(user.pk)
+            twofactor.send_email_code(user)
+            email_sent = True
+        elif email_on:
+            error, status = EMAIL_LIMITED, 429
+    elif request.method == 'POST':
+        if LOGIN_IP.exceeded(ip) or LOGIN_EMAIL.exceeded(email) or (needs_code and OTP_USER.exceeded(user.pk)):
+            error, status = LOGIN_LIMITED, 429
+        elif not user.check_password(request.POST.get('password', '')):
+            LOGIN_IP.hit(ip)
+            LOGIN_EMAIL.hit(email)
+            error = 'That password isn’t right.'
+        elif needs_code and not twofactor.check_code(user, request.POST.get('code', '')):
+            OTP_USER.hit(user.pk)
+            error = 'That code didn’t work. Check it and try again.'
+        else:
+            LOGIN_EMAIL.reset(email)
+            if needs_code:
+                OTP_USER.reset(user.pk)
+            recent_auth.mark(request)
+            return redirect(next_url)
+    kinds = [kind for kind, on in (('the 6-digit code from your authenticator app', has_totp),
+                                   ('the code we email you', email_on),
+                                   ('a recovery code', twofactor.recovery_codes_left(user) > 0)) if on]
+    return render(request, 'console/confirm_identity.html', {
+        'next': next_url, 'error': error, 'email_sent': email_sent, 'needs_code': needs_code,
+        'code_help': ('Then enter ' + ' or '.join(kinds) + '.') if kinds else '',
+        'has_passkeys': twofactor.has_passkeys(user), 'email_on': email_on,
+        'email_minutes': twofactor.EMAIL_CODE_MINUTES, 'window_minutes': recent_auth.WINDOW // 60,
+    }, status=status)

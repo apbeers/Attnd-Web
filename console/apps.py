@@ -6,4 +6,4 @@ class ConsoleConfig(AppConfig):
     name = 'console'
 
     def ready(self):
-        from console import session_expiry, signals, twofactor  # noqa: F401  (signal receivers)
+        from console import recent_auth, session_expiry, signals, twofactor  # noqa: F401  (signal receivers)

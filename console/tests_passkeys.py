@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import struct
+import time
 from datetime import timedelta
 from unittest import mock
 
@@ -23,7 +24,7 @@ from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from console import totp, twofactor, webauthn
+from console import recent_auth, totp, twofactor, webauthn
 from console.models import Passkey, SignInSecurity, TwoFactorDevice
 from console.webauthn import FLAG_AT, FLAG_BE, FLAG_BS, FLAG_ED, FLAG_UP, FLAG_UV, WebAuthnError, b64url_encode
 
@@ -274,6 +275,7 @@ class PasskeyFlowTests(TestCase):
         if twofactor.is_required(user) or twofactor.has_second_factor(user):
             session = client.session
             session[twofactor.SESSION_KEY] = str(user.pk)
+            session[recent_auth.KEY] = time.time()  # a fresh full sign-in
             session.save()
         auth, response = self.add_passkey(client=client)
         self.assertEqual(response.status_code, 200, response.content)

@@ -7,6 +7,7 @@
    [data-passkey-signin]              sign-in page: data-options-url, data-verify-url, data-next;
                                       autofill (conditional mediation) + a [data-passkey-button]
    [data-passkey-second-step]         same, with mode "second_step"
+   [data-passkey-reauth]              same, with mode "reauth" (Confirm it's you, console/recent_auth.py)
    [data-passkey-register]            button: data-options-url, data-verify-url, data-next,
                                       optional data-name-input="#id" (the passkey's name)
    [data-passkey-prompt]              banner shown only with a built-in (platform) authenticator
@@ -93,6 +94,10 @@
     });
     let data = {};
     try { data = await response.json(); } catch (e) { /* not JSON */ }
+    if (data.reauth && response.status === 403) {  // a recent sign-in is needed first (console/recent_auth.py)
+      window.location.assign(data.reauth);
+      throw new Error(data.error || 'Confirm it’s you first.');
+    }
     if (!response.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
     return data;
   }
@@ -303,6 +308,7 @@
   if (immediateLinks.length) clientCapabilities().then(caps => setUpImmediateLinks(immediateLinks, caps));
   document.querySelectorAll('[data-passkey-signin]').forEach(el => setUpSignIn(el, 'signin'));
   document.querySelectorAll('[data-passkey-second-step]').forEach(el => setUpSignIn(el, 'second_step'));
+  document.querySelectorAll('[data-passkey-reauth]').forEach(el => setUpSignIn(el, 'reauth'));
   document.querySelectorAll('[data-passkey-register]').forEach(setUpRegister);
   const prompt = document.querySelector('[data-passkey-prompt]');
   if (prompt && typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {

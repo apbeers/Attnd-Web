@@ -257,3 +257,9 @@
 .agent__person { display: flex; justify-content: flex-end; padding: 0 var(--space-3); }
 .agent__contact { align-self: stretch; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md, 12px);
   background: var(--color-surface-2); }
+
+/* Confirm it's you (console/recent_auth.py): a risky action waits for a recent sign-in. */
+.agent__reauth { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: var(--space-2) 0;
+  padding: var(--space-3) var(--space-4); background: var(--color-warning-soft); border: 1px solid var(--color-warning-line);
+  border-radius: var(--radius-lg); }
+.agent__reauth p { flex: 1 1 12rem; margin: 0; font-size: var(--text-sm); color: var(--color-warning-text); }

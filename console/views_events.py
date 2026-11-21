@@ -23,6 +23,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from attnd.links import join_url, qr_png
+from console.recent_auth import recent_auth_required, require as require_recent_auth
 from agent import summaries as S
 from agent.registry import agent_action, param as P
 
@@ -501,6 +502,7 @@ def event_import(request, event):
               build=S.build_delete_event, title='Deleted the event')
 @event_view
 @require_POST
+@recent_auth_required
 def event_delete(request, event):
     if event.role_for(request.user) != 'owner':
         messages.error(request, 'Only the owner can delete this event.')
@@ -1161,6 +1163,9 @@ def team(request, event):
 
     if request.method == 'POST':
         action = request.POST.get('action', 'invite')
+        if action in ('remove', 'transfer'):  # a sign-in from the last 20 minutes first (console/recent_auth.py)
+            if (response := require_recent_auth(request, reverse('console:team', args=[event.pk]))) is not None:
+                return response
         member = None
         if request.POST.get('member'):
             member = EventMember.objects.filter(event=event, pk=request.POST['member']).select_related('user').first()

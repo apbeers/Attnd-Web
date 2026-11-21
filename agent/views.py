@@ -339,6 +339,14 @@ def _wait_for_news(r, after, wait):
 @require_POST
 def confirm(request, run_id):
     r = _run(request, run_id)
+    # Risky actions (deleting an event, removing a member, transferring it) need a recent sign-in of the person
+    # themselves (console/recent_auth.py) before the confirmation releases them: the chat shows the re-check card.
+    from console import recent_auth
+    waiting = AgentStep.objects.filter(pk=int(request.POST.get('step') or 0), run=r).only('tool').first()
+    if waiting is not None and waiting.tool in recent_auth.GUARDED_ACTIONS and not recent_auth.is_recent(request):
+        back = request.POST.get('next') or request.META.get('HTTP_REFERER') or '/console/'
+        return JsonResponse({'error': recent_auth.MESSAGE, 'reauth': recent_auth.confirm_url(recent_auth._back(request, back)),
+                             'reauth_step': waiting.pk}, status=403)
     try:
         step = loop.confirm(r, int(request.POST.get('step') or 0), request.POST.get('hash', ''))
     except loop.GateError as exc:

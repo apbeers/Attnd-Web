@@ -63,13 +63,21 @@ def _second_step_user(request):
     return None
 
 
+def _reauth_user(request):
+    """Confirm it's you (console/recent_auth.py): the signed-in account, past its second step, with passkeys."""
+    user = request.user
+    if user.is_authenticated and twofactor.pending_step(request) is None and twofactor.has_passkeys(user):
+        return user
+    return None
+
+
 @require_POST
 def auth_options(request):
     if PASSKEY_IP.exceeded(client_ip(request)):
         return _error(LIMITED, 429)
     data = _body(request)
-    if data.get('mode') == 'second_step':
-        user = _second_step_user(request)
+    if data.get('mode') in ('second_step', 'reauth'):
+        user = _second_step_user(request) if data['mode'] == 'second_step' else _reauth_user(request)
         if user is None:
             return _error('There is no sign-in waiting for a passkey.', 403)
         return JsonResponse(passkeys.authentication_options(request, user))
@@ -84,8 +92,9 @@ def auth_verify(request):
     data = _body(request)
     next_url = _next_from(request, data)
     second_step = data.get('mode') == 'second_step'
-    user = _second_step_user(request) if second_step else None
-    if second_step and user is None:
+    reauth = data.get('mode') == 'reauth'
+    user = _second_step_user(request) if second_step else _reauth_user(request) if reauth else None
+    if (second_step or reauth) and user is None:
         return _error('There is no sign-in waiting for a passkey.', 403)
     try:
         passkey = passkeys.finish_authentication(request, data.get('credential'), user)
@@ -93,6 +102,10 @@ def auth_verify(request):
         PASSKEY_IP.hit(ip)
         logger.info('Passkey sign-in rejected: %s', exc)
         return _error(FAILED)
+    if reauth:  # the same account, checked again: no new sign-in, just the time
+        from console import recent_auth
+        recent_auth.mark(request)
+        return JsonResponse({'redirect': next_url})
     if not second_step:
         login(request, passkey.user, backend=BACKEND)
     twofactor.mark_verified(request)  # user verification on the authenticator = both factors
@@ -108,10 +121,22 @@ def _may_register(request) -> bool:
     return request.user.is_authenticated and twofactor.pending_step(request) in (None, 'setup')
 
 
+def _needs_recheck(request):
+    """Adding a passkey from the Account page needs a recent sign-in (staff enrollment doesn't: it is the sign-in)."""
+    from console import recent_auth
+    if twofactor.pending_step(request) == 'setup' or recent_auth.is_recent(request):
+        return None
+    data = _body(request)
+    url = recent_auth.confirm_url(_next_from(request, data) if data.get('next') else reverse('console:account'))
+    return JsonResponse({'error': recent_auth.MESSAGE, 'reauth': url}, status=403)
+
+
 @require_POST
 def register_options(request):
     if not _may_register(request):
         return _error('Sign in fully before adding a passkey.', 403)
+    if (response := _needs_recheck(request)) is not None:
+        return response
     return JsonResponse(passkeys.registration_options(request))
 
 
@@ -119,6 +144,8 @@ def register_options(request):
 def register_verify(request):
     if not _may_register(request):
         return _error('Sign in fully before adding a passkey.', 403)
+    if (response := _needs_recheck(request)) is not None:
+        return response
     data = _body(request)
     next_url = _next_from(request, data)
     try:

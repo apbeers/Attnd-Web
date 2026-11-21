@@ -46,6 +46,7 @@ urlpatterns = [
     path('accounts/login/', public(views_auth.SignInView.as_view()), name='login'),
     path('accounts/2fa/', views_auth.two_factor_verify, name='two_factor_verify'),
     path('accounts/2fa/setup/', views_auth.two_factor_setup, name='two_factor_setup'),
+    path('accounts/confirm/', views_auth.confirm_identity, name='confirm_identity'),  # recent sign-in check
     path('accounts/passkeys/auth/options/', public(views_passkeys.auth_options), name='passkey_auth_options'),
     path('accounts/passkeys/auth/', public(views_passkeys.auth_verify), name='passkey_auth'),
     # (the passkey registration endpoints answer their own JSON 403 when signed out)

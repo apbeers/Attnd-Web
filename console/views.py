@@ -8,6 +8,7 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.models import User
 from django.db import IntegrityError
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 
@@ -108,6 +109,12 @@ class SignUpView(View):
         return redirect('console:dashboard')
 
 
+# Account changes that need a recent sign-in (console/recent_auth.py). Renaming a passkey and the email / Ask
+# Attnd preferences don't.
+RISKY_ACCOUNT_ACTIONS = ('email', 'password', '2fa_disable', '2fa_codes', 'email_codes_on', 'email_codes_off',
+                         'passkey_remove')
+
+
 @login_required
 def account(request):
     """Change the email you sign in with, or your password. The account (and its events) stays the same."""
@@ -115,6 +122,10 @@ def account(request):
     password_form = PasswordChangeForm(request.user, prefix='pw')
     recovery_codes = None
     action = request.POST.get('action') if request.method == 'POST' else None
+    if action in RISKY_ACCOUNT_ACTIONS:  # a sign-in from the last 20 minutes first (console/recent_auth.py)
+        from console import recent_auth
+        if (response := recent_auth.require(request, reverse('console:account'))) is not None:
+            return response
     if action in ('2fa_disable', '2fa_codes', 'email_codes_on', 'email_codes_off'):
         recovery_codes, response = account_two_factor_action(request)
         if response is not None:

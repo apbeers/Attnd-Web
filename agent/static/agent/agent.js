@@ -618,8 +618,27 @@
         if (data.step.changed && data.step.event_id) { refreshKeys([`event:${data.step.event_id}`]); pageChanged(data.step.event_id); }
       }
       poll();
-    } catch (err) { bubble('error', err.message); }
+    } catch (err) {
+      if (err.data && err.data.reauth) reauthCard(err.data.reauth, err.message);  // console/recent_auth.py
+      else bubble('error', err.message);
+    }
   });
+  // "Confirm it's you": a risky action needs a recent sign-in first. The card opens the check, which comes back
+  // here; the action is still waiting for Confirm.
+  function reauthCard(url, text) {
+    const card = document.createElement('div');
+    card.className = 'agent__reauth';
+    card.setAttribute('role', 'alert');
+    const p = document.createElement('p');
+    p.textContent = text || 'Confirm it’s you first.';
+    const a = document.createElement('a');
+    a.className = 'button button--primary button--small';
+    a.href = url;
+    a.textContent = 'Confirm it’s you';
+    card.append(p, a);
+    log.append(card);
+    card.scrollIntoView({ block: 'nearest' });
+  }
   $('[data-agent-confirm-no]').addEventListener('click', async () => {
     if (!run || !confirmBox.dataset.step) return;
     try { renderRun(await post(runUrl(run.id, 'cancel/'), { step: confirmBox.dataset.step })); live = true; poll(); }

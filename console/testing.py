@@ -1,7 +1,9 @@
 """Test helpers."""
 from django.test import Client
 
-from console import twofactor
+import time
+
+from console import recent_auth, twofactor
 
 
 class TwoFactorClient(Client):
@@ -12,4 +14,5 @@ class TwoFactorClient(Client):
         super()._login(user, backend)
         session = self.session
         session[twofactor.SESSION_KEY] = str(user.pk)
+        session[recent_auth.KEY] = time.time()  # a fresh full sign-in (recent-sign-in checks pass)
         session.save()
