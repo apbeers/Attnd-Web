@@ -18,6 +18,7 @@
 {% endblock %}
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', () => {  // console.js is deferred
 const list = document.getElementById('location-list');
 if (list) makeSortable(list, {
   handle: '.drag-handle',
@@ -27,6 +28,7 @@ if (list) makeSortable(list, {
     fetch('{% url "console:locations_reorder" event.id %}', {method: 'POST', body,
       headers: {'X-CSRFToken': '{{ csrf_token }}'}});
   }
+});
 });
 </script>
 {% endblock %}

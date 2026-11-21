@@ -8,6 +8,11 @@
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
   {% agent_panel as show_agent %}{% if show_agent %}<link rel="stylesheet" href="{% static 'agent/agent.css' %}">{% endif %}
   <link rel="manifest" href="{% url 'console:manifest' %}">
+  {# Stage H: downloaded while the page parses, run in this order after it (page scripts use defer too). #}
+  <script src="{% static 'console/console.js' %}" defer></script>
+  <script src="{% static 'console/tz.js' %}" defer></script>
+  <script src="{% static 'console/passkeys.js' %}" defer></script>
+  {% if GOOGLE_MAPS_BROWSER_KEY %}<script src="{% static 'console/maps.js' %}" defer></script>{% endif %}
   <meta name="theme-color" content="#431f86">
   {% block head %}{% endblock %}
 </head>
@@ -94,11 +99,7 @@
   <div class="task-panel"><div class="task-panel-title">Background tasks</div><ul class="task-list"></ul></div>
 </div>
 {% endif %}
-<script src="{% static 'console/console.js' %}"></script>
-<script src="{% static 'console/tz.js' %}"></script>
-<script src="{% static 'console/passkeys.js' %}"></script>
-{% if GOOGLE_MAPS_BROWSER_KEY %}<div id="maps-config" hidden data-key="{{ GOOGLE_MAPS_BROWSER_KEY }}" data-map-id="{{ GOOGLE_MAPS_MAP_ID }}"></div>
-<script src="{% static 'console/maps.js' %}"></script>{% endif %}
+{% if GOOGLE_MAPS_BROWSER_KEY %}<div id="maps-config" hidden data-key="{{ GOOGLE_MAPS_BROWSER_KEY }}" data-map-id="{{ GOOGLE_MAPS_MAP_ID }}"></div>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -551,7 +551,8 @@ the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-pick
 - **Search** (`attnd/search.py`, F3): Postgres full text (English stemming, weighted fields, `websearch`) plus pg_trgm
   word similarity (≥ 0.3, typos) in one query; Ask Attnd's `search_events` (an event's own fields, its locations and
   schedule items) and the Prospects search use it.
-- **Console front end** (H): Ask Attnd's `agent.js` (~1,500 lines) loads lazily through `agent/agent-loader.js`: at
+- **Console front end** (H): `console.js`, `tz.js`, `passkeys.js` and `maps.js` load in `<head>` with `defer` (page
+  scripts in `{% block scripts %}` use `defer` too; inline page scripts that need them wait for `DOMContentLoaded`). Ask Attnd's `agent.js` (~1,500 lines) loads lazily through `agent/agent-loader.js`: at
   once on the full-screen page, when the panel was open on the previous page or while a run is active
   (`sessionStorage attnd.agent.active`), else on the launcher's hover / focus / click or an "Add with AI" click
   (replayed once loaded). Polling backs off: Ask Attnd 1.5 s → 6 s while nothing changes, 15 s in a hidden tab; the

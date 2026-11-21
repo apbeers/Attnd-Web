@@ -82,7 +82,7 @@ Built on `develop` in this order; ticked as it ships.
   (no GeneratedField: the ends we query need interval maths, which Postgres won't store), django.tasks with our own
   DB-backed worker ✅ (built, off by default: `TASKS_BACKEND=database` on dev first, then a `tasks` dyno or the scheduler).
 - [x] **G. Security** ✅: ALLOWED_HOSTS, Scrypt, Permissions-Policy, SECRET_KEY_FALLBACKS, Ask Attnd rate limit + magic bytes.
-- [x] **H. Performance** ✅ (agent.js split into modules still open, see A): no head scripts to defer (all at the end of body), lazy Ask Attnd, cached root files, sized images, polling back-off.
+- [x] **H. Performance** ✅ (agent.js split into modules still open, see A): console scripts in `<head>` with `defer`, lazy Ask Attnd, cached root files, sized images, polling back-off.
 - [ ] **I. Chat-first additions** (Tiers 1–3: preview-before-apply, briefing / readiness, paste anything, server-side
   conversation, quality harness, live ops, notification drafting, voice, numbers, command bar, preferences, roll over,
   search, streaming, mobile chat-first, organizer notifications, first-run walkthrough, talk to a person).
