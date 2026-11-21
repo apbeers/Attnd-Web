@@ -151,6 +151,8 @@ class ConsoleTests(PreviewTestCase):
     def test_bundle_records_the_version_and_the_card_says_how_many_phones_have_it(self):
         self.join('a1')
         Device.objects.filter(pk='a1').update(last_seen=timezone.now())
+        self.assertEqual(preview.phones(self.event)['text'], 'No attendee phones have checked in yet.')  # no version reported yet
+        Device.objects.filter(pk='a1').update(last_version=self.event.content_version - 1)
         self.assertEqual(preview.phones(self.event)['text'], 'Updated on 0 of 1 phone.')
         self.api.get(f'/api/v2/events/{self.event.pk}/bundle/', secure=True, HTTP_X_DEVICE_ID='a1', **AUTH)
         self.assertEqual(Device.objects.get(pk='a1').last_version, self.event.content_version)

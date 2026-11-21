@@ -152,7 +152,7 @@ def wait_for_change(event_id, since, seconds=WAIT_SECONDS):
 # The console's live line ("Updated on 31 of 37 phones") and the preview phones
 # ---------------------------------------------------------------------------
 
-ACTIVE_WINDOW = timedelta(hours=24)  # attendee phones counted: seen in the last day
+ACTIVE_WINDOW = timedelta(hours=24)  # attendee phones counted: seen in the last day, with a version reported
 
 
 def phones(event, now=None):
@@ -164,13 +164,15 @@ def phones(event, now=None):
     version = event.content_version
     attendee = Q(preview_by__isnull=True, preview_until__isnull=True)
     counts = (Device.objects.real().filter(event=event)  # one query: the attendee phones of the last day + previews
-              .aggregate(total=Count('pk', filter=attendee & Q(last_seen__gte=now - ACTIVE_WINDOW)),
+              # phones that reported a version (a device from before API-026 counts once it fetches again)
+              .aggregate(total=Count('pk', filter=attendee & Q(last_seen__gte=now - ACTIVE_WINDOW,
+                                                              last_version__isnull=False)),
                          updated=Count('pk', filter=attendee & Q(last_seen__gte=now - ACTIVE_WINDOW,
                                                                  last_version__gte=version)),
                          previews=Count('pk', filter=~attendee)))
     total, updated = counts['total'], counts['updated']
     if not total:
-        text = 'No attendee phones yet.'
+        text = 'No attendee phones have checked in yet.'
     elif updated == total:
         text = f'Up to date on {"the" if total == 1 else "all"} {total} phone{"" if total == 1 else "s"}.'
     else:
