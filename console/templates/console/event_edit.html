@@ -3,33 +3,7 @@
 {% block title %}Details · {{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="stack stack--loose">
-<div class="panel panel--roomy">
-  <form method="post" enctype="multipart/form-data">{% csrf_token %}
-    {% with locked=event.locked_fields %}
-    {% include 'console/_field.html' with field=form.name %}
-    {% include 'console/_field.html' with field=form.description %}
-    <div class="grid grid--3">
-      {% include 'console/_field.html' with field=form.start_time %}
-      {% include 'console/_field.html' with field=form.end_time %}
-      {% include 'console/_field.html' with field=form.timezone %}
-    </div>
-    <p class="form-note">Times are in the event’s time zone ({{ event.timezone }}).</p>
-    {% include 'console/_field.html' with field=form.address %}
-    <div class="grid grid--2">
-      {% include 'console/_field.html' with field=form.latitude %}
-      {% include 'console/_field.html' with field=form.longitude %}
-    </div>
-    {% include 'console/_field.html' with field=form.flyer %}
-    <div class="split split--compact">
-      <div class="split__aside">{% include 'console/_field.html' with field=form.accent_color %}</div>
-      <div class="split__main">{% include 'console/_field.html' with field=form.logo_url %}</div>
-    </div>
-    {% include 'console/_assistant_context.html' %}
-    {% endwith %}
-    <div class="action-bar"><div class="action-bar__summary"><strong>{{ event.name }}</strong> · changes reach the app within seconds</div>
-      <button class="button button--primary">Save</button></div>
-  </form>
-</div>
+<div class="panel panel--roomy">{% component "event_form" event=event form=form %}</div>
 {% if event.locked_fields %}
 <p class="small muted">{% icon "lock" "lock" %} Fields you’ve edited are protected from AI refreshes — the AI can still suggest changes, but they’re unticked by default.</p>
 {% endif %}

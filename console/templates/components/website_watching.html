@@ -1,7 +1,11 @@
-{% load console_tags %}{# website_watching: source websites, watching and update mode, Check for updates now (a background task). #}<div class="stack component component--website_watching">
+{% load console_tags %}{# website_watching: Check for updates now (a background task), source websites and watching. #}<div class="stack component component--website_watching">
   {% if surface == 'chat' %}<h3 class="title-4">{% icon "refresh" %} {{ d.name }}</h3>{% endif %}
-  <p class="small muted">{% if d.watching %}Attnd watches these pages for changes{% else %}Not watching{% endif %}{% if d.checked %} · last checked {{ d.checked }}{% endif %}.</p>
+  <p class="muted small">Turn on watching and Attnd checks your pages for changes: every 10 minutes during the event, hourly in the week before, every few hours before that. Checking is free; the AI only re-reads a page when its content actually changed. Anything you edited by hand is never overwritten.{% if d.last_ai %} Last AI update {{ d.last_ai }} ago.{% endif %}</p>
+  <details><summary class="small muted">Add new material (optional), then check now</summary>
+    <div class="details-body">{% include 'components/_form.html' with form=d.refresh %}</div></details>
   {% include 'components/_form.html' with form=d.form %}
-  {% if d.has_sources %}<form method="post" action="{{ d.refresh_url }}" data-background data-busy-label="Checking for updates…" data-after-start="reset">{% csrf_token %}
-    <button class="button button--outline">{% icon "refresh" %} Check for updates now</button></form>{% endif %}
+  {% if not d.manage %}<p class="small muted">Only the owner and event admins can change these.</p>{% endif %}
+  {% if d.pages %}<details><summary class="small muted">Watched pages ({{ d.pages|length }}){% if d.checked %} · checked {{ d.checked }}{% endif %}</summary>
+    <ul class="small details-body">{% for p in d.pages %}<li><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|truncatechars:70 }}</a>
+      <span class="muted">· {{ p.state }}{% if p.error %} · <span class="tone-danger">{{ p.error }}</span>{% endif %}</span></li>{% endfor %}</ul></details>{% endif %}
 </div>

@@ -22,8 +22,8 @@ QR, poster, join link → sharing_kit; publish / end / delete → event_lifecycl
 CSV → event_exports. The person can tap a card for its \
 details and use its buttons and forms themselves (those that always ask still ask them). For pages without a \
 component, read_page is the fallback.
-- Find ids first: read the relevant page with read_page (list_pages lists the pages; list_events your events). \
-Ids are in the page text and the links ("→ /console/events/12/locations/34/").
+- Ids: show / get_component return the components' JSON with every id (list_events gives your events); for pages \
+without a component read_page, whose links carry ids ("→ /console/events/12/locations/34/").
 - For edits pass only the fields that should change; leave the others null (null = keep the current value).
 - Times are the event's local time (its time zone) as YYYY-MM-DDTHH:MM.
 - Dates and times: the CONTEXT block gives now (UTC and in the event's time zone), the event's start and end in its \
@@ -49,7 +49,7 @@ the "Details for the assistant" fields (names starting ctx_: about, FAQ, ameniti
 age limit, accessibility, getting there, policies, links) with what they gave you or what a page says, in the \
 formats their help text shows; only empty ones (fill_form skips the others). Never invent facts.
 - How-to questions about the platform (accounts, passwords, passkeys, team, publishing, notifications, QR codes, \
-imports, layout, history, Studio, billing): answer from PLATFORM HELP below in a few sentences, always with the \
+imports, layout, history, Studio, billing): call platform_help and answer in a few sentences, always with the \
 Markdown link to the exact page ([Account](/console/account/)); the person taps it. Don't read pages for these.
 - When done, call finish with a short summary of what you did (and anything left to do), and in suggest 2-4 short \
 follow-ups the person is likely to want next, phrased as their request ("Show the schedule", "Add a location", \
@@ -67,14 +67,14 @@ def _help():
 
 
 HELP = _help()
-SYSTEM_PROMPT = SYSTEM_PROMPT + '\n\nPLATFORM HELP (how-to answers, with the page links to give)\n' + HELP
+# (The help is a tool, platform_help, not part of the prompt: it is sent only when someone asks how to do something.)
 
 
 def _local(dt, tz):
     return dt.astimezone(tz).strftime('%Y-%m-%dT%H:%M') if dt else None
 
 
-def event_context(event, user):
+def event_context(event, user, counts=True):
     """The event the person is on, as compact JSON-able facts (times in its own zone)."""
     from datetime import timedelta
     from zoneinfo import ZoneInfo
@@ -100,10 +100,10 @@ def event_context(event, user):
         'id': event.pk, 'name': event.name, 'code': event.event_code, 'status': event.status,
         'time_zone': event.timezone, 'start': _local(event.start_time, tz), 'end': _local(event.end_time, tz),
         'event_days': days, 'single_day': len(days) == 1, 'now_in_event_zone': _local(now, tz),
-        'locations': event.location_set.count(), 'schedule_items': event.scheduleditem_set.count(),
-        'updates_sent': event.notification_set.filter(sent=True).count(),
-        'updates_scheduled': event.notification_set.filter(sent=False).count(),
-        'your_role': event.role_for(user),
+        **({'locations': event.location_set.count(), 'schedule_items': event.scheduleditem_set.count(),
+            'notifications_sent': event.notification_set.filter(sent=True).count(),
+            'notifications_scheduled': event.notification_set.filter(sent=False).count(),
+            'your_role': event.role_for(user)} if counts else {}),
     }
 
 
@@ -122,7 +122,7 @@ def context_block(run):
         data['current_event'] = None
         from events.models import events_for_user
         keys = ('id', 'name', 'code', 'time_zone', 'start', 'end', 'event_days')
-        data['your_events'] = [{k: v for k, v in event_context(e, run.user).items() if k in keys}
+        data['your_events'] = [{k: v for k, v in event_context(e, run.user, counts=False).items() if k in keys}
                                for e in events_for_user(run.user).order_by('-start_time')[:8]]
     return 'CONTEXT (facts from the server):\n' + json.dumps(data, ensure_ascii=False, separators=(',', ':'))
 

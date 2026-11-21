@@ -37,34 +37,7 @@
 
     <div class="panel stack">
       <h2 id="sync-settings">{% icon "stars" "tone-brand" %} Keep it in sync with your website</h2>
-      <p class="muted small">Turn on watching and Attnd checks your pages for changes: every 10 minutes during the event, hourly in the week before, every few hours before that.
-        Checking is free; the AI only re-reads a page when its content actually changed. Anything you edited by hand is never overwritten.
-        {% if event.last_refreshed_at %}Last AI update {{ event.last_refreshed_at|timesince }} ago.{% endif %}</p>
-      <form method="post" action="{% url 'console:event_refresh' event.id %}" enctype="multipart/form-data" class="stack stack--tight"
-            data-background data-busy-label="Checking for updates…" data-after-start="reset">{% csrf_token %}
-        <details><summary class="small muted">Add new material (optional)</summary>
-          <div class="details-body">{% for field in refresh_form %}{% include 'console/_field.html' %}{% endfor %}</div>
-        </details>
-        <div><button class="button button--outline">{% icon "refresh" %} Check for updates now</button></div>
-      </form>
-      <form method="post" action="{% url 'console:event_sources' event.id %}">{% csrf_token %}
-        {% include 'console/_field.html' with field=sources_form.source_urls_text %}
-        <div class="grid grid--2">
-          {% include 'console/_field.html' with field=sources_form.refresh_schedule %}
-          {% include 'console/_field.html' with field=sources_form.update_mode %}
-        </div>
-        <details class="field"><summary class="small muted">Extra source text</summary>
-          <div class="details-body">{{ sources_form.source_text }}</div></details>
-        {% if can_manage %}<button class="button button--secondary button--small">Save</button>{% else %}<p class="small muted">Only the owner and event admins can change these.</p>{% endif %}
-      </form>
-      {% if source_pages %}
-      <details><summary class="small muted">Watched pages ({{ source_pages|length }}){% if event.sources_checked_at %} · checked {{ event.sources_checked_at|timesince }} ago{% endif %}</summary>
-        <ul class="small details-body">{% for p in source_pages %}
-          <li><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|truncatechars:70 }}</a>
-            <span class="muted">· {% if p.has_pending_change %}<strong class="tone-brand">changed, AI update pending</strong>{% elif p.changed_at %}last changed {{ p.changed_at|timesince }} ago{% elif p.checked_at %}no changes yet{% else %}not checked yet{% endif %}{% if p.failures %} · <span class="tone-danger">{{ p.last_status }}</span>{% endif %}</span></li>
-        {% endfor %}</ul>
-      </details>
-      {% endif %}
+      {% component "website_watching" event=event %}
     </div>
 
     {% component "event_stats" event=event part="most_liked" %}
@@ -90,21 +63,10 @@
 
     <div class="panel stack">
       <h2 class="eyebrow">Visibility</h2>
-      <form method="post" action="{% url 'console:event_status' event.id %}" class="stack stack--tight">{% csrf_token %}
-        {% if event.status == 'published' %}
-          {% if event.public %}
-            <button name="action" value="unlist" class="button button--secondary button--small button--block">Hide from “nearby events”</button>
-          {% else %}
-            <button name="action" value="list" class="button button--outline button--small button--block">Show in “nearby events”</button>
-          {% endif %}
-          <button name="action" value="archive" class="button button--secondary button--small button--block">Mark as ended (archive)</button>
-          <button name="action" value="unpublish" class="button button--ghost button--small button--block muted">Move back to draft</button>
-        {% elif event.status == 'archived' %}
-          <button name="action" value="publish" class="button button--outline button--small button--block">Make live again</button>
-        {% endif %}
-      </form>
+      {% component "event_lifecycle" event=event %}
       {% if not event.paid %}<p class="small muted">{% icon "info" %} Attendees see a “Demo event” banner until the event is upgraded.</p>{% endif %}
     </div>
+    <details class="panel"><summary class="strong">More ways to share</summary><div class="details-body">{% component "sharing_kit" event=event %}</div></details>
 
     <div class="panel stack stack--tight">
       <h2 class="eyebrow">App layout</h2>

@@ -62,7 +62,7 @@ class ComponentTestCase(TestCase):
             'notification_row': 'Gates open late', 'notification_form': 'Send a notification',
             'object_history': 'No changes recorded yet', 'event_form': 'Prairie Fest', 'event_new_form': 'Create with AI',
             'event_team': 'Owner', 'event_metrics': 'iOS and Android', 'event_map': 'No location has a map pin yet',
-            'changeset_review': '2 schedule changes', 'app_layout': 'Changes reach open apps',
+            'changeset_review': '2 schedule changes', 'app_layout': 'Changes save as you make them',
             'website_watching': 'Source websites', 'event_context_form': 'Only add what attendees may see',
             'event_flyer': 'No flyer yet', 'sharing_kit': 'PRAIRIE', 'event_lifecycle': 'Now:',
             'event_versions': 'No saved versions yet', 'event_exports': 'CSV files',

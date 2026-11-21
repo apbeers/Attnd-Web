@@ -188,18 +188,8 @@
 .canvas__overlay-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: var(--space-5); }
 /* Open: slides in from the right with a fade. Back (the arrow, Esc, a crumb): the level slides out to the right with
    a fade, the one below comes back; nested levels animate between them. No motion with prefers-reduced-motion. */
-.canvas__overlay.is-entering, .canvas__level.is-entering { animation: canvas-in .22s cubic-bezier(.2, .8, .2, 1) both; }
-.canvas__overlay.is-leaving, .canvas__level.is-leaving { animation: canvas-out .2s cubic-bezier(.4, 0, .8, .4) both; pointer-events: none; }
-.canvas__level.is-returning { animation: canvas-return .22s ease-out both; }
 .canvas__level { display: grid; gap: var(--space-4); align-content: start; }
 .canvas__level[hidden] { display: none; }
-@keyframes canvas-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
-@keyframes canvas-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(36px); } }
-@keyframes canvas-return { from { opacity: .3; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) {
-  .canvas__overlay.is-entering, .canvas__overlay.is-leaving, .canvas__level.is-entering, .canvas__level.is-leaving,
-  .canvas__level.is-returning { animation: none; }
-}
 /* Sections of a tab (Updates: compose, then every update) and the tab's toolbar (Add location…). */
 .canvas__toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-bottom: var(--space-3); }
 .canvas__section + .canvas__section { margin-top: var(--space-5); }

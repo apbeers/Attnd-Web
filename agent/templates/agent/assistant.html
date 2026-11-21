@@ -4,7 +4,7 @@
 {% block head %}<link rel="stylesheet" href="{% static 'agent/agent.css' %}">{% endblock %}
 {% block content %}
 <div class="assistant">
-  <section class="canvas" data-canvas aria-label="What Ask Attnd shows">
+  <section class="canvas" data-canvas data-routes="{{ canvas_routes }}" aria-label="What Ask Attnd shows">
     {# The canvas drawn on the server (agent/canvas.py, A21): agent.js adopts these tabs and cards. #}
     <div class="tabs canvas__tabs" role="tablist" aria-label="Canvas" data-canvas-tabs{% if not canvas_tabs %} hidden{% else %} data-ssr{% endif %}>
       {% for t in canvas_tabs %}<button type="button" class="tabs__tab" id="{{ t.id }}-tab" role="tab" aria-controls="{{ t.id }}" aria-selected="{{ t.active|yesno:'true,false' }}" tabindex="{{ t.active|yesno:'0,-1' }}" data-tab-label="{{ t.label }}">{{ t.text }}</button>{% endfor %}
@@ -16,7 +16,7 @@
           <div class="canvas__cards{% if sec.row_list %} canvas__cards--rows{% endif %}">
           {% for r in sec.rows %}{% if r.heading %}<h4 class="eyebrow agent__group">{{ r.heading }}</h4>{% else %}<div class="agent__card" data-component="{{ r.card.component }}" data-ids="{{ r.ids }}" data-keys="{{ r.card.keys|join:' ' }}" data-title="{{ r.card.label|default:r.card.title }}"{% if r.card.detail %} data-detail="{{ r.card.detail }}" data-detail-ids="{{ r.detail_ids }}"{% endif %}><div class="agent__card-body">{{ r.card.html|safe }}</div></div>{% endif %}
           {% empty %}<p class="canvas__none muted">{{ sec.empty }}</p>{% endfor %}
-          </div></section>{% endfor %}</div>
+          </div>{% if sec.next_offset %}<button type="button" class="button button--outline button--small canvas__more" data-more-offset="{{ sec.next_offset }}">Show more ({{ sec.total }} in all)</button>{% endif %}</section>{% endfor %}</div>
       </div>{% empty %}
       <div class="canvas__empty" data-canvas-empty>
         <div class="canvas__empty-mark">{% icon "stars" %}</div>

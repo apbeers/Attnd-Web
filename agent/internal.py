@@ -111,6 +111,25 @@ def request(run, method, path, data=None, files=None, accept_json=False, step=No
     return response
 
 
+def ensure_signed_in(run):
+    """For reads that don't go through a view (component JSON): the person's session must still be signed in as them,
+    with any second sign-in step done, exactly like a request through the middleware."""
+    from django.contrib.auth import BACKEND_SESSION_KEY, HASH_SESSION_KEY, SESSION_KEY
+
+    from console import twofactor
+    session = _session(run)
+    ok = bool(run.session_key) and session.exists(run.session_key) and session.get(SESSION_KEY) == str(run.user_id)
+    if ok:
+        verifier = session.get(HASH_SESSION_KEY)
+        ok = bool(verifier) and verifier == run.user.get_session_auth_hash() and bool(session.get(BACKEND_SESSION_KEY))
+    if ok and session.get(twofactor.SESSION_KEY) != str(run.user_id):
+        ok = not (twofactor.is_required(run.user) and not twofactor.strong_methods(run.user)) and \
+            not twofactor.has_second_factor(run.user)
+    if not ok:
+        raise Signedout('You are signed out of the console (or it needs your second sign-in step), so Ask Attnd '
+                        'stopped. Sign in again and ask once more.')
+
+
 def _check_signed_in(response):
     target = urlsplit(response.location).path if response.location else ''
     if target.startswith(('/accounts/login', '/accounts/2fa')):

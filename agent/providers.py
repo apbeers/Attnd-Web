@@ -30,7 +30,7 @@ logger = logging.getLogger('attnd.agent')
 MAX_TOKENS = 16000
 MAX_TOKENS_RETRY = 32000
 MAX_CONTINUATIONS = 3
-STRICT_TOOLS = {'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show', 'get_component', 'fill_form'}
+STRICT_TOOLS = {'read_page', 'list_pages', 'list_events', 'search_events', 'ask_user', 'finish', 'show', 'get_component', 'fill_form', 'platform_help'}
 
 # Strict schemas the API refused once (too complex): this process sends tools without `strict` from then on.
 _strict_refused = set()

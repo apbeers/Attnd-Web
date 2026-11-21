@@ -228,7 +228,8 @@ class ProspectComponentTests(AgentTestCase):
         super().setUp()
         from prospects.models import Prospect, ProspectContact, ProspectRun
         self.staff = User.objects.create_user('staffer', 'staff@example.com', 'pw', is_staff=True)
-        self.prospect = Prospect.objects.create(name='River Days', city='Austin', fit_score=80)
+        self.prospect = Prospect.objects.create(name='River Days', city='Austin', fit_score=80,
+                                                urls=['https://river.example/'])
         self.contact = ProspectContact.objects.create(prospect=self.prospect, name='Ana', email='ana@example.org',
                                                       source_url='https://river.example/contact')
         self.dnc = ProspectContact.objects.create(prospect=self.prospect, name='Bo', email='bo@example.org',
@@ -284,7 +285,11 @@ class ChatDefaultTests(AgentTestCase):
         response = self.client.get(overview, secure=True)
         self.assertIn(f'event={self.event.pk}', response['Location'])
         self.assertEqual(self.client.get(overview + '?page=1', secure=True).status_code, 200)  # Exit lands on the page
-        self.assertEqual(self.client.get(dashboard, secure=True, HTTP_X_ATTND_AGENT='1/1').status_code, 200)
+        self.assertEqual(self.client.get(dashboard, secure=True, HTTP_X_ATTND_AGENT='1/1').status_code, 302)  # a header
+        from agent import internal  # only Ask Attnd's own internal request skips the landing
+        run = AgentRun.objects.create(user=self.owner, goal='x', session_key=self.client.session.session_key,
+                                      host='testserver', secure=True)
+        self.assertEqual(internal.request(run, 'GET', dashboard).status, 200)
         page = self.client.get(reverse('console:assistant') + f'?event={self.event.pk}&from={overview}', secure=True)
         self.assertContains(page, 'page=1')
         self.assertContains(page, 'aria-checked="true"')

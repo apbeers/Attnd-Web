@@ -79,6 +79,11 @@ def status_badges(e):
     return out
 
 
+def ScheduledItemModel():
+    from events.models import ScheduledItem
+    return ScheduledItem
+
+
 def _count(queryset, field='event'):
     rows = queryset.filter(**{field: OuterRef('pk')}).order_by().values(field).annotate(n=Count('pk')).values('n')
     return Coalesce(Subquery(rows, output_field=IntegerField()), 0)
@@ -111,8 +116,8 @@ def event_url(ids):
 # ---------------------------------------------------------------------------
 
 def _expand_events(user, **ids):
-    upcoming, past = upcoming_and_past(list(annotated_events(user)[:40]))
-    return [{'event_id': e.pk} for e in (upcoming + past)[:20]]
+    upcoming, past = upcoming_and_past(list(annotated_events(user)))
+    return [{'event_id': e.pk, 'event': e} for e in upcoming + past]
 
 
 @component('event_tile', 'Event', 'One of your events: dates, code, status, counts (the console home list). Without '
@@ -250,7 +255,8 @@ def event_map(user, event_id=None, event=None):
 @component('event_overview', 'Event overview', "An event at a glance: header, AI updates to review, numbers, a map of "
            'its locations, the QR to open it live on your phone.',
            parts=('event_header', 'needs_review', 'event_stats', 'event_map', 'live_on_phone'),
-           page=event_url)
+           page=event_url,
+           chat_only="A composite of the Overview page's own parts (header, review, numbers, map, QR).")
 def event_overview(user, event_id=None, event=None):
     event = editable_event(user, event_id, event)
     from console.components import get
@@ -274,9 +280,12 @@ def _location(user, event_id, location_id, event=None, location=None):
 
 
 def _expand_locations(user, event_id=None, **_):
+    from console.usage import net_hearts
     event = editable_event(user, event_id)
-    return [{'event_id': event.pk, 'location_id': pk}
-            for pk in event.location_set.order_by('sort_order', 'name').values_list('pk', flat=True)[:40]]
+    hearts = net_hearts(event)['location']
+    locs = event.location_set.annotate(n_items=_count(ScheduledItemModel().objects.all(), 'location'))
+    return [{'event_id': event.pk, 'location_id': loc.pk, 'event': event, 'location': loc,
+             'hearts': hearts.get(loc.pk, 0)} for loc in locs.order_by('sort_order', 'name')]
 
 
 @component('location_row', 'Location', 'A location (stage, booth, vendor…) of an event: category, summary, tags, '
@@ -401,11 +410,14 @@ def _item(user, event_id, item_id, event=None, item=None):
 
 
 def _expand_items(user, event_id=None, location_id=None, **_):
+    from console.usage import net_hearts
     event = editable_event(user, event_id)
-    items = event.scheduleditem_set.order_by('start_time', 'name')
+    hearts = net_hearts(event)['item']
+    items = event.scheduleditem_set.select_related('location').order_by('start_time', 'name')
     if location_id:
         items = items.filter(location_id=location_id)
-    return [{'event_id': event.pk, 'item_id': pk} for pk in items.values_list('pk', flat=True)[:40]]
+    return [{'event_id': event.pk, 'item_id': it.pk, 'event': event, 'item': it, 'hearts': hearts.get(it.pk, 0)}
+            for it in items]
 
 
 @component('schedule_item_row', 'Schedule item', 'A schedule item (set, talk, session…): day, time, location, tags, '
@@ -477,9 +489,9 @@ def schedule_item_form(user, event_id=None, item_id=None, event=None, item=None,
 def _expand_notifications(user, event_id=None, **_):
     event = editable_event(user, event_id)
     # Scheduled first (soonest first), then sent (newest first): the list's two sections.
-    scheduled = list(event.notification_set.filter(sent=False).order_by('send_time').values_list('pk', flat=True)[:30])
-    sent = list(event.notification_set.filter(sent=True).order_by('-send_time').values_list('pk', flat=True)[:30])
-    return [{'event_id': event.pk, 'notification_id': pk} for pk in scheduled + sent]
+    scheduled = list(event.notification_set.filter(sent=False).order_by('send_time'))
+    sent = list(event.notification_set.filter(sent=True).order_by('-send_time'))
+    return [{'event_id': event.pk, 'notification_id': n.pk, 'event': event, 'notification': n} for n in scheduled + sent]
 
 
 @component('notification_row', 'Notification', 'A notification (push notification) of an event: title, text, urgent, sent '
@@ -609,18 +621,19 @@ def event_form(user, event_id=None, event=None, form=None):
     return {'id': event.pk, 'name': event.name, 'title': f'{event.name}: details', 'form': data}
 
 
-def _new_event_forms(user):
+def _new_event_forms(user, ai_form=None, blank_form=None):
     from console.forms.event_forms import AIImportForm, BlankEventForm
     from studio.access import is_staff
-    ai = form_json(AIImportForm(prefix='ai'), ['urls', 'text', 'upload', 'instructions'],
+    layout = ['urls', 'text', 'upload', 'instructions'] + ([('block', 'studio_import')] if is_staff(user) else [])
+    ai = form_json(ai_form or AIImportForm(prefix='ai'), layout,
                    action=reverse('console:event_new'),
                    submit=[{'label': 'Create with AI', 'style': 'primary', 'icon': 'stars'}])
-    ai['hidden'] = {'mode': 'ai'}
+    ai['hidden'] = {'mode': 'ai', 'browser_tz': ''}  # console.js fills the browser's zone
     ai['background'] = 'Reading your event…'  # runs as a background task (the tray shows its steps)
     if is_staff(user):
-        ai['hidden'].update({'studio_import_shown': '1', 'studio_import': '1'})
+        ai['hidden'].update({'studio_import_shown': '1'})  # the Studio checkbox ('studio_import' block)
     with timezone.override('America/Chicago'):
-        blank = form_json(BlankEventForm(prefix='blank'), ['name', ('grid', 'start_time', 'timezone'), 'address'],
+        blank = form_json(blank_form or BlankEventForm(prefix='blank'), ['name', ('grid', 'start_time', 'timezone'), 'address'],
                           action=reverse('console:event_new'), submit=[{'label': 'Create empty event',
                                                                         'style': 'outline'}])
     blank['hidden'] = {'mode': 'blank'}
@@ -630,8 +643,8 @@ def _new_event_forms(user):
 @component('event_new_form', 'New event', 'Create an event: from its website(s), pasted text or a flyer with the AI '
            'import (runs in the background, the task tray shows each step), or an empty draft.', ids=(),
            page=lambda ids: reverse('console:event_new'))
-def event_new_form(user):
-    ai, blank = _new_event_forms(user)
+def event_new_form(user, ai_form=None, blank_form=None):
+    ai, blank = _new_event_forms(user, ai_form, blank_form)
     return {'title': 'New event', 'ai': ai, 'blank': blank}
 
 
@@ -657,7 +670,8 @@ def _row_actions(event, offered):
            'invitations by email; invite someone, change a role, remove someone, cancel an invitation (these always '
            'ask to confirm).', form=_team_bind,
            actions=(('invite_team_member', 'Invite'), ('cancel_team_invite', 'Cancel'), ('remove_team_member', 'Remove'),
-                    ('change_team_role', 'Change role'), ('leave_event', 'Leave')),
+                    ('change_team_role', 'Change role'), ('transfer_event_ownership', 'Make owner'),
+                    ('leave_event', 'Leave')),
            page=lambda ids: reverse('console:team', args=[ids['event_id']]))
 def event_team(user, event_id=None, event=None, form=None):
     from console.accounts import display_name
@@ -675,12 +689,18 @@ def event_team(user, event_id=None, event=None, form=None):
             other = EventMember.ROLE_CONTRIBUTOR if m.role == EventMember.ROLE_ADMIN else EventMember.ROLE_ADMIN
             row['actions'].append({'name': 'change_team_role', 'style': 'outline',
                                    'label': f'Make {dict(EventMember.ROLE_CHOICES)[other].lower()}',
-                                   'fields': {'member': m.pk, 'role': other}})
+                                   'fields': {'member': m.pk, 'role': other},
+                                   'confirm_text': f'Make {m.user.email} {dict(EventMember.ROLE_CHOICES)[other].lower()}?'})
+        if is_owner:
+            row['actions'].append({'name': 'transfer_event_ownership', 'label': 'Make owner', 'style': 'ghost',
+                                   'fields': {'member': m.pk},
+                                   'confirm_text': f'Make {m.user.email} the owner? You stay on the team as an admin.'})
         if is_owner or (can_manage and m.role == EventMember.ROLE_CONTRIBUTOR):
             row['actions'].append({'name': 'remove_team_member', 'label': 'Remove', 'style': 'danger',
-                                   'fields': {'member': m.pk}})
+                                   'fields': {'member': m.pk}, 'confirm_text': f'Remove {m.user.email}?'})
         elif m.user_id == user.pk:
-            row['actions'].append({'name': 'leave_event', 'label': 'Leave', 'style': 'danger'})
+            row['actions'].append({'name': 'leave_event', 'label': 'Leave', 'style': 'danger',
+                                   'confirm_text': 'Leave this event?'})
         row['actions'] = _row_actions(event, row['actions'])
         actions += row['actions']
         members.append(row)
@@ -689,7 +709,7 @@ def event_team(user, event_id=None, event=None, form=None):
         row = {'id': i.pk, 'email': i.email, 'role': i.get_role_display(), 'actions': []}
         if can_manage:
             row['actions'].append({'name': 'cancel_team_invite', 'label': 'Cancel', 'style': 'danger',
-                                   'fields': {'invite': i.pk}})
+                                   'fields': {'invite': i.pk}, 'confirm_text': f'Cancel the invitation for {i.email}?'})
         row['actions'] = _row_actions(event, row['actions'])
         actions += row['actions']
         invites.append(row)
@@ -713,12 +733,12 @@ def event_team(user, event_id=None, event=None, form=None):
 @component('event_metrics', 'Metrics', "This event's usage from the apps (anonymous counts): devices joined, app "
            'opens, views, searches, likes and the most liked places and items, the iOS / Android split and how many '
            'devices push notifications reach.', page=lambda ids: reverse('console:usage', args=[ids['event_id']]))
-def event_metrics(user, event_id=None, event=None):
+def event_metrics(user, event_id=None, event=None, usage=None):
     from console.usage import event_usage
     from events.models import Device
     event = editable_event(user, event_id, event)
     tz = _tz(event)
-    u = event_usage(event, tz)
+    u = usage or event_usage(event, tz)  # the Usage page passes what it already counted
     devices = Device.objects.real().filter(event=event)
     by_platform = dict(devices.values_list('platform').annotate(n=Count('id')).values_list('platform', 'n'))
     in_event = sum(by_platform.values())

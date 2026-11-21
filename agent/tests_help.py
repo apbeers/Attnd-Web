@@ -21,9 +21,12 @@ class HelpTests(SimpleTestCase):
             except Resolver404:
                 self.fail(f'help link “{text}” → {href} does not resolve')
 
-    def test_help_is_in_the_system_prompt(self):
-        self.assertIn('PLATFORM HELP', SYSTEM_PROMPT)
-        self.assertIn('[Account](/console/account/)', SYSTEM_PROMPT)
+    def test_help_is_a_tool_not_prompt_text(self):
+        from agent.loop import FIXED_TOOLS
+        self.assertIn('platform_help', {t['name'] for t in FIXED_TOOLS})
+        self.assertIn('call platform_help', SYSTEM_PROMPT)
+        self.assertNotIn('## Account and sign-in', SYSTEM_PROMPT)
+        self.assertIn('[Account](/console/account/)', HELP)
 
     def test_account_pages_stay_off_limits_to_the_tools(self):
         from agent.registry import off_limits

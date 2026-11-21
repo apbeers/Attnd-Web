@@ -8,6 +8,16 @@
       <button type="button" class="button button--outline button--small" data-fill-go>{% icon "stars" %} Fill from this website?</button>
       <span class="small muted" data-fill-status role="status" aria-live="polite"></span>
     </div>
+{% elif r.name == 'studio_import' %}<label class="check field" for="{{ uid }}studio_import"><input type="checkbox" id="{{ uid }}studio_import" name="studio_import" value="1" checked>
+        Also rebuild the website in Attnd Studio <span class="badge badge--neutral badge--pill">Beta</span>
+        <span class="field__help">Studio copies every page, image, font and PDF of the website and the AI builds a matching site.</span></label>
+{% elif r.name == 'layout_reason' %}<div class="notice notice--neutral small" data-layout-reason>{{ r.text }}</div>
+{% elif r.name == 'tab_list' %}<ul class="list list--boxed field tab-list" data-tab-sortable>{% for t in r.tabs %}
+        <li class="cluster" data-tab="{{ t.value }}">{% icon "grip" "drag-handle" %}<label class="check" for="{{ uid }}tab-{{ t.value }}"><input type="checkbox" name="tabs" value="{{ t.value }}" id="{{ uid }}tab-{{ t.value }}"{% if t.checked %} checked{% endif %}> {{ t.label }}</label></li>{% endfor %}
+      </ul>
+{% elif r.name == 'accent' %}<div class="field"><span class="field__label">Accent colour</span>
+        <div class="cluster"><input type="color" name="accent_color" value="{{ r.value }}" aria-label="Accent colour">
+          <label class="check small"><input type="checkbox" name="accent_default"{% if r.default %} checked{% endif %}> Use Attnd’s default</label></div></div>
 {% elif r.name == 'urgent_warning' %}<div class="notice notice--error small" id="{{ uid }}urgent-warning" role="alert" data-show-if="urgent">
         {% icon "warning" %} <strong>Urgent goes to everyone in the event, right away:</strong>
         {{ d.urgent_reach }} device{{ d.urgent_reach|pluralize }}, including people who turned notifications off. It arrives

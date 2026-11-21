@@ -100,6 +100,11 @@ class BlankEventForm(StyledFormMixin, forms.ModelForm):
         model = Event
         fields = ['name', 'start_time', 'timezone', 'address']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:  # console.js starts it on the browser's zone
+            self.fields['timezone'].widget.attrs['data-browser-tz'] = '1'
+
 
 class EventForm(AssistantContextMixin, StyledFormMixin, forms.ModelForm):
     context_kind = assistant_context.EVENT
@@ -138,6 +143,33 @@ class EventForm(AssistantContextMixin, StyledFormMixin, forms.ModelForm):
     def save(self, commit=True):
         self._save_context()
         return super().save(commit)
+
+
+class EventContextForm(AssistantContextMixin, StyledFormMixin, forms.ModelForm):
+    """Only the event's Details for the assistant (the canvas's card): saves nothing else."""
+    context_kind = assistant_context.EVENT
+
+    class Meta:
+        model = Event
+        fields = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_context()
+
+    def save(self, commit=True):
+        self._save_context()
+        if commit:
+            self.instance.save(update_fields=['context'])
+        return self.instance
+
+
+class EventFlyerForm(StyledFormMixin, forms.ModelForm):
+    """Only the event's flyer (image or PDF): saves nothing else."""
+
+    class Meta:
+        model = Event
+        fields = ['flyer']
 
 
 class SourcesForm(StyledFormMixin, forms.ModelForm):

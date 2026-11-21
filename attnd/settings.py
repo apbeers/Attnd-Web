@@ -76,10 +76,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'console.middleware.TwoFactorMiddleware',
+    # Ask Attnd's chat cards (console.middleware): a form with errors comes back as just that component; a saved one
+    # answers JSON with the Undo id (outside UndoMiddleware, which adds it).
+    'console.middleware.ComponentFragmentMiddleware',
     # Undo for every console change (console/undo.py): after MessageMiddleware, so it can tag the success message.
     'console.undo.UndoMiddleware',
-    # Ask Attnd's chat: a component form with errors comes back as just that component (console/components).
-    'console.middleware.ComponentFragmentMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.csp.ContentSecurityPolicyMiddleware',
 ]
@@ -203,6 +204,7 @@ RATE_LIMITS = {
     'attest_nonce_ip': _rate('attest_nonce_ip', '30/60'),       # attestation challenges per IP, 1 minute
     'place_search_user': _rate('place_search_user', '60/600'),  # the location form's address searches per person
     'location_fill_user': _rate('location_fill_user', '30/3600'),  # "Fill from this website?" per person, 1 hour
+    'agent_quiet_runs': _rate('agent_quiet_runs', '60/3600'),  # chat buttons that start a quiet run, per person
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
@@ -391,7 +393,7 @@ PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # OpenAI's web_search tool: $10 per 1,000 c
 
 # Ask Attnd (agent/): the console's AI agent. Every tool runs the real console view as the signed-in person.
 # Provider (agent/providers.py, separate from Studio's STUDIO_AI_PROVIDER): anthropic (default when ANTHROPIC_API_KEY
-# is set; the official SDK, Claude Haiku 5.5) or openai (these models).
+# is set; the official SDK, AGENT_ANTHROPIC_MODEL) or openai (AGENT_MODEL / AGENT_FALLBACK_MODEL below).
 AGENT_PROVIDER = os.getenv('AGENT_PROVIDER', '').strip().lower() or ('anthropic' if ANTHROPIC_API_KEY else 'openai')
 # Claude everywhere outside Ask Attnd's loop and Studio (attnd/claude.py): Haiku for imports, website checks, tags,
 # vision, form fills and scores; Sonnet where Haiku can't (web search).
@@ -399,7 +401,7 @@ AI_MODEL = os.getenv('AI_MODEL', 'claude-haiku-5-5')
 AI_SMART_MODEL = os.getenv('AI_SMART_MODEL', 'claude-sonnet-5-5')
 AGENT_ANTHROPIC_MODEL = os.getenv('AGENT_ANTHROPIC_MODEL', 'claude-haiku-5-5')  # owner, Nov 21, 2026
 PLAN_SUGGESTIONS_MODEL = os.getenv('PLAN_SUGGESTIONS_MODEL', 'claude-haiku-5-5')  # API-021 (events/plan_suggestions.py)
-# Claude Haiku has no server-side refusal fallback: a declined run continues on OpenAI with this model.
+# A run Claude declines (stop_reason refusal) continues on this model (agent/loop.py _refusal_fallback).
 AGENT_REFUSAL_MODEL = os.getenv('AGENT_REFUSAL_MODEL', 'gpt-5-mini')
 AGENT_MODEL = os.getenv('AGENT_MODEL', 'gpt-5-mini')  # owner, Nov 21, 2026: the cheaper model (was gpt-5.5)
 AGENT_FALLBACK_MODEL = os.getenv('AGENT_FALLBACK_MODEL', 'gpt-5')  # only when AGENT_MODEL is unavailable

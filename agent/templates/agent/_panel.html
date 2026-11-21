@@ -3,7 +3,7 @@
   data-event-id="{% if agent_event.id %}{{ agent_event.id }}{% elif event.id %}{{ event.id }}{% endif %}"
   {% if mode == 'full' %}data-from="{{ back_url }}"{% endif %}
   data-start-url="{% url 'agent:start' %}" data-runs-url="{% url 'agent:runs' %}" data-attach-url="{% url 'agent:attach' %}"
-  data-run-url="{% url 'agent:run' 0 %}" data-components-url="{% url 'agent:component_render' %}"
+  data-run-url="{% url 'agent:run' 0 %}" data-components-url="{% url 'agent:component_render' %}" data-batch-url="{% url 'agent:component_batch' %}"
   data-pick-url="{% url 'agent:component_pick' %}" data-act-url="{% url 'agent:component_act' %}"
   data-undo-url="{% url 'console:undo' 0 %}" data-reorder-url="{% url 'console:locations_reorder' 0 %}">
   <button type="button" class="agent__launcher" aria-expanded="false" aria-controls="agent-panel" data-agent-open>

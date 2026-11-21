@@ -20,6 +20,6 @@ Discard always ask (in the chat through the confirm gate, on pages with the brow
     <div class="cluster"><button class="button button--primary"{% if surface != 'chat' %} data-confirm="Apply the ticked changes?"{% endif %}>Apply the ticked changes</button>
       {% if surface == 'chat' %}<button type="button" class="button button--danger button--small" data-component-act="discard_ai_changes">Discard all</button>{% endif %}</div>
   </form>
-  {% if surface != 'chat' %}{% for a in d.actions %}{% if a.name == 'discard_ai_changes' %}{% include 'components/_actions.html' with actions=d.actions|slice:"1:" %}{% endif %}{% endfor %}{% endif %}
+  {% if surface != 'chat' %}{% include 'components/_actions.html' with actions=d.actions|named:"discard_ai_changes" %}{% endif %}
   {% else %}<p class="small muted">Already reviewed.</p>{% endif %}
 </div>

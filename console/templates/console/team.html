@@ -13,53 +13,7 @@
 </div>
 {% endif %}
 
-<div class="panel panel--flush"><ul class="list">
-  <li class="cluster">
-    <span class="grow">{% if event.user %}{{ event.user.email }}{% else %}<span class="muted">No owner</span>{% endif %}</span>
-    <span class="badge badge--dark">Owner</span>
-  </li>
-  {% for m in members %}
-  <li class="cluster">
-    <span class="grow">{{ m.user.email }}{% if m.user_id == user.id %} <span class="muted small">(you)</span>{% endif %}</span>
-    {% if is_owner %}
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="role"><input type="hidden" name="member" value="{{ m.id }}">
-        <select name="role" class="small" data-autosubmit aria-label="Role">
-          <option value="admin" {% if m.role == 'admin' %}selected{% endif %}>Admin</option>
-          <option value="contributor" {% if m.role == 'contributor' %}selected{% endif %}>Contributor</option>
-        </select></form>
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="transfer"><input type="hidden" name="member" value="{{ m.id }}">
-        <button class="button button--ghost button--small" data-confirm="Make {{ m.user.email }} the owner? You stay on the team as an admin.">Make owner</button></form>
-    {% else %}
-      <span class="badge badge--neutral">{{ m.get_role_display }}</span>
-    {% endif %}
-    {% if is_owner or can_manage and m.role == 'contributor' %}
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="member" value="{{ m.id }}">
-        <button class="button button--ghost button--small tone-danger">Remove</button></form>
-    {% elif m.user_id == user.id %}
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="leave">
-        <button class="button button--ghost button--small tone-danger" data-confirm="Leave this event?">Leave</button></form>
-    {% endif %}
-  </li>{% endfor %}
-  {% for i in invites %}
-  <li class="cluster">
-    <span class="grow">{{ i.email }} <span class="muted small">· invited, hasn't signed up yet</span></span>
-    <span class="badge badge--neutral">{{ i.get_role_display }}</span>
-    {% if can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="cancel_invite"><input type="hidden" name="invite" value="{{ i.id }}">
-      <button class="button button--ghost button--small tone-danger">Cancel</button></form>{% endif %}
-  </li>{% endfor %}
-</ul></div>
-
-{% if can_manage %}
-<div class="panel">
-  <h2 class="title-4">{% icon "people" %} Add someone</h2>
-  <p class="small muted">Enter their email. If they don't have an Attnd account yet, they get access as soon as they sign up with that email
-    at <code>{{ signup_url }}</code>.</p>
-  <form method="post" class="cluster">{% csrf_token %}<input type="hidden" name="action" value="invite">
-    <div class="grow">{{ form.email }}</div>
-    {% if is_owner %}<div>{{ form.role }}</div>{% endif %}
-    <button class="button button--primary">Add</button></form>
-</div>
-{% endif %}
+<div class="panel panel--roomy">{% component "event_team" event=event form=form %}</div>
 
 {% if user.is_superuser %}
 <div class="panel stack stack--tight">

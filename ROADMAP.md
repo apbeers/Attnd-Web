@@ -71,7 +71,8 @@ Built on `develop` in this order; ticked as it ships.
   assistant ✅, Updates → Notifications in the console ✅, one reveal helper for every cross-place change ✅, the event
   map on the Overview ✅, live numbers every 60 s ✅, the rest of the organizer's work on the canvas (review, layout,
   watching, event details, flyer, sharing kit, lifecycle, restore, CSV) ✅, Prospects on the canvas (staff) ✅, Chat as
-  default ✅, reload without jumps ✅. Then A-fix (architecture corrections).
+  default ✅, reload without jumps ✅, A-fix architecture corrections ✅ except splitting agent.js into modules
+  (chat, cards, canvas, overlay, fill: ~1,500 lines in one closure today; do it with stage H's lazy-loaded Ask Attnd).
 - [ ] **B. Sign-in flow**: signed in → console; logo → /home/; no prompts during a session.
 - [ ] **C. All AI on Anthropic** (official SDK; OpenAI only for Studio images).
 - [ ] **D. Place images in our own store** (event pages, venue site, Wikimedia; API-022 `image_credit`).

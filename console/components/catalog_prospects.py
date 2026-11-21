@@ -22,9 +22,10 @@ def _staff(user):
 def _expand_prospects(user, **_):
     from prospects.models import Prospect
     _staff(user)
-    qs = (Prospect.objects.exclude(status__in=[Prospect.DISMISSED, Prospect.LOST])
-          .order_by('-fit_score', 'start_date', 'id').values_list('pk', flat=True)[:40])
-    return [{'prospect_id': pk} for pk in qs]
+    from django.db.models import Count
+    qs = (Prospect.objects.exclude(status__in=[Prospect.DISMISSED, Prospect.LOST]).select_related('event')
+          .annotate(n_contacts=Count('contacts')).order_by('-fit_score', 'start_date', 'id')[:300])
+    return [{'prospect_id': p.pk, 'prospect': p} for p in qs]
 
 
 def _dates(p):
@@ -39,7 +40,8 @@ def _dates(p):
            'city, fit score, pipeline status, contacts; Create test event (asks to confirm). With no ids: the open '
            'prospects by fit.', ids=('prospect_id',), expand=_expand_prospects, detail='prospect_detail',
            audience='staff', kwarg_map=PK, actions=(('create_test_event', 'Create test event'),),
-           page=lambda ids: reverse('prospects:detail', args=[ids['prospect_id']]))
+           page=lambda ids: reverse('prospects:detail', args=[ids['prospect_id']]),
+           chat_only='The Prospects page is a bulk-select table; the canvas lists rows.')
 def prospect_row(user, prospect_id=None, prospect=None):
     from prospects.models import Prospect
     _staff(user)
@@ -49,7 +51,7 @@ def prospect_row(user, prospect_id=None, prospect=None):
     actions = [] if p.event_id else [{'name': 'create_test_event', 'style': 'outline'}]
     return {'id': p.pk, 'name': p.name, 'organizer': p.organizer, 'dates': _dates(p), 'city': p.city,
             'venue': p.venue, 'fit': p.fit_score, 'status': p.get_status_display(), 'status_key': p.status,
-            'contacts': p.contacts.count(), 'event_name': p.event.name if p.event_id else '',
+            'contacts': p.n_contacts if hasattr(p, 'n_contacts') else p.contacts.count(), 'event_name': p.event.name if p.event_id else '',
             'url': reverse('prospects:detail', args=[p.pk]), 'actions': actions}
 
 
@@ -66,11 +68,14 @@ def prospect_detail(user, prospect_id=None, prospect=None):
     p = prospect or Prospect.objects.filter(pk=prospect_id).select_related('event').first()
     if p is None:
         raise Http404
+    from prospects import testing
+    job = testing.active_job(p)
     ids = {'prospect_id': p.pk}
     contacts = []
     for c in p.contacts.order_by('id'):
         row = {'id': c.pk, 'name': c.name or c.organization or 'Contact', 'role': c.role, 'organization': c.organization,
                'email': '' if c.do_not_contact else c.email, 'phone': '' if c.do_not_contact else c.phone,
+               'website': '' if c.do_not_contact else c.website, 'profile': '' if c.do_not_contact else c.profile_url,
                'source': c.source_url, 'dnc': c.do_not_contact,
                'actions': [{'name': 'toggle_prospect_contact_dnc', 'style': 'outline',
                             'label': 'Contactable again' if c.do_not_contact else 'Do not contact',
@@ -81,12 +86,19 @@ def prospect_detail(user, prospect_id=None, prospect=None):
                           zip(row['actions'], resolve_actions(get('prospect_detail'), ids, row['actions']))]
         contacts.append(row)
     actions = [a for c in contacts for a in c['actions']]
-    if not p.event_id:
-        actions.append({'name': 'create_test_event', 'style': 'primary'})
+    if not p.event_id and not job and p.urls:
+        actions.append({'name': 'create_test_event', 'style': 'secondary', 'icon': 'plus'})
     with timezone.override(timezone.get_current_timezone()):
         activity = [{'when': fmt(a.created_at, 'M j, g:i A'), 'text': a.text, 'who': a.user.email if a.user_id else 'Attnd'}
                     for a in p.activity.select_related('user')[:12]]
     return {
+        'event_code': p.event.event_code if p.event_id else '', 'can_see_qr': bool(p.event_id and (
+            p.event.user_id == user.pk or user.is_superuser)),
+        'qr_url': reverse('console:event_qr', args=[p.event_id]) if p.event_id else '',
+        'importing_url': reverse('console:job', args=[job.pk]) if job else '',
+        'import_error': p.ingest_job.error if p.ingest_job_id and p.ingest_job.status == 'failed' else '',
+        'link_count': len(p.urls or []),
+        'first_run': p.first_seen_run_id, 'first_run_url': reverse('prospects:run', args=[p.first_seen_run_id]) if p.first_seen_run_id else '',
         'id': p.pk, 'name': p.name, 'organizer': p.organizer, 'summary': p.summary, 'dates': _dates(p), 'city': p.city,
         'venue': p.venue, 'fit': p.fit_score, 'reasons': list(p.fit_reasons or [])[:6], 'traits': list(p.traits or [])[:8],
         'links': list(p.urls or [])[:5], 'status': p.status, 'statuses': [{'value': v, 'label': lbl} for v, lbl in
@@ -101,16 +113,17 @@ def prospect_detail(user, prospect_id=None, prospect=None):
 def _expand_runs(user, **_):
     from prospects.models import ProspectRun
     _staff(user)
-    return [{'prospect_run_id': pk} for pk in ProspectRun.objects.order_by('-created_at').values_list('pk', flat=True)[:10]]
+    return [{'prospect_run_id': r.pk, 'run': r} for r in ProspectRun.objects.order_by('-created_at')[:10]]
 
 
 @component('prospect_run_row', 'Discovery run', 'A prospect discovery run (staff only): when, status, found / new / '
            'updated, cost. With no ids: the latest runs.', ids=('prospect_run_id',), expand=_expand_runs,
-           audience='staff', page=lambda ids: reverse('prospects:run', args=[ids['prospect_run_id']]))
-def prospect_run_row(user, prospect_run_id=None):
+           audience='staff', page=lambda ids: reverse('prospects:run', args=[ids['prospect_run_id']]),
+           chat_only='The Runs page is a table with more columns; the canvas lists rows.')
+def prospect_run_row(user, prospect_run_id=None, run=None):
     from prospects.models import ProspectRun
     _staff(user)
-    r = ProspectRun.objects.filter(pk=prospect_run_id).first()
+    r = run or ProspectRun.objects.filter(pk=prospect_run_id).first()
     if r is None:
         raise Http404
     return {'id': r.pk, 'name': f'Run {r.pk}', 'when': fmt(r.created_at, 'M j, g:i A'), 'status': r.get_status_display(),

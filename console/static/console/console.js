@@ -111,7 +111,8 @@
   // ---------------------------------------------------------------------------
   // Draw the eye to what changed (owner, Nov 21, 2026): one helper for every place an action somewhere changes
   // something elsewhere. Faint and quick (~200–320 ms, ease-out, Web Animations API); nothing with reduced motion.
-  //   attndReveal(el, 'slide', {from: 'left'|'right'})  a panel / tab arriving from the side of the tab order
+  //   attndReveal(el, 'slide', {from: 'left'|'right'})  a panel / tab / overlay level arriving from that side
+  //   attndReveal(el, 'out')                             leaving to the right with a fade (the overlay's Back)
   //   attndReveal(el, 'in')                              a new card, step line or tray item fades up
   //   attndReveal(el, 'pulse')                           a row / card / number that was added, edited, restored
   //   attndReveal(el, 'glow', {delay})                   a form field the AI just filled (in sequence)
@@ -133,6 +134,9 @@
     if (kind === 'slide') {
       const dx = opts.from === 'left' ? -18 : 18;
       frames = [{ opacity: 0, transform: `translateX(${dx}px)` }, { opacity: 1, transform: 'none' }];
+    } else if (kind === 'out') {  // leaving to the right with a fade (the overlay's Back)
+      frames = [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(36px)' }];
+      timing = { duration: 200, easing: 'cubic-bezier(.4, 0, .8, .4)', delay: 0, fill: 'forwards' };
     } else if (kind === 'in') {
       frames = [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }];
       timing.duration = 220;
@@ -153,8 +157,11 @@
       frames = [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }];
       timing.duration = 280;
     } else return Promise.resolve();
+    if (kind === 'slide' || kind === 'in') { el.style.opacity = ''; el.style.transform = ''; }  // (after an 'out')
     const anim = el.animate(frames, timing);
-    return anim.finished.catch(() => {});
+    return anim.finished.then(() => {
+      if (kind === 'out') { try { anim.commitStyles(); } catch (e) { /* detached */ } anim.cancel(); }
+    }).catch(() => {});
   }
   window.attndReveal = reveal;
   window.attndFlip = function (container, mutate, key) {
@@ -470,6 +477,7 @@
   };
   async function liveTick() {
     if (document.hidden) return;
+    window.attndLiveCards?.();  // Ask Attnd's cards (agent.js), one batch request
     const mine = [...document.querySelectorAll('[data-live]')].filter((el) => !el.closest('.agent__card, .agent, .canvas'));
     if (!mine.length) return;
     try {
@@ -503,17 +511,67 @@
     setTimeout(() => form.submit(), calm.matches ? 0 : 240);
   });
 
-  // Forms that save as you change them (app layout on the canvas): a short pause after the last change, then submit
-  // (the chat posts it with fetch; a page reloads).
+  // Forms that save as you change them (app layout, page and cards alike): a short pause after the last change, then
+  // a JSON POST to the same view; nothing reloads. A [data-tab-sortable] list keeps its order in tab_order.
+  async function autosave(form) {
+    const status = form.closest('.component')?.querySelector('[data-autosave-status]');
+    const list = form.querySelector('[data-tab-sortable]');
+    const order = form.querySelector('input[name=tab_order]');
+    if (list && order) order.value = [...list.querySelectorAll('[data-tab]')].map((li) => li.dataset.tab).join(',');
+    const csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+    if (status) status.textContent = 'Saving…';
+    try {
+      const r = await fetch(form.getAttribute('action') || location.href, { method: 'POST', body: new FormData(form),
+        credentials: 'same-origin', headers: { Accept: 'application/json', 'X-CSRFToken': csrf ? csrf.value : '' } });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d.saved === false) throw new Error();
+      const reason = form.querySelector('[data-layout-reason]');
+      if (reason && d.resolved) {
+        const p = String(d.resolved.resolved_preset || '');
+        reason.textContent = `Currently using ${p.charAt(0).toUpperCase() + p.slice(1)}: ${d.resolved.reason}.`;
+        reveal(reason, 'pulse');
+      }
+      if (status) status.textContent = 'Saved. Open apps update within a few seconds.';
+    } catch (e) {
+      if (status) status.textContent = 'Couldn’t save. Check your connection and try again.';
+    }
+  }
   document.addEventListener('change', (e) => {
     const form = e.target.closest && e.target.closest('form[data-autosave]');
     if (!form) return;
     clearTimeout(form._autosave);
-    form._autosave = setTimeout(() => form.requestSubmit(), 500);
+    form._autosave = setTimeout(() => autosave(form), 400);
   });
+  document.addEventListener('submit', (e) => {
+    const form = e.target.closest && e.target.closest('form[data-autosave]');
+    if (form) { e.preventDefault(); e.stopImmediatePropagation(); autosave(form); }
+  }, true);
+  function enhanceTabLists(scope) {
+    scope.querySelectorAll('[data-tab-sortable]:not([data-ready])').forEach((list) => {
+      list.dataset.ready = '1';
+      const form = list.closest('form');
+      const custom = form && form.querySelector('[name$="customize_tabs"]');
+      const sync = () => list.querySelectorAll('input').forEach((i) => { i.disabled = custom ? !custom.checked : false; });
+      custom?.addEventListener('change', sync);
+      sync();
+      window.makeSortable?.(list, { handle: '.drag-handle', onEnd: () => form && autosave(form) });
+    });
+  }
+
+  // The browser's time zone for new events (hidden browser_tz; an untouched time zone select starts on it).
+  function enhanceTimeZones(scope) {
+    let tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return; }
+    scope.querySelectorAll('input[name=browser_tz]').forEach((i) => { if (!i.value) i.value = tz; });
+    scope.querySelectorAll('select[name$="timezone"][data-browser-tz]').forEach((sel) => {
+      if ([...sel.options].some((o) => o.value === tz)) sel.value = tz;
+    });
+  }
 
   window.attndEnhance = function (scope) {
     scope = scope || document;
+    enhanceTimeZones(scope);
+    enhanceTabLists(scope);
     scope.querySelectorAll('form').forEach((form) => { enhanceMaps(form); enhanceFill(form); });
     enhanceEventMaps(scope);
   };

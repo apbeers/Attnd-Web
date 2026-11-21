@@ -30,16 +30,21 @@ ID_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required': list(C
              'properties': {k: {'type': ['integer', 'null']} for k in C.ID_NAMES}}
 
 
+def _phrase(comp):
+    """A component in a phrase for the show tool (the full descriptions cost thousands of tokens per call)."""
+    text = comp.description.split(':')[0].split('. ')[0]
+    return text if len(text) <= 48 else text[:45].rstrip() + '…'
+
+
 def tool_definitions(user=None):
     comps = [c for c in C.registry().values() if c.chat and (user is None or C.allowed(c, user))]
     catalog = '; '.join(f'{c.name} ({", ".join(c.ids) or "no ids"}'
-                        f'{", optional " + ", ".join(c.optional_ids) if c.optional_ids else ""}): {c.description}'
+                        f'{", optional " + ", ".join(c.optional_ids) if c.optional_ids else ""}): {_phrase(c)}'
                         for c in comps)
     names = [c.name for c in comps]
     return [
-        {'name': 'show', 'description': 'Show console components to the person in the chat: live, interactive cards '
-                                        'drawn by the console itself (tap for details, buttons and forms that work). '
-                                        'Prefer this over describing these things in text. You get their data back. '
+        {'name': 'show', 'description': 'Show console components (live cards: tap for details, working buttons and '
+                                        'forms); prefer this to describing them. Returns their data. '
                                         f'Components: {catalog}',
          'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['component', 'items'],
                         'properties': {
@@ -151,19 +156,22 @@ def _label(name, ids):
     return f'{name}({", ".join(f"{k}={v}" for k, v in ids.items())})'
 
 
-def _load(user, name, items):
+RENDER_LIMIT = 60  # cards per render request (the canvas pages with "Show more"); the model's show keeps 12
+
+
+def _load(user, name, items, limit=MAX_ITEMS, start=0, with_total=False):
     """[(ids, data)] or raise ValueError with a message for the model."""
     if name not in C.registry() or not C.get(name).chat or not C.allowed(C.get(name), user):
         raise ValueError(f'There is no component “{name}”.')
     try:
-        found = C.instances(user, name, items)
+        found, total = C.instances_page(user, name, items, start, limit)
     except C.IdError as exc:
         raise ValueError(str(exc)) from None
     except Http404:
         raise ValueError('Not found, or you don\'t have access to it.') from None
-    if not found:
+    if not found and not start:
         raise ValueError('Nothing to show (none found).')
-    return found[:MAX_ITEMS]
+    return (found, total) if with_total else found
 
 
 def show_tool(run, call, args):
@@ -238,7 +246,7 @@ def _parse_items(raw):
         items = [items]
     if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
         raise ValueError('items must be a list of id sets.')
-    return items[:MAX_ITEMS]
+    return items[:RENDER_LIMIT]
 
 
 def rendered(request, name, found):
@@ -261,11 +269,41 @@ def rendered(request, name, found):
 def render(request):
     """GET ?component=…&items=[{…}]: the HTML of components (shown by the model, or refreshing a stale copy)."""
     name = request.GET.get('component', '')
+    offset = request.GET.get('offset', '0')
+    start = int(offset) if offset.isdigit() else 0
     try:
-        found = _load(request.user, name, _parse_items(request.GET.get('items')))
+        found, total = _load(request.user, name, _parse_items(request.GET.get('items')), limit=RENDER_LIMIT,
+                             start=start, with_total=True)
     except ValueError as exc:
         return _error(str(exc), status=404 if 'access' in str(exc) or 'none found' in str(exc) else 400)
-    return JsonResponse({'items': rendered(request, name, found)})
+    end = start + len(found)
+    return JsonResponse({'items': rendered(request, name, found), 'total': total,
+                         'next_offset': end if end < total else None})
+
+
+@login_required
+@require_GET
+def batch(request):
+    """GET ?q=[{"component": …, "items": [{…}]}, …]: several components in one request (the canvas's live numbers
+    and refreshes). Each entry answers like render (items) or with its error; at most 20 entries."""
+    try:
+        wanted = json.loads(request.GET.get('q') or '[]')
+    except ValueError:
+        return _error('q must be JSON.')
+    if not isinstance(wanted, list):
+        return _error('q must be a list.')
+    out = []
+    for entry in wanted[:20]:
+        if not isinstance(entry, dict):
+            out.append({'error': 'Bad entry.'})
+            continue
+        name = str(entry.get('component') or '')
+        try:
+            found = _load(request.user, name, _parse_items(json.dumps(entry.get('items') or [{}])), limit=RENDER_LIMIT)
+            out.append({'component': name, 'items': rendered(request, name, found)})
+        except ValueError as exc:
+            out.append({'component': name, 'error': str(exc)})
+    return JsonResponse({'results': out})
 
 
 BUTTONS_GOAL = 'Buttons in the chat'
@@ -278,6 +316,10 @@ def _own_run(request, create=False):
     if not raw.isdigit():
         if not create:
             raise Http404
+        from attnd.ratelimit import RateLimit
+        limit = RateLimit('agent_quiet_runs')
+        if limit.hit(request.user.pk) > limit.limit:
+            raise PermissionError('Too many chat buttons in a short time. Wait a few minutes and try again.')
         return AgentRun.objects.create(user=request.user, goal=BUTTONS_GOAL, status=AgentRun.DONE,
                                        summary='', session_key=request.session.session_key or '',
                                        host=request.get_host(), secure=request.is_secure())
@@ -368,7 +410,10 @@ def act(request):
         if not form.is_valid():
             again = C.finish(comp, ids, comp.data(request.user, **ids, form=form))
             return JsonResponse({'invalid': True, 'items': rendered(request, name, [(ids, again)])})
-    run = _own_run(request, create=True)
+    try:
+        run = _own_run(request, create=True)
+    except PermissionError as exc:
+        return _error(str(exc), status=429)
     if run.steps.filter(confirm_state=AgentStep.CONFIRM_PENDING).exists():
         return _error('Answer the confirmation that is waiting first.', status=409)
     args = _tool_args(action, ids, request.POST, comp.kwarg_map)
@@ -390,3 +435,39 @@ def act(request):
                          confirm_hash=loop.args_hash(action.name, args))
     run.refresh_from_db()
     return JsonResponse({'run': run_json(run), 'step': step_json(step)})
+
+
+# ---------------------------------------------------------------------------
+# What the agent reads as JSON instead of page text (the first message, list_events / search_events)
+# ---------------------------------------------------------------------------
+
+def events_json(user, query=''):
+    """The person's events as compact event_tile JSON lines (one query for all of them)."""
+    found = C.instances(user, 'event_tile', [{}])
+    lines = []
+    query = (query or '').lower().strip()
+    for ids, data in found:
+        line = C.model_json(data, limit=600)
+        if query and query not in line.lower():
+            continue
+        lines.append(line)
+    if not lines:
+        return f'No event matches “{query}”.' if query else 'No events yet.'
+    return '\n'.join(lines)
+
+
+def page_json(user, path):
+    """(title, JSON text) of the component a console page is drawn from, or None when it has none."""
+    from agent import canvas
+    hit = canvas.match(path)
+    if hit is None:
+        return None
+    name, ids, _ = hit
+    try:
+        found = C.instances(user, name, [ids], 0, 20)
+    except (Http404, C.IdError):
+        return None
+    if not found:
+        return None
+    title = found[0][1].get('name') or found[0][1].get('title') or C.get(name).title
+    return title, '\n'.join(C.model_json(data, limit=3000) for _, data in found)

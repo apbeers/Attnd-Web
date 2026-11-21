@@ -606,8 +606,10 @@
                                  { credentials: 'same-origin', headers: { Accept: 'application/json' } });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw Object.assign(new Error(data.error || 'Could not show this.'), { status: response.status });
+    lastNext = data.next_offset ?? null;  // more after these (the canvas's "Show more")
     return data.items;
   }
+  let lastNext = null;
 
   function setBody(card, html) {
     const body = document.createElement('div');
@@ -827,21 +829,13 @@
     });
   }
 
-  async function refresh(card, liveOnly) {
+  async function refresh(card) {
     card.classList.add('is-busy');
     try {
       const [item] = await fetchCards(card.dataset.component, [JSON.parse(card.dataset.ids)]);
-      const body = card.querySelector('.agent__card-body');
-      const old = body?.innerHTML;
-      if (liveOnly === true && body && window.attndLiveSwap) {  // live numbers: pulse just the changed ones
-        const tmp = document.createElement('div');
-        tmp.innerHTML = item.html;
-        const fresh = [...tmp.querySelectorAll('[data-live]')];
-        body.querySelectorAll('[data-live]').forEach((el, i) => { if (fresh[i]) window.attndLiveSwap(el, fresh[i]); });
-      } else {
-        setBody(card, item.html);
-        if (old !== undefined && !sameHtml(old, item.html)) reveal(card, 'pulse');  // it changed: draw the eye
-      }
+      const old = card.querySelector(".agent__card-body")?.innerHTML;
+      setBody(card, item.html);
+      if (old !== undefined && !sameHtml(old, item.html)) reveal(card, 'pulse');  // it changed: draw the eye
       card.dataset.keys = (item.keys || []).join(' ');
     } catch (err) {
       if (err.status === 404) {
@@ -908,14 +902,6 @@
     } catch (err) { bubble('error', err.message); }
   }
 
-  function notices(html) {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const found = [...doc.querySelectorAll('main .notice')];
-    const undo = found.map((n) => n.dataset.undoId).find(Boolean);
-    const texts = found.map((n) => (n.querySelector('.notice__text') || n).textContent.replace('×', '').trim()).filter(Boolean);
-    return Object.assign(texts, { undo });
-  }
-
   async function submitForm(card, form, submitter) {
     const body = new FormData(form, submitter || undefined);
     card.classList.add('is-busy');
@@ -923,19 +909,20 @@
       // (getAttribute: an <input name="action"> shadows form.action)
       const response = await fetch(form.getAttribute('action'), { method: 'POST', body, credentials: 'same-origin',
         headers: { 'X-CSRFToken': csrf, 'X-Attnd-Component': card.dataset.component } });
-      if ((response.headers.get('Content-Type') || '').includes('json')) {
-        const data = await response.json();
-        if (data.html) { setBody(card, data.html); return; }  // errors, in place
+      // The server answers JSON (console.middleware): errors → the component again; saved → what happened, the
+      // Undo id and where the page would go. No HTML scraping.
+      if (!(response.headers.get('Content-Type') || '').includes('json')) {
+        throw new Error(response.status === 404 ? 'Not found, or you don’t have access to it.'
+                                                : 'That didn’t work. Please try again.');
       }
-      if (!response.ok) throw new Error(response.status === 404 ? 'Not found, or you don’t have access to it.'
-                                                              : 'That didn’t work. Please try again.');
-      const said = notices(await response.text());
-      if (!response.redirected) throw new Error(said.join(' ') || 'Not saved. Open the page to see why.');
-      const savedLine = stepLine(said.join(' ') || 'Saved', 'changed');
+      const data = await response.json();
+      if (data.html) { setBody(card, data.html); return; }  // errors, in place
+      if (!data.saved) throw new Error(data.error || 'Not saved. Open the page to see why.');
+      const savedLine = stepLine((data.messages || []).join(' ') || 'Saved', 'changed');
       const ids0 = JSON.parse(card.dataset.ids);
-      if (said.undo) addUndo(savedLine, said.undo, 'available', ids0.event_id);
+      if (data.undo) addUndo(savedLine, data.undo, 'available', ids0.event_id);
       const keys = card.dataset.keys.split(' ');
-      const made = response.url.match(/\/console\/events\/(\d+)\/$/);
+      const made = (data.location || '').match(/\/console\/events\/(\d+)\/$/);
       if (card.dataset.component === 'event_new_form' && made) {  // an empty event was created: work on it here
         if (full) { location.assign(`${root.dataset.assistantUrl}?event=${made[1]}&from=${encodeURIComponent(`/console/events/${made[1]}/`)}`); return; }
       }
@@ -1112,7 +1099,37 @@
     return el;
   }
 
+  // "Show more" under a long list (the server sends 60 at a time).
+  function moreButton(sec, next) {
+    sec.querySelector(':scope > .canvas__more')?.remove();
+    if (next == null) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'button button--outline button--small canvas__more';
+    b.dataset.moreOffset = next;
+    b.textContent = 'Show more';
+    sec.appendChild(b);
+  }
+  canvas?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-more-offset]');
+    if (!b) return;
+    const sec = b.closest('.canvas__section');
+    b.disabled = true;
+    try {
+      const response = await fetch(`${root.dataset.componentsUrl}?component=${encodeURIComponent(sec.dataset.component)}`
+        + `&items=${itemsParam([JSON.parse(sec.dataset.parent || '{}')])}&offset=${b.dataset.moreOffset}`,
+        { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      const wrap = sec.querySelector('.canvas__cards');
+      const before = wrap.children.length;
+      appendGrouped(wrap, data.items || []);
+      [...wrap.children].slice(before).forEach((c) => reveal(c, 'in'));
+      moreButton(sec, data.next_offset ?? null);
+    } catch (err) { b.disabled = false; }
+  });
+
   function fillSection(sec, name, items) {
+    const next = lastNext;
     sec.textContent = '';
     if (HEADINGS[name]) {
       const h = document.createElement('h3');
@@ -1130,6 +1147,7 @@
       wrap.appendChild(p);
     }
     sec.appendChild(wrap);
+    moreButton(sec, next);
     if (name === 'location_row' && items.length > 1 && window.makeSortable) sortable(wrap, sec);
     return wrap;
   }
@@ -1232,34 +1250,24 @@
   // Console pages the canvas can show itself (links in cards, step links, the task tray): everything for events,
   // locations, the schedule and notifications stays in full screen. Anything else (Studio, the AI review, diagnostics…)
   // opens as a page.
-  const ROUTES = [
-    [/^\/console\/events\/(\d+)\/locations\/new\/$/, (m) => ['location_form', { event_id: +m[1] }, 'New location']],
-    [/^\/console\/events\/(\d+)\/locations\/(\d+)\/$/, (m) => ['location_form', { event_id: +m[1], location_id: +m[2] }]],
-    [/^\/console\/events\/(\d+)\/schedule\/new\/$/, (m) => ['schedule_item_form', { event_id: +m[1] }, 'New schedule item']],
-    [/^\/console\/events\/(\d+)\/schedule\/(\d+)\/$/, (m) => ['schedule_item_form', { event_id: +m[1], item_id: +m[2] }]],
-    [/^\/console\/events\/(\d+)\/$/, (m) => ['event_overview', { event_id: +m[1] }]],
-    [/^\/console\/events\/(\d+)\/edit\/$/, (m) => ['event_form', { event_id: +m[1] }, 'Details']],
-    [/^\/console\/events\/(\d+)\/history\/$/, (m) => ['object_history', { event_id: +m[1] }, 'History']],
-    [/^\/console\/new\/$/, () => ['event_new_form', {}, 'New event']],
-    [/^\/console\/$/, () => ({ tab: 'Events' })],
-    [/^\/console\/events\/(\d+)\/(locations|schedule|notifications|team|usage)\/$/, (m) => ({ tab: { locations: 'Locations', schedule: 'Schedule', notifications: 'Notifications', team: 'Team', usage: 'Metrics' }[m[2]], event: +m[1] })],
-  ];
+  // The routes come from the server (agent/canvas.py ROUTES): path → component, ids and the canvas tab that lists it.
+  const ROUTES = (() => {
+    try { return JSON.parse(canvas?.dataset.routes || '[]').map(([p, name, tab]) => [new RegExp(p), name, tab]); }
+    catch (e) { return []; }
+  })();
   function openUrl(href, opener) {
     if (!canvasOn() || !href) return false;
     let url;
     try { url = new URL(href, location.origin); } catch (e) { return false; }
     if (url.origin !== location.origin || url.search) return false;
-    for (const [pattern, target] of ROUTES) {
+    for (const [pattern, name, tab] of ROUTES) {
       const m = url.pathname.match(pattern);
       if (!m) continue;
-      const to = target(m);
-      if (to.tab) {
-        if ((to.event && to.event !== eventId) || !tabs.has(to.tab)) return false;
-        selectTab(to.tab);
-        return true;
-      }
-      if (to[0] === 'event_overview' && to[1].event_id === eventId && tabs.has('Overview')) { selectTab('Overview'); return true; }
-      openComponent(to[0], to[1], to[2], opener);
+      const ids = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, +v]));
+      const sameEvent = !ids.event_id || ids.event_id === eventId;
+      if (tab && sameEvent && tabs.has(tab) && !ids.location_id && !ids.item_id) { selectTab(tab); return true; }
+      if (tab && !['event_overview', 'object_history', 'event_form'].includes(name)) return false;  // another event's list
+      openComponent(name, ids, null, opener);
       return true;
     }
     return false;
@@ -1295,18 +1303,12 @@
     overlay.querySelector('[data-overlay-title]').focus();
   }
 
-  // One CSS animation class at a time; resolves when it ends (at once with reduced motion).
+  // The overlay's animations go through the console's one helper (console.js attndReveal): open slides in from the
+  // right, Back slides out to the right, the level below comes back from the left.
   function animate(el, cls) {
-    return new Promise((resolve) => {
-      if (reduceMotion.matches) { resolve(); return; }
-      el.classList.remove('is-entering', 'is-leaving', 'is-returning');
-      void el.offsetWidth;  // restart the animation
-      el.classList.add(cls);
-      let done = false;
-      const end = () => { if (done) return; done = true; el.classList.remove(cls); resolve(); };
-      el.addEventListener('animationend', end, { once: true });
-      setTimeout(end, 400);  // in case the animation never runs (hidden, interrupted)
-    });
+    const kind = { 'is-entering': ['slide', { from: 'right' }], 'is-leaving': ['out', {}],
+                   'is-returning': ['slide', { from: 'left' }] }[cls];
+    return kind ? reveal(el, kind[0], kind[1]) : Promise.resolve();
   }
 
   function renderCrumbs() {
@@ -1451,14 +1453,27 @@
     selectTab('Overview');
   }
 
-  // Live numbers on cards (Overview numbers, Metrics): every 60 s while visible, paused when the page is hidden.
-  setInterval(() => {
-    if (document.hidden) return;
-    liveCards().filter((c) => c.offsetParent !== null && c.querySelector('[data-live]')).forEach((c) => refresh(c, true));
-  }, 60000);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) liveCards().filter((c) => c.offsetParent !== null && c.querySelector('[data-live]')).forEach((c) => refresh(c, true));
-  });
+  // Live numbers on cards (Overview numbers, Metrics): console.js's one live-numbers timer (60 s while visible,
+  // paused when hidden) calls this; every visible live card comes back in one batch request.
+  window.attndLiveCards = async () => {
+    const cards = liveCards().filter((c) => c.offsetParent !== null && c.querySelector('[data-live]'));
+    if (!cards.length) return;
+    const q = cards.map((c) => ({ component: c.dataset.component, items: [JSON.parse(c.dataset.ids)] }));
+    try {
+      const response = await fetch(`${root.dataset.batchUrl}?q=${encodeURIComponent(JSON.stringify(q))}`,
+                                   { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      (data.results || []).forEach((r, i) => {
+        const item = r.items && r.items[0];
+        const body = cards[i].querySelector('.agent__card-body');
+        if (!item || !body) return;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = item.html;  // server-rendered component (our templates)
+        const fresh = [...tmp.querySelectorAll('[data-live]')];
+        body.querySelectorAll('[data-live]').forEach((el, j) => { if (fresh[j]) window.attndLiveSwap(el, fresh[j]); });
+      });
+    } catch (e) { /* offline: next minute */ }
+  };
 
   // ---- recent requests ---------------------------------------------------------------------
   $('[data-agent-history]').addEventListener('click', async (e) => {

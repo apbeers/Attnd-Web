@@ -91,7 +91,7 @@ def _chat_landing(request, event=None):
     from urllib.parse import urlencode
 
     from console.models import ConsolePreference
-    if (request.method != 'GET' or request.GET.get('page') == '1' or request.headers.get('X-Attnd-Agent')
+    if (request.method != 'GET' or request.GET.get('page') == '1' or getattr(request, 'agent_run_id', None)
             or not ConsolePreference.chat_first(request.user)):
         return None
     params = {'from': request.path}
@@ -317,6 +317,21 @@ def _studio_import_run(event, user):
 @agent_action('event_details_page', "An event's details form with the current values.", kind='read')
 @event_view
 def event_edit(request, event):
+    # The canvas's cut-down cards post `part`: only their own fields are saved (never a stale copy of the others).
+    part = request.POST.get('part') if request.method == 'POST' else None
+    if part in ('context', 'flyer'):
+        from console.forms.event_forms import EventContextForm, EventFlyerForm
+        cls = EventContextForm if part == 'context' else EventFlyerForm
+        small = cls(request.POST, request.FILES, instance=event)
+        if small.is_valid():
+            mark_locked(event, small.changed_data)
+            small.save()
+            messages.success(request, 'Details for the assistant saved.' if part == 'context' else 'Flyer saved.')
+        else:
+            for errors in small.errors.values():
+                for e in errors:
+                    messages.error(request, e)
+        return redirect('console:event', event_id=event.pk)
     form = EventForm(request.POST or None, request.FILES or None, instance=event)
     if request.method == 'POST' and form.is_valid():
         mark_locked(event, form.changed_data)

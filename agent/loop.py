@@ -56,6 +56,11 @@ FIXED_TOOLS = [
                         'options': {'type': ['array', 'null'], 'items': {'type': 'string'},
                                     'description': '2-6 short answers the person can tap (e.g. the event days), or '
                                                    'null for an open question'}}}, 'strict': True},
+    {'name': 'platform_help', 'description': 'How-to answers about Attnd (accounts, passwords, passkeys, team, '
+                                             'publishing, notifications, QR codes, imports, layout, history, Studio, '
+                                             'billing) with the exact console page links to give.',
+     'parameters': {'type': 'object', 'additionalProperties': False, 'required': [], 'properties': {}},
+     'strict': True},
     {'name': 'finish', 'description': 'End the run with a short summary for the person, and 2-4 follow-ups they '
                                       'might tap next.',
      'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['summary', 'suggest'],
@@ -142,10 +147,26 @@ def _thread(run_id, resume):
     threading.Thread(target=main, daemon=True, name=f'agent-run-{run_id}').start()
 
 
-def tools_for(user):
+# Rarely used write tools (staff areas, Studio) load only when the request is about them (prompt size): the page is
+# in that area or the request names it. list_pages still lists every page.
+AREAS = {'studio': ('studio', 'website', ' site'), 'prospects': ('prospect',),
+         'diagnostics': ('diagnostic', 'crash', ' log')}
+
+
+def _areas_for(run):
+    if run is None:
+        return set(AREAS)
+    text = f' {(run.goal or "").lower()} '
+    page = run.page_url or ''
+    return {area for area, words in AREAS.items() if f'/{area}/' in page or any(w in text for w in words)}
+
+
+def tools_for(user, run=None):
     from agent import components
-    return (FIXED_TOOLS + components.tool_definitions(user)
-            + [registry.tool_definition(a) for a in registry.writes_for(user).values()])
+    areas = _areas_for(run)
+    writes = [a for a in registry.writes_for(user).values()
+              if (a.url_name or '').split(':')[0] not in AREAS or (a.url_name or '').split(':')[0] in areas]
+    return FIXED_TOOLS + components.tool_definitions(user) + [registry.tool_definition(a) for a in writes]
 
 
 def _provider(name=None, model=None):
@@ -274,30 +295,33 @@ def _pending_outcome(run, step):
 
 
 def _first_message(run):
+    from agent import components
+    internal.ensure_signed_in(run)  # (component reads don't pass the middleware)
     page_text, events_text = '(none)', ''
     if run.page_url:
         step = add_step(run, tool='read_page', arguments={'path': run.page_url}, text='Reading this page…')
-        try:
-            title, page_text, final = internal.read(run, run.page_url, step=step)
-            step.text, step.url = f'Read “{title}”', final
-        except internal.Signedout as exc:
-            raise StopRun(str(exc))
-        except ValueError as exc:
-            page_text = f'(could not read it: {exc})'
-            step.text, step.ok = 'Couldn’t read this page', False
+        drawn = components.page_json(run.user, run.page_url)  # the page's component as JSON, when it has one
+        if drawn is not None:
+            title, page_text = drawn
+            step.text, step.url = f'Read “{title}”', run.page_url
+        else:
+            try:
+                title, page_text, final = internal.read(run, run.page_url, step=step)
+                step.text, step.url = f'Read “{title}”', final
+            except internal.Signedout as exc:
+                raise StopRun(str(exc))
+            except ValueError as exc:
+                page_text = f'(could not read it: {exc})'
+                step.text, step.ok = 'Couldn’t read this page', False
         step.result = page_text[:4000]
         step.save()
-    try:
-        _, events_text, _ = internal.read(run, reverse('console:dashboard'))
-    except ValueError as exc:
-        events_text = f'(could not list them: {exc})'
+    events_text = components.events_json(run.user)
     earlier = []
     since = timezone.now() - timedelta(hours=48)
     previous = list(AgentRun.objects.filter(user=run.user, created_at__gte=since).exclude(pk=run.pk)
                     .order_by('-created_at')[:6])
     for old in previous:
         earlier.insert(0, f'- Request: {old.goal[:300]} → {old.status}: {(old.summary or old.error)[:400]}')
-    from agent import components
     shown = components.earlier(run, previous)  # console components shown / opened in the chat (JSON, never HTML)
     attachments = [f'- id {a.pk}: {a.name} ({a.content_type}, {a.size // 1024} KB)'
                    for a in AgentAttachment.objects.filter(user=run.user, run=run)]
@@ -328,7 +352,7 @@ def _refusal_fallback(run, messages, refused):
 def _loop(run, provider, messages):
     from agent.providers import Refused
     from studio import ai
-    tools = tools_for(run.user)
+    tools = tools_for(run.user, run)
     while True:
         _check_not_stopped(run)
         if run.step_count >= settings.AGENT_MAX_STEPS:
@@ -443,6 +467,10 @@ def _call(run, call):
     try:
         if name == 'read_page':
             return _tool_read(run, call, args)
+        if name == 'platform_help':
+            from agent.prompts import HELP
+            add_step(run, tool='platform_help', call_id=call.id, arguments={}, text='Looked up how Attnd works')
+            return f'PLATFORM HELP (give the matching links as Markdown):\n{HELP}'
         if name == 'list_pages':
             return _tool_pages(run, call, args)
         if name in ('list_events', 'search_events'):
@@ -502,11 +530,12 @@ def _tool_events(run, call, args):
     query = str(args.get('query') or '').strip().lower()
     step = add_step(run, tool=call.name, call_id=call.id, arguments=args,
                     text=f'Searched your events for “{query}”' if query else 'Looked at your events')
-    _, text, _ = internal.read(run, reverse('console:dashboard'), step=step)
-    if query:
-        blocks = [b for b in text.split('\n\n') if query in b.lower()]
-        text = '\n\n'.join(blocks) if blocks else f'No event matches “{query}”.'
-    return f'YOUR EVENTS (data):\n{internal.trim(text, 0, 10000)}'
+    from agent import components
+    internal.ensure_signed_in(run)
+    text = components.events_json(run.user, query)
+    step.result = text[:2000]
+    step.save()
+    return f'YOUR EVENTS (data, JSON per event):\n{internal.trim(text, 0, 10000)}'
 
 
 def _clean_args(action, args):

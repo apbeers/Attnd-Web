@@ -432,6 +432,23 @@ on Save does; there is no second copy of any business logic.
   their steps), drawn hidden, scrolled once, faded in; the canvas (tabs, sections, cards, active tab) is drawn on the
   server (`agent/canvas.py`) and adopted by agent.js. Measured on a reload with 6 runs: scroll events 5 → 0, CLS
   0.042 → 0–0.012, Ask Attnd requests 25 → 1.
+- **Architecture corrections (A-fix)**: lists aren't cut at 12 (the model's `show` takes 12; render / canvas pages 60 at a
+  time with **Show more**, `components/?offset=`, `C.instances_page`); list components' `expand` loads the list once
+  (the event, annotated rows, one likes count) and hands the objects on (`console/tests_architecture.py` checks the
+  query count is the same for 3 and 15 rows); every component is drawn by a page or carries `chat_only=<why>` (a test
+  fails otherwise; the pages Team, AI review, App layout, History versions, Usage metrics + exports, Overview
+  watching / visibility / sharing, Details, New event and the prospect detail now draw the components); cut-down
+  event cards (`EventContextForm`, `EventFlyerForm`, POST `part`) save only their own fields; the agent's first
+  message, `list_events` and `search_events` read component JSON (`agent/components.events_json`, `page_json` via
+  `agent/canvas.py ROUTES`) instead of page HTML, after `internal.ensure_signed_in`; platform help is a tool
+  (`platform_help`), the show tool's catalogue is a phrase per component, and staff-area write tools (Studio,
+  Prospects, Diagnostics) load only when a request is about them (`loop.AREAS`): about 13.6K → 11.7K tokens for an
+  organizer, 17.6K → 12.0K for staff (characters / 4); one batch endpoint (`agent:component_batch`) for live numbers
+  under console.js's one timer; chat card forms answer JSON when saved (`ComponentFragmentMiddleware`: messages, Undo
+  id, location); the overlay animates through `attndReveal`; actions are picked by name (`|named:"…"`); the page
+  `{% component %}` tag goes through `C.load` (audience check); quiet button runs are rate limited
+  (`agent_quiet_runs`); `plan_suggestions` uses `attnd/claude.structured`. Not done yet: splitting agent.js into
+  modules (ROADMAP).
 - **Naming**: the console and the chat say **Notifications** (the apps keep their "Updates" tab; API names unchanged).
 - **Follow-up chips**: `finish(summary, suggest)` (2–4 short requests, `AgentRun.suggestions`); without them
   `views.suggestions` derives them from the last component shown (`FOLLOW_UPS`). `run_json.suggestions` (done runs

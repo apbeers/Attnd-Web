@@ -9,7 +9,7 @@ art walk got "Plan my Saturday around art and evening". Now the server writes up
 - a family one only when items carry a family tag;
 - one question ("What's on near me right now?" or one for this event).
 
-Claude Haiku 5.5 writes them (the official `anthropic` SDK, structured output, a small cached system prompt, effort
+Claude Haiku 5.5 writes them (attnd/claude.py on the official `anthropic` SDK, structured output, a small cached system prompt, effort
 `low`), checked here (no weekday the event doesn't have, the family rule, lengths, kinds); without an Anthropic key, or
 when the AI fails or its answer doesn't pass, the **deterministic fallback** built from the event's real dates,
 categories and tags is used. They are stored on `Event.plan_suggestions` and regenerated in the background after
@@ -222,15 +222,10 @@ def model():
     return getattr(settings, 'PLAN_SUGGESTIONS_MODEL', '') or 'claude-haiku-5-5'
 
 
-def _client():
-    import anthropic
-    return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=60.0, max_retries=2)
-
-
 def ask_ai(f, client=None):
-    """(suggestions, cost in USD) from Claude Haiku 5.5, or raises."""
-    import anthropic
-    client = client or _client()
+    """(suggestions, cost in USD) from Claude Haiku 5.5 (attnd/claude.py: structured output, cached system prompt,
+    effort low), or raises."""
+    from attnd import claude
     facts_text = json.dumps({
         'EVENT': f['name'], 'TIME_ZONE': f['time_zone'],
         'DAYS': [{'weekday': d['weekday'], 'date': d['date'], 'items': d['items'], 'mostly': d['part']} for d in f['days']],
@@ -238,24 +233,11 @@ def ask_ai(f, client=None):
         'ITEMS': f['items'],
     }, ensure_ascii=False)
     try:
-        response = client.messages.create(
-            model=model(), max_tokens=1024,
-            system=[{'type': 'text', 'text': SYSTEM_PROMPT, 'cache_control': {'type': 'ephemeral'}}],
-            messages=[{'role': 'user', 'content': f'The event (data):\n{facts_text}'}],
-            output_config={'effort': 'low', 'format': {'type': 'json_schema', 'schema': SCHEMA}},
-        )
-    except anthropic.APIError as exc:
-        raise RuntimeError(f'Claude: {exc.__class__.__name__}') from exc
-    usage = response.usage
-    from studio.ai import token_cost
-    cost = token_cost(model(), (usage.input_tokens or 0) + (usage.cache_read_input_tokens or 0)
-                      + (usage.cache_creation_input_tokens or 0), usage.output_tokens or 0,
-                      cached_tokens=usage.cache_read_input_tokens or 0,
-                      cache_write_tokens=usage.cache_creation_input_tokens or 0)
-    if response.stop_reason != 'end_turn':  # refusal, max_tokens…: no usable answer
-        raise RuntimeError(f'Claude stopped: {response.stop_reason}')
-    text = next((b.text for b in response.content if b.type == 'text'), '')
-    return json.loads(text).get('suggestions') or [], cost
+        data, cost = claude.structured(system=SYSTEM_PROMPT, content=f'The event (data):\n{facts_text}', schema=SCHEMA,
+                                       model=model(), effort='low', max_tokens=1024, timeout=60.0, api=client)
+    except claude.ClaudeError as exc:
+        raise RuntimeError(str(exc)) from exc
+    return data.get('suggestions') or [], cost
 
 
 # ---------------------------------------------------------------------------

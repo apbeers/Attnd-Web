@@ -34,16 +34,16 @@ GROUPS = {'scheduled': 'Scheduled', 'sent': 'Sent'}
 
 
 def _cards(request, name, parent):
-    from agent.components import rendered
+    from agent.components import RENDER_LIMIT, rendered
     try:
-        found = C.instances(request.user, name, [parent])
+        found, total = C.instances_page(request.user, name, [parent], 0, RENDER_LIMIT)
     except (Http404, C.IdError):
-        return []
-    return rendered(request, name, found)
+        return [], 0
+    return rendered(request, name, found), total
 
 
 def _section(request, name, parent):
-    items = _cards(request, name, parent)
+    items, total = _cards(request, name, parent)
     groups = {}
     for item in items:
         if item.get('group'):
@@ -57,6 +57,7 @@ def _section(request, name, parent):
         rows.append({'card': item, 'ids': json.dumps(item['ids'], separators=(',', ':')),
                      'detail_ids': json.dumps(item['detail_ids'], separators=(',', ':'))})
     return {'name': name, 'parent': json.dumps(parent, separators=(',', ':')), 'rows': rows, 'items': items,
+            'next_offset': len(items) if len(items) < total else None, 'total': total,
             'row_list': name.endswith('_row'), 'heading': HEADINGS.get(name, ''), 'empty': EMPTY.get(name, 'Nothing here yet.')}
 
 
@@ -86,3 +87,40 @@ def build(request, event=None):
         out.append({'label': label, 'text': text, 'id': f'canvas-{label.lower()}', 'active': label == active,
                     'sections': tabs[label]})
     return out
+
+
+# Console pages the canvas (and the agent) can show as components: path → (component, ids, tab). agent.js gets this
+# list from the page (data-routes) instead of keeping a copy.
+ROUTES = [
+    (r'^/console/events/(?P<event_id>\d+)/locations/new/$', 'location_form', None),
+    (r'^/console/events/(?P<event_id>\d+)/locations/(?P<location_id>\d+)/$', 'location_form', None),
+    (r'^/console/events/(?P<event_id>\d+)/schedule/new/$', 'schedule_item_form', None),
+    (r'^/console/events/(?P<event_id>\d+)/schedule/(?P<item_id>\d+)/$', 'schedule_item_form', None),
+    (r'^/console/events/(?P<event_id>\d+)/edit/$', 'event_form', None),
+    (r'^/console/events/(?P<event_id>\d+)/history/$', 'object_history', 'History'),
+    (r'^/console/events/(?P<event_id>\d+)/locations/$', 'location_row', 'Locations'),
+    (r'^/console/events/(?P<event_id>\d+)/schedule/$', 'schedule_item_row', 'Schedule'),
+    (r'^/console/events/(?P<event_id>\d+)/notifications/$', 'notification_row', 'Notifications'),
+    (r'^/console/events/(?P<event_id>\d+)/team/$', 'event_team', 'Team'),
+    (r'^/console/events/(?P<event_id>\d+)/usage/$', 'event_metrics', 'Metrics'),
+    (r'^/console/events/(?P<event_id>\d+)/display/$', 'app_layout', 'Settings'),
+    (r'^/console/events/(?P<event_id>\d+)/changes/$', 'changeset_review', 'Review'),
+    (r'^/console/events/(?P<event_id>\d+)/$', 'event_overview', 'Overview'),
+    (r'^/console/new/$', 'event_new_form', None),
+    (r'^/console/$', 'event_tile', 'Events'),
+]
+
+
+def match(path):
+    """(component, ids, tab) for a console path the components can show, else None."""
+    import re
+    for pattern, name, tab in ROUTES:
+        m = re.match(pattern, path or '')
+        if m:
+            return name, {k: int(v) for k, v in m.groupdict().items()}, tab
+    return None
+
+
+def routes_json():
+    """For agent.js: [[pattern, component, tab], …] (JavaScript reads the named groups the same way)."""
+    return json.dumps([[p.replace('(?P<', '(?<'), name, tab] for p, name, tab in ROUTES])

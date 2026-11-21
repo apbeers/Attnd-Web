@@ -51,6 +51,7 @@ class Component:
     form: object = None  # (user, ids, data) -> bound form, for chat submissions that wait for a confirmation
     template: str = ''
     chat: bool = True  # may Ask Attnd show it
+    chat_only: str = ''  # why no page draws it (e.g. a canvas cut-down of a page's component); else a page must
     kwarg_map: dict = None  # URL kwarg -> id name, for views whose URLs say pk (Prospects: {'pk': 'prospect_id'})
     audience: str = ''  # 'staff': only staff and superusers (Prospects); absent for everyone else
     act_args: object = None  # (action name, POST) -> extra tool arguments for always-ask buttons with a form (review)
@@ -114,13 +115,19 @@ def clean_ids(comp, ids):
     return out
 
 
-def instances(user, name, items):
+def instances(user, name, items, start=0, limit=None):
     """[(ids, data)] for one component and a list of id sets, expanding list components given only a parent
-    (e.g. location_row with just event_id = every location). Raises IdError / Http404."""
+    (e.g. location_row with just event_id = every location). Raises IdError / Http404. `start` / `limit` page through
+    the expanded list (the canvas shows more with "Show more"; the model's show takes 12)."""
+    return instances_page(user, name, items, start, limit)[0]
+
+
+def instances_page(user, name, items, start=0, limit=None):
+    """(found, total): like instances, plus how many there are in all (for "Show more")."""
     comp = get(name)
     if not allowed(comp, user):
         raise Http404
-    out = []
+    planned = []  # (ids, preloaded objects)
     for raw in items or [{}]:
         raw = {k: v for k, v in (raw or {}).items() if v not in (None, '')}
         unknown = set(raw) - set(comp.all_ids)
@@ -128,12 +135,16 @@ def instances(user, name, items):
             raise IdError(f'{comp.name} takes {", ".join(comp.all_ids)}, not {", ".join(sorted(unknown))}.')
         if comp.expand and not all(k in raw for k in comp.ids):
             parent = {k: v for k, v in raw.items() if k in comp.all_ids}
-            for ids in comp.expand(user, **clean_parent(parent)):
-                out.append((ids, load(user, name, ids)))
+            # An expand loads the list once (the event, annotated rows, one likes count) and hands the objects on,
+            # like the pages do: no query per row.
+            for entry in comp.expand(user, **clean_parent(parent)):
+                planned.append(({k: v for k, v in entry.items() if k in ID_NAMES},
+                                {k: v for k, v in entry.items() if k not in ID_NAMES}))
             continue
-        ids = clean_ids(comp, raw)
-        out.append((ids, load(user, name, ids)))
-    return out
+        planned.append((clean_ids(comp, raw), {}))
+    total = len(planned)
+    end = None if limit is None else start + limit
+    return [(ids, load(user, name, ids, objects)) for ids, objects in planned[start:end]], total
 
 
 def clean_parent(ids):
@@ -154,12 +165,13 @@ def for_user(user):
     return {n: c for n, c in registry().items() if allowed(c, user)}
 
 
-def load(user, name, ids):
-    """Run the data function for this person (Http404 when they may not see it) and resolve its actions."""
+def load(user, name, ids, objects=None):
+    """Run the data function for this person (Http404 when they may not see it) and resolve its actions.
+    `objects` are rows an expand (or a page's view) already loaded and checked for this person."""
     comp = get(name)
     if not allowed(comp, user):
         raise Http404
-    data = comp.data(user, **ids)
+    data = comp.data(user, **ids, **(objects or {}))
     return finish(comp, ids, data)
 
 

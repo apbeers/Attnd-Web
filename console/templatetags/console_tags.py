@@ -97,14 +97,15 @@ def component(context, name, part=None, data=None, **objects):
     uid = context.get('uid') or ''
     if data is None:
         user = getattr(request, 'user', None)
-        cacheable = 'form' not in objects
-        key = (name, tuple(sorted((k, getattr(v, 'pk', v)) for k, v in objects.items())))
+        cacheable = 'form' not in objects and not any(isinstance(v, (dict, list)) for v in objects.values())
+        key = (name, tuple(sorted((k, getattr(v, 'pk', v)) for k, v in objects.items()))) if cacheable else None
         cache = getattr(request, '_components', None) if request is not None else None
         if cacheable and cache is not None and key in cache:
             data = cache[key]
         else:
             comp = C.get(name)
-            data = C.finish(comp, _ids_of(comp, objects), comp.data(user, **objects))
+            ids = _ids_of(comp, objects)
+            data = C.load(user, name, ids, {k: v for k, v in objects.items() if k not in ids})  # (+ audience check)
             if cacheable and request is not None:
                 if cache is None:
                     cache = request._components = {}
@@ -182,3 +183,10 @@ def chat_default(context):
     from console.models import ConsolePreference
     request = context.get('request')
     return ConsolePreference.chat_first(getattr(request, 'user', None))
+
+
+@register.filter
+def named(actions, names):
+    """A component's actions picked by name ("save_snapshot" or "apply,discard"), never by position."""
+    wanted = {n.strip() for n in (names or '').split(',') if n.strip()}
+    return [a for a in actions or [] if a.get('name') in wanted]

@@ -73,6 +73,7 @@ EXCLUDED = {
     'agent:undo': 'Ask Attnd\'s own endpoints.',
     'agent:attach': 'Ask Attnd\'s own endpoints.',
     'agent:component_render': 'Ask Attnd\'s own endpoints (the chat\'s components).',
+    'agent:component_batch': 'Ask Attnd\'s own endpoints (several components in one request).',
     'agent:component_pick': 'Ask Attnd\'s own endpoints (the chat\'s components).',
     'agent:component_act': 'Ask Attnd\'s own endpoints (only the person\'s click confirms).',
 }
@@ -262,7 +263,7 @@ def _nullable(schema):
     return schema
 
 
-def _text(*parts, limit=200):
+def _text(*parts, limit=130):  # (tool schemas go into every model call: short)
     text = ' '.join(str(p).strip() for p in parts if p and str(p).strip())
     text = re.sub(r'\s+', ' ', text)
     return text if len(text) <= limit else text[:limit - 1] + '…'
@@ -289,7 +290,7 @@ def field_schema(name, f):
         values = [str(v) for v, _ in f.choices]
         if len(values) <= MAX_ENUM:
             labels = '; '.join(f'{v or "(empty)"} = {lbl}' for v, lbl in f.choices if str(lbl) != str(v))
-            return {'type': 'string', 'enum': values, 'description': _text(desc, labels, limit=400)}
+            return {'type': 'string', 'enum': values, 'description': _text(desc, labels, limit=220)}
         example = values[min(len(values) - 1, 3)]
         return {'type': 'string', 'description': _text(desc, f'(one of {len(values)} values, e.g. {example})')}
     if isinstance(f, forms.DateTimeField):

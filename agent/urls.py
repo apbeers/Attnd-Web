@@ -8,6 +8,7 @@ urlpatterns = [
     path('start/', views.start, name='start'),
     path('attach/', views.attach, name='attach'),
     path('components/', components.render, name='component_render'),
+    path('components/batch/', components.batch, name='component_batch'),
     path('components/pick/', components.pick, name='component_pick'),
     path('components/act/', components.act, name='component_act'),
     path('runs/<int:run_id>/', views.run, name='run'),

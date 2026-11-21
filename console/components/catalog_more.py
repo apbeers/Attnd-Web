@@ -13,29 +13,12 @@ from console.components import component, form_json
 from console.components.catalog import _tz, editable_event, fmt
 
 
-def _partial_event_form(event, rows, files=False):
-    """EventForm with only `rows` visible; every other field goes along hidden with its current value, so saving this
-    card changes nothing else (the flyer file input keeps the stored file when nothing is chosen)."""
-    from console.forms.event_forms import EventForm
+def _small_event_form(event, cls, rows, part):
+    """A cut-down event form (only its own fields; the view saves only those, `part`)."""
     with timezone.override(_tz(event)):
-        form = EventForm(instance=event)
-        data = form_json(form, rows, action=reverse('console:event_edit', args=[event.pk]),
-                         submit=[{'label': 'Save', 'style': 'primary'}])
-    shown = {r if isinstance(r, str) else None for r in rows}
-    shown |= {n for r in rows if not isinstance(r, str) and r[0] == 'grid' for n in r[1:]}
-    hidden = {}
-    for name, f in data['fields'].items():
-        if name in shown or f['widget'] == 'file':
-            continue
-        if f['widget'] in ('select', 'radio'):
-            chosen = next((o['value'] for o in f.get('options') or [] if o['selected']), '')
-            hidden[f['name']] = chosen
-        elif f['widget'] == 'checkbox':
-            if f.get('checked'):
-                hidden[f['name']] = 'on'
-        else:
-            hidden[f['name']] = '' if f.get('value') is None else str(f['value'])
-    data['hidden'] = hidden
+        data = form_json(cls(instance=event), rows, action=reverse('console:event_edit', args=[event.pk]),
+                         submit=[{'label': 'Save', 'style': 'primary'}], locked=list(event.locked_fields or []))
+    data['hidden'] = {'part': part}
     return data
 
 
@@ -53,8 +36,8 @@ def _review_args(action, post):
 def _expand_reviews(user, event_id=None, **_):
     from scrape.models import ChangeSet
     event = editable_event(user, event_id)
-    return [{'event_id': event.pk, 'changeset_id': pk}
-            for pk in event.changesets.filter(status=ChangeSet.PENDING).order_by('-created_at').values_list('pk', flat=True)[:10]]
+    return [{'event_id': event.pk, 'changeset_id': pk, 'event': event}
+            for pk in event.changesets.filter(status=ChangeSet.PENDING).order_by('-created_at').values_list('pk', flat=True)]
 
 
 @component('changeset_review', 'AI suggestions', "The AI's suggested changes from the event's websites / files waiting "
@@ -62,13 +45,13 @@ def _expand_reviews(user, event_id=None, **_):
            'With only event_id: every pending review.', ids=('event_id', 'changeset_id'), expand=_expand_reviews,
            actions=(('apply_ai_changes', 'Apply'), ('discard_ai_changes', 'Discard all')), act_args=_review_args,
            page=lambda ids: reverse('console:changeset', args=[ids['changeset_id']]))
-def changeset_review(user, event_id=None, changeset_id=None, event=None):
+def changeset_review(user, event_id=None, changeset_id=None, event=None, changeset=None):
     from django.http import Http404
 
     from console.views_events import _changes_for_review
     from scrape.models import Change, ChangeSet
     event = editable_event(user, event_id, event)
-    cs = ChangeSet.objects.filter(pk=changeset_id, event=event).first()
+    cs = changeset if changeset is not None else ChangeSet.objects.filter(pk=changeset_id, event=event).first()
     if cs is None:
         raise Http404
     with timezone.override(_tz(event)):
@@ -79,8 +62,7 @@ def changeset_review(user, event_id=None, changeset_id=None, event=None):
         ch = row['change']
         counts[ch.op] = counts.get(ch.op, 0) + 1
         changes.append({
-            'id': ch.pk, 'op': ch.op, 'entity': ch.get_entity_display() if hasattr(ch, 'get_entity_display') else ch.entity,
-            'title': ch.label if hasattr(ch, 'label') else (ch.data.get('name', {}) if isinstance(ch.data.get('name'), str) else ''),
+            'id': ch.pk, 'op': ch.op, 'entity': ch.get_entity_display(), 'title': ch.label,
             'pending': ch.status == Change.PENDING, 'conflict': bool(ch.conflict_fields),
             'fields': [{'name': f['name'], 'label': f['label'], 'old': str(f.get('old') or '')[:300], 'new': str(f.get('new') or '')[:300],
                         'conflict': f.get('conflict', False), 'image': f.get('is_image', False)} for f in row['fields']],
@@ -106,56 +88,91 @@ def changeset_review(user, event_id=None, changeset_id=None, event=None):
 @component('app_layout', 'App layout', "How the event looks in the apps: preset, tabs, default tab, list and schedule "
            'styles, map options, accent colour. Saves as you change it.',
            page=lambda ids: reverse('console:display', args=[ids['event_id']]))
-def app_layout(user, event_id=None, event=None):
+def app_layout(user, event_id=None, event=None, form=None):
     from console.forms.event_forms import DisplayForm
-    from events.display import clean_overrides, event_stats, resolve_display
+    from events.display import LABELS, TABS, clean_overrides, event_stats, resolve_display
     event = editable_event(user, event_id, event)
-    form = DisplayForm(initial=DisplayForm.initial_from(clean_overrides(event.display_config)))
-    data = form_json(form, ['preset', 'customize_tabs', 'tabs', ('grid', 'default_tab', 'secondary_pane'),
-                            ('grid', 'locations_style', 'schedule_style'),
-                            ('grid', 'map_clustering', 'map_fit_all'),
-                            ('grid', 'show_location_images', 'enable_search'), 'group_by_category'],
-                     action=reverse('console:display', args=[event.pk]), submit=[{'label': 'Save', 'style': 'primary'}])
-    data['hidden'] = {'accent_color': event.accent_color or '', 'tab_order': form.initial.get('tab_order', '')}
-    data['submit'] = []  # saves as you change it
+    overrides = clean_overrides(event.display_config)
+    form = form or DisplayForm(initial=DisplayForm.initial_from(overrides))
+    initial = DisplayForm.initial_from(overrides)
+    order = [t for t in (initial.get('tab_order') or '').split(',') if t in TABS]
+    order += [t for t in TABS if t not in order]
+    chosen = set(initial.get('tabs') or [])
+    stats = event_stats(event)
+    resolved = resolve_display(event, stats)
+    data = form_json(form, [('choices', 'preset'),
+                            ('block', 'layout_reason', {'text': f"Currently using {str(resolved.get('resolved_preset', '')).capitalize()}: {resolved.get('reason', '')}."}),
+                            'customize_tabs',
+                            ('block', 'tab_list', {'tabs': [{'value': t, 'label': LABELS['tabs'].get(t, t), 'checked': t in chosen}
+                                                            for t in order]}),
+                            ('grid', 'default_tab', 'secondary_pane'), ('grid', 'locations_style', 'schedule_style'),
+                            ('grid', 'map_clustering', 'map_fit_all'), ('grid', 'show_location_images', 'enable_search'),
+                            'group_by_category',
+                            ('block', 'accent', {'value': event.accent_color or '#431f86', 'default': not event.accent_color})],
+                     action=reverse('console:display', args=[event.pk]), submit=[])
+    data['hidden'] = {'tab_order': ','.join(order)}
     data['autosave'] = True
-    resolved = resolve_display(event, event_stats(event))
     return {'event_id': event.pk, 'name': f'App layout · {event.name}', 'form': data,
-            'resolved': {'preset': str(resolved.get('preset', '')), 'tabs': ', '.join(resolved.get('tabs') or [])},
-            'accent': event.accent_color or '#431f86'}
+            'counts': {'locations': stats.get('location_count', 0), 'items': stats.get('item_count', 0),
+                       'spread': stats.get('spread_km')},
+            'resolved': {'preset': str(resolved.get('resolved_preset', '')), 'tabs': ', '.join(resolved.get('tabs') or [])}}
 
 
 @component('website_watching', 'Website watching', "The event's source websites, whether Attnd watches them for "
            'changes (review / small fixes automatically / everything automatically) and Check for updates now.',
            page=lambda ids: reverse('console:event', args=[ids['event_id']]))
 def website_watching(user, event_id=None, event=None):
-    from console.forms.event_forms import SourcesForm
+    from console.forms.event_forms import RefreshForm, SourcesForm
+    from django.utils.timesince import timesince
     event = editable_event(user, event_id, event)
+    manage = event.can_manage_team(user)
     data = form_json(SourcesForm(instance=event), ['source_urls_text', ('grid', 'refresh_schedule', 'update_mode'),
                                                    'source_text'],
-                     action=reverse('console:event_sources', args=[event.pk]), submit=[{'label': 'Save', 'style': 'primary'}])
+                     action=reverse('console:event_sources', args=[event.pk]),
+                     submit=[{'label': 'Save', 'style': 'secondary'}] if manage else [])
+    refresh = form_json(RefreshForm(), ['text', 'upload', 'instructions'],
+                        action=reverse('console:event_refresh', args=[event.pk]),
+                        submit=[{'label': 'Check for updates now', 'style': 'outline', 'icon': 'refresh'}])
+    refresh['background'] = 'Checking for updates…'
+    pages = []
+    for p in event.source_pages.all()[:40]:
+        if p.has_pending_change:
+            state = 'changed, AI update pending'
+        elif p.changed_at:
+            state = f'last changed {timesince(p.changed_at)} ago'
+        elif p.checked_at:
+            state = 'no changes yet'
+        else:
+            state = 'not checked yet'
+        pages.append({'url': p.url, 'state': state, 'error': p.last_status if p.failures else ''})
     checked = event.sources_checked_at
-    return {'event_id': event.pk, 'name': f'Website watching · {event.name}', 'form': data,
-            'watching': event.refresh_schedule == 'watch', 'checked': fmt(checked, 'M j, g:i A') if checked else '',
-            'refresh_url': reverse('console:event_refresh', args=[event.pk]), 'has_sources': bool(event.source_urls)}
+    return {'event_id': event.pk, 'name': f'Website watching · {event.name}', 'form': data, 'refresh': refresh,
+            'manage': manage, 'watching': event.refresh_schedule == 'watch', 'pages': pages,
+            'checked': fmt(checked, 'M j, g:i A') if checked else '',
+            'last_ai': timesince(event.last_refreshed_at) if event.last_refreshed_at else '',
+            'has_sources': bool(event.source_urls)}
 
 
 @component('event_context_form', 'Details for the assistant', "The event's Details for the assistant (what attendees' "
            'phones answer questions from, offline): about, FAQ, amenities, accessibility, policies, getting there, '
-           'weather plan, links.', page=lambda ids: reverse('console:event_edit', args=[ids['event_id']]))
+           'weather plan, links.', page=lambda ids: reverse('console:event_edit', args=[ids['event_id']]),
+           chat_only='The canvas cut-down of event_form (the Details page shows the whole form).')
 def event_context_form(user, event_id=None, event=None):
     from events import context as ctx
     event = editable_event(user, event_id, event)
-    data = _partial_event_form(event, [f'ctx_{k}' for k in ctx.KEYS[ctx.EVENT]])
+    from console.forms.event_forms import EventContextForm
+    data = _small_event_form(event, EventContextForm, [f'ctx_{k}' for k in ctx.KEYS[ctx.EVENT]], 'context')
     return {'event_id': event.pk, 'name': f'Details for the assistant · {event.name}', 'form': data,
             'locked': 'context' in (event.locked_fields or [])}
 
 
 @component('event_flyer', 'Flyer', "The event's flyer (an image or a PDF): upload, replace or remove it.",
-           page=lambda ids: reverse('console:event_edit', args=[ids['event_id']]))
+           page=lambda ids: reverse('console:event_edit', args=[ids['event_id']]),
+           chat_only='The canvas cut-down of event_form (the Details page shows the whole form).')
 def event_flyer(user, event_id=None, event=None):
     event = editable_event(user, event_id, event)
-    data = _partial_event_form(event, ['flyer'], files=True)
+    from console.forms.event_forms import EventFlyerForm
+    data = _small_event_form(event, EventFlyerForm, ['flyer'], 'flyer')
     url = event.flyer.url if event.flyer else ''
     return {'event_id': event.pk, 'name': f'Flyer · {event.name}', 'form': data, 'flyer_url': url,
             'is_pdf': url.lower().split('?')[0].endswith('.pdf')}

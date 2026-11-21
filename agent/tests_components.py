@@ -161,7 +161,12 @@ class PanelEndpointTests(AgentTestCase):
         response = self.client.post(action, {'name': 'Prairie Lights (encore)', 'start_time': '2026-11-14T21:00',
                                              'location': self.stage.pk, 'tags_text': 'live music'},
                                     HTTP_X_ATTND_COMPONENT='schedule_item_form', secure=True)
-        self.assertEqual(response.status_code, 302)
+        # Saved: JSON for the chat (what happened, the Undo id, where the page would go), not the next page's HTML
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['saved'])
+        self.assertTrue(data['messages'])
+        self.assertTrue(data['undo'])
         self.item.refresh_from_db()
         self.assertEqual(self.item.name, 'Prairie Lights (encore)')
         self.assertIn('name', self.item.locked_fields)  # exactly like the page: hand edits are locked
