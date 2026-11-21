@@ -132,6 +132,8 @@ def account(request):
             return response
     elif action in ('passkey_rename', 'passkey_remove'):
         return _passkey_action(request, action)
+    elif action in ('session_signout', 'sessions_signout_others'):
+        return _session_action(request, action)
     elif action == 'notify':  # stage I16: which organizer emails
         from console.models import ConsolePreference
         from console.organizer_mail import KINDS
@@ -175,7 +177,13 @@ def account(request):
         note['event'] = names.get(note.get('event_id'), '')
     from console.organizer_mail import KINDS
     chosen = pref.notify if pref else {}
+    from console import user_sessions
+    sessions = [{'id': r.pk, 'label': user_sessions.describe(r.user_agent), 'last_active': r.last_active,
+                 'created_at': r.created_at, 'current': r.session_key == request.session.session_key}
+                for r in user_sessions.live_sessions(user)]
+    sessions.sort(key=lambda s: (not s['current'], -s['last_active'].timestamp()))
     return render(request, 'console/account.html', {
+        'sign_in_sessions': sessions, 'other_sessions': any(not s['current'] for s in sessions),
         'agent_notes': notes,
         'notify_kinds': [{'key': k, 'label': v, 'on': chosen.get(k, True)} for k, v in KINDS.items()],
         'email_form': email_form, 'password_form': password_form, 'section': 'account',
@@ -187,6 +195,19 @@ def account(request):
         'email_codes_on': twofactor.email_codes_on(user), 'email_available': email_enabled() and bool(user.email),
         'totp_removable': device is not None and (not required or bool(keys)),
     })
+
+
+def _session_action(request, action):
+    """Sign out one of your other sessions, or every other one (console/user_sessions.py)."""
+    from console import user_sessions
+    current = request.session.session_key
+    rows = [r for r in user_sessions.live_sessions(request.user) if r.session_key != current]
+    if action == 'session_signout':
+        rows = [r for r in rows if str(r.pk) == request.POST.get('session')]
+    n = user_sessions.sign_out(request.user, rows)
+    messages.success(request, 'Signed out that device.' if action == 'session_signout' and n else
+                     f'Signed out {n} other device{"s" if n != 1 else ""}.' if n else 'No other device was signed in.')
+    return redirect(reverse('console:account') + '#sessions')
 
 
 def _passkey_action(request, action):

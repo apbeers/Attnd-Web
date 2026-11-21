@@ -674,6 +674,15 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
   (delete_event, remove_team_member, transfer_event_ownership; the chat shows a "Confirm it's you" card and the
   action keeps waiting), and its internal requests hit the same check. Staff enrollment (`two_factor_setup` while
   pending) is exempt. `console.testing.TwoFactorClient` marks it fresh. Tests: `console/tests_recent_auth.py`.
+- **Where you're signed in** (`console/user_sessions.py`, model `console.UserSession`, owner Nov 21, 2026): every
+  sign-in (`user_logged_in`) records the session key, the User-Agent and a SHA-256 of the browser's long-lived
+  `attnd_device` cookie (random, two years, HttpOnly; no place is stored); `SessionTrackingMiddleware` keeps the key in
+  step (the second step's new key) and last-active (written at most every 10 minutes). Account → **Signed in on other
+  devices** (`#sessions`) lists live sessions ("Safari on iPhone", last active, "This device"), signs one out or
+  **Sign out everywhere else** (deletes their Django sessions); `run_scheduled_tasks` purges rows of ended sessions.
+  A sign-in from a browser the account hasn't used (`SignInSecurity.known_devices`, ≤ 30 hashes) emails **New
+  sign-in to Attnd** (time, browser, link to `#sessions`), not for a brand-new account's first device and not without
+  a User-Agent or from `attnd-ci` (tests, CI); EMAIL_ALLOWED_RECIPIENTS applies. Tests: `console/tests_user_sessions.py`.
 - **How long a sign-in lasts** (`console/session_expiry.py`, owner Nov 21, 2026): **organizers** 14 days at most, sliding: `SessionLifetimeMiddleware` (after AuthenticationMiddleware) renews the idle expiry on use, at most once an hour, to 7 days (never past 14 days after the sign-in time kept in the session, `_signed_in_at`) and signs the person out after 14 days; 7 days without a request ends it. **Staff and superusers** sign in once a day: `console/static/console/tz.js` (on the sign-in, sign-up and two-factor pages, the homepage and every console page) stores the browser's zone (`Intl…timeZone`) in the `attnd_tz` cookie (zone name only, a year, `SameSite=Lax`), and every successful sign-in (password, passkey, a new account: the `user_logged_in` signal; the second step keeps it, `cycle_key` carries the expiry) calls `request.session.set_expiry(<next local midnight>)`, or the midnight after when the next one is under an hour away (11:30 PM → the following night). The zone is validated with zoneinfo (unknown, missing, path-like → `America/Chicago`). An explicit expiry overrides `SESSION_EXPIRE_AT_BROWSER_CLOSE` (off) and is never longer than `SESSION_COOKIE_AGE` (two weeks, unchanged). Ask Attnd's internal requests never renew. Tests: `console/tests_session_expiry.py`.
 - **Hosts, passwords, headers, keys** (stage G): `ALLOWED_HOSTS` is only our own hostnames (`SITE_URL`'s host, + `www`
   for attnd.app, the Studio sites host; `ALLOWED_HOSTS_EXTRA` adds more), never `.herokuapp.com`. Passwords hash with

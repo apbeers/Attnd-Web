@@ -119,6 +119,18 @@
       <button class="button button--secondary button--small">{% if recovery_codes_left %}New recovery codes{% else %}Set up recovery codes{% endif %}</button></form>
   </div>
   {% endif %}
+  <div class="panel span-all" id="sessions">
+    <h2 class="title-4">{% icon "phone" %} Signed in on other devices</h2>
+    <p class="small muted">Every browser signed in to your account. Sign out any you don’t recognise, then change your password.</p>
+    <ul class="list list--boxed">{% for s in sign_in_sessions %}<li class="cluster">
+      <span class="grow"><strong>{{ s.label }}</strong>{% if s.current %} <span class="badge badge--success badge--pill">This device</span>{% endif %}<br>
+        <span class="small muted">Last active {{ s.last_active|timesince }} ago · signed in {{ s.created_at|date:"M j, Y" }}</span></span>
+      {% if not s.current %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="session_signout"><input type="hidden" name="session" value="{{ s.id }}">
+        <button class="button button--ghost button--small tone-danger">Sign out</button></form>{% endif %}
+    </li>{% endfor %}</ul>
+    {% if other_sessions %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="sessions_signout_others">
+      <button class="button button--secondary button--small" data-confirm="Sign out every other device?">Sign out everywhere else</button></form>{% endif %}
+  </div>
   <div class="panel span-all" id="emails">
     <h2 class="title-4">{% icon "mail" %} Email me when…</h2>
     <form method="post" class="stack stack--tight">{% csrf_token %}<input type="hidden" name="action" value="notify">

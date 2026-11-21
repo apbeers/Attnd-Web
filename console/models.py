@@ -53,6 +53,9 @@ class SignInSecurity(models.Model):
     email_code_hash = models.CharField(max_length=64, blank=True)
     email_code_expires_at = models.DateTimeField(null=True, blank=True)
     passkey_prompt_dismissed = models.BooleanField(default=False)
+    # Browsers this account has signed in from (SHA-256 of their long-lived attnd_device cookie, newest last, ≤ 30):
+    # a sign-in from any other one emails "New sign-in to Attnd" (console/user_sessions.py).
+    known_devices = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name = 'sign-in settings'
@@ -207,3 +210,21 @@ class ConsolePreference(models.Model):
         import re
         ua = request.META.get('HTTP_USER_AGENT', '') if request is not None else ''
         return bool(re.search(r'iPhone|iPod|Android.+Mobile|Mobile Safari|Windows Phone', ua))
+
+
+class UserSession(models.Model):
+    """One signed-in browser of an account (console/user_sessions.py): Account → "Signed in on other devices" lists
+    them and signs them out. Linked to Django's session by key (updated when the key changes after the second step);
+    rows of ended sessions are purged by run_scheduled_tasks."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sign_in_sessions')
+    session_key = models.CharField(max_length=40, db_index=True)
+    device = models.CharField(max_length=64, blank=True, help_text='SHA-256 of the browser\'s attnd_device cookie')
+    user_agent = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_active = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-last_active']
+
+    def __str__(self):
+        return f'{self.user} · {self.user_agent[:40]}'
