@@ -272,7 +272,7 @@ def sharing_kit(user, event_id=None, event=None):
            'events or unlist, transfer ownership, delete; each asks to confirm (unlisting doesn\'t).',
            actions=(('publish_event', 'Publish'), ('unpublish_event', 'Move back to draft'), ('archive_event', 'End (archive)'),
                     ('list_event_nearby', 'List in nearby events'), ('unlist_event', 'Unlist'),
-                    ('delete_event', 'Delete event')),
+                    ('delete_event', 'Delete event'), ('mark_event_paid', 'Mark paid')),
            page=lambda ids: reverse('console:event', args=[ids['event_id']]))
 def event_lifecycle(user, event_id=None, event=None):
     from events.models import Event
@@ -287,13 +287,28 @@ def event_lifecycle(user, event_id=None, event=None):
             actions.append({'name': 'unpublish_event', 'style': 'outline', 'confirm_text': 'Move back to draft? Attendees can no longer open it.'})
         if event.status != Event.STATUS_ARCHIVED:
             actions.append({'name': 'archive_event', 'style': 'outline', 'confirm_text': 'End the event? Attendees see it as ended.'})
-        actions.append({'name': 'unlist_event', 'style': 'outline'} if event.public else
-                       {'name': 'list_event_nearby', 'style': 'outline', 'confirm_text': 'List it in nearby events for everyone?'})
+        if event.public:
+            actions.append({'name': 'unlist_event', 'style': 'outline'})
+        elif event.paid or user.is_staff or user.is_superuser:  # going live is invite-only (API-025)
+            actions.append({'name': 'list_event_nearby', 'style': 'outline', 'confirm_text': 'List it in nearby events for everyone?'})
+    if user.is_staff or user.is_superuser:
+        actions.append({'name': 'mark_event_paid', 'style': 'outline', 'label': 'Mark unpaid' if event.paid else 'Mark paid',
+                        'params': {'paid': '' if event.paid else '1'},
+                        'confirm_text': 'Mark this event unpaid?' if event.paid else 'Mark this event paid? The free limit goes.'})
     if role == 'owner':
         actions.append({'name': 'delete_event', 'style': 'danger', 'fields': {'confirm_code': event.event_code},
                         'confirm_text': 'Delete this event permanently? This can’t be undone.'})
+    from django.urls import reverse as _r
+    from events import free_limit
+    limit = free_limit.status(event)
+    limit_form = None
+    if limit.get('limited') and manage:
+        from console.views_events import LimitRequestForm
+        limit_form = form_json(LimitRequestForm(), ['message'], action=_r('console:event_limit_request', args=[event.pk]),
+                               submit=[{'label': 'Remove the limit', 'style': 'primary'}])
+        limit_form['no_ai'] = True
     return {'event_id': event.pk, 'name': f'Status · {event.name}', 'status': event.get_status_display(),
-            'public': event.public, 'manage': manage, 'owner': role == 'owner',
+            'public': event.public, 'manage': manage, 'owner': role == 'owner', 'limit': limit, 'limit_form': limit_form,
             'team_url': reverse('console:team', args=[event.pk]), 'actions': actions}
 
 

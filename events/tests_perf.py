@@ -182,6 +182,10 @@ class AppImageTests(TestCase):
 class PagePerfTests(PerfBase):
     def test_public_pages(self):
         anon = Client()
+        from django.core.cache import caches
+        caches['local'].clear()
+        with self.assertNumQueries(4):  # the gallery (showcase, DEMO, near you, region), then cached a while
+            self.assertEqual(anon.get('/home/', secure=True).status_code, 200)
         with self.assertNumQueries(0):
             self.assertEqual(anon.get('/', secure=True).status_code, 200)
         with self.assertNumQueries(0):

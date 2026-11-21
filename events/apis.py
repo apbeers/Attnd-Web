@@ -33,6 +33,7 @@ def nearby_events(latitude, longitude, now=None):
     events = Event.objects.filter(
         public=True,
         testing_only=False,  # staff test copies of prospects' events are never listed
+        showcase=False,  # nor the home page's showcase events
         status=Event.STATUS_PUBLISHED,
         latitude__isnull=False,
         longitude__isnull=False,

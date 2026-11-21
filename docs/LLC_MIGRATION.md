@@ -113,6 +113,10 @@ Accounts and services:
   Wikimedia's API needs no account. Mention third-party photo credits in the Terms when they are written.
 - Attnd's own data: organizer accounts (emails, passkeys), anonymous device ids, usage counts, diagnostics; buyers'
   names/emails/orders, ticket holders' names/emails, door check-ins (tickets).
+- Open sign-ups (Nov 21, 2026): anyone can create an organizer account and AI-built demo events from the home page;
+  the home page's anonymous counts (`home.HomeMetric`) and the composer's waiting submissions (`home.PendingImport`,
+  deleted after a day). Terms of Service should cover demo events, the 20-phone free limit, claims of events made from
+  public pages (staff-approved hand-over) and AI-generated content.
 Legal/policy surface (to re-issue in the LLC's name):
 - Privacy policy (`/privacy/`), Terms of Service (to write), Terms of Sale + Organizer Agreement (tickets), App Store
   privacy labels, Play data safety, support email, App Review contact.

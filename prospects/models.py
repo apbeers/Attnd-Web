@@ -85,9 +85,10 @@ class ProspectRun(models.Model):
 class Prospect(models.Model):
     NEW, REVIEWING, TEST_EVENT, CONTACTED, INTERESTED, WON, LOST, DISMISSED = (
         'new', 'reviewing', 'test_event_created', 'contacted', 'interested', 'won', 'lost', 'dismissed')
+    CLAIMED = 'claimed'  # its organizer claimed the test event and staff approved it (home page "Claim it")
     STATUS_CHOICES = [(NEW, 'New'), (REVIEWING, 'Reviewing'), (TEST_EVENT, 'Test event created'),
-                      (CONTACTED, 'Contacted'), (INTERESTED, 'Interested'), (WON, 'Won'), (LOST, 'Lost'),
-                      (DISMISSED, 'Dismissed')]
+                      (CONTACTED, 'Contacted'), (INTERESTED, 'Interested'), (CLAIMED, 'Claimed'), (WON, 'Won'),
+                      (LOST, 'Lost'), (DISMISSED, 'Dismissed')]
 
     name = models.CharField(max_length=256)
     organizer = models.CharField(max_length=256, blank=True, help_text='Organizing person or organization')
@@ -171,3 +172,30 @@ class ProspectActivity(models.Model):
     class Meta:
         ordering = ['-created_at', '-id']
         verbose_name_plural = 'prospect activity'
+
+
+class ClaimRequest(models.Model):
+    """"Is this your event? Claim it" on the home page's "Happening near you" cards: a signed-in person asks for a
+    prospect's test event. Never automatic: staff approve it in Prospects → Claims, which hands the event over."""
+    PENDING, APPROVED, DECLINED = 'pending', 'approved', 'declined'
+    STATUS_CHOICES = [(PENDING, 'Waiting for staff'), (APPROVED, 'Approved'), (DECLINED, 'Declined')]
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='claim_requests')
+    prospect = models.ForeignKey(Prospect, on_delete=models.SET_NULL, null=True, blank=True, related_name='claims')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="event_claims")
+    email = models.EmailField()
+    role = models.CharField(max_length=200, help_text='Their role at the event')
+    note = models.TextField(blank=True)
+    # An automatic hint for staff: the email's domain matches the event's website or a prospect contact.
+    domain_match = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING, db_index=True)
+    decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='+')
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.email} → {self.event_id} ({self.status})'

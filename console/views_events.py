@@ -19,6 +19,7 @@ from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
+from django import forms
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -138,13 +139,27 @@ def chat_default(request):
 @agent_action('events_list', 'Your events (upcoming and past) with their codes and counts.', kind='read')
 @login_required
 def dashboard(request):
+    # Onboarding (Nov 21, 2026): what someone typed into the home page's composer before signing up becomes their AI
+    # import now (a demo event they own); the job page shows its steps, then the event in the full-screen chat.
+    from home import onboarding
+    job, error = onboarding.consume(request)
+    if job is not None:
+        return redirect('console:job', job_id=job.pk)
+    if error:
+        messages.error(request, error)
+    from console.components.catalog import annotated_events, upcoming_and_past
+    running = IngestJob.objects.filter(created_by=request.user, kind=IngestJob.KIND_CREATE,
+                                       status__in=[IngestJob.QUEUED, IngestJob.RUNNING])
+    preview = request.GET.get('onboarding') == '1' and (request.user.is_staff or request.user.is_superuser)
+    has_events = events_for_user(request.user).exists()
+    if preview or (not has_events and not running.exists()):
+        # Signed in with no events: the home page's hero, composer and gallery ("Try one on your phone first").
+        # Staff see it any time with ?onboarding=1 (the top bar's Preview onboarding), without touching their data.
+        return render(request, 'console/onboarding.html', onboarding.page_context(request, preview=preview))
     if (landing := _chat_landing(request)) is not None:
         return landing
     # Each event is the event_tile component (console/components); the counts are correlated subqueries.
-    from console.components.catalog import annotated_events, upcoming_and_past
     upcoming, past = upcoming_and_past(list(annotated_events(request.user)))
-    running = IngestJob.objects.filter(created_by=request.user, kind=IngestJob.KIND_CREATE,
-                                       status__in=[IngestJob.QUEUED, IngestJob.RUNNING])
     return render(request, 'console/dashboard.html', {'upcoming': upcoming, 'past': past, 'running_jobs': running})
 
 
@@ -391,6 +406,10 @@ def event_status(request, event):
         event.status = Event.STATUS_ARCHIVED
         messages.info(request, 'Archived. Attendees see it as ended.')
     elif action == 'list':
+        # Going live is invite-only (owner, Nov 21, 2026): only paid events are listed in nearby search.
+        if not (event.paid or request.user.is_staff or request.user.is_superuser):
+            messages.error(request, 'Listing in nearby events comes with going live. Ask us to remove the limit first.')
+            return redirect('console:event', event_id=event.pk)
         event.public = True
         messages.success(request, 'Listed — people nearby can now find it in the app.')
     elif action == 'unlist':
@@ -399,6 +418,60 @@ def event_status(request, event):
     else:
         raise Http404
     event.save(update_fields=['status', 'public'])
+    return redirect('console:event', event_id=event.pk)
+
+
+class LimitRequestForm(forms.Form):
+    """Remove the limit (API-025): a note to the Attnd team, who mark the event paid."""
+    message = forms.CharField(label='Anything we should know?', required=False, max_length=2000,
+                              widget=forms.Textarea(attrs={'rows': 3}),
+                              help_text='Expected attendees, dates, how to reach you. We reply by email.')
+
+
+@agent_action('request_limit_removal', "Ask the Attnd team to remove an unpaid event's free limit (20 phones) and "
+              'take it live. Emails the admins; an admin marks the event paid.', form=LimitRequestForm,
+              title='Asked to remove the limit')
+@event_view
+@require_POST
+def event_limit_request(request, event):
+    from attnd.ratelimit import RateLimit
+    from django.conf import settings
+    from django.core.mail import send_mail
+    from events import free_limit
+    form = LimitRequestForm(request.POST)
+    back = redirect('console:event', event_id=event.pk)
+    if not free_limit.status(event).get('limited'):
+        messages.info(request, 'This event has no limit.')
+        return back
+    limit = RateLimit('limit_request_user')
+    if not form.is_valid() or limit.exceeded(request.user.pk):
+        messages.error(request, 'You already asked today; we’ll be in touch by email.')
+        return back
+    used = free_limit.status(event)
+    admins = [email for _, email in getattr(settings, 'ADMINS', [])]
+    body = (f'{request.user.email} asks to remove the free limit of “{event.name}” ({event.event_code}, id {event.pk}).\n'
+            f'{used["used"]} of {used["limit"]} free spots used.\n\n{form.cleaned_data["message"] or "(no note)"}\n\n'
+            f'Mark it paid: {settings.SITE_URL}{reverse("console:event", args=[event.pk])}')
+    limit.hit(request.user.pk)
+    if admins:
+        send_mail(f'Remove the limit: {event.name}', body, None, admins, fail_silently=True)
+    messages.success(request, 'Thanks! We’ll email you about taking the event live.')
+    return back
+
+
+@agent_action('mark_event_paid', 'Staff: mark an event paid (lifts the 20-phone free limit, allows nearby listing) '
+              'or back to unpaid.', confirm=True, params={'paid': P('boolean', 'true = paid, false = back to unpaid')},
+              summary=S.mark_paid,
+              title='Changed whether the event is paid')
+@event_view
+@require_POST
+def event_paid(request, event):
+    if not (request.user.is_staff or request.user.is_superuser):
+        raise Http404
+    paid = str(request.POST.get('paid', '')).lower() in ('1', 'true', 'on', 'yes')
+    event.paid = paid
+    event.save(update_fields=['paid'])
+    messages.success(request, 'Marked paid: the free limit is gone.' if paid else 'Marked unpaid: the free limit applies.')
     return redirect('console:event', event_id=event.pk)
 
 

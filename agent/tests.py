@@ -201,6 +201,7 @@ class RegistryTests(AgentTestCase):
             ('diagnostics/report.html', 'delete'): 'delete_diagnostics_report',
             ('diagnostics/symbols.html', 'delete'): 'delete_symbol_mapping',
             ('diagnostics/session.html', ''): 'delete_diagnostics_session',
+            ('prospects/claims.html', ''): 'approve_event_claim',
             ('studio/editor.html', 'unpublish'): 'unpublish_studio_site',
             ('studio/editor.html', 'form_delete'): 'delete_studio_form_entry',
             ('studio/editor.html', 'reset_previews'): 'reset_studio_preview_links',

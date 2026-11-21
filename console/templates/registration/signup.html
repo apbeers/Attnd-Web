@@ -12,6 +12,7 @@
   <div class="panel panel--narrow stack">
     {% if signups_open %}
     <h1 class="auth-title">Create an account</h1>
+    {% if request.GET.building %}<p class="notice notice--info small">Got it! Create your account (or <a href="{% url 'login' %}?next={% url 'console:dashboard' %}">sign in</a>) and Attnd starts building your event right away.</p>{% endif %}
     {% else %}
     <h1 class="auth-title">Invite only</h1>
     <div class="notice notice--info" {% if refused %}role="alert"{% endif %}>

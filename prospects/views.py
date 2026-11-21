@@ -287,3 +287,30 @@ def export_csv(request):
                       '' if dnc else c.profile_url, c.source_url, 'yes' if dnc else 'no'] if c else [''] * 9)
             writer.writerow([csv_safe(v) for v in base + extra])
     return response
+
+
+@agent_action('approve_event_claim', 'Hand a prospect test event to the person who claimed it (owner = them; the '
+              'free limit stays until paid).', confirm=True, fixed={'action': 'approve'},
+              params={'claim': P('integer', 'The claim id')}, title='Approved a claim')
+@agent_action('decline_event_claim', 'Decline a claim of a prospect test event.', fixed={'action': 'decline'},
+              params={'claim': P('integer', 'The claim id')}, title='Declined a claim')
+@agent_action('prospect_claims', 'Claims of prospect test events from the home page, waiting first.', kind='read')
+@staff_required
+def claims_view(request):
+    from prospects import claims
+    from prospects.models import ClaimRequest
+    if request.method == 'POST':
+        claim = get_object_or_404(ClaimRequest, pk=request.POST.get('claim') or 0)
+        if claim.status != ClaimRequest.PENDING:
+            messages.info(request, 'That claim was already decided.')
+        elif request.POST.get('action') == 'approve':
+            claims.approve(claim, request.user)
+            messages.success(request, f'{claim.event.name} now belongs to {claim.email}.')
+        elif request.POST.get('action') == 'decline':
+            claims.decline(claim, request.user)
+            messages.info(request, 'Claim declined.')
+        return redirect('prospects:claims')
+    rows = ClaimRequest.objects.select_related('event', 'prospect', 'user', 'decided_by').order_by(
+        '-status', '-created_at')[:200]  # pending sorts first ('pending' > 'declined' > 'approved')
+    return render(request, 'prospects/claims.html', {'tab': 'claims', 'claims': rows,
+                                                      'waiting': ClaimRequest.objects.filter(status='pending').count()})

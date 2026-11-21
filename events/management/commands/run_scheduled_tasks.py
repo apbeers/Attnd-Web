@@ -48,7 +48,11 @@ class Command(BaseCommand):
         from console.undo import purge as purge_undo
         purge_undo()  # Undo entries a day past their 24 h
         from console.user_sessions import purge as purge_sessions
-        purge_sessions()  # signed-in sessions that have ended (Account → Signed in on other devices)
+        purge_sessions()
+        from events import showcase
+        showcase.refresh()  # the home page's showcase events stay happening now (dev only for now)
+        from home.onboarding import purge_pending
+        purge_pending()  # home page composer submissions nobody signed up for, after a day  # signed-in sessions that have ended (Account → Signed in on other devices)
         # Privacy policy: device records unused for 12 months are deleted
         from datetime import timedelta
         from django.utils import timezone

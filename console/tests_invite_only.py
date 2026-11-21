@@ -116,14 +116,12 @@ class InviteOnlyHomepageTests(TestCase):
         cache.clear()
 
     def test_homepage_shows_the_notice_instead_of_the_form(self):
+        # The onboarding home page (Nov 21, 2026) keeps its composer; with sign-ups closed it says so, and the
+        # sign-up page then takes invited emails only.
         html = self.client.get('/', secure=True).content.decode()
-        self.assertIn('id="invite-only"', html)
-        self.assertIn("Attnd is invite-only right now", html)
+        self.assertIn('data-composer', html)
+        self.assertIn('invite-only right now', html)
         self.assertNotIn('id="scrape-form"', html)
-        self.assertNotIn('home/home.js', html)
-        self.assertNotIn('Create your event for free', html)
-        self.assertNotIn('Create an event', html)
-        self.assertNotIn('Try it free', html)
 
     def test_anonymous_trial_import_is_refused(self):
         with patch('scrape.jobs.scrape_event') as scrape_event, patch('scrape.jobs.enqueue') as enqueue:
@@ -142,7 +140,7 @@ class InviteOnlyHomepageTests(TestCase):
                                         content_type='application/json', secure=True)
         self.assertEqual(response.status_code, 202)
         enqueue.assert_called_once()
-        self.assertIn('id="scrape-form"', self.client.get('/home/', secure=True).content.decode())
+        self.assertIn('data-composer', self.client.get('/home/', secure=True).content.decode())
 
 
 @override_settings(SIGNUPS_OPEN=True)
@@ -161,9 +159,8 @@ class SignupsOpenTests(TestCase):
 
     def test_homepage_and_import_open(self):
         html = self.client.get('/', secure=True).content.decode()
-        self.assertIn('id="scrape-form"', html)
-        self.assertIn('Create your event for free', html)
-        self.assertNotIn('id="invite-only"', html)
+        self.assertIn('data-composer', html)
+        self.assertNotIn('invite-only right now', html)
         self.assertContains(self.client.get(reverse('login'), secure=True), 'New here?')
         with patch('scrape.jobs.enqueue'):
             response = self.client.post('/scrape/', data=json.dumps({'url': 'https://example.com'}),

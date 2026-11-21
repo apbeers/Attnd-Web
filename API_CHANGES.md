@@ -72,6 +72,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-022 | Place images found automatically: `locations[].image_credit` (credit / licence of a photo Attnd found and stores itself, or null) | additive (new key) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-023 | Per-event colour themes: `event.theme` in `bundle/` (`{light, dark}` × `primary` / `secondary` / `tertiary` hex, contrast-adjusted; `null` without a theme or when the organizer turned it off for the apps). Made by the AI import, edited in the console; used on the website now. **Apps: later, not in this change** | additive (new key, `bundle/` only) | 🚧 built · ⬜ prod | ⬜ (later) | ⬜ (later) |
 | API-024 | Server-driven screens: `layout` in `bundle/` (per screen an ordered list of sections from a closed catalogue, overrides per category / tag, on-device conditions) for apps that send `X-Attnd-Sections: <catalogue version>` (ETag `-s<version>`); `home` in `display.tabs` for those apps; console App layout → Screens editor, Ask Attnd `update_screen_layout` | additive (new key, new optional request header, new `display.tabs` value only for apps that send the header) | ✅ dev (6630ce5, 3d4e0b9) · ⬜ prod | ✅ dev (8bd7bd3, 0f25083; TestFlight 2.0.161) | ⬜ (later) |
+| API-025 | Free limit: an unpaid event takes 20 different devices on `join/`; a new device beyond it gets `409 {error: "event_full_free", message, limit}` (rejoin always works; paid, DEMO, App Review sample and showcase events exempt) | additive (new error answer on an existing endpoint, for unpaid events only) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -79,6 +80,20 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-025: Free limit on unpaid events
+**Why:** anyone can now sign up and create demo events (owner, Nov 21, 2026); going live stays invite-only (an admin
+marks the event paid, no checkout yet). A demo serves a dry run, not a real crowd.
+**Server (attnd-web):** `events/free_limit.py`: `EventJoin` records each device that ever joined an event (the existing
+devices were backfilled by the migration); `join/` refuses the 21st different real device of an unpaid event with `409
+{"error": "event_full_free", "message", "limit"}` and doesn't register it. A device that joined before always rejoins.
+Exempt: `paid`, `showcase`, the DEMO event, the App Review sample events (`seed_test_data`); `ci-` and `showcase-`
+device ids never count. Console: "14 of 20 free spots used" + **Remove the limit** (emails the admins) on the event's
+status card; staff **Mark paid** (`mark_event_paid`); listing in nearby search needs a paid event. `FREE_DEVICE_LIMIT`
+(default 20). Tests: `events/tests_free_limit.py`.
+**iOS / Android:** on a `409` from `join/` whose `error` is `event_full_free`, show the server's `message` (written for
+attendees: the event is full on its free trial; ask the organizer) instead of the generic join error, and go back to
+the launch screen; don't retry automatically. Older builds show their generic join error, which is acceptable.
 
 ### API-024: Server-driven screens (layouts)
 **Why:** the owner wants each event to show what is relevant to it: every section compiled into the apps, the event's

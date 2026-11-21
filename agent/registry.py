@@ -92,7 +92,7 @@ POST_EXCLUDED = {
 }
 
 NAMESPACE_AUDIENCE = {'diagnostics': 'staff', 'prospects': 'staff', 'studio': 'studio'}
-URL_AUDIENCE = {'studio:reports': 'staff', 'console:admin_usage': 'superuser'}
+URL_AUDIENCE = {'studio:reports': 'staff', 'console:admin_usage': 'superuser', 'console:event_paid': 'staff'}
 
 TOOL_NAME_RE = re.compile(r'^[a-z][a-z0-9_]{2,63}$')
 MAX_ENUM = 40

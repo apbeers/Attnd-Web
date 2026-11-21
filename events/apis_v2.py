@@ -170,6 +170,10 @@ class JoinV2(ApiKeyRequired, View):
             return refused
         body.pop('event', None)
         body.pop('api_version', None)
+        # API-025: an unpaid event takes FREE_DEVICE_LIMIT different devices; a device that joined before always can.
+        from events import free_limit
+        if not free_limit.admit(event, device_id):
+            return JsonResponse(free_limit.refusal(), status=409)
         register_device(device_id, event=event, api_version=API_VERSION, **body)
         return JsonResponse({'status': 'ok', 'content_version': event.content_version})
 
@@ -223,5 +227,7 @@ class UsageV2(ApiKeyRequired, View):
         body = _body(request)
         platform = body.get('platform') if body.get('platform') in ('ios', 'android') else ''
         # A CI key gets exactly the answer a real app would, but nothing is recorded (API-008).
-        accepted = usage.ingest(event, platform, body.get('events'), save=not is_ci_request(request))
+        # Showcase events (home page gallery) aren't counted either.
+        accepted = usage.ingest(event, platform, body.get('events'),
+                                save=not is_ci_request(request) and not event.showcase)
         return JsonResponse({'status': 'ok', 'accepted': accepted})

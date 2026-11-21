@@ -247,6 +247,10 @@ RATE_LIMITS = {
     'location_fill_user': _rate('location_fill_user', '30/3600'),  # "Fill from this website?" per person, 1 hour
     'agent_quiet_runs': _rate('agent_quiet_runs', '60/3600'),  # chat buttons that start a quiet run, per person
     'agent_start_user': _rate('agent_start_user', '30/600'),
+    'limit_request_user': _rate('limit_request_user', '3/86400'),  # "Remove the limit" requests per person, a day
+    'home_metric_ip': _rate('home_metric_ip', '120/600'),  # the home page's anonymous counts per IP, 10 minutes
+    'pending_import_ip': _rate('pending_import_ip', '10/3600'),  # home composer submissions per IP, an hour
+    'claim_user': _rate('claim_user', '5/86400'),  # "Claim this event" requests per person, a day
     'agent_contact_user': _rate('agent_contact_user', '3/3600'),  # "Talk to a person" messages per person, an hour  # Ask Attnd requests started per person, 10 minutes
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
@@ -394,7 +398,17 @@ SITES_ORIGIN = f"{'http' if DEBUG and SITES_HOST.startswith(('127.0.0.1', 'local
 STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))
 # Organizer sign-ups (console.signups): off = invite-only (only invited emails can create an account, and the
 # homepage's anonymous AI import is closed). Attendees and existing accounts are unaffected.
-SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '').strip().lower() in ('1', 'true', 'yes', 'on')
+# Open since the onboarding work (owner, Nov 21, 2026): anyone can sign up and make demo events; going live stays
+# invite-only (an admin marks the event paid). SIGNUPS_OPEN=0 closes sign-ups again (invited emails only).
+# Home page showcase events (events/showcase.py): unset = on for dev.attnd.app and DEBUG only; 1 / 0 overrides.
+SHOWCASE_EVENTS = (os.getenv('SHOWCASE_EVENTS').strip().lower() in ('1', 'true', 'yes', 'on')
+                   if os.getenv('SHOWCASE_EVENTS') else None)
+# The full-screen chat as the console's default view for new accounts (owner, Nov 21, 2026); off in tests (TESTING
+# below) so page tests see the pages.
+CHAT_DEFAULT_ON = os.getenv('CHAT_DEFAULT_ON', '1') not in ('0', 'false', 'False') and not TESTING
+FREE_DEVICE_LIMIT = int(os.getenv('FREE_DEVICE_LIMIT', '20'))  # API-025: phones per unpaid event
+NEW_ACCOUNT_DAILY_IMPORTS = int(os.getenv('NEW_ACCOUNT_DAILY_IMPORTS', '3'))  # AI imports a day for new accounts
+SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 # Studio is for admins (staff and superusers) only. These emails (comma-separated, default none) are an explicit
 # override that also get Studio.
 STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', '').split(',') if e.strip()]

@@ -185,6 +185,10 @@ class ConsoleTests(TestCase):
         self.client.post(self.url('event_status'), {'action': 'list'}, secure=True)
         self.event.refresh_from_db()
         self.assertEqual(self.event.status, Event.STATUS_PUBLISHED)
+        self.assertFalse(self.event.public, 'going live is invite-only: an unpaid event is not listed (API-025)')
+        Event.objects.filter(pk=self.event.pk).update(paid=True)
+        self.client.post(self.url('event_status'), {'action': 'list'}, secure=True)
+        self.event.refresh_from_db()
         self.assertTrue(self.event.public)
 
     def test_display_settings_saved(self):

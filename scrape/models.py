@@ -23,6 +23,7 @@ class IngestJob(models.Model):
     TRIGGER_WATCH = 'watch'
     TRIGGER_PASTE = 'paste'  # pasted text or a dropped file for an existing event (stage I3): only that, no deletes
     TRIGGER_PROSPECT = 'prospect'  # a staff test copy of a prospect's event (prospects.testing)
+    TRIGGER_HOME = 'home'  # the home page's composer (home.onboarding): a demo event for a new organizer
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     kind = models.CharField(max_length=16, choices=KIND_CHOICES)

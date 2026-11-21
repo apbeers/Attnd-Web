@@ -52,6 +52,8 @@ urlpatterns = [
 
     path('events/<int:event_id>/display/', v.display_settings, name='display'),
     path('events/<int:event_id>/screens/', v.event_screens, name='event_screens'),  # API-024
+    path('events/<int:event_id>/limit/', v.event_limit_request, name='event_limit_request'),  # API-025
+    path('events/<int:event_id>/paid/', v.event_paid, name='event_paid'),  # staff
     path('events/<int:event_id>/theme/', v.event_theme, name='event_theme'),
     path('events/<int:event_id>/theme/css/', v.event_theme_css, name='event_theme_css'),
     path('events/<int:event_id>/theme/switches/', v.event_theme_switches, name='event_theme_switches'),

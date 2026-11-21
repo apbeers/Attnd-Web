@@ -244,3 +244,11 @@ mode; `null` → today's behaviour (`accent_color`, else the brand purple).
   detail screens (neither app has one yet), weather.
 - Check on a device (TestFlight): the DEMO event with a festival vs a single-room layout, and a section turned off in
   the console reaching the phone after the `content_updated` push.
+
+## Onboarding follow-ups (built Nov 21, 2026: open sign-ups, demo events, free limit, home page)
+- **Testimonials / "used at" logos** on the home page once real events have run with Attnd (with the organizers' OK).
+- API-025 in the apps: show the server's `event_full_free` message on a full free event (API_CHANGES.md → API-025).
+- Checkout: "Remove the limit" emails the admins and an admin marks the event paid; a real checkout (Stripe) later.
+- Showcase events on production: set `SHOWCASE_EVENTS=1` on attnd-web when the owner wants the gallery there, and
+  `manage.py load_showcase_events --images` once for AI covers (OpenAI, a few cents each).
+- More real screenshots on the home page (the planner, the Live Activity, Studio) from the next store screenshot run.

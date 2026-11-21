@@ -1,0 +1,26 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Claims · Prospects{% endblock %}
+{% block content %}
+{% include 'prospects/_nav.html' %}
+<div class="stack">
+  <p class="muted">People who tapped “Is this your event? Claim it” on the home page. Approving hands the event to them
+    (they become its owner; it stays a free demo with the 20-phone limit until an admin marks it paid). Check the
+    email and role first: the domain hint is only a hint.</p>
+  <div class="panel panel--flush"><div class="scroll-x"><table class="data-table">
+    <thead><tr><th>Event</th><th>Who</th><th>Role</th><th>Hint</th><th>When</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for c in claims %}<tr>
+      <td><a href="{% url 'console:event' c.event_id %}">{{ c.event.name }}</a>{% if c.prospect %}<div class="small"><a href="{% url 'prospects:detail' c.prospect_id %}">Prospect</a></div>{% endif %}</td>
+      <td>{{ c.email }}{% if c.email|lower != c.user.email|lower %}<div class="small muted">account {{ c.user.email }}</div>{% endif %}</td>
+      <td>{{ c.role }}{% if c.note %}<div class="small muted">{{ c.note|truncatechars:160 }}</div>{% endif %}</td>
+      <td>{% if c.domain_match %}<span class="badge badge--success">{{ c.domain_match }}</span>{% else %}<span class="small muted">No match</span>{% endif %}</td>
+      <td class="nowrap">{{ c.created_at|date:"M j, g:i A" }}</td>
+      <td>{% if c.status == 'pending' %}<span class="badge badge--info">Waiting</span>{% elif c.status == 'approved' %}<span class="badge badge--success">Approved</span>{% else %}<span class="badge badge--muted">Declined</span>{% endif %}{% if c.decided_by %}<div class="small muted">{{ c.decided_by.email }}</div>{% endif %}</td>
+      <td>{% if c.status == 'pending' %}<div class="cluster">
+        <form method="post">{% csrf_token %}<input type="hidden" name="claim" value="{{ c.pk }}"><input type="hidden" name="action" value="approve"><button class="button button--primary button--small" data-confirm="Hand {{ c.event.name }} to {{ c.email }}?">Approve</button></form>
+        <form method="post">{% csrf_token %}<input type="hidden" name="claim" value="{{ c.pk }}"><input type="hidden" name="action" value="decline"><button class="button button--ghost button--small">Decline</button></form>
+      </div>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="7" class="muted">No claims yet.</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+</div>
+{% endblock %}

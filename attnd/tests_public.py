@@ -13,6 +13,9 @@ PUBLIC = {
     'join_event', 'join_qr', 'shared_plan_qr', 'shared_plan', 'aasa', 'android_asset_links',
     # the homepage's AI import (anonymous visitors get the invite-only 403)
     'scrape', 'job_status',
+    # onboarding (Nov 21, 2026): the composer, the page's anonymous counts, "Happening near you"; Claim it asks for a
+    # sign-in itself (login_required)
+    'start', 'metric', 'near', 'claim',
     # signing in, signing up, passwords (the passkey registration endpoints answer their own JSON 403)
     'login', 'signup', 'passkey_auth_options', 'passkey_auth', 'passkey_register_options', 'passkey_register', 'password_reset', 'password_reset_done',
     'password_reset_confirm', 'password_reset_complete',

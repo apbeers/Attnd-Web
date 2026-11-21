@@ -1,0 +1,13 @@
+{% comment %} A live phone preview beside the hero, drawn in HTML/CSS from the showcase looks: the chips switch looks (theme
+colours, name, places, schedule). No images, no framework; crossfades only without prefers-reduced-motion. {% endcomment %}<div class="hero-phone" aria-hidden="true" data-phone>
+  <div class="hero-phone__frame">{% for l in looks %}
+    <div class="hero-phone__screen{% if forloop.first %} is-active{% endif %}" data-look-screen="{{ l.key }}" style="{{ l.style }}">
+      <div class="ph-top"><span class="ph-time">9:41</span><span class="ph-island"></span></div>
+      <div class="ph-head"><span class="ph-logo">{{ l.name|first }}</span><div><strong>{{ l.name }}</strong><small>{{ l.address }}</small></div></div>
+      <div class="ph-now"><span class="ph-live">● Now</span> {{ l.items.0 }}</div>
+      <div class="ph-map"><span class="ph-pin" style="--x:30%;--y:40%"></span><span class="ph-pin" style="--x:62%;--y:30%"></span><span class="ph-pin" style="--x:48%;--y:66%"></span><span class="ph-pin ph-pin--me" style="--x:40%;--y:52%"></span></div>
+      <ul class="ph-list">{% for p in l.places %}<li><span class="ph-dot"></span>{{ p }}<span class="ph-walk">{{ forloop.counter }} min</span></li>{% endfor %}</ul>
+      <div class="ph-tabs"><span class="is-on">Map</span><span>Schedule</span><span>Places</span><span>Updates</span></div>
+    </div>{% endfor %}
+  </div>
+</div>

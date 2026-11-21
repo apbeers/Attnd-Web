@@ -135,11 +135,18 @@ class HistoryRecord(models.Model):
         return f'History {self.log_entry_id} ({self.via or "console"})'
 
 
+def chat_default_on():
+    """New accounts (and saved preferences that never touched the switch) open the console in the full-screen chat
+    (owner, Nov 21, 2026). CHAT_DEFAULT_ON: on everywhere; the test settings turn it off so page tests see pages."""
+    from django.conf import settings
+    return bool(getattr(settings, 'CHAT_DEFAULT_ON', True))
+
+
 class ConsolePreference(models.Model):
     """Per-person console choices (owner, Nov 21, 2026): "Chat as my default view" opens signed-in landings
     (/console/, an event's overview) in Ask Attnd's full-screen chat instead of the page."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='console_preference')
-    chat_default = models.BooleanField(default=False)
+    chat_default = models.BooleanField(default=chat_default_on)  # on by default since Nov 21, 2026 (settings)
     # Stage I15: on phones the console opens on the chat unless the person turned it off there.
     phone_chat = models.BooleanField(default=True)
     # Stage I16: which organizer emails this person wants ({kind: bool}, console/organizer_mail.KINDS; all on).
@@ -197,7 +204,7 @@ class ConsolePreference(models.Model):
         cached = getattr(user, '_chat_prefs', None)
         if cached is None:
             row = cls.objects.filter(user=user).values_list('chat_default', 'phone_chat', 'walkthrough_done').first()
-            cached = row or (False, True, False)
+            cached = row or (chat_default_on(), True, False)  # chat as the default view since Nov 21, 2026
             user._chat_prefs = cached
         return cached
 

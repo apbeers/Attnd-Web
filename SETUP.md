@@ -68,6 +68,12 @@ Do these steps once, in order. Each step says which values go where. For any sin
   attnd-web` and `heroku ps:scale tasks=1:basic -a attnd-web` (with a go-ahead).
 - [x] DEMO reloaded on dev with its theme (owner, Nov 21, 2026). Production: the same `load_demo_event` with a go-ahead
   after the release.
+- [ ] Onboarding (Nov 21, 2026, on dev): sign-ups are **open by default** now (`SIGNUPS_OPEN` defaults to on; anyone
+  makes demo events, capped at 20 phones each, API-025). Before releasing to production decide: keep it open, or
+  `heroku config:set SIGNUPS_OPEN=0 -a attnd-web` (invited emails only). Showcase events are dev-only (`SHOWCASE_EVENTS`
+  unset = dev.attnd.app only); for production later: `heroku config:set SHOWCASE_EVENTS=1 -a attnd-web`, and once for
+  AI covers on either app: `heroku run -a attnd-dev python manage.py load_showcase_events --images` (OpenAI, a few
+  cents each). Watch `ADMIN_EMAILS`: "Remove the limit" requests and event claims are emailed there.
 - [ ] Later (before outside organizers or payments): move everything to a Texas LLC — `docs/LLC_MIGRATION.md`.
 - [x] Repos made public (Nov 19, 2026); history scan found old secrets: the OpenAI key in `_set_heroku_env.command`
       (revoked Apr 29, 2026) and the 2021 service-account keys `attnd-prod` (`bf9dce7d…`) and `attnd-742` (`73dbb440…`),

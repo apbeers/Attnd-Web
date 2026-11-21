@@ -1,0 +1,18 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Claim {{ event.name }}{% endblock %}
+{% block content %}
+<div class="column column--small">
+  <div class="panel panel--roomy stack">
+    <p class="eyebrow">Is this your event?</p>
+    <h1 class="title-2">{{ event.name }}</h1>
+    <p class="muted">We made this demo from the event’s public pages. If you run it, tell us who you are and we’ll hand it
+      over: it becomes yours to edit, with everything already filled in. We check every claim by hand, usually within a day.</p>
+    <form method="post" class="stack">{% csrf_token %}
+      {% for field in form %}<div class="field"><label class="field__label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+        {% if field.help_text %}<div class="field__help">{{ field.help_text }}</div>{% endif %}{% for e in field.errors %}<div class="field__error">{{ e }}</div>{% endfor %}</div>{% endfor %}
+      <div><button class="button button--primary">Send my claim</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

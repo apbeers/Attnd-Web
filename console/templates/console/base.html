@@ -25,7 +25,8 @@
     <a class="button button--primary button--small" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>
     {% if user.is_staff or user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'diagnostics:overview' %}">{% icon "gauge" %} Diagnostics</a>
     <a class="button button--secondary button--small" href="{% url 'prospects:list' %}">{% icon "target" %} Prospects</a>
-    <a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>{% endif %}
+    <a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>
+    <a class="button button--secondary button--small" href="{% url 'console:dashboard' %}?onboarding=1" title="What a new organizer sees (your data isn't touched)">{% icon "stars" %} Preview onboarding</a>{% endif %}
     {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
     <a class="button button--secondary button--small" href="{% url 'admin:index' %}">Admin</a>{% endif %}
     {% chat_default as chat_on %}<form method="post" action="{% url 'console:chat_default' %}" class="chat-switch-form">{% csrf_token %}

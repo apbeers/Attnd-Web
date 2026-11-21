@@ -1,0 +1,23 @@
+{% extends 'console/base.html' %}
+{% load console_tags static %}
+{% block title %}Welcome{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'home/onboarding.css' %}">{% endblock %}
+{% block content %}
+<div class="onb-console">
+  {% if preview %}<p class="notice notice--info small">Preview: what an organizer with no events sees. Nothing you do here touches your own events unless you submit the composer.</p>{% endif %}
+  <section class="onb-hero onb-hero--console">
+    <div class="onb-hero__grid">
+      <div class="onb-hero__main">
+        <p class="onb-greeting"><span class="onb-mark" aria-hidden="true">a.</span> Hi{% if user.first_name %} {{ user.first_name }}{% endif %}! What’s your event?</p>
+        <h1 class="title-1">Let’s put it on your phone.</h1>
+        <p class="muted">Paste its website, drop a flyer or describe it. Attnd builds a demo you can try right away with up to {{ free_limit }} phones.</p>
+        {% include 'home/_composer.html' with cid='console' %}
+        {% include 'home/_chips.html' %}
+      </div>
+      {% include 'home/_phone.html' %}
+    </div>
+  </section>
+  {% include 'home/_gallery.html' with gallery_title="Try one on your phone first" %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{% static 'home/home.js' %}" defer></script>{% endblock %}

@@ -111,6 +111,9 @@ class Event(CoordinatesMixin, models.Model):
     # Staff test copies of prospects' events (prospects/): published (joinable by code / QR) but never listed in
     # nearby search, never website-watched, never brought into Studio automatically. Not part of the API.
     testing_only = models.BooleanField(default=False, help_text='Staff test copy: never listed or watched')
+    # Showcase events (manage.py load_showcase_events, dev only for now): the home page's "See it live" gallery. Kept
+    # happening now like DEMO; exempt from the free limit (API-025), never in nearby search, no usage counts.
+    showcase = models.BooleanField(default=False, help_text='Home page showcase event (gallery, kept happening now)')
     # API-021: "Plan your day" examples written for this event (events/plan_suggestions.py): {items: [{text, kind}],
     # version: the content_version they were made for, source: ai | fallback, at, cost_usd}. Kept up to date in the
     # background after content changes; the bundle falls back to the deterministic ones when empty or stale.
@@ -372,6 +375,17 @@ CI_DEVICE_PREFIX = 'ci-'
 
 def is_ci_device(device_id):
     return str(device_id or '').startswith(CI_DEVICE_PREFIX)
+
+
+class EventJoin(models.Model):
+    """API-025: each device that ever joined an event, once (the free limit counts these; a device that left and
+    comes back is still one of them, so a rejoin is always allowed)."""
+    event = models.ForeignKey('Event', on_delete=models.CASCADE, related_name='joins')
+    device_id = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['event', 'device_id'], name='event_join_once')]
 
 
 class DeviceQuerySet(models.QuerySet):

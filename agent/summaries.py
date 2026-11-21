@@ -95,6 +95,13 @@ def archive_event(ctx):
 
 
 @safe
+def mark_paid(ctx):
+    if ctx.args.get('paid'):
+        return f'Mark {_name(ctx)} paid: the 20-phone free limit goes and it can be listed nearby.'
+    return f'Mark {_name(ctx)} unpaid: the 20-phone free limit applies again.'
+
+
+@safe
 def list_event(ctx):
     return f'List {_name(ctx)} publicly: people near it can find it in the app’s “Find nearby events”.'
 

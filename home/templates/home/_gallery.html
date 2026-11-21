@@ -1,0 +1,29 @@
+{% comment %} "See it live": real events to try on a phone. "Happening near you" first (prospect test events near the
+visitor: the browser's location if they allow it, else the prospects region), then the showcase events and DEMO. Category
+pills and Grid | Map; works without JS (every card, grid). {% endcomment %}<section class="section gallery" id="see-it-live" data-gallery data-near-url="{% url 'home:near' %}">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>{{ gallery_title|default:"See it live" }}</h2>
+      <p class="muted">Real events made with Attnd. Scan a code with your phone: the app (or an instant App Clip on iPhone) opens right on the event.</p>
+    </div>
+    <div class="gallery__near" data-near{% if not near_you %} hidden{% endif %}>
+      <div class="cluster"><h3 class="grow">Happening near you</h3><button type="button" class="button button--ghost button--small" data-near-locate hidden>Use my location</button></div>
+      <p class="small muted" data-near-where>{% if region %}Around {{ region }}.{% endif %}</p>
+      <ul class="event-grid" data-near-list>{% for c in near_you %}{% include 'home/_card.html' %}{% endfor %}</ul>
+    </div>
+    <div class="gallery__tools cluster">
+      <div class="pills" role="group" aria-label="Kind of event">
+        <button type="button" class="pill is-on" data-kind-filter="" aria-pressed="true">All</button>{% for k in categories %}
+        <button type="button" class="pill" data-kind-filter="{{ k }}" aria-pressed="false" data-metric="gallery_filter" data-detail="{{ k|slugify }}">{{ k }}</button>{% endfor %}
+      </div>
+      <span class="grow"></span>
+      <div class="pills" role="group" aria-label="View">
+        <button type="button" class="pill is-on" data-view="grid" aria-pressed="true">Grid</button>
+        <button type="button" class="pill" data-view="map" aria-pressed="false">Map</button>
+      </div>
+    </div>
+    {% if showcase %}<ul class="event-grid" data-showcase-list>{% for c in showcase %}{% include 'home/_card.html' %}{% endfor %}</ul>
+    <div class="gallery__map" data-gallery-map hidden><svg viewBox="0 0 1000 560" role="img" aria-label="Where the events are"><rect width="1000" height="560" rx="24" class="gallery__map-bg"/></svg></div>
+    {% else %}<p class="muted">Showcase events appear here soon. Meanwhile, try yours: it takes about a minute.</p>{% endif %}
+  </div>
+</section>

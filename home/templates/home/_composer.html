@@ -1,0 +1,20 @@
+{% comment %} The composer ("Try it on your event"): type or paste anything, attach a flyer / PDF / spreadsheet, or speak;
+Build my event keeps it until you have an account (home.onboarding.save_pending), then the AI builds a demo event.
+`cid` keeps the two composers' ids apart. Works without JS (a plain multipart form). {% endcomment %}<form class="composer" method="post" action="{% url 'home:start' %}" enctype="multipart/form-data" data-composer>{% csrf_token %}
+  <input type="hidden" name="time_zone" value="" data-tz>
+  <label class="visually-hidden" for="{{ cid }}-text">Tell us about your event</label>
+  <textarea id="{{ cid }}-text" name="text" rows="3" maxlength="8000" placeholder="{{ placeholders.0 }}" data-placeholders="{{ placeholders|join:'|' }}" data-composer-text></textarea>
+  <div class="composer__bar">
+    <label class="composer__icon" title="Attach a flyer, PDF or spreadsheet">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4L15 7"/></svg>
+      <span class="visually-hidden">Attach a flyer, PDF or spreadsheet</span>
+      <input type="file" name="upload" class="visually-hidden" accept="application/pdf,image/png,image/jpeg,image/webp,text/plain,text/csv,.csv,.xlsx" data-composer-file>
+    </label>
+    <button type="button" class="composer__icon" data-composer-mic hidden aria-label="Speak instead of typing">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <span class="composer__file small muted" data-composer-file-name></span>
+    <span class="grow"></span>
+    <button class="button button--primary composer__go" type="submit" data-metric="submit">Build my event</button>
+  </div>
+</form>

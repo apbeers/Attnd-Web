@@ -232,6 +232,42 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
 - **Homepage screenshots** (`home/static/home/img/demo-map.webp`, `demo-locations.webp`, 768×1670): the raw 6.3" captures `raw/iphone-63/1-map.png` and `4-locations.png` from Attnd-iOS's `store-screenshots` artifact, resized with Pillow (WebP, quality 82). Refresh them after a new screenshot run.
 - **Demo data:** `python manage.py load_demo_event [--owner email]` builds the DEMO event (happening now, every feature populated).
 
+## Onboarding: the home page and "Try it on your event" (owner, Nov 21, 2026; `home/`)
+- **Home page** (`home/views.home`, `home/templates/home/home.html` + `onboarding.css` + `home.js`; our own design and
+  words): a greeting with the Attnd mark, the **composer** (`_composer.html`: typed placeholder examples, attach a
+  flyer / PDF / spreadsheet checked by its first bytes, speak (Web Speech), **Build my event**), the chips (Import from a
+  website · Start from a flyer · Plan a festival · Plan a market · Just looking; they fill the composer and switch the
+  **live phone preview** beside the hero, `_phone.html`: HTML/CSS drawn from the showcase looks with their themes,
+  crossfades only without reduced motion), **See it live** (`_gallery.html`, `_card.html`: kind pills, Grid | Map (an
+  SVG of the pins), cards with cover or theme colours, dates, swatches and a join QR; phones get Open in Attnd), feature
+  sections, a second composer, SEO (`schema.org` JSON-LD with the nonce, Open Graph + Twitter card, `og.png` from
+  `scripts/make_og_image.py`) and anonymous counts of its own taps (`home.HomeMetric` per day: chip, submit, qr_view,
+  open_app, claim, gallery_filter; `POST /home/m/` by sendBeacon, no identifier). Works without JS. `<html
+  data-scheme="auto">` (dark mode).
+- **The composer** (`POST /start/`, `home.onboarding.save_pending`, `pending_import_ip` 10/h): the text and file wait in
+  a `home.PendingImport` (its id in the session; purged after a day by `run_scheduled_tasks`); signed out → sign-up
+  (`?building=1`) or sign-in; the console's dashboard then `consume`s it: an `IngestJob` (`trigger='home'`, a demo event
+  they own) → the job page (steps) → the event in the full-screen chat with its QR. New accounts (< 7 days) start at most
+  `NEW_ACCOUNT_DAILY_IMPORTS` (3) AI imports a day.
+- **Signed in with no events**: the dashboard shows the same hero, composer and gallery (`console/onboarding.html`, "Try
+  one on your phone first") instead of the chat; staff get **Preview onboarding** in the top bar (`?onboarding=1`,
+  nothing of theirs changes). **Chat as the default view**: `ConsolePreference.chat_default` is on for new accounts and
+  saved preferences that never touched it (`CHAT_DEFAULT_ON`, off in tests; migration `0014`).
+- **Showcase events** (`events/showcase.py`, `manage.py load_showcase_events [--if-enabled] [--images]`): eight demo
+  events (festival, farmers market, tech conference, 5K, art walk, food truck rally, holiday market, county fair) with
+  places, schedule, details, a theme and two updates, `Event.showcase` (no free limit, never nearby, no usage counts),
+  kept happening now by `run_scheduled_tasks`; the release phase loads them where `SHOWCASE_EVENTS` is on (default:
+  dev.attnd.app and DEBUG only). `--images` asks Studio's image model for covers (stored as the flyer). DEMO is
+  unchanged and is one more card.
+- **Happening near you** (`home.onboarding.gallery`): published prospect test events (`testing_only`, linked to a
+  prospect, not yet claimed) within 150 miles of the browser's location (only after "Use my location": `GET
+  /home/near/`), else every one with the prospects region as the label; each card says **Is this your event? Claim it**
+  (`/claim/<code>/`, sign-in required): email, role, note → `prospects.ClaimRequest` with a domain hint (the email's
+  domain is the event's website or a contact's); staff decide in **Prospects → Claims** (`approve_event_claim` always
+  asks, `decline_event_claim`): approving hands the event over (owner = them, no longer testing-only, still unpaid),
+  the prospect → Claimed, History records it. Never automatic. Tests: `home/tests_onboarding.py`,
+  `events/tests_free_limit.py`.
+
 ## Diagnostics (API-013, API-014)
 
 App logs, crash reports and server timings for staff; nothing organizer-facing. The shared record format and every
@@ -686,7 +722,12 @@ Organizers stay signed in up to 14 days (7 days idle); staff sign in once a day,
 `/` goes to the console, the attnd. logo goes to `/home/` (always the home page, which then says **Console** instead of
 Sign in and makes no passkey prompt), and the sign-in, sign-up and two-factor pages send a fully signed-in person on
 to the console (`console/tests_signin_flow.py`). People only ever see and sign in with their **email** (`console.auth_backends.EmailOrUsernameBackend`, case-insensitive). The account's `username` is an internal generated id (`u` + 10 hex, `console.accounts.new_username`), so an email can change (Account page, `/console/account/`) without losing the account. Emails are unique case-insensitively (Postgres index `auth_user_email_lower_uniq` + `email_in_use`). Create a site admin with `python manage.py create_admin you@example.com` (they set up two-factor sign-in at their first sign-in; see Security). Deleting an account never deletes events: they become unassigned.
-- **Invite-only** (`console/signups.py`, `SIGNUPS_OPEN`, default off): `/console/signup/` shows "Invite only" with the form folded under "Have an invite?"; only emails with a pending `EventInvite` can create an account (Studio access and `STUDIO_BETA_EMAILS` don't count) (anyone else gets the same 403 invite-only answer, checked before "already exists", so it never reveals who is invited or has an account; the signup rate limit still applies; claiming a trial event follows the same rule). The homepage's anonymous AI import is closed (`POST /scrape/` → 403 JSON for anonymous visitors, no job; the homepage shows the invite-only notice instead of the form and its sign-up CTAs; signed-in organizers keep it). Sign-in and everything attendees use (apps, API, `/join/`, `/p/`, Studio sites) are unaffected. `SIGNUPS_OPEN=1` restores open sign-ups.
+- **Open sign-ups, demo events** (owner, Nov 21, 2026; `console/signups.py`, `SIGNUPS_OPEN`, default **on**): anyone
+  can create an account and demo (unpaid) events; **going live stays invite-only**: an admin marks the event paid
+  (`mark_event_paid`, staff; no checkout yet), which lifts the free limit and allows nearby listing. Unpaid events take
+  20 different phones (API-025, `events/free_limit.py`, `FREE_DEVICE_LIMIT`; the event's status card shows "14 of 20
+  free spots used" and **Remove the limit**, which emails the admins). `SIGNUPS_OPEN=0` goes back to invited emails only
+  (the old invite-only page and 403s).
 
 ## Security
 
@@ -911,7 +952,10 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Email | Mailgun SMTP credentials for the sending domain (`postmaster@mg.attnd.app` on prod; dev uses its sandbox). No password = mail goes to the log. They feed Django 6.1's `MAILERS` (settings `EMAIL_ENABLED`, `EMAIL_SMTP_OPTIONS`); the deprecated `EMAIL_*` Django settings aren't used |
 | `DEFAULT_FROM_EMAIL` | No | Default `Attnd <noreply@mg.attnd.app>` |
 | `SITE_URL` | No | Base URL for links in emails, default `https://attnd.app` (dev: `https://dev.attnd.app`) |
-| `SIGNUPS_OPEN` | No | Default off = invite-only organizer sign-ups (only invited emails; homepage AI import closed for anonymous visitors). `1` = anyone can sign up (console.signups) |
+| `SIGNUPS_OPEN` | No | Default on (Nov 21, 2026): anyone signs up and makes demo events (20 phones each, API-025). `0` = invited emails only (console.signups) |
+| `FREE_DEVICE_LIMIT` / `NEW_ACCOUNT_DAILY_IMPORTS` | No | API-025 phones per unpaid event (20) / AI imports a day for accounts under a week old (3) |
+| `SHOWCASE_EVENTS` | No | The home page's showcase events: unset = dev.attnd.app and DEBUG only; `1` / `0` overrides |
+| `CHAT_DEFAULT_ON` | No | Default on: new accounts open the console in the full-screen chat (off in tests) |
 | `ADMIN_EMAILS` | No | Comma-separated; get server error emails |
 | `EMAIL_ALLOWED_RECIPIENTS` | No | Comma-separated addresses/@domains; when set, nobody else is emailed (for dev) |
 | `MAILGUN_*` | — | Set by the Mailgun add-on (SMTP server/port, API key, sandbox domain) |
@@ -981,7 +1025,7 @@ CI/CD for all three repos (develop → dev, main → production) is documented i
 
 Heroku `Procfile`:
 ```
-release: python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py seed_test_data
+release: python manage.py migrate --noinput && python manage.py createcachetable && python manage.py collectstatic --noinput && python manage.py seed_test_data && python manage.py load_showcase_events --if-enabled
 web: gunicorn attnd.wsgi --worker-class gthread --workers 1 --threads 4 --timeout 300
 worker: python manage.py process_ingest_jobs   # optional, scaled to 0 by default
 ```

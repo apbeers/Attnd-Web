@@ -89,6 +89,15 @@ Hidden locations and items are already filtered out. `locations` are already in 
 → `{ "status": "ok", "content_version": 15 }`. Only `device_id` is required. iOS also sends `app_clip` (API-019, see
 `POST devices/`).
 
+**Free limit (API-025).** An unpaid (demo) event takes at most 20 different devices. A device that joined the event
+before (also after leaving) always joins again. A new device beyond the limit gets:
+```json
+409 { "error": "event_full_free", "message": "This event is full for now: its free trial takes 20 people. Ask the organizer to remove the limit, then try again.", "limit": 20 }
+```
+The device is not registered. Show `message` (it is written for attendees) with a way back to the launch screen; until
+an app knows the code it shows its generic join error. Paid events, the DEMO event, the App Review sample events and
+Attnd's showcase events have no limit; `ci-` test devices never count.
+
 ### `POST events/<id>/leave/`
 ```json
 { "device_id": "uuid" }
