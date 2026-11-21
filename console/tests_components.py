@@ -60,7 +60,7 @@ class ComponentTestCase(TestCase):
             'event_versions': {'event_id': self.event.pk}, 'event_exports': {'event_id': self.event.pk},
             'change_preview': {'event_id': self.event.pk, 'proposal_id': self.proposal.pk},
             'event_readiness': {'event_id': self.event.pk}, 'attention': {},
-            'usage_answer': {'event_id': self.event.pk},
+            'usage_answer': {'event_id': self.event.pk}, 'event_rollover': {'event_id': self.event.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -75,7 +75,7 @@ class ComponentTestCase(TestCase):
             'event_flyer': 'No flyer yet', 'sharing_kit': 'PRAIRIE', 'event_lifecycle': 'Now:',
             'event_versions': 'No saved versions yet', 'event_exports': 'CSV files',
             'change_preview': 'Move sets later', 'event_readiness': 'to fix',
-            'attention': 'What needs attention', 'usage_answer': 'numbers',
+            'attention': 'What needs attention', 'usage_answer': 'numbers', 'event_rollover': 'Make the copy',
         }
 
     def request(self, user=None):
@@ -327,3 +327,31 @@ class UsageAnswerTests(ComponentTestCase):
         self.assertEqual(data['liked'][0], {'kind': 'place', 'name': self.stage.name, 'likes': 7})
         html = C.render('usage_answer', data, surface='chat')
         self.assertIn('<svg', html)
+
+
+class RolloverTests(ComponentTestCase):
+    def test_a_copy_moves_everything_to_the_new_first_day_and_keeps_the_team(self):
+        from datetime import timedelta
+
+        from django.urls import reverse
+        from django.utils import timezone
+
+        from events.models import Event, EventMember, Notification
+        helper = User.objects.create_user('h', 'h@example.com', 'pw')
+        EventMember.objects.create(event=self.event, user=helper, role='contributor')
+        data = C.load(self.owner, 'event_rollover', {'event_id': self.event.pk})
+        self.assertEqual(data['shift_days'] % 7, 0)  # the same weekday
+        self.client.force_login(self.owner)
+        new_day = (timezone.localtime(self.event.start_time).date() + timedelta(days=364))
+        response = self.client.post(reverse('console:event_duplicate', args=[self.event.pk]), {
+            'name': 'Prairie Fest 2027', 'start_date': new_day.isoformat(), 'keep_team': 'on'}, secure=True)
+        copy = Event.objects.get(name='Prairie Fest 2027')
+        self.assertRedirects(response, reverse('console:event', args=[copy.pk]), fetch_redirect_response=False)
+        self.assertEqual(copy.status, 'draft')
+        self.assertNotEqual(copy.event_code, self.event.event_code)
+        item = copy.scheduleditem_set.get()
+        self.assertEqual(item.start_time - self.item.start_time, timedelta(days=364))
+        self.assertEqual(item.location.event_id, copy.pk)  # linked to the copied place
+        self.assertEqual(copy.location_set.count(), self.event.location_set.count())
+        self.assertTrue(EventMember.objects.filter(event=copy, user=helper).exists())
+        self.assertFalse(Notification.objects.filter(event=copy).exists())

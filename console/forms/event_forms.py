@@ -213,6 +213,14 @@ class RefreshForm(StyledFormMixin, forms.Form):
     ALLOWED_TYPES = AIImportForm.ALLOWED_TYPES
 
 
+class DuplicateEventForm(StyledFormMixin, forms.Form):
+    """Stage I12: a copy of the event as a new draft, moved to a new first day (clock times kept)."""
+    name = forms.CharField(max_length=256, label='Name of the copy')
+    start_date = forms.DateField(label='New first day', widget=forms.DateInput(attrs={'type': 'date'}),
+                                 help_text='Every schedule item moves by the same number of days; times stay the same.')
+    keep_team = forms.BooleanField(label='Keep the team', required=False, initial=True)
+
+
 class PasteImportForm(StyledFormMixin, forms.Form):
     """Stage I3: pasted text or a dropped file (flyer image, PDF, CSV / XLSX schedule, an email) read into an existing
     event as AI suggestions to review. Only that source: no website crawl, no removals."""

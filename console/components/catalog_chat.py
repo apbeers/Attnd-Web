@@ -204,3 +204,36 @@ def usage_answer(user, event_id=None, event=None):
             'first': bars[0]['label'] if bars else '', 'last': bars[-1]['label'] if bars else '',
             'busiest': {'label': best['label'], 'count': best['count']} if best and best['count'] else None,
             'joins': joins, 'liked': liked[:8], 'has_data': bool(bars or liked or joins)}
+
+
+@component('event_rollover', 'Copy or roll over', 'A copy of the event as a new draft on a new first day (default: '
+           'the same weekday next year): the form with the name and date, and a preview of the first and last '
+           'schedule items at their new times. Creating it is a normal save (the copy is a draft).',
+           actions=(('duplicate_event', 'Make the copy'),),
+           page=lambda ids: reverse('console:event', args=[ids['event_id']]),
+           chat_only='The chat\'s and canvas Overview\'s copy card (the overview page has no copy form).')
+def event_rollover(user, event_id=None, event=None, form=None):
+    from console import rollover
+    from console.components import form_json
+    from console.forms.event_forms import DuplicateEventForm
+    event = editable_event(user, event_id, event)
+    tz = _tz(event)
+    shift = rollover.default_shift(event)
+    start = timezone.localtime(event.start_time + shift, tz)
+    year = start.year
+    name = event.name.replace(str(year - 1), str(year)) if str(year - 1) in event.name else f'{event.name} {year}'
+    form = form or DuplicateEventForm(initial={'name': name, 'start_date': start.date(), 'keep_team': True})
+    items = list(event.scheduleditem_set.order_by('start_time')[:1]) + list(
+        event.scheduleditem_set.order_by('-start_time')[:1])
+    preview = []
+    for it in items[:2] if len(items) == 2 and items[0].pk != items[1].pk else items[:1]:
+        with timezone.override(tz):
+            preview.append({'name': it.name, 'old': fmt(it.start_time, 'D M j, Y g:i A'),
+                            'new': fmt(it.start_time + shift, 'D M j, Y g:i A')})
+    data = form_json(form, ['name', 'start_date', 'keep_team'], action=reverse('console:event_duplicate',
+                                                                                 args=[event.pk]),
+                     submit=[{'label': 'Make the copy', 'style': 'primary'}])
+    counts = {'locations': event.location_set.count(), 'items': event.scheduleditem_set.count(),
+              'team': event.members.count()}
+    return {'event_id': event.pk, 'name': event.name, 'form': data, 'preview': preview, 'counts': counts,
+            'shift_days': shift.days}

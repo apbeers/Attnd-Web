@@ -28,7 +28,7 @@ from agent.registry import agent_action, param as P
 
 from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, LocationForm,
                                        NotificationEditForm,
-                                       NotificationForm, PasteImportForm, RefreshForm, ScheduledItemForm, SourcesForm,
+                                       NotificationForm, DuplicateEventForm, PasteImportForm, RefreshForm, ScheduledItemForm, SourcesForm,
                                        TeamInviteForm)
 from events import push
 from events.content import mark_locked, restore, save_revision
@@ -424,6 +424,25 @@ def event_refresh(request, event):
     if _wants_json(request):
         return JsonResponse({'task': task_json(job)}, status=202)
     return redirect('console:job', job_id=job.pk)
+
+
+@agent_action('duplicate_event', 'Copy an event as a new draft ("roll over last year\'s festival to 2027"): every '
+              'location, schedule item and assistant detail, moved to a new first day (clock times kept), the team '
+              'kept. Not copied: notifications, attendees, numbers. Show the event_rollover card first so the person '
+              'checks the dates.', form=DuplicateEventForm, title='Copied the event')
+@event_view
+@require_POST
+def event_duplicate(request, event):
+    from console import rollover
+    form = DuplicateEventForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, ' '.join(e for errs in form.errors.values() for e in errs))
+        return redirect('console:event', event_id=event.pk)
+    shift = rollover.shift_for(event, form.cleaned_data['start_date'])
+    copy = rollover.duplicate(event, request.user, shift, name=form.cleaned_data['name'],
+                              keep_team=form.cleaned_data['keep_team'])
+    messages.success(request, f'Made “{copy.name}”, a draft starting {copy.start_time.astimezone(_tz(copy)):%a %b %-d, %Y}.')
+    return redirect('console:event', event_id=copy.pk)
 
 
 @agent_action('import_into_event', 'Read pasted text or an attached file (flyer image, PDF, CSV / Excel schedule, an '

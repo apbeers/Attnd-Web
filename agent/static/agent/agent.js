@@ -1195,7 +1195,7 @@
                   object_history: 'History', location_row: 'Locations', location_form: 'Locations',
                   schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Notifications',
                   notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics', usage_answer: 'Metrics',
-                  event_map: 'Overview', event_lifecycle: 'Overview', sharing_kit: 'Overview', event_exports: 'Overview',
+                  event_map: 'Overview', event_lifecycle: 'Overview', sharing_kit: 'Overview', event_exports: 'Overview', event_rollover: 'Overview',
                   changeset_review: 'Review', app_layout: 'Settings', website_watching: 'Settings',
                   event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
                   prospect_row: 'Prospects', prospect_detail: 'Prospects', prospect_run_row: 'Prospects',
@@ -1655,7 +1655,7 @@
     // Every event and "New event" too, so the whole console is reachable from here.
     try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
     const parent = { event_id: eventId };
-    for (const name of ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'changeset_review',
+    for (const name of ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'event_rollover', 'changeset_review',
                         'location_row', 'schedule_item_row', 'notification_form', 'notification_row',
                         'event_team', 'event_metrics', 'usage_answer', 'app_layout', 'website_watching', 'event_context_form',
                         'event_flyer', 'object_history', 'event_versions']) {
