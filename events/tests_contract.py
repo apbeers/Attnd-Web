@@ -130,6 +130,11 @@ class ApiContractTests(TestCase):
         self.assertEqual(resp.status_code, 200, f'{method.upper()} {path}: {resp.content[:300]}')
         return resp.json()
 
+    def sections_bundle(self, event_id):
+        resp = self.client.get(f'/api/v2/events/{event_id}/bundle/', secure=True, HTTP_X_ATTND_SECTIONS='1', **AUTH)
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        return resp.json()
+
     def symbols(self):
         resp = self.client.post('/api/diagnostics/symbols/?platform=android&version=2.0.1&build=2001',
                                 b'com.a.B -> a.a:\n    void b() -> b\n', content_type='text/plain', secure=True, **AUTH)
@@ -144,6 +149,8 @@ class ApiContractTests(TestCase):
             'GET events/nearby/': self.call('get', '/api/v2/events/nearby/?lat=32.75&lng=-97.33'),
             'GET events/lookup/': self.call('get', '/api/v2/events/lookup/?q=CONTRACT'),
             'GET events/<id>/bundle/': self.call('get', f'/api/v2/events/{e}/bundle/'),
+            # API-024: an app that draws layout sections gets bundle.layout (and the Home tab when listed).
+            'GET events/<id>/bundle/ (X-Attnd-Sections)': self.sections_bundle(e),
             'POST events/<id>/join/': self.call('post', f'/api/v2/events/{e}/join/', device),
             'POST events/<id>/leave/': self.call('post', f'/api/v2/events/{e}/leave/', {'device_id': 'contract-device'}),
             'POST devices/': self.call('post', '/api/v2/devices/', device),

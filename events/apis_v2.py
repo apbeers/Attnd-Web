@@ -28,6 +28,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from events import content
+from events import layout as screen_layout
 from events import usage
 from events.apis import (ApiKeyRequired, _leave, _not_found, ci_device_refused, demo_event, is_ci_request, live_events,
                          lookup_event, nearby_events, register_device)
@@ -44,12 +45,15 @@ def _body(request):
         return {}
 
 
-def _etag(event):
-    return _etag_for(event.id, event.content_version)
+def _etag(event, sections=0):
+    return _etag_for(event.id, event.content_version, sections)
 
 
-def _etag_for(event_id, content_version):
-    return f'"e{event_id}-v{content_version}"'
+def _etag_for(event_id, content_version, sections=0):
+    # API-024: apps that send X-Attnd-Sections get a body with the layout for that catalogue version, so the
+    # version is part of the ETag (an app update with a newer catalogue never gets a 304 for the older body).
+    suffix = f'-s{sections}' if sections else ''
+    return f'"e{event_id}-v{content_version}{suffix}"'
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -101,11 +105,11 @@ BUNDLE_CACHE_SECONDS = 300
 LAST_SEEN_RESOLUTION = timedelta(minutes=10)
 
 
-def _bundle_bytes(event, request):
-    key = f'bundle:v2:{event.id}:{event.content_version}:{request.scheme}://{request.get_host()}'
+def _bundle_bytes(event, request, sections=0):
+    key = f'bundle:v2:{event.id}:{event.content_version}:s{sections}:{request.scheme}://{request.get_host()}'
     body = cache.get(key)
     if body is None:
-        body = json.dumps(content.bundle(event, request), cls=DjangoJSONEncoder).encode()
+        body = json.dumps(content.bundle(event, request, sections), cls=DjangoJSONEncoder).encode()
         cache.set(key, body, BUNDLE_CACHE_SECONDS)
     return body
 
@@ -127,6 +131,7 @@ class BundleV2(ApiKeyRequired, View):
 
     def get(self, request, event_id):
         events = live_events().filter(id=event_id)
+        sections = screen_layout.sections_header(request)
         etag = None
         if_none_match = request.headers.get('If-None-Match')
         if if_none_match:
@@ -134,15 +139,15 @@ class BundleV2(ApiKeyRequired, View):
             version = events.values_list('content_version', flat=True).first()
             if version is None:
                 return JsonResponse({'error': 'Not found'}, status=404)
-            etag = _etag_for(event_id, version)
+            etag = _etag_for(event_id, version, sections)
         if etag is not None and if_none_match == etag:
             resp = HttpResponse(status=304)
         else:
             event = events.first()
             if event is None:
                 return JsonResponse({'error': 'Not found'}, status=404)
-            etag = _etag(event)
-            resp = HttpResponse(_bundle_bytes(event, request), content_type='application/json')
+            etag = _etag(event, sections)
+            resp = HttpResponse(_bundle_bytes(event, request, sections), content_type='application/json')
         resp['ETag'] = etag
         resp['Cache-Control'] = 'no-cache'
         _touch_device(request)

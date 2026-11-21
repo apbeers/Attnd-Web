@@ -21,7 +21,7 @@ FLAGS = {'create': ADDITION, 'update': CHANGE, 'delete': DELETION}
 VIA_TEXT = {'ask_attnd': 'Ask Attnd', 'chat': 'Ask Attnd', 'undo': 'Undo'}
 MAX_TEXT = 160
 # Fields the timeline never shows as "old → new" (long JSON, internal lists): still listed as changed.
-OPAQUE = {'context', 'display_config', 'locked_fields', 'source_urls', 'snapshot', 'operations'}
+OPAQUE = {'context', 'display_config', 'layout_config', 'locked_fields', 'source_urls', 'snapshot', 'operations'}
 # Bookkeeping fields never listed as changed (Undo still restores them): "Locked fields" isn't a change people made.
 HIDDEN = {'locked_fields'}
 

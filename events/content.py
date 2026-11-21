@@ -162,7 +162,10 @@ def notification_v2(n):
     }
 
 
-def bundle(event, request=None):
+def bundle(event, request=None, sections=0):
+    """`sections`: the layout catalogue version the app draws (X-Attnd-Sections, API-024; 0 = none: no layout,
+    no Home tab)."""
+    from events import layout as screen_layout
     from events import plan_suggestions
     from events.display import event_stats, resolve_display
 
@@ -184,12 +187,13 @@ def bundle(event, request=None):
     # API-023: the event's colour theme (contrast-adjusted), null without one or when it is off for the apps.
     from events import theme as event_theme
     event_row['theme'] = event_theme.for_bundle(event)
+    display = resolve_display(event, stats, sections)
     return {
         'schema_version': 2,
         'content_version': event.content_version,
         'updated_at': _dt(event.content_updated_at),
         'event': event_row,
-        'display': resolve_display(event, stats),
+        'display': display,
         'categories': categories,
         'locations': location_rows,
         'schedule': item_rows,
@@ -197,6 +201,9 @@ def bundle(event, request=None):
         'tickets': None,  # API-017: ticketing parked (git branch parked/tickets), always null
         # API-021: "Plan your day" examples written for this event (stored, re-checked; else the deterministic ones)
         'plan_suggestions': plan_suggestions.for_bundle(event, locations, items),
+        # API-024: the screens' sections (null for apps that don't send X-Attnd-Sections)
+        'layout': screen_layout.resolve_layout(event, locations, items, sections, display['resolved_preset'],
+                                               event_row.get('website_url')),
     }
 
 

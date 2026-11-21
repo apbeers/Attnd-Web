@@ -91,6 +91,7 @@ def changeset_review(user, event_id=None, changeset_id=None, event=None, changes
 def app_layout(user, event_id=None, event=None, form=None):
     from console.forms.event_forms import DisplayForm
     from events.display import LABELS, TABS, clean_overrides, event_stats, resolve_display
+    from events.layout import CATALOGUE_VERSION
     event = editable_event(user, event_id, event)
     overrides = clean_overrides(event.display_config)
     form = form or DisplayForm(initial=DisplayForm.initial_from(overrides))
@@ -99,7 +100,7 @@ def app_layout(user, event_id=None, event=None, form=None):
     order += [t for t in TABS if t not in order]
     chosen = set(initial.get('tabs') or [])
     stats = event_stats(event)
-    resolved = resolve_display(event, stats)
+    resolved = resolve_display(event, stats, sections=CATALOGUE_VERSION)  # the newest apps' tabs (Home included)
     data = form_json(form, [('choices', 'preset'),
                             ('block', 'layout_reason', {'text': f"Currently using {str(resolved.get('resolved_preset', '')).capitalize()}: {resolved.get('reason', '')}."}),
                             'customize_tabs',

@@ -34,6 +34,7 @@ from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm
 from events import push
 from events.content import mark_locked, restore, save_revision
 from events.display import LABELS, clean_overrides, event_stats, resolve_display
+from events.layout import CATALOGUE_VERSION as LAYOUT_CATALOGUE
 from events.models import (Device, Event, EventInvite, EventMember, EventRevision, Location, Notification,
                            ScheduledItem, events_for_user, generate_event_code, next_send_slot)
 from scrape import diff, jobs
@@ -886,11 +887,11 @@ def display_settings(request, event):
             event.accent_color = ''
         event.save(update_fields=['display_config', 'accent_color'])
         if _wants_json(request):
-            return JsonResponse({'saved': True, 'resolved': resolve_display(event, event_stats(event))})
+            return JsonResponse({'saved': True, 'resolved': resolve_display(event, event_stats(event), sections=LAYOUT_CATALOGUE)})
         messages.success(request, 'App layout saved. Open apps update within a few seconds.')
         return redirect('console:display', event_id=event.pk)
     stats = event_stats(event)
-    resolved = resolve_display(event, stats)
+    resolved = resolve_display(event, stats, sections=LAYOUT_CATALOGUE)
     if request.method == 'POST' and _wants_json(request):
         return JsonResponse({'saved': False, 'errors': form.errors}, status=400)
     return render(request, 'console/display.html', _ctx(

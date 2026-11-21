@@ -71,6 +71,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-021 | "Plan your day" suggestions written for each event: `plan_suggestions` in `bundle/` (≤ 4 `{text, kind: plan\|question}`; Claude Haiku 5.5 in the background, deterministic fallback from the event's real days, categories and tags) | additive (new key, `bundle/` only) | ✅ dev · ⬜ prod | ⬜ | ⬜ |
 | API-022 | Place images found automatically: `locations[].image_credit` (credit / licence of a photo Attnd found and stores itself, or null) | additive (new key) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-023 | Per-event colour themes: `event.theme` in `bundle/` (`{light, dark}` × `primary` / `secondary` / `tertiary` hex, contrast-adjusted; `null` without a theme or when the organizer turned it off for the apps). Made by the AI import, edited in the console; used on the website now. **Apps: later, not in this change** | additive (new key, `bundle/` only) | 🚧 built · ⬜ prod | ⬜ (later) | ⬜ (later) |
+| API-024 | Server-driven screens: `layout` in `bundle/` (per screen an ordered list of sections from a closed catalogue, overrides per category / tag, on-device conditions) for apps that send `X-Attnd-Sections: <catalogue version>` (ETag `-s<version>`); `home` in `display.tabs` for those apps; console App layout → Screens editor, Ask Attnd `update_screen_layout` | additive (new key, new optional request header, new `display.tabs` value only for apps that send the header) | 🚧 built · ⬜ prod | ⬜ | ⬜ (later) |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -78,6 +79,30 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-024: Server-driven screens (layouts)
+**Why:** the owner wants each event to show what is relevant to it: every section compiled into the apps, the event's
+JSON choosing which appear, in what order and with which options, like the console's components (Nov 21, 2026). Data
+choosing among built-in components, never downloaded code (App Store guideline 2.5.2). Additive.
+**Server (attnd-web):** `events/layout.py`: the catalogue (screens × section types, each with the catalogue version
+that added it, the facts it needs and its parts), the apps' default layouts, `automatic()` (sections nothing in the
+event could fill are left out; food places with menus put the menu and hours first; tags whose items have performers
+put the performers first; Home per preset), `clean_config()` for `Event.layout_config` (organizers' screens, validated
+like the apps do) and `resolve_layout()` (organizer screens over automatic ones, filtered to the app's catalogue
+version). `bundle/` reads `X-Attnd-Sections`; without it `layout` is `null` and `display.tabs` never lists `home`
+(older apps are unchanged, their ETag too); with it the ETag ends in `-s<version>` and the cached bundle is per
+version. `display.tabs` accepts `home` (organizers turn it on; never automatic), at most 5 tabs. Usage accepts
+`tab_view` `home`. Console: App layout → **Screens** (per screen: drag order, on / off, header parts, titles, limits,
+the automatic overrides, a phone-shaped preview drawn by one Django component per section, autosave, Undo, Reset to
+automatic); Ask Attnd `update_screen_layout`. Changing a layout bumps `content_version` (the usual `content_updated`
+push). Contract: `API_V2.md` → Layout. Tests: `events/tests_layout.py`, `console/tests_screens.py`.
+**iOS:** send `X-Attnd-Sections: 1` on `bundle/`; decode `layout` leniently; resolve each screen with the rules in
+`API_V2.md` → Layout (unknown types, parts and conditions dropped, first matching override, data-driven visibility,
+fallback to the built-in layouts, which are today's screens); draw the item and place details, the event info, Options'
+event rows and the map overlay from them; a Home tab when `display.tabs` lists `home`; screenshot mode always uses the
+built-in layouts and never shows Home.
+**Android (later; not in this change):** the same rules and catalogue (`domain/` + the screens), sharing the iOS test
+cases (`ScreenLayoutTests`); until then Android sends no header and gets no layout and no Home tab.
 
 ### API-023: Per-event colour themes
 **Why:** every event looked Attnd-purple; organizers want their own colours (owner, Nov 21, 2026). Additive: one new

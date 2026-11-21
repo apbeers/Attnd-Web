@@ -124,6 +124,9 @@ class Event(CoordinatesMixin, models.Model):
 
     # Presentation — organizer overrides only; resolved by events.display
     display_config = models.JSONField(default=dict, blank=True)
+    # API-024: the organizer's screen layouts (events/layout.py `clean_config`: {"screens": {screen: {sections,
+    # overrides?}}}); screens not listed use the automatic layout.
+    layout_config = models.JSONField(default=dict, blank=True)
     accent_color = models.CharField(max_length=7, blank=True, help_text='#RRGGBB')
     logo_url = models.URLField(max_length=1024, blank=True)
     # API-023: the event's colour theme (events/theme.py): {light: {primary, secondary, tertiary}, dark: {…}, source:

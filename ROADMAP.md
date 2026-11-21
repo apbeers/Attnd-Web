@@ -234,3 +234,13 @@ contrast-adjusted; `null` without a theme or when the organizer turned "Use cust
 API_CHANGES.md → API-023). iOS and Android: decode it leniently and, when set, use it instead of `accent_color` for
 the event's tint (primary), soft surfaces (secondary) and highlights (tertiary), following the system's light / dark
 mode; `null` → today's behaviour (`accent_color`, else the brand purple).
+
+## API-024 server-driven screens: Android, and later sections (iOS + web built Nov 21, 2026)
+- **Android adopts it** (phase 5 of the plan): port `ScreenLayout` (catalogue, validation, overrides, conditions, facts;
+  the iOS `ScreenLayoutTests` cases) into `domain/`, draw the detail screens, event info, Options' event rows and the
+  map overlay from it, add the Home tab, and send `X-Attnd-Sections: 1` on `bundle/`. Until then Android gets no layout
+  and no Home tab (the server strips both without the header).
+- Later section types (a new catalogue version, an app release each): sponsors, a hero image, nearby places, update
+  detail screens (neither app has one yet), weather.
+- Check on a device (TestFlight): the DEMO event with a festival vs a single-room layout, and a section turned off in
+  the console reaching the phone after the `content_updated` push.

@@ -15,7 +15,10 @@ from math import asin, cos, radians, sin, sqrt
 SCHEMA_VERSION = 1
 
 PRESETS = ['auto', 'intimate', 'standard', 'festival']
-TABS = ['map', 'locations', 'schedule', 'flyer', 'notifications']
+# 'home' (API-024): a tab made of the `home` layout's sections; only for apps that send X-Attnd-Sections ≥ 1,
+# never in the automatic tabs (organizers turn it on).
+TABS = ['home', 'map', 'locations', 'schedule', 'flyer', 'notifications']
+MAX_TABS = 5
 LOCATIONS_STYLES = ['cards', 'list', 'grouped']
 SCHEDULE_STYLES = ['timeline', 'by_day', 'by_location', 'now_next']
 SECONDARY_PANES = ['locations', 'schedule', 'now_next', 'none']
@@ -46,6 +49,7 @@ LABELS = {
         'none': 'Nothing (map fills the screen)',
     },
     'tabs': {
+        'home': 'Home',
         'map': 'Map',
         'locations': 'Locations',
         'schedule': 'Schedule',
@@ -171,7 +175,9 @@ def clean_overrides(raw):
     return out
 
 
-def resolve_display(event, stats=None):
+def resolve_display(event, stats=None, sections=0):
+    """`sections`: the layout catalogue version the app draws (X-Attnd-Sections, API-024); below 1 the Home tab
+    is left out, so older apps never see it."""
     stats = stats or event_stats(event)
     overrides = clean_overrides(event.display_config)
     preset = overrides.get('preset', 'auto')
@@ -202,6 +208,9 @@ def resolve_display(event, stats=None):
     # Flyer tab only makes sense with a flyer
     if not stats['has_flyer']:
         cfg['tabs'] = [t for t in cfg['tabs'] if t != 'flyer']
+    if not sections or sections < 1:
+        cfg['tabs'] = [t for t in cfg['tabs'] if t != 'home']
+    cfg['tabs'] = cfg['tabs'][:MAX_TABS]  # the apps show at most five (never a "More" tab)
     if not cfg['tabs']:
         cfg['tabs'] = ['map', 'notifications']
     if cfg['default_tab'] not in cfg['tabs']:

@@ -482,7 +482,7 @@ This object holds the organizer's layout choices, already resolved by the server
 
 | Key | Values | Meaning |
 |---|---|---|
-| `tabs` | ordered subset of `map`, `locations`, `schedule`, `flyer`, `notifications` | The visible tabs, in order. Unknown values are ignored. |
+| `tabs` | ordered subset of `home`, `map`, `locations`, `schedule`, `flyer`, `notifications`, at most 5 | The visible tabs, in order. Unknown values are ignored. `home` (API-024) only appears for apps that send `X-Attnd-Sections` ≥ 1 and only when the organizer turned it on; it is the `home` screen of `layout`. |
 | `default_tab` | one of `tabs` | The tab selected after joining. |
 | `locations_style` | `cards` \| `list` \| `grouped` | `cards`: large image cards. `list`: compact rows with a thumbnail. `grouped`: sections by `category`. |
 | `schedule_style` | `timeline` \| `by_day` \| `by_location` \| `now_next` | `timeline`: one chronological list. `by_day`: sections per day in the event's time zone. `by_location`: sections per location. `now_next`: a "Happening now" section, then "Up next" (the next 2 hours), then "Later". |
@@ -507,6 +507,69 @@ Client defaults when `display` or a key is missing:
 - `enable_search`: `true`
 - `group_by_category`: `false`
 - `secondary_pane`: `locations`
+
+
+### Layout (API-024)
+`layout` says which **sections** the apps draw on each screen and in which order. Sections are chosen from one closed
+catalogue compiled into the apps (data choosing among built-in components, never code). An app sends the catalogue
+version it draws with every bundle request:
+
+```
+X-Attnd-Sections: 1
+```
+
+- Without the header (older apps) `layout` is `null` and `display.tabs` never lists `home`.
+- With it, `layout` only holds section types of that catalogue version or older, so an app never gets a type it
+  can't draw. The `ETag` then ends in `-s<version>` (`"e12-v40-s1"`), so an app updated to a newer catalogue gets a
+  full body, not a `304`.
+
+```json
+"layout": {
+  "catalogue": 1,
+  "source": {"home": "automatic", "place_detail": "organizer", "…": "…"},
+  "screens": {
+    "item_detail": {
+      "sections": [{"type": "header", "show": ["time", "status", "tags"]}, {"type": "about"}, {"type": "place_link"}],
+      "overrides": [{"match": "tag:live music", "sections": [{"type": "header"}, {"type": "performers"}, {"type": "about"}]}]
+    },
+    "home": {"sections": [{"type": "header"}, {"type": "now_next", "when": ["not:after_end"]}, {"type": "updates", "limit": 3}]}
+  }
+}
+```
+
+- **Screens:** `home` (the Home tab), `event_info` (the event's info page), `item_detail` (every schedule item),
+  `place_detail` (every location), `map_overlay` (the map's Now playing strip and pin card: on / off only),
+  `options_event` (the event rows in Options). A screen that is missing has no layout: the app uses its built-in one.
+- **Section:** `type` (required), `show` (parts of the type, for `header`), `title` (≤ 60 characters, replaces the
+  section's heading), `limit` (1–20 entries, for lists), `when` (conditions that must all hold). Only `type` is always
+  present.
+- **Overrides** (`item_detail`, `place_detail` only, ≤ 8): the first whose `match` fits the subject replaces the screen's
+  sections. `category:<name>` compares case-insensitively with the place's category (a schedule item: its place's);
+  `tag:<tag>` with the subject's tags as sent (lower case).
+- **Conditions** (a closed set; the app evaluates them on the device): `has:<fact>` (`description`, `image`,
+  `coordinate`, `website`, `tags`, `category`, `flyer`, `logo`, `context`, `context.about|menu|hours|accessibility|
+  age_limit|price|performers|links|faq|amenities|getting_there|policies|weather_plan`, `items_here`, `likes`, `plan`,
+  `updates`, `urgent`, `locations`, `pins`, `schedule`, `upcoming`), `has_plan`, `model_available`, `now_playing`,
+  `within_walk`, `before_start`, `during`, `after_end` (the event), `day:YYYY-MM-DD` (today in the event's zone) and
+  `not:<condition>`. An unknown condition is false.
+- **A section draws only when its subject has the data** (a `menu` on a place without a menu is skipped).
+
+Catalogue version 1:
+
+| Screen | Section types (default order = today's screen) |
+|---|---|
+| `item_detail` | `header` (parts `time`, `status`, `tags`), `about`, `performers`, `good_to_know`, `links`, `place_link`, `ask_about`; also `countdown` |
+| `place_detail` | `header` (parts `image`, `category`, `tags`, `address`, `distance`, `now_next`), `walk_map`, `ask_about`, `about`, `hours`, `good_to_know`, `menu`, `links`, `at_this_location`; also `directions`, `now_next` |
+| `event_info` | `header` (part `website`), `about`, `faq`, `amenities`, `getting_there`, `accessibility`, `policies`, `weather_plan`, `links` |
+| `options_event` | `header`, `website`, `event_info_link` |
+| `map_overlay` | `now_playing`, `selected_place` |
+| `home` | `header`, `urgent`, `countdown`, `now_next`, `plan_today`, `liked`, `whats_on`, `map`, `places`, `updates`, `faq`, `getting_there`, `about`, `links`, `flyer`, `website` |
+
+Client rules: drop unknown screens, types, parts and conditions; a type appears once per screen (the first); at most
+24 sections per screen; a screen with nothing valid left, or no `layout`, uses the built-in layout; screenshot modes
+always use the built-in layouts. The server builds an **automatic** layout from what the event has (sections nothing
+could fill are left out, food places with menus lead with the menu, tags whose items have performers lead with the
+performers, Home per preset) and replaces whole screens with the organizer's (console App layout → Screens).
 
 ---
 

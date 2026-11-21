@@ -427,7 +427,8 @@ class DisplayForm(forms.Form):
     def initial_from(cls, overrides):
         initial = {'preset': overrides.get('preset', 'auto'),
                    'customize_tabs': 'tabs' in overrides,
-                   'tabs': overrides.get('tabs', TABS),
+                   # Home (API-024) is never on by itself: organizers tick it.
+                   'tabs': overrides.get('tabs', [t for t in TABS if t != 'home']),
                    'tab_order': ','.join(overrides.get('tabs', TABS))}
         for key in cls.CHOICE_KEYS:
             initial[key] = overrides.get(key, '')
