@@ -490,6 +490,50 @@ on Save does; there is no second copy of any business logic.
   `ChangeProposal`; the chat shows the `change_preview` card (rows ticked, untick any, Apply / Cancel).
   `agent:proposal_apply` runs the ticked rows through the real views as the person inside **one** undo recording
   (`UndoMiddleware` passes nested internal requests through to the outer recorder), so one Undo reverses them all.
+- **Chat-first additions** (stage I, Nov 21, 2026; each a registered action / component / Ask Attnd endpoint):
+  - **What needs attention / Ready to publish?** (`console/components/catalog_chat.py`): one `checks(event)` list
+    (AI updates waiting, no locations / schedule, places without a pin or photo, overlapping sets at a place, items
+    outside the event's dates, empty assistant details, notifications scheduled, a draft starting within 7 days);
+    `attention` (the person's current events, shown under the greeting when the chat opens empty) and
+    `event_readiness` (a 0–100 score + every check with its fix link, Publish; canvas Overview).
+  - **Paste or drop anything** (`console:event_import`, action `import_into_event`, `PasteImportForm`): text, a flyer
+    image / PDF, CSV or Excel (`scrape/tables.py`: XLSX read with zipfile + XML, as tab-separated text) → an
+    `IngestJob` with `trigger='paste'`: only that source (no crawl), never removals, never auto-applied; the
+    suggestions wait in Review. Files can be dropped or pasted onto the chat (`/console/agent/attach/` accepts XLSX by
+    its zip magic bytes).
+  - **Conversation on the server**: `AgentRun.thread`; the browser sends its thread with each request (`thread_for`
+    only accepts the person's own), a tab without one loads the latest conversation of the last 7 days (for the
+    current event) in one request, "Earlier · n" loads older requests.
+  - **Live ops / notification drafting**: `propose_changes` takes `notify_title` / `notify_body` / `notify_urgent`;
+    after Apply the chat shows `notification_form` prefilled (sending still asks to confirm). The notification form
+    has a lock-screen preview and length counters (`lock_preview` block, console.js `enhanceLockPreview`).
+  - **Voice input**: a mic button (Web Speech API; hidden where unsupported); `Permissions-Policy` allows the
+    microphone for our own origin.
+  - **Ask the numbers**: `usage_answer` (interactions per hour on the latest day with data as inline SVG bars, the
+    busiest hour, joins, the most liked places and items; canvas Metrics).
+  - **Command bar**: Ctrl/⌘+K anywhere opens and focuses the chat (also before `agent.js` has loaded); `/` lists quick
+    actions (`/attention`, `/ready`, `/location`, `/item`, `/notify`, `/numbers`, `/new`) that show their card at once.
+  - **Preferences memory**: the model's `remember(note, event_id)` tool → `ConsolePreference.agent_notes` (≤ 30); the
+    context block lists them as `remembered_preferences`; Account → "What Ask Attnd remembers" removes them.
+  - **Copy or roll over**: `event_rollover` (name, new first day: the same weekday ~a year later by default, the
+    first / last items' new times) → `console:event_duplicate` (`duplicate_event`, `console/rollover.py`): a draft
+    with every location, schedule item and assistant detail shifted by whole days, the team kept, website watching
+    off; never notifications, devices or numbers.
+  - **Search everything**: the `search_everything(query, event_id)` tool (`agent/search_tool.py`, `attnd/search.py`;
+    JSON fields searched as text with the `field::json` lookup).
+  - **Streaming**: `GET runs/<id>/?wait=10` long-polls (≤ 10 s, at most 2 waiting per process, the DB connection back
+    in the pool while sleeping; never inside a transaction), the browser polls again at once after a `waited` answer.
+  - **Phones chat-first**: `ConsolePreference.phone_chat` (default on; the top bar switch on a phone changes it, on a
+    desktop `chat_default`); the full-screen chat on narrow screens shows the event's sections as chips above the
+    composer and a "Pages ↗" chip.
+  - **Organizer emails** (`console/organizer_mail.py`): import finished, website changes waiting for review, a
+    scheduled notification went out; to the owner and event admins, each kind off in Account (`ConsolePreference.notify`).
+  - **First-run walkthrough** (`first_run`): import → review → layout → publish → share as progress chips for people
+    with ≤ 2 events, shown instead of the briefing until finished or skipped (`console:walkthrough_skip`,
+    `ConsolePreference.walkthrough_done`).
+  - **Talk to a person** (`agent:contact`): a form in the chat (also the "Talk to a person" suggestion chip) that
+    emails `ADMIN_EMAILS` with the person's email as Reply-To, the run id, its request and outcome, the page and event;
+    3 per person per hour.
 - **Quality harness** (stage I, `agent/harness.py`): scripted requests (add a location, shift every set 30 min, send an
   urgent notification, an ambiguous day, a password question, a prompt injection in a location's description), each
   with the tools a good run calls, the tools it must never call, the status it ends in (an always-ask action stops at
