@@ -239,3 +239,10 @@
   animation: agent-listen 1.2s ease-in-out infinite; }
 @keyframes agent-listen { 50% { box-shadow: 0 0 0 6px var(--color-danger-soft); } }
 @media (prefers-reduced-motion: reduce) { .agent__mic.is-listening { animation: none; } }
+
+/* command bar (stage I10) */
+.agent__commands { list-style: none; margin: 0 var(--space-2); padding: var(--space-1); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px); background: var(--color-surface, var(--color-bg)); box-shadow: var(--shadow-md, none); }
+.agent__commands li { display: flex; gap: var(--space-2); padding: .35rem .5rem; border-radius: 8px; cursor: pointer; font-size: var(--text-sm); }
+.agent__commands li[aria-selected="true"] { background: var(--color-brand-soft); }
+.agent__commands .mono { color: var(--color-brand-text); }

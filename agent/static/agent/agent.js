@@ -634,6 +634,88 @@
     e.target.value = '';
     if (file) attachFile(file);
   });
+  // Stage I10: the command bar. Ctrl/⌘+K anywhere opens and focuses the chat; "/" at the start lists quick actions
+  // that show their card at once (no model call).
+  const COMMANDS = [
+    { key: 'attention', label: 'What needs attention', component: 'attention', ids: () => ({}) },
+    { key: 'ready', label: 'Is it ready to publish? (and Publish)', component: 'event_readiness', event: true },
+    { key: 'location', label: 'Add a location', component: 'location_form', event: true },
+    { key: 'item', label: 'Add a schedule item', component: 'schedule_item_form', event: true },
+    { key: 'notify', label: 'Send a notification', component: 'notification_form', event: true },
+    { key: 'numbers', label: 'Numbers (likes, busiest hour)', component: 'usage_answer', event: true },
+    { key: 'new', label: 'New event', component: 'event_new_form', ids: () => ({}) },
+  ];
+  const menu = document.createElement('ul');
+  menu.className = 'agent__commands';
+  menu.id = 'agent-commands';
+  menu.setAttribute('role', 'listbox');
+  menu.hidden = true;
+  form.before(menu);
+  input.setAttribute('aria-controls', 'agent-commands');
+  let choices = [];
+  let chosen = 0;
+  function drawMenu() {
+    const q = input.value.startsWith('/') ? input.value.slice(1).trim().toLowerCase() : null;
+    choices = q === null ? [] : COMMANDS.filter((c) => (!c.event || eventId)
+      && (c.key.startsWith(q) || c.label.toLowerCase().includes(q)));
+    menu.textContent = '';
+    menu.hidden = !choices.length;
+    input.setAttribute('aria-expanded', String(!menu.hidden));
+    chosen = Math.min(chosen, Math.max(choices.length - 1, 0));
+    choices.forEach((c, i) => {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.id = `agent-cmd-${c.key}`;
+      li.setAttribute('aria-selected', String(i === chosen));
+      li.innerHTML = '<span class="mono"></span> <span></span>';
+      li.children[0].textContent = `/${c.key}`;
+      li.children[1].textContent = c.label;
+      li.addEventListener('mousedown', (e) => { e.preventDefault(); runCommand(c); });
+      menu.appendChild(li);
+    });
+    if (choices[chosen]) input.setAttribute('aria-activedescendant', `agent-cmd-${choices[chosen].key}`);
+    else input.removeAttribute('aria-activedescendant');
+  }
+  async function runCommand(c) {
+    input.value = '';
+    fitInput();
+    drawMenu();
+    try {
+      const ids = c.event ? { event_id: eventId } : c.ids();
+      const [item] = await fetchCards(c.component, [ids]);
+      if (!item) return;
+      const box = cardBox();
+      box.appendChild(makeCard(item));
+      box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      box.querySelector('input:not([type=hidden]), textarea')?.focus();
+    } catch (err) { bubble('error', err.message); }
+  }
+  input.addEventListener('input', () => { chosen = 0; drawMenu(); });
+  input.addEventListener('keydown', (e) => {
+    if (menu.hidden) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      chosen = (chosen + (e.key === 'ArrowDown' ? 1 : choices.length - 1)) % choices.length;
+      drawMenu();
+    } else if (e.key === 'Enter' && !e.shiftKey && choices[chosen]) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      runCommand(choices[chosen]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      input.value = '';
+      drawMenu();
+    }
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (!full && panel.hidden) open();
+      input.focus();
+      input.select();
+    }
+  });
+
   // Stage I8: speak instead of typing (the browser's own Web Speech API; hidden where it isn't available).
   (function voice() {
     const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;

@@ -29,6 +29,13 @@
     root.dataset.openOnLoad = '1';
     load();
   });
+  // Ctrl/⌘+K before agent.js is here: load it and open the chat (agent.js handles the key itself afterwards).
+  document.addEventListener('keydown', (e) => {
+    if (window.attndAgentReady || !(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'k') return;
+    e.preventDefault();
+    root.dataset.openOnLoad = '1';
+    load();
+  });
   // "Add with AI" on a page form before agent.js is here: load it, then replay the click.
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-add-with-ai]');
