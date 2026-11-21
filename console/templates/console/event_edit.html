@@ -42,11 +42,3 @@
 </div>
 </div>
 {% endblock %}
-{% block scripts %}
-<script nonce="{{ csp_nonce }}">
-if (window.attndMaps) {
-  attndMaps.addressAutocomplete(document.getElementById('id_address'),
-    {lat: document.getElementById('id_latitude'), lng: document.getElementById('id_longitude')}).catch(() => {});
-}
-</script>
-{% endblock %}

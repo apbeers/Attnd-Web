@@ -26,21 +26,3 @@
   </div>
 </div>
 {% endblock %}
-{% block scripts %}
-<script nonce="{{ csp_nonce }}">
-(function () {
-  const lat = document.getElementById('id_latitude'), lng = document.getElementById('id_longitude');
-  const has = lat.value && lng.value;
-  const center = has ? [+lat.value, +lng.value]
-    : {% if event.latitude is not None %}[{{ event.latitude|stringformat:"f" }}, {{ event.longitude|stringformat:"f" }}]{% else %}[39.8, -98.6]{% endif %};
-  const zoom = (has || {{ event.latitude|yesno:"true,false" }}) ? 16 : 4;
-  if (window.attndMaps) {
-    attndMaps.pinMap(document.getElementById('pin-map'), lat, lng, center, zoom)
-      .catch(() => pinPicker(document.getElementById('pin-map'), lat, lng, center, zoom));
-    attndMaps.addressAutocomplete(document.getElementById('id_address'), {lat, lng}).catch(() => {});
-  } else {
-    pinPicker(document.getElementById('pin-map'), lat, lng, center, zoom);
-  }
-})();
-</script>
-{% endblock %}

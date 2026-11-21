@@ -59,6 +59,8 @@ EXCLUDED = {
     'studio:version_preview': 'Redirects to a signed preview link on the sites host (outside the console).',
     'prospects:export': 'CSV download of organizer contacts; the list and detail pages show the same data.',
     'diagnostics:session_export': 'A .jsonl file download; the session page and entries.json have the entries.',
+    'console:place_search': 'Address search for the location form\'s Find button (JSON); the agent fills addresses itself.',
+    'console:location_fill': 'Suggestions for the location form from a website (JSON, saves nothing; the person reviews).',
     'console:assistant': 'Ask Attnd\'s own full-screen chat page: the agent never drives itself.',
     'agent:start': 'Ask Attnd\'s own endpoints: the agent never drives itself.',
     'agent:runs': 'Ask Attnd\'s own endpoints.',
@@ -78,6 +80,7 @@ EXCLUDED = {
 POST_EXCLUDED = {
     'console:signup': EXCLUDED['console:signup'],
     'console:account': EXCLUDED['console:account'],
+    'console:location_fill': EXCLUDED['console:location_fill'],
 }
 
 NAMESPACE_AUDIENCE = {'diagnostics': 'staff', 'prospects': 'staff', 'studio': 'studio'}

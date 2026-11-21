@@ -46,15 +46,17 @@ class ComponentTestCase(TestCase):
             'notification_row': {'event_id': self.event.pk, 'notification_id': self.update.pk},
             'notification_form': {'event_id': self.event.pk},
             'object_history': {'event_id': self.event.pk}, 'event_form': {'event_id': self.event.pk},
-            'event_new_form': {},
+            'event_new_form': {}, 'event_team': {'event_id': self.event.pk},
+            'event_metrics': {'event_id': self.event.pk}, 'event_map': {'event_id': self.event.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
             'live_on_phone': 'Live on your phone', 'needs_review': '1 AI update waiting for review',
             'event_overview': 'Live on your phone', 'location_row': 'Main Stage', 'location_form': 'One-line summary',
             'schedule_item_row': 'Prairie Lights', 'schedule_item_form': 'Prairie Lights',
-            'notification_row': 'Gates open late', 'notification_form': 'Send an update',
+            'notification_row': 'Gates open late', 'notification_form': 'Send a notification',
             'object_history': 'No changes recorded yet', 'event_form': 'Prairie Fest', 'event_new_form': 'Create with AI',
+            'event_team': 'Owner', 'event_metrics': 'iOS and Android', 'event_map': 'No location has a map pin yet',
         }
 
     def request(self, user=None):
@@ -219,7 +221,8 @@ class PageTests(ComponentTestCase):
                                                               'component--live_on_phone', 'Attendees joined',
                                                               'Most liked'],
             reverse('console:locations', args=[self.event.pk]): ['component--location_row', 'drag-handle'],
-            reverse('console:location_edit', args=[self.event.pk, self.stage.pk]): ['id="pin-map"',
+            reverse('console:location_edit', args=[self.event.pk, self.stage.pk]): ['data-pin-map',
+                                                                                    'data-fill-site',
                                                                                     'category-options'],
             reverse('console:schedule', args=[self.event.pk]): ['component--schedule_item_row'],
             reverse('console:item_edit', args=[self.event.pk, self.item.pk]): ['name="start_time"'],
@@ -251,7 +254,6 @@ class PageTests(ComponentTestCase):
         self.assertEqual(data['ids'], {'event_id': self.event.pk, 'item_id': self.item.pk})
         self.assertIn('field__error', data['html'])
         self.assertIn('data-component-form', data['html'])
-        self.assertNotIn('id="pin-map"', data['html'])
         # Without the header the page comes back as before.
         response = self.client.post(url, {'name': '', 'start_time': 'not a time'})
         self.assertContains(response, 'field__error')

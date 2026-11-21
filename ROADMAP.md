@@ -61,6 +61,28 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
   concurrently (HTTP/2 multiplexing, a thread pool) or on the worker dyno, outside the row lock.
 - Revisit the "push straight to develop" rule (branch protection, PRs) once there are real users.
 
+## Round 3 web plan (owner-approved Nov 21, 2026; in progress)
+Built on `develop` in this order; ticked as it ships.
+- [ ] **A. Console + chat polish**: address search on every location form (Google Places, else Find on the map via
+  Google Places / Nominatim on the server) ✅, the location map with the event's other locations ✅, Fill from this
+  website ✅, Notifications two columns + Scheduled / Sent sections + editing scheduled ones ✅, canvas-first answers
+  (one line in the chat) ✅, Team and Metrics tabs ✅, platform help with links ✅, narrower margins ✅, no dumps / one
+  answer ✅, History hides Locked fields ✅, Add with AI on every form + fill_form ✅, AI fills Details for the
+  assistant ✅, Updates → Notifications in the console ✅, one reveal helper for every cross-place change ✅, the event
+  map on the Overview ✅, live numbers every 60 s ✅; the rest of the organizer's work on the canvas (A18: review,
+  layout, watching, event details, flyer, sharing kit, lifecycle, restore, CSV export).
+- [ ] **B. Sign-in flow**: signed in → console; logo → /home/; no prompts during a session.
+- [ ] **C. All AI on Anthropic** (official SDK; OpenAI only for Studio images).
+- [ ] **D. Place images in our own store** (event pages, venue site, Wikimedia; API-022 `image_credit`).
+- [ ] **E. Packages**: latest everything, psycopg 3 + pooling, Python 3.15.2.
+- [ ] **F. Django built-ins**: database cache, LoginRequiredMiddleware, Postgres search, GeneratedField / humanize,
+  django.tasks with our own DB-backed worker (last).
+- [ ] **G. Security**: ALLOWED_HOSTS, Scrypt, Permissions-Policy, SECRET_KEY_FALLBACKS, Ask Attnd rate limit + magic bytes.
+- [ ] **H. Performance**: deferred head scripts, lazy Ask Attnd, cached root files, sized images, polling back-off.
+- [ ] **I. Chat-first additions** (Tiers 1–3: preview-before-apply, briefing / readiness, paste anything, server-side
+  conversation, quality harness, live ops, notification drafting, voice, numbers, command bar, preferences, roll over,
+  search, streaming, mobile chat-first, organizer notifications, first-run walkthrough, talk to a person).
+
 ## Future
 
 ### Event assistant (in progress; spec agreed Nov 15, 2026)

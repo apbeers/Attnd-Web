@@ -50,7 +50,7 @@ def send_notification(ctx):
     event, args = ctx.event, ctx.args
     title = (args.get('title') or '').strip() or '(no title)'
     urgent = bool(args.get('urgent'))
-    kind = 'urgent announcement' if urgent else 'update'
+    kind = 'urgent notification' if urgent else 'notification'
     if args.get('when') == 'later':
         return (f'Schedule the {kind} “{title}” for {args.get("send_time") or "(no time)"} ({event.timezone}) in '
                 f'{_name(ctx)}. It goes to the attendees who allow notifications then and shows in the Updates tab.')
@@ -74,7 +74,7 @@ def send_scheduled_notification(ctx):
 def delete_notification(ctx):
     from events.models import Notification
     n = Notification.objects.get(pk=ctx.args['notification_id'], event_id=ctx.args['event_id'])
-    return f'Delete the scheduled update “{n.title}” of {_name(ctx)}. It will not be sent.'
+    return f'Delete the scheduled notification “{n.title}” of {_name(ctx)}. It will not be sent.'
 
 
 # --- event lifecycle ---------------------------------------------------------

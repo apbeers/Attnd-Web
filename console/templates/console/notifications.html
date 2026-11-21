@@ -6,12 +6,21 @@
   <div class="split__aside panel panel--roomy">
     {% component "notification_form" event=event form=form %}
   </div>
-  <div class="split__main panel panel--flush">
-    <ul class="list list--roomy">
-    {% for n in notifications %}
-      {% component "notification_row" event=event notification=n %}
-    {% empty %}<li class="list__empty">No notifications yet.</li>{% endfor %}
-    </ul>
+  <div class="split__main stack">
+    <section class="stack stack--tight">
+      <h2 class="title-4 notifications-heading">Scheduled · {{ scheduled|length }}</h2>
+      <div class="panel panel--flush"><ul class="list list--roomy">
+      {% for n in scheduled %}{% component "notification_row" event=event notification=n %}
+      {% empty %}<li class="list__empty">Nothing scheduled.</li>{% endfor %}
+      </ul></div>
+    </section>
+    <section class="stack stack--tight">
+      <h2 class="title-4 notifications-heading">Sent · {{ sent|length }}</h2>
+      <div class="panel panel--flush"><ul class="list list--roomy">
+      {% for n in sent %}{% component "notification_row" event=event notification=n %}
+      {% empty %}<li class="list__empty">No notifications sent yet.</li>{% endfor %}
+      </ul></div>
+    </section>
   </div>
 </div>
 {% endblock %}

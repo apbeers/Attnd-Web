@@ -462,7 +462,7 @@ class LoopTests(AgentTestCase):
         args.update(event_id=self.event.pk, title='Gates open late', body='Gates open at 11.', when='now')
         run, _ = self.run_with([[('send_notification', args)]])
         step = run.steps.get(confirm_state=AgentStep.CONFIRM_PENDING)
-        self.assertEqual(step.confirm_summary, 'Send the update “Gates open late” now to 3 attendees. It also shows in '
+        self.assertEqual(step.confirm_summary, 'Send the notification “Gates open late” now to 3 attendees. It also shows in '
                                                'the app’s Updates tab.')
         self.assertFalse(Notification.objects.filter(event=self.event).exists())
 

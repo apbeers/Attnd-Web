@@ -1,6 +1,6 @@
-{% load console_tags %}{% comment %} notification_form: compose an update. Sending always asks: in the chat the panel sends it through Ask
+{% load console_tags %}{% comment %} notification_form: compose a notification. Sending always asks: in the chat the panel sends it through Ask
 Attnd's confirm gate. {% endcomment %}<div class="component component--notification_form">
-    <h2>Send an update</h2>
+    <h2>Send a notification</h2>
     <p class="small muted">Pushes to {{ d.reach }} device{{ d.reach|pluralize }} with notifications on, and shows in everyone’s Updates tab.</p>
     {% include 'components/_form.html' with form=d.form %}
 </div>

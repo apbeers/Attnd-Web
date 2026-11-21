@@ -201,6 +201,8 @@ RATE_LIMITS = {
     'studio_report_ip': _rate('studio_report_ip', '5/3600'),    # "Report this site" per IP, 1 hour
     'scrape_ip': _rate('scrape_ip', '5/3600'),                  # homepage trial AI imports per IP, 1 hour
     'attest_nonce_ip': _rate('attest_nonce_ip', '30/60'),       # attestation challenges per IP, 1 minute
+    'place_search_user': _rate('place_search_user', '60/600'),  # the location form's address searches per person
+    'location_fill_user': _rate('location_fill_user', '30/3600'),  # "Fill from this website?" per person, 1 hour
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
@@ -391,6 +393,10 @@ PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # OpenAI's web_search tool: $10 per 1,000 c
 # Provider (agent/providers.py, separate from Studio's STUDIO_AI_PROVIDER): anthropic (default when ANTHROPIC_API_KEY
 # is set; the official SDK, Claude Haiku 5.5) or openai (these models).
 AGENT_PROVIDER = os.getenv('AGENT_PROVIDER', '').strip().lower() or ('anthropic' if ANTHROPIC_API_KEY else 'openai')
+# Claude everywhere outside Ask Attnd's loop and Studio (attnd/claude.py): Haiku for imports, website checks, tags,
+# vision, form fills and scores; Sonnet where Haiku can't (web search).
+AI_MODEL = os.getenv('AI_MODEL', 'claude-haiku-5-5')
+AI_SMART_MODEL = os.getenv('AI_SMART_MODEL', 'claude-sonnet-5-5')
 AGENT_ANTHROPIC_MODEL = os.getenv('AGENT_ANTHROPIC_MODEL', 'claude-haiku-5-5')  # owner, Nov 21, 2026
 PLAN_SUGGESTIONS_MODEL = os.getenv('PLAN_SUGGESTIONS_MODEL', 'claude-haiku-5-5')  # API-021 (events/plan_suggestions.py)
 # Claude Haiku has no server-side refusal fallback: a declined run continues on OpenAI with this model.

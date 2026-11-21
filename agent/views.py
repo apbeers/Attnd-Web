@@ -1,5 +1,8 @@
 """Ask Attnd's endpoints for the console panel (JSON; the panel polls, no WebSockets)."""
 
+import json
+import re
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -40,7 +43,7 @@ def _page_name(path):
 
 
 def stage_text(step):
-    """The thinking line while a step runs: "Reading Updates…", "Adding location “Taco Row”…"."""
+    """The thinking line while a step runs: "Reading Notifications…", "Adding location “Taco Row”…"."""
     args = step.arguments or {}
     if step.kind == AgentStep.KIND_COMPONENT:
         return f'Showing {step.text}…'
@@ -76,8 +79,27 @@ def undo_states(user, steps):
             for e in UndoEntry.objects.filter(pk__in=ids, user=user).only('pk', 'used_at', 'expires_at')}
 
 
+LABEL_MAX = 80
+
+
+def step_label(step):
+    """A step's one-line label in the chat: never page text or JSON (A9). Notes, questions and replies are the
+    model's or the person's own words and stay whole; tool steps are cut to one line of ~80 characters."""
+    text = step.text or ''
+    if step.kind in (AgentStep.KIND_NOTE, AgentStep.KIND_QUESTION, AgentStep.KIND_REPLY):
+        return text
+    text = text.split('\n', 1)[0]
+    cut = re.search(r'[\[{<]', text)  # anything that looks like data starts a dump: drop it
+    if cut and cut.start() > 0:
+        text = text[:cut.start()].rstrip(' :·—-')
+    text = ' '.join(text.split())
+    if len(text) > LABEL_MAX:
+        text = text[:LABEL_MAX - 1].rstrip() + '…'
+    return text
+
+
 def step_json(step, undo=None):
-    out = {'seq': step.seq, 'id': step.pk, 'kind': step.kind, 'tool': step.tool, 'text': step.text, 'ok': step.ok,
+    out = {'seq': step.seq, 'id': step.pk, 'kind': step.kind, 'tool': step.tool, 'text': step_label(step), 'ok': step.ok,
            'changed': step.changed, 'url': step.url, 'event_id': step.event_id, 'confirm': step.confirm_state,
            'at': step.created_at.isoformat(), 'stage': stage_text(step)}
     if step.undo_id:
@@ -88,19 +110,24 @@ def step_json(step, undo=None):
     if step.kind == AgentStep.KIND_COMPONENT:  # the panel fetches the HTML (agent/components.py: render)
         out['component'] = {'name': step.arguments.get('component', ''), 'items': step.arguments.get('items') or [],
                             'picked': bool(step.arguments.get('picked'))}
+        if step.tool == 'fill_form':  # the panel puts these values into that form on screen
+            out['component']['fill'] = step.arguments.get('fill') or {}
+            out['component']['submit'] = bool(step.arguments.get('submit'))
     return out
 
 
 # Follow-ups when the model gave none: from the last component the run showed (the panel's chips).
 FOLLOW_UPS = {
     'event_tile': ['Show the overview', 'Create an event'],
-    'event_overview': ['Show the schedule', 'Show locations', 'Send an update'],
-    'location_row': ['Add a location', 'Show the schedule', 'Send an update'],
+    'event_overview': ['Show the schedule', 'Show locations', 'Send a notification'],
+    'location_row': ['Add a location', 'Show the schedule', 'Send a notification'],
     'location_form': ['Show locations', 'Show the schedule'],
-    'schedule_item_row': ['Add a schedule item', 'Show locations', 'Send an update'],
-    'schedule_item_form': ['Show the schedule', 'Send an update'],
-    'notification_row': ['Send an update', 'Show the schedule'],
-    'notification_form': ['Show updates', 'Show the schedule'],
+    'schedule_item_row': ['Add a schedule item', 'Show locations', 'Send a notification'],
+    'schedule_item_form': ['Show the schedule', 'Send a notification'],
+    'notification_row': ['Send a notification', 'Show the schedule'],
+    'notification_form': ['Show notifications', 'Show the schedule'],
+    'event_team': ['Invite someone', 'Show the metrics'],
+    'event_metrics': ['Show the most liked', 'Send a notification'],
 }
 
 
@@ -112,7 +139,7 @@ def suggestions(run):
     last = run.steps.filter(kind=AgentStep.KIND_COMPONENT).order_by('-seq').first()
     if last is not None:
         return FOLLOW_UPS.get(last.arguments.get('component', ''), [])[:4]
-    return ['Show the schedule', 'Add a location', 'Send an update'] if run.event_id else []
+    return ['Show the schedule', 'Add a location', 'Send a notification'] if run.event_id else []
 
 
 def run_json(run):
@@ -166,7 +193,15 @@ def start(request):
     attachments = [int(i) for i in request.POST.get('attachments', '').split(',') if i.strip().isdigit()]
     if not request.session.session_key:
         request.session.save()
-    run = loop.create_run(request, goal, page, event, attachments)
+    target = {}
+    if request.POST.get('target'):  # Add with AI: the form on screen the agent fills (checked when it fills it)
+        try:
+            raw = json.loads(request.POST['target'])
+            target = {'component': str(raw.get('component', ''))[:64],
+                      'ids': {k: int(v) for k, v in (raw.get('ids') or {}).items() if str(v).isdigit()}}
+        except (ValueError, AttributeError, TypeError):
+            target = {}
+    run = loop.create_run(request, goal, page, event, attachments, target=target)
     return JsonResponse({'run': run_json(run), 'steps': []}, status=202)
 
 

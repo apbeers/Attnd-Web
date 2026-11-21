@@ -1,0 +1,6 @@
+{% load console_tags %}{# event_map: every location with a pin (console.js attndEnhance draws it like the location map: Google or OpenStreetMap); tap a pin for a popup with View location. #}<div class="stack stack--tight component component--event_map">
+  <div class="cluster"><h3 class="eyebrow grow">{% icon "map" %} Map</h3>
+    <span class="small muted">{{ d.count }} location{{ d.count|pluralize }} on the map{% if d.missing %} · <a href="{{ d.locations_url }}">{{ d.missing }} without a pin</a>{% endif %}</span></div>
+  {% if d.count %}<div class="pin-map event-map" data-event-map data-pins="{{ d.pins }}" data-center="{{ d.center }}" data-zoom="{{ d.zoom }}" role="region" aria-label="Map of the event’s locations"></div>
+  {% else %}<p class="small muted">No location has a map pin yet. Open a location and search its address or tap its map to set one.</p>{% endif %}
+</div>

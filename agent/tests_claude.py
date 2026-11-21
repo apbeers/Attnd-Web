@@ -289,7 +289,7 @@ class ContextTests(AgentTestCase):
         self.assertEqual(run.status, AgentRun.WAITING_CONFIRMATION)
         self.assertFalse(run.steps.filter(kind=AgentStep.KIND_QUESTION).exists())
         step = run.steps.get(confirm_state=AgentStep.CONFIRM_PENDING)
-        self.assertIn(f'Schedule the update “Starting soon” for {self.day:%Y-%m-%d}T16:00', step.confirm_summary)
+        self.assertIn(f'Schedule the notification “Starting soon” for {self.day:%Y-%m-%d}T16:00', step.confirm_summary)
         self.assertFalse(Notification.objects.exists())  # nothing is scheduled before Confirm
         loop.confirm(run, step.pk, step.confirm_hash)
         provider.turns.append('Scheduled.')

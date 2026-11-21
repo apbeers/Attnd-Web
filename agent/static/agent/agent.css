@@ -150,23 +150,14 @@
   .agent__thinking-text { transition: none; }
 }
 
-/* Compact tiles in the full-screen chat (the cards themselves are on the canvas) */
-.agent__tiles { gap: var(--space-1); }
-.agent__tile { display: flex; align-items: center; gap: var(--space-3); width: 100%; padding: .55rem .75rem; font: inherit; text-align: left;
-  color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius);
-  cursor: pointer; }
-.agent__tile:hover { background: var(--color-brand-soft); border-color: var(--color-brand-line); }
-.agent__tile:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 1px; }
-.agent__tile-mark { flex: none; display: grid; place-items: center; width: 2.25rem; height: 2.25rem; font-weight: 800;
-  color: var(--color-brand-text); background: var(--color-brand-soft); border-radius: .7rem; }
-.agent__tile-text { display: grid; flex: 1; min-width: 0; font-size: var(--text-sm); line-height: 1.3; }
-.agent__tile-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agent__tile-text span { color: var(--color-muted); font-size: var(--text-xs); }
-.agent__tile-arrow { flex: none; font-size: 1.3rem; color: var(--color-muted); }
+/* Full screen: what went to the canvas is one line in the chat ("Showing 18 locations →") */
+.agent__note { align-self: flex-start; }
+.agent__shown { color: var(--color-brand-text); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.agent__link { color: var(--color-brand-text); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---- Full screen (/console/assistant/): chat column + canvas ---------------------------------------------- */
-.page:has(.assistant) { padding-bottom: var(--space-4); }
-.assistant { display: grid; gap: var(--space-5); grid-template-columns: minmax(20rem, 36%) minmax(0, 1fr);
+.page:has(.assistant) { padding: var(--space-3) clamp(.75rem, 1.1vw, 1.25rem) var(--space-3); }
+.assistant { display: grid; gap: var(--space-4); grid-template-columns: minmax(20rem, 36%) minmax(0, 1fr);
   height: calc(100vh - 8.5rem); min-height: 32rem; }
 .agent--full { position: static; display: flex; z-index: auto; min-height: 0; order: -1; }
 .agent--full .agent__launcher, .agent--full .agent__switch { display: none; }
@@ -210,6 +201,13 @@
 /* Sections of a tab (Updates: compose, then every update) and the tab's toolbar (Add location…). */
 .canvas__toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-bottom: var(--space-3); }
 .canvas__section + .canvas__section { margin-top: var(--space-5); }
+/* Updates: the compose card and "Sent and scheduled" side by side on wide canvases, stacked when narrow */
+.canvas__pane[data-tab=Updates] { container: updates / inline-size; }
+@container updates (min-width: 56rem) {
+  .canvas__pane[data-tab=Updates] > .canvas__grid { display: grid; grid-template-columns: minmax(22rem, 5fr) minmax(0, 6fr); gap: var(--space-5); align-items: start; }
+  .canvas__pane[data-tab=Updates] > .canvas__grid > .canvas__section + .canvas__section { margin-top: 0; }
+  .canvas__pane[data-tab=Updates] [data-section=notification_form] { position: sticky; top: 0; }
+}
 /* (the compose form gets a soft card on the canvas) */
 .canvas [data-section=notification_form] .agent__card { padding: var(--space-4) var(--space-5); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
 .canvas [data-section=event_overview] .canvas__cards, .canvas__level .canvas__cards { grid-template-columns: 1fr; }
@@ -221,3 +219,9 @@
   .canvas { display: none; }
   .agent--full .agent__panel { height: calc(100vh - 9rem); }
 }
+
+.agent__group { margin: var(--space-3) 0 var(--space-1); }
+.canvas__cards--rows > .agent__group { padding: 0 var(--space-2); }
+.agent__target { display: flex; align-items: center; gap: var(--space-2); align-self: flex-start; margin: 0 var(--space-3) var(--space-1);
+  padding: .15rem .3rem .15rem .7rem; color: var(--color-brand-text); background: var(--color-brand-soft); border-radius: var(--radius-pill); }
+.agent__target[hidden] { display: none; }

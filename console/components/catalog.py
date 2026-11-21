@@ -5,6 +5,7 @@ or objects a console view already loaded for this person (the pages). Everything
 the templates in console/templates/components/ draw only from it.
 """
 
+import json
 from datetime import timedelta
 
 from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
@@ -227,14 +228,34 @@ def needs_review(user, event_id=None, event=None):
                         'url': reverse('console:changeset', args=[cs.pk])} for cs in pending]}
 
 
-@component('event_overview', 'Event overview', "An event at a glance: header, AI updates to review, numbers, the QR "
-           'to open it live on your phone.', parts=('event_header', 'needs_review', 'event_stats', 'live_on_phone'),
+@component('event_map', 'Event map', "A map of every location of an event that has a pin; tap a pin for its "
+           'details and View location.', page=lambda ids: reverse('console:locations', args=[ids['event_id']]))
+def event_map(user, event_id=None, event=None):
+    event = editable_event(user, event_id, event)
+    pins, missing = [], 0
+    for loc in event.location_set.order_by('sort_order', 'name'):
+        if not loc.has_coordinates:
+            missing += 1
+            continue
+        pins.append({'id': loc.pk, 'name': loc.name, 'lat': float(loc.latitude), 'lng': float(loc.longitude),
+                     'category': loc.category, 'snippet': Truncator(loc.snippet or loc.address).chars(80),
+                     'hidden': loc.hidden, 'url': reverse('console:location_edit', args=[event.pk, loc.pk])})
+    center = [float(event.latitude), float(event.longitude)] if event.latitude is not None and event.longitude is not None \
+        else ([pins[0]['lat'], pins[0]['lng']] if pins else [39.8, -98.6])
+    return {'event_id': event.pk, 'name': f'Map · {event.name}', 'pins': json.dumps(pins), 'count': len(pins),
+            'missing': missing, 'center': json.dumps(center), 'zoom': 15 if pins else 4,
+            'locations_url': reverse('console:locations', args=[event.pk])}
+
+
+@component('event_overview', 'Event overview', "An event at a glance: header, AI updates to review, numbers, a map of "
+           'its locations, the QR to open it live on your phone.',
+           parts=('event_header', 'needs_review', 'event_stats', 'event_map', 'live_on_phone'),
            page=event_url)
 def event_overview(user, event_id=None, event=None):
     event = editable_event(user, event_id, event)
     from console.components import get
     parts = []
-    for name in ('event_header', 'needs_review', 'event_stats', 'live_on_phone'):
+    for name in ('event_header', 'needs_review', 'event_stats', 'event_map', 'live_on_phone'):
         data = get(name).data(user, event=event)
         parts.append({**data, 'component': name, 'ids': {'event_id': event.pk}})  # (finish() resolves them)
     return {'id': event.pk, 'name': event.name, 'parts': parts}
@@ -308,6 +329,24 @@ def _context_details(form, locked):
                  'see.' + (' You’ve edited them, so AI updates only suggest changes.' if 'context' in locked else '')})
 
 
+def _pin_map(event, loc=None):
+    """The location form's map: this place as the main pin, the event's other locations as small muted pins, framed
+    to fit (console.js / maps.js read these as data attributes)."""
+    others = [{'name': name, 'lat': float(lat), 'lng': float(lng)} for name, lat, lng in
+              event.location_set.exclude(pk=getattr(loc, 'pk', None)).exclude(latitude=None).exclude(longitude=None)
+              .order_by('sort_order', 'name').values_list('name', 'latitude', 'longitude')[:80]
+              if not (abs(lat) < 1e-6 and abs(lng) < 1e-6)]
+    if loc is not None and loc.has_coordinates:
+        center, zoom = [float(loc.latitude), float(loc.longitude)], 16
+    elif event.latitude is not None and event.longitude is not None:
+        center, zoom = [float(event.latitude), float(event.longitude)], 15
+    else:
+        center, zoom = [39.8, -98.6], 4
+    return {'center': json.dumps(center), 'zoom': zoom, 'others': json.dumps(others),
+            'places_url': reverse('console:place_search', args=[event.pk]),
+            'has_pin': bool(loc is not None and loc.has_coordinates)}
+
+
 @component('location_form', 'Location form', 'Add or edit a location: name, category, summary, description, tags, '
            'address and map pin, website, image, hidden, details for the assistant. Without location_id: a new one.',
            ids=('event_id',), optional_ids=('location_id',),
@@ -330,8 +369,9 @@ def location_form(user, event_id=None, location_id=None, event=None, location=No
                                    'options': list(getattr(form, 'categories', [])) + LOCATION_CATEGORIES}),
             'snippet', 'description', 'tags_text', _tags_note(event), 'address',
             ('grid', 'latitude', 'longitude'),
-            ('block', 'pin_map'),
-            'website', ('grid', 'image', 'image_url'), 'hidden', _context_details(form, locked),
+            ('block', 'pin_map', _pin_map(event, loc)),
+            'website', ('block', 'fill_site', {'url': reverse('console:location_fill', args=[event.pk])}),
+            ('grid', 'image', 'image_url'), 'hidden', _context_details(form, locked),
         ]
         data = form_json(form, [r for r in layout if r], action=url,
                          submit=[{'label': 'Save', 'style': 'primary'},
@@ -436,14 +476,17 @@ def schedule_item_form(user, event_id=None, item_id=None, event=None, item=None,
 
 def _expand_notifications(user, event_id=None, **_):
     event = editable_event(user, event_id)
-    return [{'event_id': event.pk, 'notification_id': pk}
-            for pk in event.notification_set.order_by('-send_time').values_list('pk', flat=True)[:30]]
+    # Scheduled first (soonest first), then sent (newest first): the list's two sections.
+    scheduled = list(event.notification_set.filter(sent=False).order_by('send_time').values_list('pk', flat=True)[:30])
+    sent = list(event.notification_set.filter(sent=True).order_by('-send_time').values_list('pk', flat=True)[:30])
+    return [{'event_id': event.pk, 'notification_id': pk} for pk in scheduled + sent]
 
 
-@component('notification_row', 'Update', 'An update (push notification) of an event: title, text, urgent, sent '
+@component('notification_row', 'Notification', 'A notification (push notification) of an event: title, text, urgent, sent '
            '(and how many devices got it) or scheduled; Send now / Delete for scheduled ones. With only event_id: '
-           'every update.', ids=('event_id', 'notification_id'), expand=_expand_notifications,
-           actions=(('send_scheduled_notification', 'Send now'), ('delete_scheduled_notification', 'Delete')),
+           'every notification.', ids=('event_id', 'notification_id'), expand=_expand_notifications,
+           actions=(('send_scheduled_notification', 'Send now'), ('edit_scheduled_notification', 'Save'),
+                    ('delete_scheduled_notification', 'Delete')),
            page=lambda ids: reverse('console:notifications', args=[ids['event_id']]))
 def notification_row(user, event_id=None, notification_id=None, event=None, notification=None):
     from events.models import Notification
@@ -452,9 +495,19 @@ def notification_row(user, event_id=None, notification_id=None, event=None, noti
     with timezone.override(_tz(event)):
         sent_at = fmt(n.sent_at or n.send_time, 'M j, g:i A') if n.sent else ''
         scheduled = '' if n.sent else fmt(n.send_time, 'M j, g:i A')
+        send_local = '' if n.sent or not n.send_time else timezone.localtime(n.send_time).strftime('%Y-%m-%dT%H:%M')
+    now = timezone.now()
+    relative = ''
+    if not n.sent and n.send_time:
+        relative = f'in {timeuntil(n.send_time, now, depth=1)}' if n.send_time > now else 'due now'
+    edit = None
+    if not n.sent:
+        edit = {'url': reverse('console:notification_action', args=[event.pk, n.pk]), 'title': n.title, 'body': n.body,
+                'send_time': send_local}
     return {
         'id': n.pk, 'title': n.title, 'body': n.body, 'urgent': n.is_urgent, 'sent': n.sent, 'sent_at': sent_at,
-        'delivered': n.delivered_count, 'scheduled': scheduled,
+        'delivered': n.delivered_count, 'scheduled': scheduled, 'relative': relative, 'edit': edit,
+        'group': 'sent' if n.sent else 'scheduled',
         'actions': [] if n.sent else [{'name': 'send_scheduled_notification', 'style': 'outline'},
                                       {'name': 'delete_scheduled_notification', 'style': 'danger'}],
     }
@@ -474,7 +527,7 @@ def _notification_bind(user, ids, data):
     return form
 
 
-@component('notification_form', 'Send an update', 'Write an update for the attendees (push notification + the '
+@component('notification_form', 'Send a notification', 'Write a notification for the attendees (push notification + the '
            "app's Updates tab): title, text, now or scheduled, urgent; how many devices it reaches. Sending always "
            'asks to confirm.', actions=(('send_notification', 'Send'),), form=_notification_bind,
            page=lambda ids: reverse('console:notifications', args=[ids['event_id']]))
@@ -509,7 +562,7 @@ HISTORY_MODELS = (('location_id', 'events.location'), ('item_id', 'events.schedu
 
 
 @component('object_history', 'History', "Who changed what and when: an event's history (every location, schedule "
-           'item, update and team change), or one location / schedule item / update with its id; field old → new, '
+           'item, notification and team change), or one location / schedule item / notification with its id; field old → new, '
            'Undo while a change can still be undone.', ids=('event_id',),
            optional_ids=('location_id', 'item_id', 'notification_id'),
            page=lambda ids: reverse('console:history', args=[ids['event_id']]))
@@ -580,3 +633,120 @@ def _new_event_forms(user):
 def event_new_form(user):
     ai, blank = _new_event_forms(user)
     return {'title': 'New event', 'ai': ai, 'blank': blank}
+
+
+# ---------------------------------------------------------------------------
+# Team and metrics (the full-screen canvas's Team and Metrics tabs, and chat cards)
+# ---------------------------------------------------------------------------
+
+def _team_bind(user, ids, data):
+    from console.forms.event_forms import TeamInviteForm
+    form = TeamInviteForm(data)
+    form.is_valid()
+    return form
+
+
+def _row_actions(event, offered):
+    """A row's buttons with url / confirm (they are also in the component's own list, which act() checks)."""
+    from console.components import get, resolve_actions
+    return [dict(a, **{k: v for k, v in r.items() if k != 'name'}) for a, r in
+            zip(offered, resolve_actions(get('event_team'), {'event_id': event.pk}, offered))]
+
+
+@component('event_team', 'Team', "An event's team: the owner, admins and contributors with their roles, and pending "
+           'invitations by email; invite someone, change a role, remove someone, cancel an invitation (these always '
+           'ask to confirm).', form=_team_bind,
+           actions=(('invite_team_member', 'Invite'), ('cancel_team_invite', 'Cancel'), ('remove_team_member', 'Remove'),
+                    ('change_team_role', 'Change role'), ('leave_event', 'Leave')),
+           page=lambda ids: reverse('console:team', args=[ids['event_id']]))
+def event_team(user, event_id=None, event=None, form=None):
+    from console.accounts import display_name
+    from console.forms.event_forms import TeamInviteForm
+    from events.models import EventMember
+    event = editable_event(user, event_id, event)
+    role = event.role_for(user)
+    can_manage = role in ('owner', EventMember.ROLE_ADMIN)
+    is_owner = role == 'owner'
+    actions, members = [], []
+    for m in event.members.select_related('user').order_by('role', 'user__email'):
+        row = {'id': m.pk, 'email': m.user.email, 'name': display_name(m.user), 'role': m.get_role_display(),
+               'you': m.user_id == user.pk, 'actions': []}
+        if is_owner:
+            other = EventMember.ROLE_CONTRIBUTOR if m.role == EventMember.ROLE_ADMIN else EventMember.ROLE_ADMIN
+            row['actions'].append({'name': 'change_team_role', 'style': 'outline',
+                                   'label': f'Make {dict(EventMember.ROLE_CHOICES)[other].lower()}',
+                                   'fields': {'member': m.pk, 'role': other}})
+        if is_owner or (can_manage and m.role == EventMember.ROLE_CONTRIBUTOR):
+            row['actions'].append({'name': 'remove_team_member', 'label': 'Remove', 'style': 'danger',
+                                   'fields': {'member': m.pk}})
+        elif m.user_id == user.pk:
+            row['actions'].append({'name': 'leave_event', 'label': 'Leave', 'style': 'danger'})
+        row['actions'] = _row_actions(event, row['actions'])
+        actions += row['actions']
+        members.append(row)
+    invites = []
+    for i in event.invites.order_by('email'):
+        row = {'id': i.pk, 'email': i.email, 'role': i.get_role_display(), 'actions': []}
+        if can_manage:
+            row['actions'].append({'name': 'cancel_team_invite', 'label': 'Cancel', 'style': 'danger',
+                                   'fields': {'invite': i.pk}})
+        row['actions'] = _row_actions(event, row['actions'])
+        actions += row['actions']
+        invites.append(row)
+    invite = None
+    if can_manage:
+        form = form or TeamInviteForm()
+        invite = form_json(form, ['email'] + (['role'] if is_owner else []),
+                           action=reverse('console:team', args=[event.pk]),
+                           submit=[{'label': 'Invite', 'style': 'primary'}], confirm_action='invite_team_member')
+        invite['hidden'] = {'action': 'invite'}
+        actions.append({'name': 'invite_team_member'})
+    return {
+        'event_id': event.pk, 'name': f'Team · {event.name}', 'your_role': role,
+        'owner': {'email': event.user.email if event.user_id else '', 'name': display_name(event.user) if event.user_id else '',
+                  'you': event.user_id == user.pk},
+        'members': members, 'invites': invites, 'invite': invite, 'can_manage': can_manage,
+        'url': reverse('console:team', args=[event.pk]), 'actions': actions,
+    }
+
+
+@component('event_metrics', 'Metrics', "This event's usage from the apps (anonymous counts): devices joined, app "
+           'opens, views, searches, likes and the most liked places and items, the iOS / Android split and how many '
+           'devices push notifications reach.', page=lambda ids: reverse('console:usage', args=[ids['event_id']]))
+def event_metrics(user, event_id=None, event=None):
+    from console.usage import event_usage
+    from events.models import Device
+    event = editable_event(user, event_id, event)
+    tz = _tz(event)
+    u = event_usage(event, tz)
+    devices = Device.objects.real().filter(event=event)
+    by_platform = dict(devices.values_list('platform').annotate(n=Count('id')).values_list('platform', 'n'))
+    in_event = sum(by_platform.values())
+    split = u['platforms']
+    total = (split['ios'] + split['android']) or 0
+    return {
+        'event_id': event.pk, 'name': f'Metrics · {event.name}', 'has_data': u['has_data'] or in_event > 0,
+        'numbers': [
+            {'label': 'In the event now', 'value': in_event},
+            {'label': 'Joined', 'value': u['joins']},
+            {'label': 'App opens', 'value': u['opens']},
+            {'label': 'Searches', 'value': u['searches']},
+            {'label': 'Likes', 'value': u['net_hearts']},
+            {'label': 'Notifications opened', 'value': u['notification_opens']},
+            {'label': 'QR / link opens', 'value': u['link_opens']['total']},
+        ],
+        'platforms': [
+            {'label': 'iOS', 'devices': by_platform.get('ios', 0), 'activity': split['ios'],
+             'share': round(100 * split['ios'] / total) if total else 0},
+            {'label': 'Android', 'devices': by_platform.get('android', 0), 'activity': split['android'],
+             'share': round(100 * split['android'] / total) if total else 0},
+        ],
+        'push': {'reach': devices.filter(subscribed=True).exclude(push_token='').count(),
+                 'urgent_reach': devices.exclude(push_token='').count()},
+        'views': {'locations': u['top_locations'][:5], 'items': u['top_items'][:5]},
+        'liked': {'locations': u['hearted_locations'][:5], 'items': u['hearted_items'][:5]},
+        'tabs': u['tabs'][:6],
+        'busiest': (f'{u["busiest"]["hour"]:%a %-I %p} · {u["busiest"]["count"]} interactions'
+                    if u['busiest'] else ''),
+        'url': reverse('console:usage', args=[event.pk]),
+    }

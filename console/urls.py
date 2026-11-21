@@ -29,6 +29,8 @@ urlpatterns = [
 
     path('events/<int:event_id>/locations/', v.locations, name='locations'),
     path('events/<int:event_id>/locations/new/', v.location_edit, name='location_new'),
+    path('events/<int:event_id>/locations/fill/', v.location_fill, name='location_fill'),
+    path('events/<int:event_id>/places/', v.place_search, name='place_search'),
     path('events/<int:event_id>/locations/reorder/', v.locations_reorder, name='locations_reorder'),
     path('events/<int:event_id>/locations/<int:location_id>/', v.location_edit, name='location_edit'),
     path('events/<int:event_id>/locations/<int:location_id>/action/', v.location_action, name='location_action'),

@@ -146,12 +146,30 @@
   }
 
   // ---- rendering ---------------------------------------------------------------------
+  // Console links in the assistant's words become real links ("Change your password → [Account](/console/account/)"):
+  // only same-site paths, built with the DOM (never HTML from the model).
+  const LINK_RE = /\[([^\]\n]{1,80})\]\((\/(?!\/)[^)\s]{0,200})\)/g;
+  function richText(el, text) {
+    let at = 0;
+    for (const m of text.matchAll(LINK_RE)) {
+      el.append(text.slice(at, m.index));
+      const a = document.createElement('a');
+      a.href = m[2];
+      a.textContent = m[1];
+      a.className = 'agent__link';
+      a.addEventListener('click', (e) => { if (canvasOn() && openUrl(m[2], a)) e.preventDefault(); });
+      el.append(a);
+      at = m.index + m[0].length;
+    }
+    el.append(text.slice(at));
+  }
   function bubble(kind, text) {
     $('[data-agent-hello]')?.remove();
     const el = document.createElement('div');
     el.className = `agent__msg agent__msg--${kind}`;
-    el.textContent = text;
+    if (kind === 'assistant') richText(el, text); else el.textContent = text;
     log.appendChild(el);
+    if (live && kind !== 'user') window.attndReveal?.(el, 'in');
     if (!thinking.hidden) log.appendChild(thinking);
     log.scrollTop = log.scrollHeight;
     return el;
@@ -174,6 +192,7 @@
     if (state === 'failed') el.classList.add('is-failed');
     if (state === 'changed') el.classList.add('is-changed');
     log.appendChild(el);
+    if (live) window.attndReveal?.(el, 'in');
     if (!thinking.hidden) log.appendChild(thinking);
     log.scrollTop = log.scrollHeight;
     return el;
@@ -359,8 +378,15 @@
               done: 'Done', failed: 'Didn’t finish', stopped: 'Stopped' }[r.status] || r.status) + spend;
   }
 
+  // A finished run's answer is drawn once (a note with the same words isn't repeated as the summary).
+  const sameText = (a, b) => (a || '').replace(/\s+/g, ' ').trim() === (b || '').replace(/\s+/g, ' ').trim();
+  function answerOnce(text) {
+    const last = [...log.children].filter((e) => e !== thinking && e.nodeType === 1).pop();
+    if (last && last.classList.contains('agent__msg--assistant') && sameText(last.textContent, text.replace(LINK_RE, '$1'))) return last;
+    return bubble('assistant', text);
+  }
   function finished() {
-    if (run.summary) bubble('assistant', run.summary);
+    if (run.summary) answerOnce(run.summary);
     if (run.error && run.status !== 'done') bubble('error', run.error);
     if (full) {  // full screen: fresh copies on the canvas instead of a reload
       run.changed_events.forEach((id) => refreshKeys([`event:${id}`]));
@@ -439,7 +465,7 @@
     if (!data.run.buttons) bubble('user', data.run.goal);
     wasActive = data.run.active;
     renderRun(data);
-    if (!data.run.active && data.run.summary) bubble('assistant', data.run.summary);
+    if (!data.run.active && data.run.summary) answerOnce(data.run.summary);
     if (!data.run.active && data.run.error && data.run.status !== 'done') bubble('error', data.run.error);
     live = isLive !== false;
   }
@@ -492,7 +518,8 @@
         if (!run || !run.active) { lastSeq = 0; }
         showSuggestions([]);
         const data = await post(root.dataset.startUrl, { goal: text, page: full ? fromPage : location.pathname + location.search,
-                                                          event_id: eventId || '', attachments: attachments.map((a) => a.id).join(',') });
+                                                          event_id: eventId || '', attachments: attachments.map((a) => a.id).join(','),
+                                                          target: target ? JSON.stringify({ component: target.component, ids: target.ids }) : '' });
         if (data.run && data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
         attachments = [];
         filesList.textContent = '';
@@ -583,6 +610,7 @@
     card.prepend(body);
     window.attndShowIf?.(body);
     window.attndOpenApp?.(body);
+    window.attndEnhance?.(body);  // address search, the location map, Fill from this website
   }
 
   function makeCard(item) {
@@ -598,36 +626,169 @@
     return card;
   }
 
+  // Lists with groups (notifications: "Scheduled · 2" first, then "Sent · 5") get a small heading per group.
+  const GROUPS = { scheduled: 'Scheduled', sent: 'Sent' };
+  function appendGrouped(into, items) {
+    const counts = {};
+    items.forEach((i) => { if (i.group) counts[i.group] = (counts[i.group] || 0) + 1; });
+    let current = null;
+    items.forEach((item) => {
+      if (item.group && item.group !== current && GROUPS[item.group]) {
+        current = item.group;
+        const h = document.createElement('h4');
+        h.className = 'eyebrow agent__group';
+        h.textContent = `${GROUPS[item.group]} · ${counts[item.group]}`;
+        into.appendChild(h);
+      }
+      into.appendChild(makeCard(item));
+    });
+  }
+
   function cardBox() {
     $('[data-agent-hello]')?.remove();
     const box = document.createElement('div');
     box.className = 'agent__component';
     log.appendChild(box);
+    if (live) window.attndReveal?.(box, 'in');
     return box;
   }
 
+  // Full screen: what the canvas can show goes to the canvas (a list → its tab, one item → the overlay) and the chat
+  // keeps one line ("Showing 18 locations →", tap to show it again); no column of tiles, nothing for a tap's detail.
+  const NOUNS = { location_row: ['location', 'locations'], schedule_item_row: ['schedule item', 'schedule items'],
+                  notification_row: ['notification', 'notifications'], event_tile: ['event', 'events'] };
+  const OVERLAY = new Set(['location_form', 'schedule_item_form', 'event_form', 'object_history', 'event_new_form']);
+  function canvasNote(step, items) {
+    const name = step.component.name;
+    const n = (items || step.component.items).length;
+    const noun = NOUNS[name];
+    const what = noun ? `${n} ${noun[n === 1 ? 0 : 1]}` : (items && items[0] ? (items[0].label || items[0].title) : step.text);
+    const line = document.createElement('button');
+    line.type = 'button';
+    line.className = 'agent__shown link-button small';
+    line.textContent = `Showing ${what} →`;
+    line.addEventListener('click', () => showOnCanvas(step, line));
+    return line;
+  }
+  async function showOnCanvas(step, opener, items) {
+    const name = step.component.name;
+    items = items || await fetchCards(name, step.component.items);
+    if (OVERLAY.has(name) && items.length === 1) {
+      overlayOpener = opener || null;
+      showOverlay(items[0].label || items[0].title, await withHistory(name, items[0].ids, items));
+    } else {
+      toCanvas(name, items);
+    }
+    return items;
+  }
+
   async function showComponents(step) {
+    if (step.component.fill) return fillStep(step);
+    if (canvasOn()) {
+      if (step.component.picked) return document.createComment('picked');  // its detail is already on the canvas
+      const box = cardBox();
+      box.classList.add('agent__note');
+      try {
+        const items = live ? await showOnCanvas(step) : null;
+        box.appendChild(canvasNote(step, items));
+      } catch (err) {
+        box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
+      }
+      log.scrollTop = log.scrollHeight;
+      return box;
+    }
     const box = cardBox();
     try {
       const items = await fetchCards(step.component.name, step.component.items);
-      if (canvasOn() && step.component.picked) {
-        // Something opened earlier: a tile that opens it again on the canvas.
-        box.classList.add('agent__tiles');
-        items.forEach((item) => box.appendChild(makeTile(item, null, 0, () => showOverlay(item.label || item.title, [item]))));
-      } else if (canvasOn()) {
-        // Full screen: compact tiles in the chat, the cards themselves on the canvas.
-        box.classList.add('agent__tiles');
-        const sec = toCanvas(step.component.name, items);
-        items.forEach((item, i) => box.appendChild(makeTile(item, sec, i)));
-      } else {
-        items.forEach((item) => box.appendChild(makeCard(item)));
-      }
+      appendGrouped(box, items);
     } catch (err) {
       box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
     }
     foldOld();
     log.scrollTop = log.scrollHeight;
     return box;
+  }
+
+  // ---- Add with AI (every form component) and fill_form ------------------------------------------------------
+  // The sparkle button above a form opens the chat with a prompt for that thing and remembers the form; what the
+  // person then says is sent with it, and the agent's fill_form puts values into that same form in front of them
+  // (highlighted, in sequence). Nothing is saved until they press Save (or say "save it": submit).
+  let target = null;  // {component, ids, form}
+  const targetChip = $('[data-agent-target]');
+  function setTarget(t) {
+    target = t;
+    if (!targetChip) return;
+    targetChip.hidden = !t;
+    if (t) targetChip.querySelector('[data-agent-target-text]').textContent = t.label;
+  }
+  targetChip?.querySelector('[data-agent-target-clear]')?.addEventListener('click', () => { setTarget(null); input.focus(); });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-add-with-ai]');
+    if (!b) return;
+    e.preventDefault();
+    const form = b.closest('.ai-offer')?.nextElementSibling;
+    let ids = {};
+    try { ids = JSON.parse(b.dataset.aiIds || '{}'); } catch (err) { ids = {}; }
+    setTarget({ component: b.dataset.aiComponent, ids, form: form && form.matches('form') ? form : null,
+                label: `Filling: ${b.closest('.agent__card')?.dataset.title || document.title.split(' · ')[0]}` });
+    if (!full) open(false);
+    input.placeholder = b.dataset.aiPrompt;
+    input.focus();
+    window.attndReveal?.(input.closest('form') || input, 'pulse');
+  });
+
+  function findForm(name, ids) {
+    const want = JSON.stringify(Object.fromEntries(Object.entries(ids || {}).sort()));
+    if (target && target.form && document.contains(target.form) && target.component === name
+        && target.form.dataset.formIds === want) return target.form;
+    const all = [...document.querySelectorAll(`form[data-form-component="${name}"]`)].filter((f) => f.dataset.formIds === want);
+    return all.find((f) => f.offsetParent !== null) || all[0] || null;
+  }
+  function applyFill(form, values, submit) {
+    let n = 0;
+    Object.entries(values).forEach(([name, value]) => {
+      const fields = form.querySelectorAll(`[name="${CSS.escape(name)}"]`);
+      if (!fields.length) return;
+      fields.forEach((el) => {
+        if (el.type === 'checkbox') el.checked = /^(true|1|yes|on)$/i.test(value);
+        else if (el.type === 'radio') el.checked = el.value === value;
+        else el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      const el = fields[0];
+      el.closest('details')?.setAttribute('open', '');  // Details for the assistant: open where it filled
+      const box = el.closest('.field') || el;
+      box.classList.add('is-ai-filled');
+      window.attndReveal?.(box, 'glow', { delay: n * 90 });
+      if (n === 0) box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      n += 1;
+    });
+    window.attndShowIf?.(form);
+    if (submit) {
+      const save = form.querySelector('button:not([type=button]):not([name])') || form.querySelector('button:not([type=button])');
+      setTimeout(() => (save ? form.requestSubmit(save) : form.requestSubmit()), 300);
+    }
+    return n;
+  }
+  async function fillStep(step) {
+    const { name, items, fill, submit } = step.component;
+    const ids = items[0] || {};
+    const line = stepLine(step.text, submit ? 'changed' : '');
+    if (!live) return line;  // history: just the line
+    let form = findForm(name, ids);
+    try {
+      if (!form) {  // not on screen yet: the canvas overlay (full screen) or a card in the chat
+        if (canvasOn()) await openComponent(name, ids, null);
+        else {
+          const box = cardBox();
+          (await fetchCards(name, [ids])).forEach((item) => box.appendChild(makeCard(item)));
+        }
+        form = findForm(name, ids);
+      }
+      if (form) applyFill(form, fill, submit);
+    } catch (err) { bubble('error', err.message); }
+    return line;
   }
 
   function liveCards() {
@@ -655,11 +816,21 @@
     });
   }
 
-  async function refresh(card) {
+  async function refresh(card, liveOnly) {
     card.classList.add('is-busy');
     try {
       const [item] = await fetchCards(card.dataset.component, [JSON.parse(card.dataset.ids)]);
-      setBody(card, item.html);
+      const body = card.querySelector('.agent__card-body');
+      const old = body?.innerHTML;
+      if (liveOnly === true && body && window.attndLiveSwap) {  // live numbers: pulse just the changed ones
+        const tmp = document.createElement('div');
+        tmp.innerHTML = item.html;
+        const fresh = [...tmp.querySelectorAll('[data-live]')];
+        body.querySelectorAll('[data-live]').forEach((el, i) => { if (fresh[i]) window.attndLiveSwap(el, fresh[i]); });
+      } else {
+        setBody(card, item.html);
+        if (old !== undefined && !sameHtml(old, item.html)) reveal(card, 'pulse');  // it changed: draw the eye
+      }
       card.dataset.keys = (item.keys || []).join(' ');
     } catch (err) {
       if (err.status === 404) {
@@ -708,8 +879,9 @@
     finally { card.classList.remove('is-busy'); }
   }
 
-  async function act(card, action, form) {
+  async function act(card, action, form, fields) {
     const body = form ? new FormData(form) : new FormData();
+    if (fields) body.set('fields', fields);  // this button's own values (which member, which role)
     body.set('run', run ? run.id : '');  // none yet: the server starts a quiet one for the buttons
     body.set('component', card.dataset.component);
     body.set('ids', card.dataset.ids);
@@ -776,10 +948,10 @@
     const card = e.target.closest('.agent__card');
     if (!card || card.classList.contains('is-folded') || card.classList.contains('is-gone')) return;
     const button = e.target.closest('[data-component-act]');
-    if (button) { e.preventDefault(); act(card, button.dataset.componentAct); return; }
+    if (button) { e.preventDefault(); act(card, button.dataset.componentAct, null, button.dataset.componentFields); return; }
     const title = e.target.closest('.title-link');
     if (title && card.dataset.detail) { e.preventDefault(); pick(card); return; }
-    // Full screen: links to events, locations, the schedule and updates open on the canvas, not as pages.
+    // Full screen: links to events, locations, the schedule and notifications open on the canvas, not as pages.
     const link = e.target.closest('a[href]');
     if (link && canvasOn() && !link.target && !link.hasAttribute('download') && openUrl(link.getAttribute('href'), link)) {
       e.preventDefault();
@@ -802,26 +974,27 @@
   });
 
   // ---- Full screen: the canvas (tabs of what the chat showed) and the detail overlay ---------------------------
-  // Each tab holds sections, one per component (Updates: the compose form, then every update). A list section
+  // Each tab holds sections, one per component (Notifications: the compose form, then every notification). A list section
   // remembers its parent ids ({event_id}) and reloads as a whole when something of that event changes, so new
   // rows appear and deleted ones go. Toolbars add things (Add location, Add schedule item…) in the overlay.
   const KINDS = { event_tile: 'Events', event_new_form: 'Events', event_overview: 'Overview', event_stats: 'Overview',
                   live_on_phone: 'Overview', needs_review: 'Overview', event_header: 'Overview', event_form: 'Overview',
                   object_history: 'Overview', location_row: 'Locations', location_form: 'Locations',
-                  schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Updates',
-                  notification_form: 'Updates' };
-  const ORDER = ['Events', 'Overview', 'Locations', 'Schedule', 'Updates'];
+                  schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Notifications',
+                  notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics' };
+  const ORDER = ['Events', 'Overview', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics'];
   const SECTION_ORDER = ['event_tile', 'event_overview', 'notification_form', 'notification_row'];
   const EMPTY = { location_row: 'No locations yet. Add stages, booths, food, anywhere attendees go.',
-                  schedule_item_row: 'No schedule items yet.', notification_row: 'No updates sent or scheduled yet.',
+                  schedule_item_row: 'No schedule items yet.', notification_row: 'No notifications sent or scheduled yet.',
                   event_tile: 'No events yet.' };
-  const HEADINGS = { notification_row: 'Sent and scheduled' };
+  const HEADINGS = {};  // (notifications: the groups' own headings, Scheduled · N and Sent · N)
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const tabs = new Map();  // label -> {button, pane, label}
   let overlayStack = [];   // [{title, items, el}]
   let overlayOpener = null;
 
   function selectTab(label) {
+    const before = [...tabs.values()].find((t) => !t.pane.hidden);
     tabs.forEach((t, key) => {
       const on = key === label;
       t.button.setAttribute('aria-selected', String(on));
@@ -829,7 +1002,15 @@
       t.pane.hidden = !on;
     });
     if (overlayStack.length) closeOverlay(false, true);
+    // The new panel arrives from its side of the tab order (never an instant cut), the tab itself pulses faintly.
+    const now = tabs.get(label);
+    if (now && before && before !== now) {
+      const from = ORDER.indexOf(label) > ORDER.indexOf(before.label) ? 'right' : 'left';
+      reveal(now.pane, 'slide', { from });
+      reveal(now.button, 'pulse');
+    }
   }
+  const reveal = (el, kind, opts) => (window.attndReveal ? window.attndReveal(el, kind, opts) : Promise.resolve());
 
   function toolbarFor(label) {
     const add = (text, name, title) => ({ text, run: (b) => openComponent(name, { event_id: eventId }, title, b) });
@@ -877,7 +1058,11 @@
       });
       pane.appendChild(row);
     }
-    const t = { button, pane, label };
+    pane.dataset.tab = label;
+    const grid = document.createElement('div');
+    grid.className = 'canvas__grid';
+    pane.appendChild(grid);
+    const t = { button, pane, label, grid };
     tabs.set(label, t);
     const sorted = [...tabs.values()].sort((a, b) => ORDER.indexOf(a.label) - ORDER.indexOf(b.label));
     sorted.forEach((x) => { bar.appendChild(x.button); body.appendChild(x.pane); });
@@ -893,14 +1078,14 @@
   });
 
   function section(t, name) {
-    let el = t.pane.querySelector(`:scope > [data-section="${name}"]`);
+    let el = t.grid.querySelector(`:scope > [data-section="${name}"]`);
     if (el) return el;
     el = document.createElement('section');
     el.className = 'canvas__section';
     el.dataset.section = name;
     const rank = (n) => { const i = SECTION_ORDER.indexOf(n); return i < 0 ? 50 : i; };
-    const after = [...t.pane.querySelectorAll(':scope > [data-section]')].find((s) => rank(s.dataset.section) > rank(name));
-    t.pane.insertBefore(el, after || null);
+    const after = [...t.grid.querySelectorAll(':scope > [data-section]')].find((s) => rank(s.dataset.section) > rank(name));
+    t.grid.insertBefore(el, after || null);
     return el;
   }
 
@@ -914,7 +1099,7 @@
     }
     const wrap = document.createElement('div');
     wrap.className = 'canvas__cards' + (name.endsWith('_row') ? ' canvas__cards--rows' : '');
-    items.forEach((item) => wrap.appendChild(makeCard(item)));
+    appendGrouped(wrap, items);
     if (!items.length) {
       const p = document.createElement('p');
       p.className = 'canvas__none muted';
@@ -955,40 +1140,29 @@
   }
 
   // A whole list section again (new rows appear, deleted ones go): one request instead of one per card.
+  // Reloading a list: rows glide to their new place (FLIP: moved, e.g. Scheduled → Sent), new rows fade in and pulse,
+  // changed ones pulse, deleted ones collapse out first.
+  const sameHtml = (a, b) => a.replace(/c[0-9a-f]{6}-/g, '') === b.replace(/c[0-9a-f]{6}-/g, '');
   async function reloadSection(sec) {
     const name = sec.dataset.component;
-    try { fillSection(sec, name, await fetchCards(name, [JSON.parse(sec.dataset.parent || '{}')])); }
-    catch (err) { if (err.status === 404 || /none found/.test(err.message)) fillSection(sec, name, []); }
-  }
-
-  function makeTile(item, sec, index, onOpen) {
-    const tile = document.createElement('button');
-    tile.type = 'button';
-    tile.className = 'agent__tile';
-    const mark = document.createElement('span');
-    mark.className = 'agent__tile-mark';
-    mark.textContent = (item.label || item.title || '?').trim().charAt(0).toUpperCase();
-    const text = document.createElement('span');
-    text.className = 'agent__tile-text';
-    const strong = document.createElement('strong');
-    strong.textContent = item.label || item.title;
-    const small = document.createElement('span');
-    small.textContent = item.title;
-    text.append(strong, small);
-    const arrow = document.createElement('span');
-    arrow.className = 'agent__tile-arrow';
-    arrow.setAttribute('aria-hidden', 'true');
-    arrow.textContent = '›';
-    tile.append(mark, text, arrow);
-    tile.addEventListener('click', () => {
-      if (onOpen) { overlayOpener = tile; onOpen(); return; }
-      const t = [...tabs.values()].find((x) => x.pane.contains(sec));
-      if (t) selectTab(t.label);
-      const card = sec.querySelectorAll('.agent__card')[index];
-      if (card && card.dataset.detail) openDetail(card, tile);
-      else card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    let items;
+    try { items = await fetchCards(name, [JSON.parse(sec.dataset.parent || '{}')]); }
+    catch (err) { if (err.status === 404 || /none found/.test(err.message)) items = []; else return; }
+    const wrap = sec.querySelector('.canvas__cards');
+    const old = new Map([...(wrap ? wrap.querySelectorAll(':scope > .agent__card') : [])].map((c) => [c.dataset.ids, c]));
+    const keep = new Set(items.map((i) => JSON.stringify(i.ids)));
+    await Promise.all([...old].filter(([ids]) => !keep.has(ids)).map(([, c]) => reveal(c, 'collapse')));
+    const html = new Map([...old].map(([ids, c]) => [ids, c.querySelector('.agent__card-body')?.innerHTML || '']));
+    const rects = new Map([...old].filter(([ids]) => keep.has(ids)).map(([ids, c]) => [ids, c.getBoundingClientRect()]));
+    fillSection(sec, name, items);
+    const fresh = sec.querySelector('.canvas__cards');
+    fresh?.querySelectorAll(':scope > .agent__card').forEach((c) => {
+      const before = html.get(c.dataset.ids);
+      const was = rects.get(c.dataset.ids);
+      if (was) { const now = c.getBoundingClientRect(); reveal(c, 'flip', { dx: was.left - now.left, dy: was.top - now.top }); }
+      if (before === undefined && old.size) { reveal(c, 'in'); reveal(c, 'pulse', { delay: 120 }); }
+      else if (before !== undefined && !sameHtml(before, c.querySelector('.agent__card-body')?.innerHTML || '')) reveal(c, 'pulse');
     });
-    return tile;
   }
 
   async function openDetail(card, opener) {
@@ -1033,7 +1207,7 @@
   }
 
   // Console pages the canvas can show itself (links in cards, step links, the task tray): everything for events,
-  // locations, the schedule and updates stays in full screen. Anything else (Studio, the AI review, diagnostics…)
+  // locations, the schedule and notifications stays in full screen. Anything else (Studio, the AI review, diagnostics…)
   // opens as a page.
   const ROUTES = [
     [/^\/console\/events\/(\d+)\/locations\/new\/$/, (m) => ['location_form', { event_id: +m[1] }, 'New location']],
@@ -1045,7 +1219,7 @@
     [/^\/console\/events\/(\d+)\/history\/$/, (m) => ['object_history', { event_id: +m[1] }, 'History']],
     [/^\/console\/new\/$/, () => ['event_new_form', {}, 'New event']],
     [/^\/console\/$/, () => ({ tab: 'Events' })],
-    [/^\/console\/events\/(\d+)\/(locations|schedule|notifications)\/$/, (m) => ({ tab: { locations: 'Locations', schedule: 'Schedule', notifications: 'Updates' }[m[2]], event: +m[1] })],
+    [/^\/console\/events\/(\d+)\/(locations|schedule|notifications|team|usage)\/$/, (m) => ({ tab: { locations: 'Locations', schedule: 'Schedule', notifications: 'Notifications', team: 'Team', usage: 'Metrics' }[m[2]], event: +m[1] })],
   ];
   function openUrl(href, opener) {
     if (!canvasOn() || !href) return false;
@@ -1183,7 +1357,7 @@
     });
   }
 
-  // The event the page is about: its overview, locations, schedule and updates (the compose form and every update)
+  // The event the page is about: its overview, locations, schedule and notifications (the compose form and every notification)
   // are on the canvas from the start; empty lists say so, and the toolbars add to them.
   async function preloadCanvas() {
     if (!canvasOn()) return;
@@ -1195,13 +1369,23 @@
     // Every event and "New event" too, so the whole console is reachable from here.
     try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
     const parent = { event_id: eventId };
-    for (const name of ['event_overview', 'location_row', 'schedule_item_row', 'notification_form', 'notification_row']) {
+    for (const name of ['event_overview', 'location_row', 'schedule_item_row', 'notification_form', 'notification_row',
+                        'event_team', 'event_metrics']) {
       let items = [];
       try { items = await fetchCards(name, [parent]); } catch (e) { /* none yet: the section says so */ }
       toCanvas(name, items, parent, true);
     }
     selectTab('Overview');
   }
+
+  // Live numbers on cards (Overview numbers, Metrics): every 60 s while visible, paused when the page is hidden.
+  setInterval(() => {
+    if (document.hidden) return;
+    liveCards().filter((c) => c.offsetParent !== null && c.querySelector('[data-live]')).forEach((c) => refresh(c, true));
+  }, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) liveCards().filter((c) => c.offsetParent !== null && c.querySelector('[data-live]')).forEach((c) => refresh(c, true));
+  });
 
   // ---- recent requests ---------------------------------------------------------------------
   $('[data-agent-history]').addEventListener('click', async (e) => {

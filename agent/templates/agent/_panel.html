@@ -48,6 +48,8 @@
         <button type="button" class="link-button small" data-agent-refresh hidden>Updated · Refresh</button>
       </div>
       <div class="agent__suggest" data-agent-suggest role="group" aria-label="Suggestions" hidden></div>
+      <div class="agent__target" data-agent-target hidden><span class="small" data-agent-target-text></span>
+        <button type="button" class="link-button small" data-agent-target-clear aria-label="Stop filling this form">×</button></div>
       <ul class="agent__files" data-agent-files></ul>
       <form class="agent__form" data-agent-form>{% csrf_token %}
         <label class="agent__icon agent__attach" title="Attach a file">{% icon "paperclip" %}<span class="visually-hidden">Attach a file</span>

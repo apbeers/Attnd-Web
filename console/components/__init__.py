@@ -50,6 +50,7 @@ class Component:
     form: object = None  # (user, ids, data) -> bound form, for chat submissions that wait for a confirmation
     template: str = ''
     chat: bool = True  # may Ask Attnd show it
+    ai_subject: str = ''  # Add with AI: "the location", "the notification"… (default: from the title)
 
     def __post_init__(self):
         self.template = self.template or f'components/{self.name}.html'
@@ -151,7 +152,25 @@ def finish(comp, ids, data):
         data['actions'] = resolve_actions(comp, data['ids'], data['actions'])
     if 'parts' in data:
         data['parts'] = [finish(get(p['component']), p['ids'], p) for p in data['parts']]
+    for key, form in list(data.items()):  # every form: who it is (fill_form finds it) and Add with AI
+        if isinstance(form, dict) and 'fields' in form and 'layout' in form:
+            data[key] = dict(form, component=comp.name, ids_json=json.dumps(data['ids'], sort_keys=True, separators=(',', ':')),
+                             ai=None if form.get('background') else ai_offer(comp, data))
     return data
+
+
+def forms_of(data):
+    """The form JSONs in a component's data (form_json output), e.g. event_new_form's blank form."""
+    return [v for v in data.values() if isinstance(v, dict) and 'fields' in v and 'layout' in v]
+
+
+def ai_offer(comp, data):
+    """Add with AI on a form: the button's label and the prompt the chat starts with (owner, Nov 21, 2026)."""
+    editing = any(k != 'event_id' for k in data.get('ids') or {})
+    subject = comp.ai_subject or comp.title.lower().removesuffix(' form')
+    if editing:
+        return {'label': 'Edit with AI', 'prompt': f'What should change in this {subject}?'}
+    return {'label': 'Add with AI', 'prompt': f'Tell me about the {subject}: paste a link, a description, anything.'}
 
 
 def resolve_actions(comp, ids, offered):
@@ -170,7 +189,11 @@ def resolve_actions(comp, ids, offered):
         entry.setdefault('label', declared[name])
         entry['confirm'] = action.confirm
         entry['url'] = reverse(action.url_name, kwargs=kwargs)
-        entry['fields'] = {**{k: str(v) for k, v in action.fixed.items()}, **entry.get('fields', {})}
+        params = entry['params'] if 'params' in entry else {  # this button's own values (e.g. member)
+            k: str(v) for k, v in entry.get('fields', {}).items()}
+        entry['params'] = params
+        entry['params_json'] = json.dumps(params, sort_keys=True) if params else ''
+        entry['fields'] = {**{k: str(v) for k, v in action.fixed.items()}, **params}
         out.append(entry)
     return out
 
@@ -204,7 +227,7 @@ def render(name, data, request=None, surface='page', part=None, uid=''):
 # What the model gets: the component's JSON, trimmed to useful fields (never HTML)
 # ---------------------------------------------------------------------------
 
-DROP_KEYS = {'url', 'open_app', 'qr_url', 'qr_download_url', 'poster_url', 'image_url', 'review_url', 'usage_url', 'action',
+DROP_KEYS = {'url', 'locations_url', 'pins', 'center', 'ids_json', 'ai', 'open_app', 'qr_url', 'qr_download_url', 'poster_url', 'image_url', 'review_url', 'usage_url', 'action',
              'multipart', 'layout', 'attrs', 'id_attr'}
 
 

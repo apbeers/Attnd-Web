@@ -374,6 +374,26 @@ class DisplayForm(forms.Form):
         return out
 
 
+class NotificationEditForm(StyledFormMixin, forms.Form):
+    """Change a scheduled notification before it goes out. Empty fields keep their current value (so Ask Attnd can
+    pass only what changes); urgency can't be changed here (that goes through Send's confirmation)."""
+    title = forms.CharField(max_length=60, required=False)
+    body = forms.CharField(max_length=256, required=False, widget=forms.Textarea(attrs={'rows': 3, 'maxlength': 256}))
+    send_time = forms.DateTimeField(
+        required=False, input_formats=DT_FORMATS, label='Send at',
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'step': 600}, format='%Y-%m-%dT%H:%M'),
+        help_text='A 10-minute mark in the future.')
+
+    def clean_send_time(self):
+        send_time = self.cleaned_data.get('send_time')
+        if send_time:
+            if not is_send_slot(send_time):
+                raise forms.ValidationError('Pick a time on a 10-minute mark (e.g. 6:00, 6:10, 6:20).')
+            if send_time <= timezone.now():
+                raise forms.ValidationError('Pick a time in the future.')
+        return send_time
+
+
 class TeamInviteForm(StyledFormMixin, forms.Form):
     email = forms.EmailField(label='Email')
     role = forms.ChoiceField(label='Role', choices=EventMember.ROLE_CHOICES, initial=EventMember.ROLE_CONTRIBUTOR)

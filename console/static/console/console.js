@@ -108,8 +108,76 @@
     });
   };
 
-  // Minimal OpenStreetMap pin picker: pinPicker(el, latInput, lngInput, [lat, lng], zoom)
-  window.pinPicker = function (el, latInput, lngInput, center, zoom) {
+  // ---------------------------------------------------------------------------
+  // Draw the eye to what changed (owner, Nov 21, 2026): one helper for every place an action somewhere changes
+  // something elsewhere. Faint and quick (~200–320 ms, ease-out, Web Animations API); nothing with reduced motion.
+  //   attndReveal(el, 'slide', {from: 'left'|'right'})  a panel / tab arriving from the side of the tab order
+  //   attndReveal(el, 'in')                              a new card, step line or tray item fades up
+  //   attndReveal(el, 'pulse')                           a row / card / number that was added, edited, restored
+  //   attndReveal(el, 'glow', {delay})                   a form field the AI just filled (in sequence)
+  //   attndReveal(el, 'collapse')                        a deleted row folds away (resolves when done; then remove it)
+  //   attndReveal(el, 'scroll')                          scroll it into view, then pulse
+  //   attndFlip(container, mutate)                       re-sorts: children glide from their old place (FLIP)
+  // ---------------------------------------------------------------------------
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const EASE = 'cubic-bezier(.2, .8, .2, 1)';
+  function reveal(el, kind, opts) {
+    opts = opts || {};
+    if (!el || !el.animate || calm.matches) {
+      if (kind === 'scroll' && el) el.scrollIntoView({ block: 'nearest' });
+      return Promise.resolve();
+    }
+    const css = getComputedStyle(document.documentElement);
+    const tint = (css.getPropertyValue('--color-focus') || 'rgba(67, 31, 134, .25)').trim();
+    let frames, timing = { duration: 260, easing: EASE, delay: opts.delay || 0 };
+    if (kind === 'slide') {
+      const dx = opts.from === 'left' ? -18 : 18;
+      frames = [{ opacity: 0, transform: `translateX(${dx}px)` }, { opacity: 1, transform: 'none' }];
+    } else if (kind === 'in') {
+      frames = [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }];
+      timing.duration = 220;
+    } else if (kind === 'pulse' || kind === 'glow') {
+      frames = [{ boxShadow: `0 0 0 0 ${tint}` }, { boxShadow: `0 0 0 4px ${tint}`, offset: .35 }, { boxShadow: `0 0 0 0 transparent` }];
+      timing = { duration: kind === 'glow' ? 700 : 900, easing: 'ease-out', delay: opts.delay || 0 };
+    } else if (kind === 'collapse') {
+      const h = el.getBoundingClientRect().height;
+      el.style.overflow = 'hidden';
+      frames = [{ opacity: 1, height: `${h}px` }, { opacity: 0, height: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px' }];
+      timing.duration = 240;
+    } else if (kind === 'scroll') {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return reveal(el, 'pulse', { delay: 180 });
+    } else if (kind === 'flip') {
+      const { dx = 0, dy = 0 } = opts;
+      if (!dx && !dy) return Promise.resolve();
+      frames = [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }];
+      timing.duration = 280;
+    } else return Promise.resolve();
+    const anim = el.animate(frames, timing);
+    return anim.finished.catch(() => {});
+  }
+  window.attndReveal = reveal;
+  window.attndFlip = function (container, mutate, key) {
+    key = key || ((el) => el.dataset.key || el.dataset.ids || el.dataset.id || '');
+    const before = new Map([...container.children].map((el) => [key(el), el.getBoundingClientRect()]));
+    mutate();
+    if (calm.matches) return;
+    [...container.children].forEach((el) => {
+      const was = before.get(key(el));
+      if (!key(el)) return;
+      if (!was) { reveal(el, 'in'); return; }
+      const now = el.getBoundingClientRect();
+      reveal(el, 'flip', { dx: was.left - now.left, dy: was.top - now.top });
+    });
+  };
+
+  // Minimal OpenStreetMap map: pinPicker(el, latInput, lngInput, [lat, lng], zoom, others). Tap to place the pin;
+  // others = [{name, lat, lng}] (the event's other locations) as small muted pins with their names, framed to fit.
+  // opts.readonly: a map to look at (the event map): no pin to place; opts.onOther(point, element) when a pin is tapped.
+  window.pinPicker = function (el, latInput, lngInput, center, zoom, others, opts) {
+    others = others || [];
+    opts = opts || {};
+    if (!latInput) { latInput = document.createElement('input'); lngInput = document.createElement('input'); }
     const TILE = 256;
     const project = (lat, lng, z) => {
       const s = TILE * Math.pow(2, z), r = Math.sin(lat * Math.PI / 180);
@@ -119,10 +187,37 @@
       const s = TILE * Math.pow(2, z), n = Math.PI - 2 * Math.PI * y / s;
       return [180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))), x / s * 360 - 180];
     };
+    el.textContent = '';
+    el.classList.add('pin-map--osm');
+    const pinned = () => !isNaN(parseFloat(latInput.value)) && !isNaN(parseFloat(lngInput.value));
+    // Frame every pin: the zoom where they all fit, centred on their middle.
+    const points = others.map((o) => [o.lat, o.lng]).concat(pinned() ? [[+latInput.value, +lngInput.value]] : []);
+    if (points.length > 1) {
+      const w = el.clientWidth || 480, h = el.clientHeight || 260;
+      for (let z = 18; z >= 2; z--) {
+        const xy = points.map(([a, b]) => project(a, b, z));
+        const xs = xy.map((p) => p[0]), ys = xy.map((p) => p[1]);
+        if (Math.max(...xs) - Math.min(...xs) < w - 48 && Math.max(...ys) - Math.min(...ys) < h - 48) {
+          zoom = z;
+          center = unproject((Math.max(...xs) + Math.min(...xs)) / 2, (Math.max(...ys) + Math.min(...ys)) / 2, z);
+          break;
+        }
+      }
+    }
     let [cx, cy] = project(center[0], center[1], zoom);
-    const layer = document.createElement('div'); el.appendChild(layer);
+    const layer = document.createElement('div'); layer.className = 'tiles'; el.appendChild(layer);
+    const dots = others.map((o) => {
+      const d = document.createElement('button');
+      d.type = 'button'; d.className = 'pin-map__other'; d.title = o.name; d.setAttribute('aria-label', o.name);
+      const label = document.createElement('span'); label.className = 'pin-map__label'; label.textContent = o.name;
+      d.appendChild(label);
+      if (o.hidden) d.classList.add('is-hidden');
+      d.addEventListener('click', (e) => { e.stopPropagation(); opts.onOther?.(o, d); });
+      el.appendChild(d);
+      return d;
+    });
     const pin = document.createElement('div'); pin.className = 'pin'; pin.innerHTML = el.dataset.pinSvg || '●'; el.appendChild(pin);
-    el.insertAdjacentHTML('beforeend', '<div class="zoom"><button type="button" data-z="1">+</button><button type="button" data-z="-1">−</button></div><div class="credit">© OpenStreetMap contributors</div>');
+    el.insertAdjacentHTML('beforeend', '<div class="zoom"><button type="button" data-z="1" aria-label="Zoom in">+</button><button type="button" data-z="-1" aria-label="Zoom out">−</button></div><div class="credit">© OpenStreetMap contributors</div>');
 
     function render() {
       const w = el.clientWidth, h = el.clientHeight, max = Math.pow(2, zoom);
@@ -137,16 +232,19 @@
           layer.appendChild(img);
         }
       }
-      const lat = parseFloat(latInput.value), lng = parseFloat(lngInput.value);
-      if (!isNaN(lat) && !isNaN(lng)) {
-        const [px, py] = project(lat, lng, zoom);
+      others.forEach((o, i) => {
+        const [px, py] = project(o.lat, o.lng, zoom);
+        dots[i].style.left = (px - x0) + 'px'; dots[i].style.top = (py - y0) + 'px';
+      });
+      if (pinned()) {
+        const [px, py] = project(+latInput.value, +lngInput.value, zoom);
         pin.style.display = ''; pin.style.left = (px - x0) + 'px'; pin.style.top = (py - y0) + 'px';
       } else pin.style.display = 'none';
     }
 
     let drag = null;
     el.addEventListener('pointerdown', e => {
-      if (e.target.closest('.zoom')) return;
+      if (e.target.closest('.zoom, .pin-map__other, .map-popup')) return;
       drag = {x: e.clientX, y: e.clientY, cx, cy, moved: false}; el.setPointerCapture(e.pointerId);
     });
     el.addEventListener('pointermove', e => {
@@ -155,11 +253,17 @@
       if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
       if (drag.moved) { cx = drag.cx - dx; cy = drag.cy - dy; render(); }
     });
+    const setPin = (lat, lng) => {
+      latInput.value = lat.toFixed(6); lngInput.value = lng.toFixed(6);
+      [latInput, lngInput].forEach((i) => i.dispatchEvent(new Event('change', { bubbles: true })));
+      el.dispatchEvent(new CustomEvent('attnd:pinned', { bubbles: true }));
+      render();
+    };
     el.addEventListener('pointerup', e => {
-      if (drag && !drag.moved) {
+      if (drag && !drag.moved && !opts.readonly) {
         const box = el.getBoundingClientRect();
         const [lat, lng] = unproject(cx - box.width / 2 + (e.clientX - box.left), cy - box.height / 2 + (e.clientY - box.top), zoom);
-        latInput.value = lat.toFixed(6); lngInput.value = lng.toFixed(6); render();
+        setPin(lat, lng);
       }
       drag = null;
     });
@@ -169,9 +273,231 @@
       const [lat, lng] = unproject(cx, cy, zoom); zoom = nz; [cx, cy] = project(lat, lng, zoom); render();
     });
     [latInput, lngInput].forEach(i => i.addEventListener('change', render));
-    window.addEventListener('resize', render);
+    (el.closest('form') || document).addEventListener('attnd:place', (e) => {
+      zoom = Math.max(zoom, 16); [cx, cy] = project(e.detail.lat, e.detail.lng, zoom); render();
+    });
+    new ResizeObserver(() => render()).observe(el);
     render();
   };
+
+  // ---------------------------------------------------------------------------
+  // Forms with an address and coordinates (locations, event details), on pages and in the chat / canvas cards:
+  // address autocomplete (Google Places when the browser key is set, else a Find button searching on the server:
+  // Google Places or OpenStreetMap), the location map (this pin + the event's other locations) and
+  // "Fill from this website?" for new or empty locations. attndEnhance(scope) is safe to call again.
+  // ---------------------------------------------------------------------------
+  const jsonData = (el, key, fallback) => { try { return JSON.parse(el.dataset[key] || ''); } catch (e) { return fallback; } };
+  function field(form, name) { return form.querySelector(`[name="${name}"], [name$="-${name}"]`); }
+
+  function addressFinder(input, lat, lng, form, url) {
+    if (!input || !url || input.dataset.finder) return;
+    input.dataset.finder = '1';
+    const row = document.createElement('div');
+    row.className = 'address-find';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'button button--outline button--small';
+    button.textContent = 'Find on the map';
+    const list = document.createElement('ul');
+    list.className = 'address-find__results';
+    list.hidden = true;
+    const status = document.createElement('span');
+    status.className = 'small muted';
+    status.setAttribute('role', 'status');
+    row.append(button, status);
+    input.after(row, list);
+    async function find() {
+      const q = input.value.trim();
+      if (q.length < 3) { status.textContent = 'Type an address or place name first.'; return; }
+      button.disabled = true; status.textContent = 'Searching…';
+      try {
+        const res = await fetch(`${url}?q=${encodeURIComponent(q)}`, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const data = await res.json();
+        list.textContent = '';
+        (data.results || []).forEach((r) => {
+          const li = document.createElement('li');
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'link-button';
+          const strong = document.createElement('strong'); strong.textContent = r.label;
+          const small = document.createElement('span'); small.className = 'small muted'; small.textContent = r.address;
+          b.append(strong, ' ', small);
+          b.addEventListener('click', () => {
+            input.value = r.address || r.label;
+            if (lat && lng) {
+              lat.value = (+r.lat).toFixed(7); lng.value = (+r.lng).toFixed(7);
+              [input, lat, lng].forEach((i) => i.dispatchEvent(new Event('change', { bubbles: true })));
+              form.dispatchEvent(new CustomEvent('attnd:place', { detail: { lat: +r.lat, lng: +r.lng } }));
+            }
+            list.hidden = true; list.textContent = ''; status.textContent = 'Pin set from the address.';
+          });
+          li.appendChild(b); list.appendChild(li);
+        });
+        list.hidden = !list.children.length;
+        status.textContent = data.error || (list.children.length ? '' : 'Nothing found. Try adding the city.');
+      } catch (e) { status.textContent = 'Couldn’t search right now.'; }
+      finally { button.disabled = false; }
+    }
+    button.addEventListener('click', find);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+  }
+
+  function placesUrl(form) {
+    const el = form.querySelector('[data-places-url]');
+    if (el) return el.dataset.placesUrl;
+    const m = (form.getAttribute('action') || location.pathname).match(/\/console\/events\/(\d+)\//);
+    return m ? `/console/events/${m[1]}/places/` : '';
+  }
+
+  function enhanceMaps(form) {
+    const address = field(form, 'address'), lat = field(form, 'latitude'), lng = field(form, 'longitude');
+    if (!address || !lat || !lng || form.dataset.mapsReady) return;
+    form.dataset.mapsReady = '1';
+    const url = placesUrl(form);
+    const fallback = () => addressFinder(address, lat, lng, form, url);
+    if (window.attndMaps) attndMaps.addressAutocomplete(address, { lat, lng, form }).catch(fallback);
+    else fallback();
+    const el = form.querySelector('[data-pin-map]');
+    if (!el) return;
+    const center = jsonData(el, 'center', [39.8, -98.6]), zoom = +el.dataset.zoom || 4, others = jsonData(el, 'others', []);
+    const empty = form.querySelector('[data-pin-empty]');
+    el.addEventListener('attnd:pinned', () => empty?.remove());
+    if (window.attndMaps) attndMaps.pinMap(el, lat, lng, center, zoom, others).catch(() => window.pinPicker(el, lat, lng, center, zoom, others));
+    else window.pinPicker(el, lat, lng, center, zoom, others);
+  }
+
+  // "Fill from this website?": offered once a website is typed on a location with empty fields; fills only the empty
+  // ones, never saves (the person reviews and saves), and the fill itself can be undone before saving.
+  const FILLABLE = ['name', 'snippet', 'description', 'category', 'tags_text', 'address', 'latitude', 'longitude', 'image_url'];
+  function enhanceFill(form) {
+    const box = form.querySelector('[data-fill-site]');
+    const site = field(form, 'website');
+    if (!box || !site || box.dataset.ready) return;
+    box.dataset.ready = '1';
+    const go = box.querySelector('[data-fill-go]'), status = box.querySelector('[data-fill-status]');
+    const empties = () => FILLABLE.map((n) => field(form, n)).filter((i) => i && !i.value.trim());
+    const sync = () => { box.hidden = !(/^https?:\/\/\S+\.\S+/.test(site.value.trim()) && empties().length); };
+    site.after(box);
+    site.addEventListener('input', sync);
+    site.addEventListener('change', sync);
+    sync();
+    go.addEventListener('click', async () => {
+      const csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+      const body = new FormData();
+      body.append('url', site.value.trim());
+      go.disabled = true; status.textContent = 'Reading the website…';
+      try {
+        const res = await fetch(box.dataset.url, { method: 'POST', body, credentials: 'same-origin',
+          headers: { 'X-CSRFToken': csrf ? csrf.value : '', Accept: 'application/json' } });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Couldn’t read that website.');
+        const before = [];
+        Object.entries(data.fields || {}).forEach(([name, value]) => {
+          const input = field(form, name);
+          if (!input || input.value.trim()) return;  // only empty fields: never overwrite what's there
+          before.push([input, input.value]);
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.classList.add('is-ai-filled');
+          input.closest('details')?.setAttribute('open', '');
+          reveal(input, 'glow', { delay: before.length * 90 });
+        });
+        const lat = field(form, 'latitude'), lng = field(form, 'longitude');
+        if (data.fields && data.fields.latitude != null && before.some(([i]) => i === lat)) {
+          form.dispatchEvent(new CustomEvent('attnd:place', { detail: { lat: +lat.value, lng: +lng.value } }));
+        }
+        status.textContent = before.length
+          ? `Filled ${before.length} field${before.length === 1 ? '' : 's'} from ${data.host}. Check them, then Save.`
+          : `Nothing new found on ${data.host}.`;
+        if (before.length) {
+          const undo = document.createElement('button');
+          undo.type = 'button'; undo.className = 'link-button small'; undo.textContent = 'Undo';
+          undo.addEventListener('click', () => {
+            before.forEach(([input, value]) => { input.value = value; input.dispatchEvent(new Event('change', { bubbles: true })); });
+            status.textContent = 'Undone.'; undo.remove(); sync();
+          });
+          status.append(' ', undo);
+        }
+        go.hidden = true;
+      } catch (e) { status.textContent = e.message; }
+      finally { go.disabled = false; }
+    });
+  }
+
+  // The event map (Overview, canvas, chat card): every location's pin, same maps as the location form; a tap opens a
+  // small themed popup with brief details and View location (on the full-screen canvas it opens there).
+  function mapPopup(el, point) {
+    el.querySelector('.map-popup')?.remove();
+    const pop = document.createElement('div');
+    pop.className = 'map-popup';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', point.name);
+    const close = document.createElement('button');
+    close.type = 'button'; close.className = 'map-popup__close'; close.setAttribute('aria-label', 'Close'); close.textContent = '×';
+    close.addEventListener('click', () => reveal(pop, 'collapse').then(() => pop.remove()));
+    const title = document.createElement('strong'); title.textContent = point.name;
+    const meta = document.createElement('span'); meta.className = 'small muted';
+    meta.textContent = [point.category, point.hidden ? 'Hidden' : '', point.snippet].filter(Boolean).join(' · ');
+    const view = document.createElement('a');
+    view.className = 'button button--primary button--small'; view.href = point.url; view.textContent = 'View location';
+    pop.append(close, title, meta, view);
+    el.appendChild(pop);
+    reveal(pop, 'in');
+    view.focus({ preventScroll: true });
+  }
+  function enhanceEventMaps(scope) {
+    scope.querySelectorAll('[data-event-map]:not([data-ready])').forEach((el) => {
+      el.dataset.ready = '1';
+      const pins = jsonData(el, 'pins', []), center = jsonData(el, 'center', [39.8, -98.6]), zoom = +el.dataset.zoom || 15;
+      const opts = { readonly: true, onOther: (p) => mapPopup(el, p) };
+      if (window.attndMaps) attndMaps.pinMap(el, null, null, center, zoom, pins, opts).catch(() => window.pinPicker(el, null, null, center, zoom, pins, opts));
+      else window.pinPicker(el, null, null, center, zoom, pins, opts);
+    });
+  }
+
+  // Live numbers (Overview numbers, Metrics): refreshed every 60 s while the page is visible (paused when hidden), the
+  // numbers that changed pulse, and "Updated 3:41 PM" says how fresh they are. Chat / canvas cards do the same in
+  // agent.js (attndLiveSwap).
+  const LIVE_MS = 60000;
+  const clock = () => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date());
+  window.attndLiveSwap = function (el, fresh) {
+    const before = [...el.querySelectorAll('.stat__value, [data-live-number]')].map((n) => n.textContent.trim());
+    if (fresh) el.innerHTML = fresh.innerHTML;
+    [...el.querySelectorAll('.stat__value, [data-live-number]')].forEach((n, i) => {
+      if (before[i] !== undefined && before[i] !== n.textContent.trim()) reveal(n.closest('div') || n, 'pulse');
+    });
+    el.querySelectorAll('[data-live-updated]').forEach((u) => { u.textContent = `Updated ${clock()} · refreshes every minute`; });
+  };
+  async function liveTick() {
+    if (document.hidden) return;
+    const mine = [...document.querySelectorAll('[data-live]')].filter((el) => !el.closest('.agent__card, .agent, .canvas'));
+    if (!mine.length) return;
+    try {
+      const res = await fetch(location.href, { credentials: 'same-origin', headers: { Accept: 'text/html' } });
+      if (!res.ok) return;
+      const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+      const count = {};
+      mine.forEach((el) => {
+        const key = el.dataset.live; const i = count[key] = (count[key] ?? -1) + 1;
+        const fresh = [...doc.querySelectorAll(`[data-live="${key}"]`)].filter((x) => !x.closest('.agent__card, .agent, .canvas'))[i];
+        if (fresh) window.attndLiveSwap(el, fresh);
+      });
+    } catch (e) { /* offline: try again next minute */ }
+  }
+  let liveTimer = null;
+  const liveSync = () => {
+    clearInterval(liveTimer);
+    liveTimer = document.hidden ? null : setInterval(liveTick, LIVE_MS);
+  };
+  document.addEventListener('visibilitychange', () => { liveSync(); if (!document.hidden) liveTick(); });
+  liveSync();
+
+  window.attndEnhance = function (scope) {
+    scope = scope || document;
+    scope.querySelectorAll('form').forEach((form) => { enhanceMaps(form); enhanceFill(form); });
+    enhanceEventMaps(scope);
+  };
+  document.addEventListener('DOMContentLoaded', () => window.attndEnhance(document));  // after maps.js has loaded
 
   // ---------------------------------------------------------------------------
   // Background tasks (AI imports and updates)
@@ -190,6 +516,7 @@
 
     const escapeHtml = (text) => String(text || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+    const shownState = new Map();  // task id -> status last drawn (new tasks fade in, finished ones pulse)
     function render(tasks) {
       lastTasks = tasks;
       const active = tasks.filter((t) => t.status === 'queued' || t.status === 'running');
@@ -220,6 +547,14 @@
           <div class="task-body" id="task-steps-${escapeHtml(t.id)}"${open ? '' : ' hidden'}>
             ${steps ? `<ol class="task-steps">${steps}</ol>` : ''}${link}</div></li>`;
       }).join('');
+      [...list.children].forEach((li, i) => {
+        const t = tasks[i];
+        if (!t || !tray.dataset.ready) return;
+        const was = shownState.get(t.id);
+        if (was === undefined) reveal(li, 'in');
+        else if (was !== t.status && (t.status === 'done' || t.status === 'failed')) reveal(li, 'pulse');
+      });
+      tasks.forEach((t) => shownState.set(t.id, t.status));
       tasks.forEach((t) => {
         const button = buttonsByTask[t.id];
         if (button && t.status !== 'queued' && t.status !== 'running') {

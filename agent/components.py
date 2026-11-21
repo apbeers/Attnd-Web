@@ -54,10 +54,88 @@ def tool_definitions():
          'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['component', 'ids'],
                         'properties': {'component': {'type': 'string', 'enum': names}, 'ids': ID_SCHEMA}},
          'strict': True},
+        FILL_TOOL,
     ]
 
 
-TOOL_NAMES = {'show', 'get_component'}
+FILL_TOOL = {
+    'name': 'fill_form', 'description': 'Fill a console form in front of the person (the form component on screen, '
+    'shown in the chat or on the canvas if it isn\'t yet): the values appear highlighted, NOTHING is saved until the '
+    'person presses Save, or you pass submit true when they said "save it". Use the form\'s field names (from '
+    'get_component). Details for the assistant (ctx_ fields) are only filled when empty.',
+    'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['component', 'ids', 'values', 'submit'],
+                   'properties': {
+                       'component': {'type': 'string'},
+                       'ids': ID_SCHEMA,
+                       'values': {'type': 'array', 'description': 'field name and its new value as text ("true" / '
+                                  '"false" for checkboxes; YYYY-MM-DDTHH:MM for times)',
+                                  'items': {'type': 'object', 'additionalProperties': False, 'required': ['name', 'value'],
+                                            'properties': {'name': {'type': 'string'}, 'value': {'type': 'string'}}}},
+                       'submit': {'type': 'boolean', 'description': 'press Save after filling (only when the person '
+                                                                   'asked to save)'}}},
+    'strict': True}
+
+TOOL_NAMES = {'show', 'get_component', 'fill_form'}
+
+
+def form_components():
+    """Components whose data has a form (each offers Add with AI and can be filled by fill_form)."""
+    return [c for c in C.registry().values() if c.chat and c.name.endswith('_form')]
+
+
+def fill_tool(run, call, args):
+    """Validate a fill against the form the person sees and record it; the panel applies it to that form."""
+    name = str(args.get('component') or '')
+    ids = args.get('ids') if isinstance(args.get('ids'), dict) else {}
+    try:
+        found = _load(run.user, name, [ids])
+    except ValueError as exc:
+        return f'Error: {exc}'
+    ids, data = found[0]
+    forms = [f for f in C.forms_of(data) if not f.get('background')]
+    if not forms:
+        return f'Error: {name} has no form to fill.'
+    fields = {k: v for f in forms for k, v in f['fields'].items()}
+    by_name = {}
+    for key, f in fields.items():
+        by_name[f['name']] = f
+        by_name[key] = f
+    locked_context = any(f.get('locked') for k, f in fields.items() if k.startswith('ctx_'))
+    values, skipped = {}, []
+    for pair in (args.get('values') or [])[:60]:
+        if not isinstance(pair, dict):
+            continue
+        field = by_name.get(str(pair.get('name') or ''))
+        value = str(pair.get('value') if pair.get('value') is not None else '')[:8000]
+        if field is None or field['widget'] == 'file':
+            skipped.append(str(pair.get('name'))[:40])
+            continue
+        short = field['name'].split('-')[-1]
+        if short.startswith('ctx_') and (locked_context or (field.get('value') or '').strip()):
+            skipped.append(f'{short} (already filled or edited by hand)')
+            continue
+        if field['widget'] in ('select', 'radio'):
+            options = {o['value']: o for o in field.get('options') or []}
+            match = options.get(value) or next((o for o in options.values() if o['label'].lower() == value.lower()), None)
+            if match is None:
+                skipped.append(f'{short} (not one of {", ".join(o["label"] for o in options.values())[:120]})')
+                continue
+            value = match['value']
+        values[field['name']] = value[:int(field['attrs'].get('maxlength') or 8000)]
+    if not values:
+        return ('Error: nothing to fill. Fields: ' + ', '.join(f.split('-')[-1] for f in list(fields)[:40])
+                + (f'. Skipped: {", ".join(skipped)}' if skipped else ''))
+    submit = bool(args.get('submit'))
+    title = C.get(name).title
+    loop.add_step(run, kind=AgentStep.KIND_COMPONENT, tool='fill_form', call_id=call.id,
+                  arguments={'component': name, 'items': [ids], 'picked': False, 'fill': values, 'submit': submit},
+                  event_id=ids.get('event_id'),
+                  text=f'{"Filled and saved" if submit else "Filled"} {len(values)} field{"s" if len(values) != 1 else ""} '
+                       f'in {data.get("title") or title}', result=json.dumps(values, ensure_ascii=False)[:4000])
+    note = (' It is being saved now (the page answers with any errors).' if submit else
+            ' Nothing is saved: the person reviews it and presses Save, or tells you to save it.')
+    return (f'Filled {", ".join(k.split("-")[-1] for k in values)} in the {title.lower()} on screen.{note}'
+            + (f' Skipped: {", ".join(skipped)}.' if skipped else ''))
 
 
 def _label(name, ids):
@@ -164,7 +242,7 @@ def rendered(request, name, found):
             html = f'<ul class="list list--boxed">{html}</ul>'
         out.append({'component': name, 'ids': ids, 'html': html, 'keys': C.keys(data), 'title': comp.title,
                     'label': data.get('name') or data.get('title') or comp.title,
-                    'url': C.page_url(name, ids), 'detail': comp.detail,
+                    'url': C.page_url(name, ids), 'detail': comp.detail, 'group': data.get('group', ''),
                     'detail_ids': list(C.get(comp.detail).all_ids) if comp.detail else []})
     return out
 
@@ -263,13 +341,19 @@ def act(request):
     except Http404:
         return _error('Not found, or you don\'t have access to it.', status=404)
     action_name = request.POST.get('action', '')
-    offered = {a['name']: a for a in data.get('actions', [])}
-    if action_name not in offered:
+    try:
+        posted = {str(k): str(v) for k, v in json.loads(request.POST.get('fields') or '{}').items()}
+    except (ValueError, AttributeError):
+        posted = None
+    # The very button offered now: the same action and the same values (remove *this* member, not another one)
+    offered = [a for a in data.get('actions', []) if a['name'] == action_name and a.get('params', {}) == posted]
+    if not offered:
         return _error('That button isn\'t available here (any more).', status=409)
     action = registry.writes_for(request.user).get(action_name)
     if action is None or not action.confirm:
         return _error('That action doesn\'t need a confirmation: post it to its page.', status=400)
-    if comp.form:  # a form that always asks (e.g. sending an update): check it first, errors come back in place
+    gated = {f.get('confirm_action') for f in C.forms_of(data)}
+    if comp.form and action_name in gated:  # a form that always asks (e.g. sending an update): check it first, errors come back in place
         form = comp.form(request.user, ids, request.POST)
         if not form.is_valid():
             again = C.finish(comp, ids, comp.data(request.user, **ids, form=form))
@@ -278,6 +362,10 @@ def act(request):
     if run.steps.filter(confirm_state=AgentStep.CONFIRM_PENDING).exists():
         return _error('Answer the confirmation that is waiting first.', status=409)
     args = _tool_args(action, ids, request.POST)
+    for name, value in offered[0].get('params', {}).items():  # the button's own values, typed like the tool's
+        if name in action.params:
+            kind = action.params[name].get('type')
+            args[name] = int(value) if (kind == 'integer' or 'integer' in (kind or [])) and value.lstrip('-').isdigit() else value
     ctx = ActionContext(run, action, args)
     summary = action.summary(ctx) if action.summary else loop._default_summary(ctx)
     # The person's current session runs it (they are signed in right now).

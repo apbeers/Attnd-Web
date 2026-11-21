@@ -1,0 +1,35 @@
+{% load console_tags %}{# event_metrics: this event's anonymous usage from the apps, iOS / Android, push reach, most viewed and liked. #}<div class="stack component component--event_metrics" data-live="event_metrics">
+  <p class="small muted live-updated" data-live-updated>Updated just now · refreshes every minute</p>
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "chart" %} {{ d.name }}</h3>{% endif %}
+  {% if not d.has_data %}<p class="muted">No app activity yet. Numbers appear here once attendees join the event in the app (anonymous counts only).</p>{% endif %}
+  <div class="grid grid--4 grid--stats metrics-numbers">
+    {% for n in d.numbers %}<div class="metric"><div class="stat__value">{{ n.value }}</div><div class="eyebrow">{{ n.label }}</div></div>{% endfor %}
+  </div>
+  <div class="grid grid--2">
+    <div class="panel stack stack--tight">
+      <h4 class="eyebrow">iOS and Android</h4>
+      {% for p in d.platforms %}<div class="platform-row"><strong>{{ p.label }}</strong><span class="small muted">{{ p.devices }} device{{ p.devices|pluralize }} · {{ p.activity }} interaction{{ p.activity|pluralize }}</span>
+        <span class="meter" role="img" aria-label="{{ p.share }}% of the activity"><span style="width: {{ p.share }}%"></span></span></div>{% endfor %}
+      <p class="small muted">Push notifications reach {{ d.push.reach }} device{{ d.push.reach|pluralize }} (urgent ones {{ d.push.urgent_reach }}).{% if d.busiest %} Busiest hour: {{ d.busiest }}.{% endif %}</p>
+    </div>
+    <div class="panel stack stack--tight">
+      <h4 class="eyebrow">{% icon "heart" "tone-danger" %} Most liked</h4>
+      {% if d.liked.locations or d.liked.items %}<ul class="list list--inset">
+        {% for r in d.liked.locations %}<li class="cluster"><span class="grow">{{ r.name }}</span><span class="small muted">place</span><span class="small nowrap">{% icon "heart" "tone-danger" %} {{ r.count }}</span></li>{% endfor %}
+        {% for r in d.liked.items %}<li class="cluster"><span class="grow">{{ r.name }}</span><span class="small muted">schedule</span><span class="small nowrap">{% icon "heart" "tone-danger" %} {{ r.count }}</span></li>{% endfor %}
+      </ul>{% else %}<p class="small muted">Nothing liked yet.</p>{% endif %}
+    </div>
+    {% if d.views.locations or d.views.items %}<div class="panel stack stack--tight">
+      <h4 class="eyebrow">Most viewed</h4>
+      <ul class="list list--inset">
+        {% for r in d.views.locations %}<li class="cluster"><span class="grow">{{ r.name }}</span><span class="small muted">{{ r.count }} view{{ r.count|pluralize }}</span></li>{% endfor %}
+        {% for r in d.views.items %}<li class="cluster"><span class="grow">{{ r.name }}</span><span class="small muted">{{ r.count }} view{{ r.count|pluralize }}</span></li>{% endfor %}
+      </ul>
+    </div>{% endif %}
+    {% if d.tabs %}<div class="panel stack stack--tight">
+      <h4 class="eyebrow">Tabs opened</h4>
+      <ul class="list list--inset">{% for t in d.tabs %}<li class="cluster"><span class="grow">{{ t.name }}</span><span class="small muted">{{ t.count }}</span></li>{% endfor %}</ul>
+    </div>{% endif %}
+  </div>
+  {% if surface != 'chat' %}<p class="small"><a href="{{ d.url }}">Charts and more on the Usage page</a></p>{% endif %}
+</div>

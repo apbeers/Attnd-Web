@@ -4,7 +4,8 @@
       {% elif d.timing.state == 'upcoming' %}{% icon "calendar" %}<strong>{{ d.timing.label }}</strong><span class="small">{{ d.timing.detail }}</span>
       {% else %}{% icon "history" %}<strong>{{ d.timing.label }}</strong>{% endif %}
     </div>{% endpartialdef %}
-{% partialdef numbers %}<div class="panel">
+{% partialdef numbers %}<div class="panel" data-live="event_stats">
+      <p class="small muted live-updated" data-live-updated>Updated just now · refreshes every minute</p>
       <div class="grid grid--3 grid--stats">
         {% for n in d.numbers %}<div><div class="stat__value">{{ n.value }}</div><div class="eyebrow">{{ n.label }}</div></div>
         {% endfor %}

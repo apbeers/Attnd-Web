@@ -60,6 +60,8 @@
   /* Reading widths: long text and forms only; everything else uses the full width */
   --page-width: none;
   --read-width: 46rem;
+  /* Maps (the location map): tiles as they are in light mode, dimmed and inverted in dark; other places muted */
+  --map-tile-filter: none; --map-other: #b9b2c9; --map-other-line: #8a829d; --map-label-bg: rgba(255, 255, 255, .92);
 }
 /* Dark mode: follows the system unless a page pins data-theme="light". */
 @media (prefers-color-scheme: dark) {
@@ -77,6 +79,8 @@
     --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b;
     --color-code: #ff8fc0;
     --color-focus: rgba(196, 176, 255, .5);
+    --map-tile-filter: invert(.92) hue-rotate(180deg) saturate(.55) brightness(.9) contrast(.9);
+    --map-other: #5d5675; --map-other-line: #8f87a8; --map-label-bg: rgba(27, 23, 40, .92);
     --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23a49fbb' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35); --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .25);
     --shadow-lg: 0 16px 48px rgba(0, 0, 0, .55); --shadow-hover: 0 2px 4px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .35);
@@ -96,6 +100,8 @@
   --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b;
   --color-code: #ff8fc0;
   --color-focus: rgba(196, 176, 255, .5);
+  --map-tile-filter: invert(.92) hue-rotate(180deg) saturate(.55) brightness(.9) contrast(.9);
+  --map-other: #5d5675; --map-other-line: #8f87a8; --map-label-bg: rgba(27, 23, 40, .92);
   --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23a49fbb' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35); --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .25);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, .55); --shadow-hover: 0 2px 4px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .35);
@@ -471,14 +477,29 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .dragging { opacity: .4; }
 .lock { color: var(--color-warning-text); }
 
-/* OpenStreetMap pin picker (console.js pinPicker) and Google Places (maps.js) */
-.pin-map { position: relative; height: 260px; margin-bottom: var(--space-4); overflow: hidden; background: var(--color-subtle);
-  border-radius: var(--radius); cursor: crosshair; touch-action: none; user-select: none; }
-.pin-map img.tile { position: absolute; width: 256px; height: 256px; max-width: none; pointer-events: none; }
-.pin-map .pin { position: absolute; color: var(--color-brand); font-size: 2rem; transform: translate(-50%, -100%); pointer-events: none; }
-.pin-map .zoom { position: absolute; top: .5rem; right: .5rem; z-index: 2; display: flex; flex-direction: column; gap: 2px; }
+/* The location map (console.js pinPicker on OpenStreetMap, maps.js on Google): rounded, themed with the UI */
+.pin-map { position: relative; height: 280px; margin-bottom: var(--space-2); overflow: hidden; background: var(--color-subtle);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg); cursor: crosshair; touch-action: none; user-select: none; }
+.pin-map-block { margin-bottom: var(--space-4); }
+.pin-map img.tile { position: absolute; width: 256px; height: 256px; max-width: none; pointer-events: none; filter: var(--map-tile-filter); }
+.pin-map .pin { position: absolute; z-index: 3; color: var(--color-brand); font-size: 2rem; transform: translate(-50%, -100%); pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
+.pin-map__other { position: absolute; z-index: 2; width: .8rem; height: .8rem; padding: 0; transform: translate(-50%, -50%); cursor: pointer;
+  background: var(--map-other); border: 2px solid var(--map-other-line); border-radius: 50%; }
+.pin-map__label { position: absolute; left: 50%; bottom: calc(100% + .3rem); transform: translateX(-50%); display: none; white-space: nowrap;
+  padding: .1rem .45rem; font-size: var(--text-xs); color: var(--color-text); background: var(--map-label-bg); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
+.pin-map__other:hover .pin-map__label, .pin-map__other:focus-visible .pin-map__label, .pin-map__other:focus .pin-map__label { display: block; }
+.pin-map .zoom { position: absolute; top: .5rem; right: .5rem; z-index: 4; display: flex; flex-direction: column; gap: 2px; }
 .pin-map .zoom button { width: 2rem; height: 2rem; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 1.1rem; cursor: pointer; }
-.pin-map .credit { position: absolute; bottom: 0; right: 0; z-index: 2; padding: 0 .3rem; font-size: .7rem; color: #333; background: rgba(255, 255, 255, .8); }
+.pin-map .credit { position: absolute; bottom: 0; right: 0; z-index: 4; padding: 0 .3rem; font-size: .7rem; color: var(--color-muted); background: var(--map-label-bg); }
+.address-find { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.address-find__results { margin: var(--space-2) 0 0; padding: 0; list-style: none; display: grid; gap: 2px;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.address-find__results[hidden] { display: none; }
+.address-find__results button { display: block; width: 100%; padding: .45rem .7rem; text-align: left; }
+.address-find__results button:hover, .address-find__results button:focus-visible { background: var(--color-brand-soft); }
+.fill-site { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-2) 0 var(--space-3); }
+.fill-site[hidden] { display: none; }
 .place-autocomplete { display: block; width: 100%; margin-bottom: .35rem; color-scheme: light; }
 .place-autocomplete-target { font-size: .85rem; color: var(--color-muted); }
 
@@ -725,3 +746,36 @@ body:has(.assistant) .task-toast { top: 9rem; bottom: auto; right: 2.5rem; }
   .crumbs li:last-child { flex: 0 1 auto; min-width: 0; }
   .crumbs li:last-child > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+/* event_team / event_metrics (console/components): rows wrap on narrow cards */
+.team-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.team-row__who { display: grid; flex: 1 1 14rem; min-width: 0; }
+.team-row__who strong { overflow-wrap: anywhere; }
+.team-row__actions form { margin: 0; }
+.platform-row { display: grid; grid-template-columns: 5rem 1fr; gap: 0 var(--space-3); align-items: center; }
+.platform-row .meter { grid-column: 1 / -1; }
+.metrics-numbers .metric { min-width: 0; }
+.notification-edit { flex-basis: 100%; }
+.notification-edit > summary { list-style: none; display: inline-flex; }
+.notification-edit > summary::-webkit-details-marker { display: none; }
+.notification-edit[open] > summary { margin-bottom: var(--space-2); }
+.notification-edit form { max-width: var(--read-width); }
+
+/* Add with AI (every form component): the sparkle button, and fields the AI just filled */
+.ai-offer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-3); }
+.button--ai { color: var(--color-brand-text); background: var(--color-brand-soft); border-color: var(--color-brand-line); }
+.button--ai:hover { background: var(--color-brand-line); }
+.is-ai-filled input, .is-ai-filled textarea, .is-ai-filled select, input.is-ai-filled, textarea.is-ai-filled, select.is-ai-filled {
+  border-color: var(--color-brand-mid); box-shadow: 0 0 0 3px var(--color-focus); background: var(--color-brand-soft); }
+
+/* The event map (Overview) and its pin popup: themed with the UI */
+.event-map { height: 320px; cursor: grab; }
+.pin-map--osm .pin-map__other.is-hidden { opacity: .5; }
+.event-map .pin-map__other { width: 1rem; height: 1rem; background: var(--color-brand-mid); border-color: var(--color-surface); }
+.map-popup { position: absolute; left: .6rem; right: auto; bottom: .6rem; z-index: 6; display: grid; gap: var(--space-1); max-width: min(20rem, calc(100% - 1.2rem));
+  padding: var(--space-3) var(--space-4); padding-right: 2.2rem; color: var(--color-text); background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow); cursor: auto; }
+.map-popup .button { justify-self: start; margin-top: var(--space-1); }
+.map-popup__close { position: absolute; top: .35rem; right: .45rem; width: 1.8rem; height: 1.8rem; font-size: 1.2rem; line-height: 1;
+  color: var(--color-muted); background: none; border: 0; border-radius: 50%; cursor: pointer; }
+.map-popup__close:hover { background: var(--color-subtle); }

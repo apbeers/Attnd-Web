@@ -27,6 +27,7 @@ from agent import summaries as S
 from agent.registry import agent_action, param as P
 
 from console.forms.event_forms import (AIImportForm, BlankEventForm, DisplayForm, EventForm, LocationForm,
+                                       NotificationEditForm,
                                        NotificationForm, RefreshForm, ScheduledItemForm, SourcesForm,
                                        TeamInviteForm)
 from events import push
@@ -579,10 +580,10 @@ def item_action(request, event, item_id):
 # Notifications
 # ---------------------------------------------------------------------------
 
-@agent_action('send_notification', 'Send an update (push notification + Updates tab) to the attendees now, or '
+@agent_action('send_notification', 'Send a notification (push + the app\'s Updates tab) to the attendees now, or '
               'schedule it. Urgent = for cancellations and safety only.', confirm=True, summary=S.send_notification,
-              form=NotificationForm, prefill=True, title='Sent / scheduled an update')
-@agent_action('notifications_page', "An event's updates (sent and scheduled) and how many devices they reach.",
+              form=NotificationForm, prefill=True, title='Sent / scheduled a notification')
+@agent_action('notifications_page', "An event's notifications (sent and scheduled) and how many devices they reach.",
               kind='read')
 @event_view
 def notifications(request, event):
@@ -605,26 +606,48 @@ def notifications(request, event):
             n.save()
             messages.success(request, 'Scheduled.')
         return redirect('console:notifications', event_id=event.pk)
-    items = event.notification_set.order_by('-send_time')
+    scheduled = list(event.notification_set.filter(sent=False).order_by('send_time'))
+    sent = list(event.notification_set.filter(sent=True).order_by('-send_time'))
     devices = Device.objects.real().filter(event=event)
     reach = devices.filter(subscribed=True).exclude(push_token='').count()
     urgent_reach = devices.exclude(push_token='').count()
     live_activities = devices.filter(platform='ios').exclude(live_activity_token='').count()
     return render(request, 'console/notifications.html', _ctx(
-        event, 'notifications', form=form, notifications=items, reach=reach, urgent_reach=urgent_reach,
+        event, 'notifications', form=form, scheduled=scheduled, sent=sent, reach=reach, urgent_reach=urgent_reach,
         live_activities=live_activities, urgent_left=push.urgent_sends_left(event)))
 
 
-@agent_action('send_scheduled_notification', 'Send a scheduled update now.', confirm=True,
-              summary=S.send_scheduled_notification, fixed={'action': 'send'}, title='Sent a scheduled update')
-@agent_action('delete_scheduled_notification', 'Delete a scheduled (not yet sent) update.', confirm=True,
-              summary=S.delete_notification, fixed={'action': 'delete'}, title='Deleted a scheduled update')
+@agent_action('send_scheduled_notification', 'Send a scheduled notification now.', confirm=True,
+              summary=S.send_scheduled_notification, fixed={'action': 'send'}, title='Sent a scheduled notification')
+@agent_action('delete_scheduled_notification', 'Delete a scheduled (not yet sent) notification.', confirm=True,
+              summary=S.delete_notification, fixed={'action': 'delete'}, title='Deleted a scheduled notification')
+@agent_action('edit_scheduled_notification', "Change a scheduled (not yet sent) notification's title, text or send "
+              'time. Pass only what changes.', form=NotificationEditForm, fixed={'action': 'edit'},
+              title='Edited a scheduled notification')
 @event_view
 @require_POST
 def notification_action(request, event, notification_id):
     n = get_object_or_404(Notification, pk=notification_id, event=event)
     action = request.POST.get('action')
-    if action == 'delete' and not n.sent:
+    if action == 'edit' and not n.sent:
+        form = NotificationEditForm(request.POST)
+        if not form.is_valid():
+            for errors in form.errors.values():
+                for e in errors:
+                    messages.error(request, e)
+            return redirect('console:notifications', event_id=event.pk)
+        changed = []
+        for name in ('title', 'body', 'send_time'):
+            value = form.cleaned_data.get(name)
+            if value not in (None, '') and value != getattr(n, name):
+                setattr(n, name, value)
+                changed.append(name)
+        if changed:
+            n.save(update_fields=changed)
+            messages.success(request, f'Saved “{n.title}”.')
+        else:
+            messages.info(request, 'Nothing changed.')
+    elif action == 'delete' and not n.sent:
         n.delete()
     elif action == 'send' and not n.sent:
         push.send_notification(n)
@@ -961,3 +984,37 @@ def admin_usage(request):
         'unassigned': Event.objects.filter(user__isnull=True).order_by('-start_time'),
         'section': 'admin_usage',
     })
+
+
+# ---------------------------------------------------------------------------
+# The location form's helpers (page, chat card, canvas overlay): address search and "Fill from this website?"
+# ---------------------------------------------------------------------------
+
+@event_view
+def place_search(request, event):
+    """GET ?q=: places for the address field's Find button (no Google Maps key in the browser, or it failed)."""
+    from attnd.ratelimit import RateLimit
+    from console import places
+    limit = RateLimit('place_search_user')
+    if limit.hit(request.user.pk) > limit.limit:
+        return JsonResponse({'error': 'Too many searches. Try again in a few minutes.', 'results': []}, status=429)
+    near = places._near(event)
+    return JsonResponse({'results': places.search(request.GET.get('q', ''), near)})
+
+
+@require_POST
+@event_view
+def location_fill(request, event):
+    """POST url: suggestions for the location form's empty fields from a website. Saves nothing."""
+    from attnd.ratelimit import RateLimit
+    from console import places
+    limit = RateLimit('location_fill_user')
+    if limit.hit(request.user.pk) > limit.limit:
+        return JsonResponse({'error': 'You’ve filled many forms from websites. Try again in an hour.'}, status=429)
+    try:
+        found = places.fill_from_website(event, request.POST.get('url', ''))
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+    logger.info('Location fill for event %s from %s: %d fields, $%s', event.pk, found['host'], len(found['fields']),
+                found['cost'])
+    return JsonResponse({'fields': found['fields'], 'host': found['host']})

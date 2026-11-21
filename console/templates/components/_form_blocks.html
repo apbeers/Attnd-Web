@@ -1,11 +1,18 @@
-{% load console_tags %}{# Named 'block' rows of the console's forms: page-only pieces (the pin map: its script lives on the page). #}{% if r.name == 'datalist' %}<datalist id="{{ uid }}{{ r.id }}">{% for c in r.options %}<option value="{{ c }}">{% endfor %}</datalist>
-{% elif r.name == 'pin_map' %}{% if surface != 'chat' %}<div id="pin-map" class="pin-map" data-pin-svg="{% filter force_escape %}{% icon 'pin-fill' %}{% endfilter %}"></div>
-      <p class="form-note">Click the map to place the pin.</p>{% endif %}
+{% load console_tags %}{# Named 'block' rows of the console's forms (the pin map and Fill from this website: console.js attndEnhance wires them, on pages and in the chat). #}{% if r.name == 'datalist' %}<datalist id="{{ uid }}{{ r.id }}">{% for c in r.options %}<option value="{{ c }}">{% endfor %}</datalist>
+{% elif r.name == 'pin_map' %}<div class="pin-map-block" data-pin-block>
+      {% if not r.has_pin %}<p class="form-note" data-pin-empty>{% icon "pin" %} No map pin yet · Set it: search the address above or tap the map.</p>{% endif %}
+      <div class="pin-map" data-pin-map data-center="{{ r.center }}" data-zoom="{{ r.zoom }}" data-others="{{ r.others }}" data-places-url="{{ r.places_url }}" data-pin-svg="{% filter force_escape %}{% icon 'pin-fill' %}{% endfilter %}" role="application" aria-label="Map: tap to place this location’s pin"></div>
+      <p class="form-note">Tap the map to place the pin{% if r.others != '[]' %}; the event’s other locations are the small pins{% endif %}.</p>
+    </div>
+{% elif r.name == 'fill_site' %}<div class="fill-site" data-fill-site data-url="{{ r.url }}" hidden>
+      <button type="button" class="button button--outline button--small" data-fill-go>{% icon "stars" %} Fill from this website?</button>
+      <span class="small muted" data-fill-status role="status" aria-live="polite"></span>
+    </div>
 {% elif r.name == 'urgent_warning' %}<div class="notice notice--error small" id="{{ uid }}urgent-warning" role="alert" data-show-if="urgent">
         {% icon "warning" %} <strong>Urgent goes to everyone in the event, right away:</strong>
         {{ d.urgent_reach }} device{{ d.urgent_reach|pluralize }}, including people who turned notifications off. It arrives
         as a time-sensitive alert that can break through Focus, and appears on Lock Screen Live Activities
         ({{ d.live_activities }} running). Use it only for cancellations, safety and big changes.
-        {{ d.urgent_left }} more urgent update{{ d.urgent_left|pluralize }} allowed this hour.
+        {{ d.urgent_left }} more urgent notification{{ d.urgent_left|pluralize }} allowed this hour.
       </div>
 {% endif %}

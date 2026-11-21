@@ -22,6 +22,8 @@ VIA_TEXT = {'ask_attnd': 'Ask Attnd', 'chat': 'Ask Attnd', 'undo': 'Undo'}
 MAX_TEXT = 160
 # Fields the timeline never shows as "old → new" (long JSON, internal lists): still listed as changed.
 OPAQUE = {'context', 'display_config', 'locked_fields', 'source_urls', 'snapshot', 'operations'}
+# Bookkeeping fields never listed as changed (Undo still restores them): "Locked fields" isn't a change people made.
+HIDDEN = {'locked_fields'}
 
 
 def _verbose(cls, name):
@@ -38,7 +40,7 @@ def change_message(op):
         return json.dumps([{'added': {}}])
     if op['op'] == 'update':
         cls = apps.get_model(op['model'])
-        return json.dumps([{'changed': {'fields': [_verbose(cls, f) for f in op.get('fields') or []]}}])
+        return json.dumps([{'changed': {'fields': [_verbose(cls, f) for f in op.get('fields') or [] if f not in HIDDEN]}}])
     return ''
 
 
@@ -133,7 +135,9 @@ def row(entry, user=None):
                 continue
             changes.append({'field': _verbose(cls, field) if cls else field, 'old': _fmt(pair[0]), 'new': _fmt(pair[1])})
     if entry.action_flag == CHANGE and not changes:
-        message = entry.get_change_message()
+        message = entry.get_change_message().replace(' and Locked fields', '').replace('Locked fields and ', '')
+        if message in ('Changed Locked fields.', 'Changed.'):
+            message = ''
     else:
         message = ''
     who = entry.user.email if entry.user_id and entry.user.email else 'Someone'

@@ -166,7 +166,31 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
 - **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. The tray is a button (`aria-expanded`) that opens a panel of running and recent tasks; each task expands to its **friendly steps** (`IngestJob.steps`, written by `scrape.jobs.Steps`: "Read 3 web pages", "Understood the event", "Found 12 locations and 34 schedule items", "Checked addresses on the map", "Found 4 changes: waiting for your review"; states running / done / failed / waiting, with status marks and a spinner), updated live from the same feed (`task_json.steps`, `result_label`); a finished task links to its result ("Open the event" / "Review the changes"). On the full-screen chat the tray sits at the canvas's top-right (away from the composer) and opens downward, and result links open on the canvas (`window.attndCanvasOpen`); Esc closes it. Web app manifest at `/console/manifest.webmanifest`.
 - **Likes** (API-009 hearts; the apps say "like", the heart icon stays): net likes (hearts − unhearts, ≥ 0) from the anonymous usage counts, `console.usage.net_hearts` / `most_hearted` (code and metric names keep "heart"; labels say "likes" / "liked"): Usage page, counts on the Locations and Schedule lists, "Most liked" on the overview. **Urgent** notifications: a checkbox with a warning on the Notifications form, red rows in the list.
 - **Status badges** (`_status_badges.html`): draft/live/archived, paid/demo, happening now (`Event.timing`), ended, watching, unassigned.
-- **Google Maps** (`console/static/console/maps.js`) when `GOOGLE_MAPS_BROWSER_KEY` is set: Places autocomplete on addresses, draggable pin map; otherwise the OpenStreetMap picker.
+- **Maps and addresses** (`console/static/console/maps.js` with `GOOGLE_MAPS_BROWSER_KEY`, else console.js's
+  OpenStreetMap `pinPicker`; both wired by `window.attndEnhance(scope)` for every form on a page and every chat /
+  canvas card): every form with address + latitude + longitude gets Places autocomplete, or a **Find on the map** button
+  that searches on the server (`console:place_search` → `console/places.py`: Google Places with the server key, else
+  Nominatim, one search per click, cached a day). The location form's map shows this place as the main pin and the
+  event's other locations as small muted pins (names on hover / focus), framed to fit, rounded and themed (map tokens
+  `--map-*`, dark tiles dimmed, Google `colorScheme`). The **event map** (`event_map` component, on the Overview page
+  and in `event_overview`) shows every pinned location; a tap opens a small themed popup with View location.
+  **Fill from this website?** (`console:location_fill`, new or empty locations): Studio's SSRF-guarded fetcher + Claude
+  Haiku structured output (`attnd/claude.py`) → suggestions for the empty fields only, including the Details for the
+  assistant (API-018, through `events/context.normalize`); nothing saves, the fill has its own Undo.
+- **Add with AI** (every form component, owner Nov 21, 2026): `console.components.finish()` stamps every form JSON
+  with its component, ids and an Add with AI / Edit with AI offer; `_form.html` draws the sparkle button and
+  `data-form-component` / `data-form-ids`. The button opens Ask Attnd with a prompt for that thing and remembers the
+  form (`AgentRun.target`, "FORM ON SCREEN" in the context); the agent's `fill_form(component, ids, values, submit)`
+  tool (agent/components.py: validated against the form's fields, ctx_ details only when empty and not hand-edited)
+  is applied by the panel to that same form in front of the person (page, canvas overlay or chat card: highlighted,
+  one after another); nothing saves until they press Save or say "save it" (`submit`). New form components get it
+  for free (`agent/tests_round3.py` checks every one).
+- **Draw the eye** (`window.attndReveal(el, kind)` in console.js: `slide`, `in`, `pulse`, `glow`, `collapse`, `scroll`,
+  `flip`; ~200–320 ms, nothing with reduced motion): canvas tab switches slide in from their side of the tab order,
+  changed cards pulse, new rows fade in, deleted ones collapse, re-sorted lists glide (Scheduled → Sent), AI-filled
+  fields glow in sequence, chat lines and cards fade up, task tray items appear and pulse when they finish.
+- **Live numbers**: `[data-live]` blocks (the Overview's numbers, Metrics) refresh every 60 s while visible (paused
+  when hidden; pages re-fetch themselves, cards in agent.js), changed numbers pulse, "Updated 3:41 PM".
 - **Brand colour** purple `#431f86` (from the app icon) across console, site and apps.
 - **Site icons** (every page includes `home/_icons.html`): `uv run python scripts/make_icons.py` regenerates them from `brand/app-icon-1024.png` (copy of the iOS 1024 app icon; iOS itself went back from the Icon Composer icon to a PNG app icon set on Nov 19, 2026 because `Assets.car` was ~5 MB, and the website's icons stay as they are) into `public/` — `favicon.ico` (16–256), `icon-32/96/192/512.png` (rounded corners, transparent, so Safari and other tabs show the tile without a plate), `apple-touch-icon.png` 180 (full bleed, opaque; iOS/macOS round it), `icon-maskable-512.png`, `site.webmanifest` — and the console manifest's icons. `home/tests.py` checks the sizes and links.
 - **Homepage screenshots** (`home/static/home/img/demo-map.webp`, `demo-locations.webp`, 768×1670): the raw 6.3" captures `raw/iphone-63/1-map.png` and `4-locations.png` from Attnd-iOS's `store-screenshots` artifact, resized with Pillow (WebP, quality 82). Refresh them after a new screenshot run.
@@ -377,6 +401,17 @@ on Save does; there is no second copy of any business logic.
 - **Send animation**: Enter / Send morphs the typed text into the new bubble: FLIP from the textarea's text position
   to the bubble's final spot (~320 ms, ease-out, Web Animations API), the composer clears at the same time; a failed
   send puts the text back. Reduced motion: a plain fade. A reply drawn this way isn't drawn again when its step comes.
+- **Canvas first** (desktop full screen): what the canvas can show goes there (a list → its tab, one form or history →
+  the overlay) and the chat keeps one line, "Showing 18 locations →" (tap to show it again); a tap's detail adds
+  nothing to the chat. Tabs: Events · Overview · Locations · Schedule · Notifications (compose and "Scheduled · N" /
+  "Sent · N" side by side on wide canvases) · Team (`event_team`: members, roles, invites; every button always asks,
+  each carrying its own member id: `resolve_actions` keeps the button's `params`, `components/act` matches the exact
+  button) · Metrics (`event_metrics`: usage per app, iOS / Android, push reach, most liked / viewed).
+- **Chat text**: step lines are one line ≤ 80 characters, never page text or JSON (`agent.views.step_label`); a
+  finished run's answer is drawn once (text next to a `finish` call isn't stored as a note). Assistant answers turn
+  `[Account](/console/account/)` into real links. **Platform help** (`agent/help.md`, appended to the system prompt):
+  how-to answers always link the exact page; `agent/tests_help.py` resolves every link.
+- **Naming**: the console and the chat say **Notifications** (the apps keep their "Updates" tab; API names unchanged).
 - **Follow-up chips**: `finish(summary, suggest)` (2–4 short requests, `AgentRun.suggestions`); without them
   `views.suggestions` derives them from the last component shown (`FOLLOW_UPS`). `run_json.suggestions` (done runs
   only) → chips above the composer (`data-agent-suggest`); tapping one sends it.

@@ -1,11 +1,22 @@
-{% load console_tags %}{# notification_row: one update, sent or scheduled (Send now / Delete for scheduled ones). #}<li class="stack stack--tight component component--notification_row{% if d.urgent %} is-urgent{% endif %}" data-id="{{ d.id }}">
+{% load console_tags %}{# notification_row: one notification, scheduled (send time, "in 2 h", Send now / Edit / Delete) or sent (when, delivered). #}<li class="stack stack--tight component component--notification_row{% if d.urgent %} is-urgent{% endif %}" data-id="{{ d.id }}" data-group="{{ d.group }}">
         <div>
         <div class="cluster">
           <strong class="grow">{% if d.urgent %}<span class="badge badge--danger">{% icon "warning" %} Urgent</span> {% endif %}{{ d.title }}</strong>
           {% if d.sent %}<span class="small muted">Sent {{ d.sent_at }} · {{ d.delivered }} delivered</span>
-          {% else %}<span class="badge badge--info">Scheduled {{ d.scheduled }}</span>{% endif %}
+          {% else %}<span class="badge badge--info">{{ d.scheduled }}{% if d.relative %} · {{ d.relative }}{% endif %}</span>{% endif %}
         </div>
         <div class="muted">{{ d.body }}</div>
         </div>
-        {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+        {% if d.actions or d.edit %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}
+          {% if d.edit %}<details class="notification-edit">
+            <summary class="button button--outline button--small">{% icon "brush" %} Edit</summary>
+            <form method="post" action="{{ d.edit.url }}" class="stack stack--tight"{% if surface == 'chat' %} data-component-form{% endif %}>{% csrf_token %}
+              <input type="hidden" name="action" value="edit">
+              <label class="field"><span class="field__label">Title</span><input name="title" maxlength="60" value="{{ d.edit.title }}" required></label>
+              <label class="field"><span class="field__label">Text</span><textarea name="body" rows="3" maxlength="256">{{ d.edit.body }}</textarea></label>
+              <label class="field"><span class="field__label">Send at</span><input type="datetime-local" step="600" name="send_time" value="{{ d.edit.send_time }}"></label>
+              <div class="cluster"><button class="button button--primary button--small">Save</button></div>
+            </form>
+          </details>{% endif %}
+        </div>{% endif %}
       </li>
