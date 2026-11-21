@@ -184,7 +184,7 @@ def chat_default(context):
     """Is "Chat as my default view" on for the signed-in person (the top bar's switch)?"""
     from console.models import ConsolePreference
     request = context.get('request')
-    return ConsolePreference.chat_first(getattr(request, 'user', None))
+    return ConsolePreference.chat_first(getattr(request, 'user', None), ConsolePreference.is_phone(request))
 
 
 @register.filter

@@ -246,3 +246,9 @@
 .agent__commands li { display: flex; gap: var(--space-2); padding: .35rem .5rem; border-radius: 8px; cursor: pointer; font-size: var(--text-sm); }
 .agent__commands li[aria-selected="true"] { background: var(--color-brand-soft); }
 .agent__commands .mono { color: var(--color-brand-text); }
+
+/* phone: the event's sections as chips above the composer (stage I15) */
+.agent__tabs-chips { display: flex; gap: var(--space-1); overflow-x: auto; padding: var(--space-1) var(--space-2);
+  scrollbar-width: none; }
+.agent__tabs-chips::-webkit-scrollbar { display: none; }
+.agent__tabs-chips .chip { flex: none; }

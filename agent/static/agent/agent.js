@@ -718,6 +718,40 @@
     }
   });
 
+  // Stage I15: on a phone, the full-screen chat shows the event's sections as chips above the composer; each shows
+  // its cards in the chat, and the pages stay one tap away.
+  (function phoneTabs() {
+    if (!full || !eventId || !window.matchMedia('(max-width: 1023px)').matches) return;
+    const row = document.createElement('div');
+    row.className = 'agent__tabs-chips';
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Event sections');
+    [['Overview', 'event_overview'], ['Ready?', 'event_readiness'], ['Locations', 'location_row'],
+     ['Schedule', 'schedule_item_row'], ['Notifications', 'notification_row'], ['Numbers', 'usage_answer']]
+      .forEach(([label, name]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip';
+        b.textContent = label;
+        b.addEventListener('click', async () => {
+          try {
+            const items = await fetchCards(name, [{ event_id: eventId }]);
+            const box = cardBox();
+            if (items.length) appendGrouped(box, items);
+            else { const p = document.createElement('p'); p.className = 'small muted'; p.textContent = `No ${label.toLowerCase()} yet.`; box.appendChild(p); }
+            box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+          } catch (err) { bubble('error', err.message); }
+        });
+        row.appendChild(b);
+      });
+    const pages = document.createElement('a');
+    pages.className = 'chip';
+    pages.href = `/console/events/${eventId}/?page=1`;
+    pages.textContent = 'Pages ↗';
+    row.appendChild(pages);
+    suggestBox.before(row);
+  })();
+
   // Stage I8: speak instead of typing (the browser's own Web Speech API; hidden where it isn't available).
   (function voice() {
     const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;

@@ -455,7 +455,7 @@ def assistant_page(request):
             and url_has_allowed_host_and_scheme(back, {request.get_host()})):
         back = '/console/'
     from console.models import ConsolePreference
-    if ConsolePreference.chat_first(request.user) and 'page=1' not in back:
+    if ConsolePreference.chat_first(request.user, ConsolePreference.is_phone(request)) and 'page=1' not in back:
         back += ('&' if '?' in back else '?') + 'page=1'  # Exit goes to the page (chat stays the default)
     from agent import canvas
     return render(request, 'agent/assistant.html', {'agent_event': event, 'back_url': back,

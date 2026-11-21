@@ -92,7 +92,7 @@ def _chat_landing(request, event=None):
 
     from console.models import ConsolePreference
     if (request.method != 'GET' or request.GET.get('page') == '1' or getattr(request, 'agent_run_id', None)
-            or not ConsolePreference.chat_first(request.user)):
+            or not ConsolePreference.chat_first(request.user, ConsolePreference.is_phone(request))):
         return None
     params = {'from': request.path}
     if event is not None:
@@ -108,7 +108,8 @@ def _chat_landing(request, event=None):
 def chat_default(request):
     from console.models import ConsolePreference
     on = request.POST.get('on') in ('1', 'true', 'on', 'True')
-    ConsolePreference.objects.update_or_create(user=request.user, defaults={'chat_default': on})
+    field = 'phone_chat' if ConsolePreference.is_phone(request) else 'chat_default'  # phones have their own (I15)
+    ConsolePreference.objects.update_or_create(user=request.user, defaults={field: on})
     messages.success(request, 'The chat is now your default view.' if on else 'Pages are your default view again.')
     if _wants_json(request):
         return JsonResponse({'chat_default': on})

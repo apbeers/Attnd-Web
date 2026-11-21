@@ -137,6 +137,8 @@ class ConsolePreference(models.Model):
     (/console/, an event's overview) in Ask Attnd's full-screen chat instead of the page."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='console_preference')
     chat_default = models.BooleanField(default=False)
+    # Stage I15: on phones the console opens on the chat unless the person turned it off there.
+    phone_chat = models.BooleanField(default=True)
     # What Ask Attnd should remember for this person (stage I11): [{id, text, event_id (or null = every event),
     # created}], ≤ 30, learned from corrections ("always call it Main Stage"); shown and removable in Account.
     agent_notes = models.JSONField(default=list, blank=True)
@@ -175,11 +177,20 @@ class ConsolePreference(models.Model):
         return f'{self.user_id}: chat {"on" if self.chat_default else "off"}'
 
     @classmethod
-    def chat_first(cls, user):
+    def chat_first(cls, user, phone=False):
+        """Does a landing open on the chat? Desktops: "Chat as my default view" (off by default). Phones (stage
+        I15): on by default, the same switch turns it off there."""
         if not getattr(user, 'is_authenticated', False):
             return False
-        cached = getattr(user, '_chat_default', None)
+        cached = getattr(user, '_chat_prefs', None)
         if cached is None:
-            cached = cls.objects.filter(user=user, chat_default=True).exists()
-            user._chat_default = cached
-        return cached
+            row = cls.objects.filter(user=user).values_list('chat_default', 'phone_chat').first()
+            cached = row or (False, True)
+            user._chat_prefs = cached
+        return cached[1] if phone else cached[0]
+
+    @staticmethod
+    def is_phone(request):
+        import re
+        ua = request.META.get('HTTP_USER_AGENT', '') if request is not None else ''
+        return bool(re.search(r'iPhone|iPod|Android.+Mobile|Mobile Safari|Windows Phone', ua))

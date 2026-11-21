@@ -304,3 +304,17 @@ class LazyPanelTests(AgentTestCase):
         self.assertContains(page, 'agent/agent-loader.js')
         self.assertNotContains(page, '<script src="/static/agent/agent.js"')
         self.assertContains(page, 'data-agent-src="/static/agent/agent.js"')
+
+
+class PhoneChatFirstTests(AgentTestCase):
+    def test_phones_open_on_the_chat_by_default_and_the_switch_turns_it_off_there_only(self):
+        from console.models import ConsolePreference
+        phone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
+        url = reverse('console:event', args=[self.event.pk])
+        response = self.client.get(url, HTTP_USER_AGENT=phone, secure=True)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('console:assistant'), response['Location'])
+        self.assertEqual(self.client.get(url, secure=True).status_code, 200)  # desktop: the page
+        self.client.post(reverse('console:chat_default'), {'on': '0'}, HTTP_USER_AGENT=phone, secure=True)
+        self.assertEqual(self.client.get(url, HTTP_USER_AGENT=phone, secure=True).status_code, 200)
+        self.assertFalse(ConsolePreference.objects.get(user=self.owner).phone_chat)
