@@ -890,6 +890,11 @@ hosts the site.
   links `rel="noopener nofollow ugc"`, forms / fields / scripts refused at save and neutralised at serve, a draft
   event's site preview-only, unpaid events' sites with a Demo ribbon, staff email at 2 open reports, EXIF stripped,
   rights confirmed (and logged in History) before an imported site's first publish.
+- **Site styles** (batch 7 Track D, `studio/styles.py`, spec §16): five documented looks (Festival poster, Program,
+  Market day, Course & countdown, One page: layout with the `attnd.js` elements, type scale, theme colour use, do /
+  don't). A from-scratch design always names one (`starter_instruction` + `styles.pick(event)`); **Platform → Site
+  styles** (`platform:site_styles`, staff) shows each in sandboxed, script-free previews (phone + laptop) in an event's
+  colours and which style that event gets. Tests: `studio/tests_styles.py`.
 - Custom domains are designed (spec §13), not built.
 
 ## Plans and the Platform admin (D1 + D2, owner Nov 21, 2026; `platform_admin/`)
@@ -910,7 +915,7 @@ hosts the site.
   sub-tab). Every admin tool is a Platform sub-tab gated by its own permission (`{% platform_nav "<key>" %}` at the
   top of each area page; their URLs are unchanged, so old links work): Health, Customers, Upgrade requests, Pricing,
   Overrides (platform admins), AI spend, Diagnostics, Prospects, Claims, Studio reports (staff), App usage (platform
-  admins), plus the actions **Preview onboarding** and **Django admin** (superusers). Architecture, App options, Brand and Emails are sub-tabs (batch 7). The full-screen canvas likewise has one **Platform** tab (Health, AI spend,
+  admins), plus the actions **Preview onboarding** and **Django admin** (superusers). Architecture, App options, Brand, Emails, Site styles and Components are sub-tabs (batch 7). The full-screen canvas likewise has one **Platform** tab (Health, AI spend,
   Prospects sections, each only with its permission; toolbar AI limits / Overrides / Discovery settings / CSV).
   `platform_admin/tests_nav.py` asserts the top bar and the canvas tabs of an organizer and of staff / a superuser
   differ only by Platform. A new admin tool = a row in `areas.AREAS` + the nav tag on its page, never a top-bar link.

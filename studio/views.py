@@ -128,7 +128,8 @@ def starter_instruction(event):
     if items:
         text += f' There are {items} schedule items.'
     text += ' Use the event\'s colours and logo when it has them. Keep it simple, readable and fast on phones.'
-    return text
+    from studio import styles
+    return text + ' ' + styles.prompt_text(styles.pick(event))
 
 
 def _start_design(request, event, text):

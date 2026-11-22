@@ -1070,3 +1070,16 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .gallery-frame__body { display: grid; gap: var(--space-3); min-width: 0; }
 .gallery-frame__body > * { min-width: 0; }
 .gallery-row, .gallery-row__frames { min-width: 0; max-width: 100%; }
+
+/* Platform → Site styles: each style's phone preview at its real width and a laptop preview scaled to half. */
+.site-style__body { display: grid; gap: var(--space-5); }
+.site-style__body > * { min-width: 0; }
+.site-style__previews { display: flex; gap: var(--space-4); align-items: flex-start; min-width: 0; overflow-x: auto; padding-bottom: var(--space-2); }
+.site-style__doc { columns: 2 22rem; column-gap: var(--space-6); }
+.site-style__doc > * { break-inside: avoid; }
+.site-style__frame { margin: 0; display: grid; gap: var(--space-1); flex: none; }
+.site-style__frame iframe { display: block; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+.site-style__frame--phone iframe { width: 390px; height: 700px; }
+.site-style__scale { width: 600px; height: 400px; overflow: hidden; border-radius: var(--radius-lg); }
+.site-style__frame--wide iframe { width: 1200px; height: 800px; transform: scale(.5); transform-origin: 0 0; }
+@media (max-width: 700px) { .site-style__frame--wide { display: none; } }

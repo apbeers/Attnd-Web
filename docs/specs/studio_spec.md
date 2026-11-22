@@ -282,6 +282,26 @@ version with Undo.
 
 Tests: `studio/tests_safeguards.py`.
 
+## 16. Site styles (batch 7 Track D, Nov 22, 2026)
+
+The best generated sites settled into five looks, now a documented set in `studio/styles.py` (the source of truth;
+Platform → Site styles shows each with phone and laptop previews in an event's colours):
+
+| Style | Best for | Pages | Signature |
+|---|---|---|---|
+| Festival poster (`poster`) | festivals, concerts, art walks, fairs | index, lineup, map, faq | dark bar, full-bleed hero, huge condensed headline, pill buttons, alternating blocks |
+| Program (`program`) | conferences, talks, theatre, film | index, schedule, venue | calm white column (68ch), serif display, schedule by day, times in their own column |
+| Market day (`market`) | markets, food truck rallies, craft fairs | index, vendors, map | warm wash (secondary), map first, vendor cards by category, hours above the fold |
+| Course & countdown (`course`) | races, rides, tournaments | index, course, faq | huge countdown, timeline of key times, big course map |
+| One page (`single`) | small events | index | everything on one scrolling page |
+
+Each style defines the home page's sections in order (with the `attnd.js` elements they use), the type scale (system
+font stacks only: no web fonts needed), how the event theme's primary / secondary / tertiary colours are used, and do's
+and don'ts. A website started from scratch (`studio.views.starter_instruction`) gets `SITE STYLE "<name>" …` from
+`styles.prompt_text(styles.pick(event))`: course words (5K, race, ride…) → Course, market words → Market day, talk /
+conference words → Program, ≤ 2 places and ≤ 6 items → One page, else Festival poster. The system prompt says to
+follow a SITE STYLE and keep to it in later changes. Imports keep the old site's look (no style).
+
 ## 13. Custom domains (later, not built)
 `Site.custom_domain` + verification; the server adds it with the Heroku Platform API (`POST /apps/<app>/domains`, ACM)
 and shows the DNS target; the middleware maps `Host` → site and serves it at `/` (`<base href="/">`, so the same

@@ -1,0 +1,30 @@
+{% extends 'console/base.html' %}
+{% load console_tags platform_tags %}
+{% block title %}Site styles{% endblock %}
+{% block content %}
+<div class="column stack stack--loose">
+  {% platform_nav "site_styles" %}
+  <p class="muted">Studio's site styles: a website started from scratch always lands on one of them (picked by what the event is: <span class="mono">studio/styles.py</span>), and the designer keeps to it. The previews are static (sample blocks stand in for the live <span class="mono">attnd.js</span> elements){% if event %}, in {{ event.name }}'s colours with its own names and times{% else %}, in Attnd's colours with a sample festival{% endif %}.</p>
+  <form method="get" class="cluster"><label class="field"><span class="field__label">Show in an event's colours</span>
+    <select name="event" data-autosubmit><option value="">Sample festival</option>{% for e in events %}<option value="{{ e.pk }}"{% if event and e.pk == event.pk %} selected{% endif %}>{{ e.name }} ({{ e.event_code }})</option>{% endfor %}</select></label></form>
+  {% for s in styles %}<section class="panel stack site-style{% if s.key == picked %} panel--accent{% endif %}" id="style-{{ s.key }}" data-site-style="{{ s.key }}">
+    <div class="cluster"><h2 class="title-3 grow">{{ s.name }} <span class="mono small muted">{{ s.key }}</span></h2>{% if s.key == picked %}<span class="badge badge--success">{{ event.name }} gets this one</span>{% endif %}</div>
+    <p>{{ s.best_for }}</p>
+    <div class="site-style__body">
+      <div class="site-style__previews">
+        <figure class="site-style__frame site-style__frame--phone"><iframe title="{{ s.name }} on a phone" sandbox srcdoc="{{ s.preview }}" width="390" height="700" loading="lazy"></iframe><figcaption class="small muted">Phone · 390 px</figcaption></figure>
+        <figure class="site-style__frame site-style__frame--wide"><div class="site-style__scale"><iframe title="{{ s.name }} on a laptop" sandbox srcdoc="{{ s.preview }}" width="1200" height="800" loading="lazy"></iframe></div><figcaption class="small muted">Laptop · 1200 px (scaled)</figcaption></figure>
+      </div>
+      <div class="site-style__doc small">
+        <h3 class="title-4">Pages</h3><p class="mono">{{ s.pages|join:" · " }}</p>
+        <h3 class="title-4">Layout of the home page</h3><ol>{% for name, what in s.layout %}<li><strong>{{ name }}</strong>: {{ what }}</li>{% endfor %}</ol>
+        <h3 class="title-4">Type</h3><p>Display <span class="mono">{{ s.type.display }}</span>; body <span class="mono">{{ s.type.body }}</span>; {{ s.type.scale }}</p>
+        <h3 class="title-4">Colours (the event theme)</h3><p>{{ s.colours }}</p>
+        <h3 class="title-4">Data library</h3><p class="mono">{% for c in s.components %}&lt;{{ c }}&gt; {% endfor %}</p>
+        <div class="grid grid--2"><div><h3 class="title-4">Do</h3><ul>{% for d in s.do %}<li>{{ d }}</li>{% endfor %}</ul></div><div><h3 class="title-4">Don't</h3><ul>{% for d in s.dont %}<li>{{ d }}</li>{% endfor %}</ul></div></div>
+        <details><summary>What the designer is told</summary><p class="mono small">{{ s.prompt }}</p></details>
+      </div>
+    </div>
+  </section>{% endfor %}
+</div>
+{% endblock %}
