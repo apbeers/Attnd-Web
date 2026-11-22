@@ -56,7 +56,13 @@ resume note is under "Running when paused" below.
   - **Missing:** place results in the search sheet have no distance or arrow yet.
 - **Android phase 6a:** the assistant domain, the router rules from the eval, the JSON tool protocol, and the
   Android eval runner. Told to skip the Plan ↔ My schedule sync code because of the one-list change.
-- **Android phase 8:** Live Update and per-entry reminders, matching iOS.
+- **Android phase 8: done** (`a04e8c0`; 391 tests pass).
+  - **Built:** the Live Update follows plan → My schedule → day; Now / Next always filled; the `live_activity`
+    follows / buttons settings; posts on join; per-entry reminders.
+  - **Differs from iOS:** `stale_text` is stored but not shown (an Android notification can't redraw itself when
+    it goes stale).
+  - **To do:** run `lintDebug assembleDebug` on develop (not re-run after the rebase). Mark API-027's Android column
+    in `API_CHANGES.md` as partial: `live_activity` is done, the screens aren't.
 - **iOS one-list change** (owner-approved): the spec is pushed, `docs/specs/one_list_spec.md` (`4c708d0`). The
   button and chat become **"Ask Attnd"**. The planner diffs its result against My schedule and proposes adds and
   removes with reasons; it only removes its own entries unless asked to. No API change. **No iOS code written yet.**
