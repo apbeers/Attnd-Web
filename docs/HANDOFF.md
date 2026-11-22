@@ -47,8 +47,13 @@ resume note is under "Running when paused" below.
     session-only, so re-measure in a new session.
   - **Not measured:** the platform-admin and superuser pages (the test account is staff only).
   - **Cleanup:** remove the seeded rows with `python manage.py seed_staff_volume --clean`.
-- **Android phase 4:** tabs (Home first, ≤ 5), Options placement, the search sheet, swipe-to-dismiss banners, the
-  update banner, the Permissions section.
+- **Android phase 4: done** (`01ef69f`).
+  - **Built:** Home first (a temporary list of today's essentials), the event's tabs, Explore and the My plan tab
+    removed, the floating search or My plan button, the Options gear, swipe-to-dismiss pills and banners, the in-app
+    update banner, and the Permissions section.
+  - **Not yet:** lint wasn't re-run after the final rebase (tests and build pass).
+  - **Moved to other phases:** the urgent card's swipe and Undo (5b), and hiding the planner without the model (6b).
+  - **Missing:** place results in the search sheet have no distance or arrow yet.
 - **Android phase 6a:** the assistant domain, the router rules from the eval, the JSON tool protocol, and the
   Android eval runner. Told to skip the Plan ↔ My schedule sync code because of the one-list change.
 - **Android phase 8:** Live Update and per-entry reminders, matching iOS.
