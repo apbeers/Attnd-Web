@@ -141,7 +141,7 @@ Accounts and services:
   Payments are collected outside Attnd for now (no checkout); invoices, sales tax and the payment account should be in
   the LLC's name, and the Terms should name the plans and what each includes.
 Legal/policy surface (to re-issue in the LLC's name):
-- Privacy policy (`/privacy/`), Terms of Service (to write), Terms of Sale + Organizer Agreement (tickets), App Store
+- Privacy policy (`/privacy/`; the rewrite waiting for approval: `docs/privacy_policy_draft.md` + `home/templates/home/privacy_draft.html`, batch 7), Terms of Service (to write), Terms of Sale + Organizer Agreement (tickets), App Store
   privacy labels, Play data safety, support email, App Review contact.
 
 ## 5. Order of operations (when it's time)

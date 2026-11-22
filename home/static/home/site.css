@@ -67,6 +67,9 @@ hr { border: 0; border-top: 1px solid var(--color-border); margin: 1.6rem 0; }
 .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 20px; }
 .page { max-width: 760px; margin: 0 auto; padding: 56px 20px 80px; }
 .page h2 { font-size: 1.3rem; margin-top: 2rem; }
+.page table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .95rem; }
+.page th, .page td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--color-border); }
+.page th { color: var(--color-muted); font-weight: 600; }
 .cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap, .6rem); }
 .cluster--center { justify-content: center; }
 .grid { display: grid; gap: 24px; }

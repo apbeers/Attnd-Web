@@ -87,8 +87,9 @@ task feed at 5; `DbReviewTests`).
 ## 7. Follow-ups (not done)
 
 - `UPPER(event_code)` unique after the production check above.
-- Device rows are never purged; at real scale add a retention job for devices not seen for a year (counts use
-  `EventJoin`, so nothing visible changes).
+- Devices unused for 12 months are deleted by `run_scheduled_tasks` (privacy policy); that delete scans
+  `events_device` (no `last_seen` index; ~4 ms at 50k rows, once per 10 minutes). Add a `last_seen` index if the table
+  passes a few million rows.
 - `events_usagecount` will be the largest table in production; it already has `(event, bucket)` and `(bucket)`, and the
   Usage page reads one event at a time. Partition by month only if it passes ~10 M rows.
 
