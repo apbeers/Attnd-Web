@@ -15,13 +15,25 @@
   const mapId = config.dataset.mapId || 'DEMO_MAP_ID';
   let loading = null;
 
+  // Maps JS injects a Roboto stylesheet from Google Fonts; the console uses system fonts, so that link is dropped
+  // (Lighthouse, Nov 22, 2026: one webfont request less). Every other element is inserted as usual.
+  function blockRoboto() {
+    const isRoboto = (n) => n && n.tagName === 'LINK' && /fonts\.googleapis\.com\/css\?family=Roboto/.test(n.href || '');
+    const insertBefore = document.head.insertBefore;
+    document.head.insertBefore = function (node, ref) { return isRoboto(node) ? node : insertBefore.call(this, node, ref); };
+    const appendChild = document.head.appendChild;
+    document.head.appendChild = function (node) { return isRoboto(node) ? node : appendChild.call(this, node); };
+  }
+
   function load() {
     if (loading) return loading;
+    blockRoboto();
     loading = new Promise((resolve, reject) => {
       window.__attndMapsReady = () => resolve(window.google.maps);
       const script = document.createElement('script');
+      // Only the marker library up front: `places` (~100 KB) is imported when an address field is used.
       script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key) +
-        '&v=weekly&loading=async&libraries=places,marker&callback=__attndMapsReady';
+        '&v=weekly&loading=async&libraries=marker&callback=__attndMapsReady';
       script.async = true;
       script.onerror = () => { loading = null; reject(new Error('Google Maps did not load')); };
       document.head.appendChild(script);
@@ -53,10 +65,15 @@
     return t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   };
 
+  // Address fields load Maps + places only when the person actually uses the field (focus), not when it scrolls by.
+  function whenFocused(el) {
+    return new Promise((resolve) => el.addEventListener('focusin', () => resolve(), { once: true }));
+  }
+
   async function addressAutocomplete(input, coords) {
     if (!input || input.dataset.autocomplete) return;
     input.dataset.autocomplete = '1';
-    await whenVisible(input);
+    await whenFocused(input);
     const maps = await load();
     // PlaceAutocompleteElement groups a person's typing and their pick into one session token by itself (billed per
     // session, not per keystroke); it has no minimum-characters option.
@@ -67,6 +84,7 @@
     if (dark()) widget.style.colorScheme = 'dark';
     input.before(widget);
     input.classList.add('place-autocomplete-target');
+    requestAnimationFrame(() => widget.focus && widget.focus());
     const scope = (coords && coords.form) || document;
     const choose = async (place) => {
       await place.fetchFields({ fields: ['formattedAddress', 'location', 'displayName'] });
@@ -135,5 +153,40 @@
     lngInput.addEventListener('input', typed);
   }
 
-  window.attndMaps = { addressAutocomplete, pinMap, load };
+  // The event map starts as a Static Maps image (one small JPEG at the displayed size × DPR, the LCP stays cheap)
+  // and becomes the interactive map on hover / focus / touch, or once the page is idle while it is on screen.
+  // Returns false (draw the interactive map now) when the box has no size yet.
+  function staticFirst(el, center, zoom, pins, interactive) {
+    const w = Math.min(640, Math.round(el.clientWidth || 0)), h = Math.min(640, Math.round(el.clientHeight || 0));
+    if (!w || !h) return false;
+    const scale = (window.devicePixelRatio || 1) > 1 ? 2 : 1;
+    const brand = (getComputedStyle(document.documentElement).getPropertyValue('--color-brand') || '#431f86').trim().replace('#', '0x');
+    const params = new URLSearchParams({ size: `${w}x${h}`, scale: String(scale), format: 'jpg', key });
+    if (dark()) params.append('style', 'element:geometry|color:0x242f3e');
+    const points = (pins || []).slice(0, 60).map((p) => `${(+p.lat).toFixed(5)},${(+p.lng).toFixed(5)}`);
+    if (points.length) params.append('markers', `size:small|color:${brand}|${points.join('|')}`);
+    else { params.set('center', `${center[0]},${center[1]}`); params.set('zoom', String(zoom)); }
+    const img = document.createElement('img');
+    img.className = 'event-map__static';
+    img.alt = 'Map of the event’s locations (tap to explore)';
+    img.width = w; img.height = h;
+    img.decoding = 'async';
+    img.src = 'https://maps.googleapis.com/maps/api/staticmap?' + params.toString();
+    el.appendChild(img);
+    let started = false;
+    const go = () => {
+      if (started) return;
+      started = true;
+      ['pointerenter', 'focusin', 'touchstart', 'click'].forEach((t) => el.removeEventListener(t, go));
+      interactive().then(() => img.remove(), () => { started = false; });
+    };
+    img.onerror = go;
+    ['pointerenter', 'focusin', 'touchstart', 'click'].forEach((t) => el.addEventListener(t, go, { passive: true }));
+    if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 2500));
+    whenVisible(el).then(() => idle(go, { timeout: 6000 }));
+    return true;
+  }
+
+  window.attndMaps = { addressAutocomplete, pinMap, load, staticFirst };
 })();

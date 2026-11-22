@@ -275,13 +275,26 @@
       frames = [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }];
       timing.duration = 220;
     } else if (kind === 'pulse' || kind === 'glow') {
-      frames = [{ boxShadow: `0 0 0 0 ${tint}` }, { boxShadow: `0 0 0 4px ${tint}`, offset: .35 }, { boxShadow: `0 0 0 0 transparent` }];
-      timing = { duration: kind === 'glow' ? 700 : 900, easing: 'ease-out', delay: opts.delay || 0 };
+      // Composited only (Lighthouse, Nov 22, 2026): a ring element over el whose opacity and scale animate, never
+      // el's box-shadow.
+      const ring = document.createElement('span');
+      ring.className = 'reveal-ring';
+      ring.setAttribute('aria-hidden', 'true');
+      ring.style.setProperty('--ring', tint);
+      if (getComputedStyle(el).position === 'static') { el.style.position = 'relative'; ring.dataset.restore = '1'; }
+      el.appendChild(ring);
+      const anim = ring.animate([{ opacity: 0, transform: 'scale(.985)' }, { opacity: 1, transform: 'scale(1)', offset: .35 },
+                                 { opacity: 0, transform: 'scale(1.01)' }],
+                                { duration: kind === 'glow' ? 700 : 900, easing: 'ease-out', delay: opts.delay || 0 });
+      return anim.finished.catch(() => {}).then(() => {
+        ring.remove();
+        if (ring.dataset.restore) el.style.position = '';
+      });
     } else if (kind === 'collapse') {
-      const h = el.getBoundingClientRect().height;
-      el.style.overflow = 'hidden';
-      frames = [{ opacity: 1, height: `${h}px` }, { opacity: 0, height: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px' }];
-      timing.duration = 240;
+      // Opacity + a vertical squash (transform), no height animation; the caller removes the element after.
+      el.style.transformOrigin = 'top';
+      frames = [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scaleY(.6)' }];
+      timing = { duration: 220, easing: EASE, delay: 0, fill: 'forwards' };
     } else if (kind === 'scroll') {
       el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       return reveal(el, 'pulse', { delay: 180 });
@@ -591,7 +604,9 @@
       el.dataset.ready = '1';
       const pins = jsonData(el, 'pins', []), center = jsonData(el, 'center', [39.8, -98.6]), zoom = +el.dataset.zoom || 15;
       const opts = { readonly: true, onOther: (p) => mapPopup(el, p) };
-      if (window.attndMaps) attndMaps.pinMap(el, null, null, center, zoom, pins, opts).catch(() => window.pinPicker(el, null, null, center, zoom, pins, opts));
+      const interactive = () => attndMaps.pinMap(el, null, null, center, zoom, pins, opts);
+      if (window.attndMaps && attndMaps.staticFirst && attndMaps.staticFirst(el, center, zoom, pins, interactive)) return;
+      if (window.attndMaps) interactive().catch(() => window.pinPicker(el, null, null, center, zoom, pins, opts));
       else window.pinPicker(el, null, null, center, zoom, pins, opts);
     });
   }

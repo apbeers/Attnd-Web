@@ -953,6 +953,15 @@ the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-pick
 - Usage counts are one `INSERT … ON CONFLICT` per batch (`events/usage.py`). Console lists count related rows with
   subqueries, never with joins + DISTINCT (the dashboard took 1.7 s on the DEMO event that way).
 - Query-count regression tests: `events/tests_perf.py`.
+- **Lighthouse pass** (Nov 22, 2026): the console's manifest is public (browsers fetch it without cookies); every page
+  has exactly one `<main>` (`attnd/tests_landmarks.py`; Studio's check flags sites without one and its autofix wraps
+  the content); console / accounts / admin pages say `noindex` on every host (meta + `X-Robots-Tag`,
+  `middleware.private_path`) and carry no canonical; Maps JS loads only `marker` up front, `places` on an address
+  field's focus, drops the Roboto stylesheet it injects, and the event map starts as a Static Maps JPEG (size × DPR)
+  that becomes interactive on hover / focus / touch or when idle on screen (needs the Maps Static API on the browser
+  key, SETUP.md); attndReveal's pulse / glow / collapse and the chat's pulses animate only opacity / transform
+  (`.reveal-ring`, `::after` rings); collectstatic minifies our own CSS (`attnd/static_storage.py`, comments and
+  whitespace only; JS not minified: no safe stdlib minifier, gzip / brotli apply).
 - **Database review** (batch 7, `docs/db_review.md`): covered FK indexes off (`db_index=False` where a composite starts
   with the column), partial indexes for live preview phones, due notifications and nearby events, the task feed's
   `(created_by, -created_at)` / `finished_at`, JSON shape CHECKs (`events.models.json_is`), `push.reach(event)` (one

@@ -279,10 +279,12 @@
 .agent__panel.is-dropping { outline: 2px dashed var(--color-brand); outline-offset: -6px; }
 
 /* voice input (stage I8) */
-.agent__mic.is-listening { color: var(--color-on-brand); background: var(--color-danger); border-radius: 50%;
-  animation: agent-listen 1.2s ease-in-out infinite; }
-@keyframes agent-listen { 50% { box-shadow: 0 0 0 6px var(--color-danger-soft); } }
-@media (prefers-reduced-motion: reduce) { .agent__mic.is-listening { animation: none; } }
+.agent__mic.is-listening { color: var(--color-on-brand); background: var(--color-danger); border-radius: 50%; }
+@keyframes agent-listen { 50% { opacity: 1; transform: scale(1.18); } }
+.agent__mic.is-listening { position: relative; }
+.agent__mic.is-listening::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 4px var(--color-danger-soft); opacity: 0; animation: agent-listen 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .agent__mic.is-listening, .agent__mic.is-listening::after { animation: none; } }
 
 /* command bar (stage I10) */
 .agent__commands { list-style: none; margin: 0 var(--space-2); padding: var(--space-1); border: 1px solid var(--color-border);
@@ -341,12 +343,13 @@
 .agent__taskcard-foot p { margin: 0; flex-basis: 100%; }
 
 /* Back from the full-screen chat: the launcher pulses three times (agent-loader.js); reduced motion: a tooltip */
-@keyframes agent-launcher-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 55%, transparent); }
-  100% { box-shadow: 0 0 0 14px transparent; } }
-.agent__launcher.is-pulsing { animation: agent-launcher-pulse .85s ease-out; }
+@keyframes agent-launcher-pulse { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.35); } }
+.agent__launcher.is-pulsing { position: relative; }
+.agent__launcher.is-pulsing::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 55%, transparent); animation: agent-launcher-pulse .85s ease-out; }
 .agent__still-here { position: absolute; right: 0; bottom: calc(100% + var(--space-2)); padding: var(--space-1) var(--space-3);
   font-size: var(--text-sm); white-space: nowrap; color: var(--color-on-brand); background: var(--color-brand); border-radius: 999px; }
-@media (prefers-reduced-motion: reduce) { .agent__launcher.is-pulsing { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .agent__launcher.is-pulsing, .agent__launcher.is-pulsing::after { animation: none; } }
 
 /* Folding groups (Your events: Happening now / Upcoming / Past / Showcase & demo; notifications Scheduled / Sent) */
 .agent__group-toggle { display: inline-flex; align-items: center; gap: .35rem; padding: 0; font: inherit; color: inherit;
