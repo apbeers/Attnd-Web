@@ -16,13 +16,15 @@ class TabLimitTests(SimpleTestCase):
         self.assertEqual(fit_tabs(['map', 'schedule']), (['map', 'schedule'], []))
 
     def test_the_form_refuses_six(self):
-        data = {'preset': 'auto', 'customize_tabs': 'on', 'tabs': ['home', 'map', 'locations', 'schedule', 'flyer',
+        # Home is always on and counts: five more is six.
+        data = {'preset': 'auto', 'customize_tabs': 'on', 'tabs': ['map', 'locations', 'schedule', 'flyer',
                                                                     'notifications']}
         form = DisplayForm(data)
         self.assertFalse(form.is_valid())
         self.assertEqual(form.errors['tabs'], [TAB_LIMIT_NOTE])
-        data['tabs'] = data['tabs'][:5]
+        data['tabs'] = data['tabs'][:4]
         self.assertTrue(DisplayForm(data).is_valid())
+        self.assertNotIn('home', DisplayForm(data).fields['tabs'].choices)
 
 
 class TabLimitNoteTests(__import__('django.test', fromlist=['TestCase']).TestCase):

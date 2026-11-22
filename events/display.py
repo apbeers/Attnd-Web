@@ -20,7 +20,8 @@ PRESETS = ['auto', 'intimate', 'standard', 'festival']
 TABS = ['home', 'map', 'locations', 'schedule', 'flyer', 'notifications']
 MAX_TABS = 5
 LOCATIONS_STYLES = ['cards', 'list', 'grouped']
-TAB_LIMIT_NOTE = 'The apps show at most 5 tabs. Turn one off first.'
+TAB_LIMIT_NOTE = 'The apps show at most 5 tabs, Home included. Turn one off first.'
+EDITABLE_TABS = [t for t in TABS if t != 'home']  # Home is always on (first, the default); organizers pick the rest
 
 
 def fit_tabs(tabs):
@@ -266,7 +267,12 @@ def resolve_display(event, stats=None, sections=0):
     # Flyer tab only makes sense with a flyer
     if not stats['has_flyer']:
         cfg['tabs'] = [t for t in cfg['tabs'] if t != 'flyer']
-    if not sections or sections < 1:
+    if sections and sections >= 1:
+        # Home is always on for apps that draw it: first and the default tab, whatever the saved list says (owner,
+        # Nov 21, 2026, batch 7 Q1; P0 #3: the same tabs from every path, so the App Clip's Home never comes and goes).
+        cfg['tabs'] = ['home'] + [t for t in cfg['tabs'] if t != 'home']
+        cfg['default_tab'] = 'home'
+    else:
         cfg['tabs'] = [t for t in cfg['tabs'] if t != 'home']
         if cfg['default_tab'] == 'home' and 'default_tab' not in overrides:
             cfg['default_tab'] = auto_default

@@ -147,3 +147,44 @@ class ConsoleTests(DraftTestCase):
                                     HTTP_ACCEPT='application/json').json()
         self.assertTrue(invalid.get('invalid'))
         self.assertEqual(Location.objects.get(pk=self.stage.pk).name, 'Market')
+
+
+class HomeStaysTests(DraftTestCase):
+    """P0 #3 (App Clip's Home came and went): every path gives an app that draws sections the same tabs, Home first
+    and the default; the ETag carries the catalogue version, so a 304 never answers for a body without Home."""
+
+    def test_old_published_copy_still_leads_with_home(self):
+        pb = self.event.published
+        for key, body in pb.bundles.items():  # a copy published before Home was always on
+            body['display']['tabs'] = ['map', 'schedule']
+            body['display']['default_tab'] = 'map'
+        pb.save(update_fields=['bundles'])
+        for v in ('1', '2'):
+            display = self.bundle(HTTP_X_ATTND_SECTIONS=v).json()['display']
+            self.assertEqual((display['tabs'][0], display['default_tab']), ('home', 'home'), v)
+        self.assertNotIn('home', self.bundle().json()['display']['tabs'])  # apps without sections never see it
+
+    def test_a_304_only_for_the_same_catalogue_version(self):
+        plain = self.bundle()
+        with_sections = self.bundle(HTTP_X_ATTND_SECTIONS='2')
+        self.assertNotEqual(plain['ETag'], with_sections['ETag'])
+        # The offline copy from a request without the header: its ETag never gets a 304 with the header.
+        self.assertEqual(self.bundle(HTTP_X_ATTND_SECTIONS='2', HTTP_IF_NONE_MATCH=plain['ETag']).status_code, 200)
+        again = self.bundle(HTTP_X_ATTND_SECTIONS='2', HTTP_IF_NONE_MATCH=with_sections['ETag'])
+        self.assertEqual(again.status_code, 304)
+        self.assertEqual(again['ETag'], with_sections['ETag'])
+        self.assertEqual(with_sections.json()['display']['tabs'][0], 'home')
+
+    def test_saved_tab_lists_lose_home(self):
+        import importlib
+
+        from django.apps import apps
+        migration = importlib.import_module('events.migrations.0052_home_always_on')
+        Event.objects.filter(pk=self.event.pk).update(display_config={'tabs': ['schedule', 'home', 'map'],
+                                                                      'default_tab': 'home'})
+        migration.normalise(apps, None)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.display_config, {'tabs': ['schedule', 'map']})
+        drafts.publish(self.event, push=False)
+        display = self.bundle(HTTP_X_ATTND_SECTIONS='2').json()['display']
+        self.assertEqual((display['tabs'], display['default_tab']), (['home', 'schedule', 'map'], 'home'))

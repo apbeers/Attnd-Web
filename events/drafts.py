@@ -121,6 +121,11 @@ def attendee_bundle(event, pb, sections, request=None):
                                                                 default=0))
     data = copy.deepcopy(bundles.get(key) or {})
     data['content_version'] = pb.version
+    display = data.get('display')
+    if sections >= 1 and isinstance(display, dict):  # copies published before Home was always on (P0 #3)
+        tabs = [t for t in (display.get('tabs') or []) if t != 'home']
+        display['tabs'] = ['home'] + tabs[:4]
+        display['default_tab'] = 'home'
     live = content.event_v2(event, request)
     for k in ('status', 'paid', 'is_demo', 'public', 'website_url'):
         if k in live and 'event' in data:

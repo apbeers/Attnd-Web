@@ -241,7 +241,10 @@ class AutomaticLayoutTests(TestCase):
             self.assertNotIn('home', old['tabs'])
             self.assertNotEqual(old['default_tab'], 'home')
         self.event.display_config = {'tabs': ['schedule', 'map'], 'default_tab': 'schedule'}
-        self.assertEqual(resolve_display(self.event, sections=1)['tabs'], ['schedule', 'map'])  # the organizer's own
+        # The organizer's own list, with Home always first and the default (batch 7 Q1).
+        cfg = resolve_display(self.event, sections=1)
+        self.assertEqual((cfg['tabs'], cfg['default_tab']), (['home', 'schedule', 'map'], 'home'))
+        self.assertEqual(resolve_display(self.event, sections=0)['default_tab'], 'schedule')
 
 
 class EmptyTabsTests(TestCase):

@@ -357,7 +357,8 @@ class RolloverTests(ComponentTestCase):
         data = C.load(self.owner, 'event_rollover', {'event_id': self.event.pk})
         self.assertEqual(data['shift_days'] % 7, 0)  # the same weekday
         self.client.force_login(self.owner)
-        new_day = (timezone.localtime(self.event.start_time).date() + timedelta(days=364))
+        from zoneinfo import ZoneInfo  # the event's own day (the server's UTC day differs late in the evening)
+        new_day = (self.event.start_time.astimezone(ZoneInfo(self.event.timezone)).date() + timedelta(days=364))
         response = self.client.post(reverse('console:event_duplicate', args=[self.event.pk]), {
             'name': 'Prairie Fest 2027', 'start_date': new_day.isoformat(), 'keep_team': 'on'}, secure=True)
         copy = Event.objects.get(name='Prairie Fest 2027')

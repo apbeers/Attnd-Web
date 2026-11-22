@@ -397,11 +397,12 @@ class NotificationForm(StyledFormMixin, forms.ModelForm):
 class DisplayForm(forms.Form):
     preset = forms.ChoiceField(choices=[(p, LABELS['preset'][p]) for p in PRESETS],
                                widget=forms.RadioSelect)
-    tabs = forms.MultipleChoiceField(choices=[(t, LABELS['tabs'][t]) for t in TABS],
+    tabs = forms.MultipleChoiceField(choices=[(t, LABELS['tabs'][t]) for t in TABS if t != 'home'],
                                      widget=forms.CheckboxSelectMultiple,
                                      required=False)
     tab_order = forms.CharField(widget=forms.HiddenInput, required=False)
-    default_tab = forms.ChoiceField(choices=[('', 'Automatic')] + [(t, LABELS['tabs'][t]) for t in TABS],
+    default_tab = forms.ChoiceField(label='Default tab (apps without Home)',
+                                    choices=[('', 'Automatic')] + [(t, LABELS['tabs'][t]) for t in TABS if t != 'home'],
                                     required=False)
     locations_style = forms.ChoiceField(choices=[('', 'Automatic')] + [(s, LABELS['locations_style'][s]) for s in LOCATIONS_STYLES], required=False)
     schedule_style = forms.ChoiceField(choices=[('', 'Automatic')] + [(s, LABELS['schedule_style'][s]) for s in SCHEDULE_STYLES], required=False)
@@ -427,9 +428,9 @@ class DisplayForm(forms.Form):
     def initial_from(cls, overrides):
         initial = {'preset': overrides.get('preset', 'auto'),
                    'customize_tabs': 'tabs' in overrides,
-                   # Home (API-024) is never on by itself: organizers tick it.
-                   'tabs': overrides.get('tabs', [t for t in TABS if t != 'home']),
-                   'tab_order': ','.join(overrides.get('tabs', TABS))}
+                   # Home is always on (first and the default; never in the list organizers edit).
+                   'tabs': [t for t in overrides.get('tabs', TABS) if t != 'home'],
+                   'tab_order': ','.join(t for t in overrides.get('tabs', TABS) if t != 'home')}
         for key in cls.CHOICE_KEYS:
             initial[key] = overrides.get(key, '')
         for key in cls.BOOL_KEYS:
@@ -439,7 +440,7 @@ class DisplayForm(forms.Form):
     def clean(self):
         from events.display import MAX_TABS, TAB_LIMIT_NOTE
         data = super().clean()
-        if data.get('customize_tabs') and len(data.get('tabs') or []) > MAX_TABS:
+        if data.get('customize_tabs') and len(data.get('tabs') or []) > MAX_TABS - 1:  # + Home
             self.add_error('tabs', TAB_LIMIT_NOTE)
         return data
 
@@ -449,8 +450,8 @@ class DisplayForm(forms.Form):
         if d['preset'] != 'auto':
             out['preset'] = d['preset']
         if d.get('customize_tabs'):
-            order = [t for t in (d.get('tab_order') or '').split(',') if t in TABS]
-            order += [t for t in TABS if t not in order]
+            order = [t for t in (d.get('tab_order') or '').split(',') if t in TABS and t != 'home']
+            order += [t for t in TABS if t not in order and t != 'home']
             out['tabs'] = [t for t in order if t in d.get('tabs', [])]
         for key in self.CHOICE_KEYS:
             if d.get(key):
