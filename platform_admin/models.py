@@ -19,6 +19,8 @@ class PlatformSettings(models.Model):
 
     class Meta:
         verbose_name = verbose_name_plural = 'Platform settings'
+        # In no role (attnd.permissions): superusers only (batch 7 Track E).
+        permissions = [('view_architecture', 'See the architecture diagram, its live status and the app options')]
 
     def __str__(self):
         return 'Platform settings'

@@ -864,11 +864,25 @@ hosts the site.
   sub-tab). Every admin tool is a Platform sub-tab gated by its own permission (`{% platform_nav "<key>" %}` at the
   top of each area page; their URLs are unchanged, so old links work): Health, Customers, Upgrade requests, Pricing,
   Overrides (platform admins), AI spend, Diagnostics, Prospects, Claims, Studio reports (staff), App usage (platform
-  admins), plus the actions **Preview onboarding** and **Django admin** (superusers). Emails / Brand / Architecture /
-  App options join as sub-tabs when built. The full-screen canvas likewise has one **Platform** tab (Health, AI spend,
+  admins), plus the actions **Preview onboarding** and **Django admin** (superusers). Architecture, App options and Brand are sub-tabs (batch 7); Emails joins when built. The full-screen canvas likewise has one **Platform** tab (Health, AI spend,
   Prospects sections, each only with its permission; toolbar AI limits / Overrides / Discovery settings / CSV).
   `platform_admin/tests_nav.py` asserts the top bar and the canvas tabs of an organizer and of staff / a superuser
   differ only by Platform. A new admin tool = a row in `areas.AREAS` + the nav tag on its page, never a top-bar link.
+- **Architecture, App options, Brand** (batch 7 Track E; Platform sub-tabs): **Architecture** (`platform:architecture`,
+  superusers: `platform_admin.view_architecture` is in no role) = `docs/architecture.toml` (hand-written nodes for
+  what code can't see: apps, App Clip, widgets, Heroku, DNS, every outside service with hosts, env vars, edges; flows;
+  TOML because the standard library reads it) + what `platform_admin/architecture.py` generates (Django apps, models
+  as an ERD with admin links, URL namespaces, API v2 endpoints, push types, Ask Attnd counts, env vars set / missing)
+  + a live status per service (Google counters, push delivered / failed, the AI ledger, the email log, endpoint
+  timings: green / amber / red). A server-drawn layered SVG (Clients → Edge → Django apps → Data → External) with pan /
+  zoom, search, layer toggles, a side panel (code links on GitHub develop), Flows (QR → join, AI import, watching,
+  urgent, preview phone, Studio publish, AI credit; step by step, Reduce Motion: a list), Data tab, export SVG / PNG /
+  Markdown. **Adding an integration = add it to docs/architecture.toml**: `attnd/tests_architecture.py` fails when a
+  Django app, an https host our code names, a settings env var or a push type is missing there. **App options**
+  (`platform:app_options`): every server-driven option (display config and preset defaults, the layout catalogue
+  per screen with since / needs / parts, conditions, theme roles and defaults, Live Activity settings). **Brand**
+  (`platform:brand`, staff; public copy `/brand/`, `home:brand`): wordmark and app icon SVG, the PNG icons, colours,
+  type, voice, do / don't, a zip of everything.
 - **Billing** (batch 7, `platform_admin/billing.py`, `Invoice`, `console/views_billing.py`, component `event_billing`,
   sidenav **Billing**, owner + event admins): plan, total paid, invoices (sequential `ATT-2026-0001`, date, amount,
   Paid / Due, a hand-written PDF), **Send a receipt** (always asks; the PDF attached), CSV export. **Pay now** = Stripe

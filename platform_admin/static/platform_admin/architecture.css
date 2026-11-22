@@ -1,0 +1,24 @@
+/* Platform → Architecture (batch 7 Track E): tokens only, dark mode through them */
+.arch-layout { display: grid; gap: var(--space-4); }
+@media (min-width: 1100px) { .arch-layout { grid-template-columns: minmax(0, 1fr) 22rem; align-items: start; } }
+.arch-canvas { overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); touch-action: none; cursor: grab; }
+.arch-canvas svg { display: block; width: 100%; height: auto; max-height: 75vh; color: var(--color-muted); }
+.arch-col { font: 700 13px system-ui, sans-serif; fill: var(--color-muted); text-transform: uppercase; letter-spacing: .06em; }
+.arch-edges path { fill: none; stroke: var(--color-border); stroke-width: 1.4; transition: opacity .2s; }
+.arch-edges path.is-on { stroke: var(--color-brand-mid); stroke-width: 2.4; }
+.arch-node rect { fill: var(--color-surface-2); stroke: var(--color-border); stroke-width: 1.2; }
+.arch-node text { font: 600 13px system-ui, sans-serif; fill: var(--color-text); pointer-events: none; }
+.arch-node { cursor: pointer; transition: opacity .2s; }
+.arch-node:focus-visible rect, .arch-node.is-picked rect { stroke: var(--color-brand); stroke-width: 2.6; }
+.arch-node.is-step rect { fill: var(--color-brand-soft); stroke: var(--color-brand); stroke-width: 2.6; }
+.arch-node--apps rect { fill: var(--color-brand-soft); }
+.arch-node.is-dim, .arch-edges path.is-dim { opacity: .18; }
+.arch-node.is-hidden, .arch-edges path.is-hidden { display: none; }
+.arch-dot { fill: var(--color-success); } .arch-node--amber .arch-dot { fill: var(--color-warning); } .arch-node--red .arch-dot { fill: var(--color-danger); }
+.arch-erd { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); }
+.arch-fields, .arch-rel { margin: 0; padding-left: 1em; }
+.arch-panel { position: sticky; top: var(--space-4); }
+.arch-steps:empty { display: none; }
+.arch-steps li.is-current { font-weight: 700; color: var(--color-brand-text); }
+@media (max-width: 700px) { .arch-canvas { display: none; } .arch-list { display: block; } .arch-list[open], .arch-list { } }
+@media (prefers-reduced-motion: reduce) { .arch-node, .arch-edges path { transition: none; } }

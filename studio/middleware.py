@@ -6,7 +6,7 @@ from studio import hosting
 _BLOCKED_PREFIXES = ('/static/', '/media/', '/favicon.ico', '/apple-touch-icon', '/.well-known/')
 # First path segments that are the app's, never a site slug (on the old sites host: 404, never redirected).
 _APP_PREFIXES = {'console', 'api', 'accounts', 'join', 'p', 'home', 'manage-attnd', 'admin', 'health', 'csp-report',
-                 'start', 'claim', 'privacy'}
+                 'start', 'claim', 'privacy', 'brand'}
 
 
 class SitesHostMiddleware:

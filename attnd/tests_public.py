@@ -6,7 +6,7 @@ from django.urls import URLPattern, URLResolver, get_resolver, reverse
 PUBLIC = {
     # site
     'health', 'place_photo', 'manifest', 'stripe_webhook',  # the console's web app manifest (browsers fetch it without cookies)
-    'indexnow_key', 'django.contrib.sitemaps.views.sitemap', 'homepage', 'home_page', 'privacy', 'csp_report',
+    'indexnow_key', 'django.contrib.sitemaps.views.sitemap', 'homepage', 'home_page', 'privacy', 'brand', 'csp_report',
     # the apps' API (API keys / attestation, never a session)
     'nearby', 'lookup', 'bundle', 'join', 'changes', 'download', 'download_app', 'download_get', 'leave', 'usage', 'device', 'diagnostics_logs', 'diagnostics_reports',
     'app_status', 'symbols', 'symbolicate', 'attest-nonce', 'attest-ios', 'attest-android',
