@@ -451,7 +451,15 @@
         confirmBox.dataset.step = pending.step;
         confirmBox.dataset.hash = pending.hash;
         confirmText.textContent = pending.summary;
-        if (!panel.hidden) { confirmBox.setAttribute('tabindex', '-1'); confirmBox.focus(); }
+        if (!panel.hidden) {
+          // The card appears with a short pulse and focus on its primary button (batch 7: one confirm look).
+          const yes = confirmBox.querySelector('[data-agent-confirm-yes]');
+          const danger = /\b(delete|remove|discard|take .* down|unpublish|leave|transfer|reject|offline)\b/i.test(pending.summary || '');
+          yes.className = 'button button--small ' + (danger ? 'button--danger' : 'button--primary');
+          confirmBox.scrollIntoView({ block: 'nearest' });
+          yes.focus({ preventScroll: true });
+          if (window.attndReveal) window.attndReveal(confirmBox, 'pulse');
+        }
         if (panel.hidden) launcher.classList.add('needs-you');
       }
     } else {

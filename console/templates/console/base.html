@@ -37,14 +37,17 @@
   </div>
 </header>
 <main class="page">
+  {# Messages are floating toasts (batch 7): top-right on desktop, bottom on phones; auto-hide (errors stay), Undo inside. #}
+  <div class="toasts" data-toasts aria-live="polite">
   {% for message in messages %}{% with undo_id=message.extra_tags|tag_id:'undo' redo_id=message.extra_tags|tag_id:'redo' %}
-    <div class="notice notice--{% if message.level_tag == 'error' %}error{% else %}{{ message.level_tag|default:'info' }}{% endif %} notice--dismissible"{% if undo_id %} data-undo-id="{{ undo_id }}"{% endif %}{% if redo_id %} data-redo-id="{{ redo_id }}"{% endif %} role="status">
+    <div class="notice toast notice--{% if message.level_tag == 'error' %}error{% else %}{{ message.level_tag|default:'info' }}{% endif %} notice--dismissible"{% if undo_id %} data-undo-id="{{ undo_id }}"{% endif %}{% if redo_id %} data-redo-id="{{ redo_id }}"{% endif %} role="{% if message.level_tag == 'error' %}alert{% else %}status{% endif %}">
       <span class="notice__text">{{ message }}</span>
       {% if undo_id or redo_id %}<form method="post" action="{% url 'console:undo' undo_id|default:redo_id %}" class="notice__undo">{% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
         <button type="submit" class="button button--small button--outline" data-undo-button>{% if undo_id %}{% icon "undo" %} Undo{% else %}Redo{% endif %}</button></form>{% endif %}
       <button type="button" class="notice__close" data-dismiss aria-label="Close">×</button></div>
   {% endwith %}{% endfor %}
+  </div>
   {% passkey_prompt as show_passkey_prompt %}{% if show_passkey_prompt %}
     <div class="notice notice--info" data-passkey-prompt data-passkey-scope hidden role="region" aria-label="Passkey">
       <div class="cluster cluster--loose">

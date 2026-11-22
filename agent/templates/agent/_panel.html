@@ -38,8 +38,9 @@
     {# Background tasks started from here (theme, import, updates, photos): a working line, then a done line (console.js). #}
     <div class="agent__tasks" data-agent-tasks aria-live="polite"></div>
     <div class="agent__confirm" data-agent-confirm hidden role="alertdialog" aria-labelledby="agent-confirm-title" aria-describedby="agent-confirm-text">
-      <div class="agent__confirm-title" id="agent-confirm-title">{% icon "warning" %} Confirm</div>
+      <div class="agent__confirm-title" id="agent-confirm-title">{% icon "check-circle" %} Please confirm</div>
       <p class="agent__confirm-text" id="agent-confirm-text" data-agent-confirm-text></p>
+      <p class="agent__confirm-note small muted">Nothing happens until you press Confirm.</p>
       <div class="cluster">
         <button type="button" class="button button--primary button--small" data-agent-confirm-yes>Confirm</button>
         <button type="button" class="button button--secondary button--small" data-agent-confirm-no>Cancel</button>

@@ -6,11 +6,100 @@
     if (button) button.closest('.notice')?.remove();
   });
 
+  // Toasts (batch 7): the server's messages and window.attndToast(text, {level, undoId}) float in [data-toasts];
+  // info / success hide after 6 s (10 s with Undo), errors stay until closed; hovering or focusing one pauses it.
+  function armToast(el) {
+    if (el.dataset.armed) return;
+    el.dataset.armed = '1';
+    if (el.classList.contains('notice--error')) return;
+    let left = el.querySelector('[data-undo-button]') ? 10000 : 6000, timer = null, started = 0;
+    const leave = () => { el.classList.add('is-leaving'); setTimeout(() => el.remove(), 260); };
+    const run = () => { started = Date.now(); timer = setTimeout(leave, left); };
+    const pause = () => { if (timer) { clearTimeout(timer); timer = null; left -= Date.now() - started; } };
+    el.addEventListener('pointerenter', pause); el.addEventListener('focusin', pause);
+    el.addEventListener('pointerleave', () => { if (!timer) run(); });
+    el.addEventListener('focusout', () => { if (!timer && !el.contains(document.activeElement)) run(); });
+    run();
+  }
+  function toastHost() {
+    let host = document.querySelector('[data-toasts]');
+    if (!host) { host = document.createElement('div'); host.className = 'toasts'; host.dataset.toasts = ''; host.setAttribute('aria-live', 'polite'); document.body.appendChild(host); }
+    return host;
+  }
+  window.attndToast = function (text, opts) {
+    opts = opts || {};
+    const el = document.createElement('div');
+    el.className = `notice toast notice--${opts.level || 'success'} notice--dismissible`;
+    el.setAttribute('role', opts.level === 'error' ? 'alert' : 'status');
+    const span = document.createElement('span'); span.className = 'notice__text'; span.textContent = text;
+    const close = document.createElement('button'); close.type = 'button'; close.className = 'notice__close';
+    close.setAttribute('data-dismiss', ''); close.setAttribute('aria-label', 'Close'); close.textContent = '×';
+    el.append(span, close);
+    toastHost().appendChild(el);
+    armToast(el);
+    return el;
+  };
+  const armAll = () => document.querySelectorAll('[data-toasts] .toast').forEach(armToast);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', armAll); else armAll();
+
   // No inline event handlers (the Content Security Policy blocks them); these data attributes replace them.
-  // <button data-confirm="Delete this?">: asks first, and does nothing unless confirmed.
+  // One in-app confirm (batch 7, no window.confirm / system dialogs): attndConfirm(message, {confirm, danger}) →
+  // Promise<boolean>, a native <dialog> (focus trapped, Esc = Cancel, focus back to the opener) styled like the
+  // chat's confirm card, with a short pulse when it opens. <button data-confirm="Delete this?"> asks with it and does
+  // nothing unless confirmed; then the same click / submit happens again. data-confirm-label="Send now" names the
+  // primary button; words like delete / remove / take down make it a danger button.
+  let confirmDialog = null;
+  function buildConfirm() {
+    const d = document.createElement('dialog');
+    d.className = 'dialog confirm-dialog';
+    d.setAttribute('role', 'alertdialog');
+    d.setAttribute('aria-labelledby', 'confirm-dialog-title');
+    d.setAttribute('aria-describedby', 'confirm-dialog-text');
+    d.innerHTML = '<div class="confirm-dialog__body"><p class="confirm-dialog__title" id="confirm-dialog-title">Please confirm</p>' +
+      '<p class="confirm-dialog__text" id="confirm-dialog-text"></p><div class="cluster confirm-dialog__actions">' +
+      '<button type="button" class="button button--primary" data-confirm-yes>Confirm</button>' +
+      '<button type="button" class="button button--secondary" data-confirm-no>Cancel</button></div></div>';
+    document.body.appendChild(d);
+    return d;
+  }
+  window.attndConfirm = function (message, opts) {
+    opts = opts || {};
+    confirmDialog = confirmDialog || buildConfirm();
+    const d = confirmDialog;
+    const yes = d.querySelector('[data-confirm-yes]'), no = d.querySelector('[data-confirm-no]');
+    d.querySelector('.confirm-dialog__text').textContent = message || 'Are you sure?';
+    yes.textContent = opts.confirm || 'Confirm';
+    const danger = opts.danger ?? /\b(delete|remove|discard|take .* down|unpublish|leave|transfer|reject|offline)\b/i.test(message || '');
+    yes.className = 'button ' + (danger ? 'button--danger' : 'button--primary');
+    const opener = document.activeElement;
+    return new Promise((resolve) => {
+      const done = (value) => {
+        yes.removeEventListener('click', onYes); no.removeEventListener('click', onNo); d.removeEventListener('cancel', onNo);
+        if (d.open) d.close();
+        if (opener && opener.focus) opener.focus({ preventScroll: true });
+        resolve(value);
+      };
+      const onYes = () => done(true), onNo = (e) => { if (e) e.preventDefault(); done(false); };
+      yes.addEventListener('click', onYes); no.addEventListener('click', onNo); d.addEventListener('cancel', onNo);
+      if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+      yes.focus();
+      if (window.attndReveal) window.attndReveal(d.querySelector('.confirm-dialog__body'), 'pulse');
+    });
+  };
   document.addEventListener('click', e => {
     const el = e.target.closest('[data-confirm]');
-    if (el && !window.confirm(el.dataset.confirm)) { e.preventDefault(); e.stopImmediatePropagation(); }
+    if (!el) return;
+    if (el.dataset.confirmed) { delete el.dataset.confirmed; return; }
+    e.preventDefault(); e.stopImmediatePropagation();
+    window.attndConfirm(el.dataset.confirm, { confirm: el.dataset.confirmLabel }).then((ok) => {
+      if (!ok) return;
+      el.dataset.confirmed = '1';
+      const form = el.form || el.closest('form');
+      if (el.matches('button, input[type=submit]') && form && (el.type || 'submit') === 'submit') {
+        delete el.dataset.confirmed;
+        if (form.requestSubmit) form.requestSubmit(el); else form.submit();
+      } else el.click();
+    });
   }, true);
   // <select data-autosubmit>: submits its form when changed.
   document.addEventListener('change', e => {

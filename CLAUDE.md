@@ -270,6 +270,15 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   another; nothing saves until they press Save or say "save it" (`submit`), and forms that always ask (sending a
   notification, team invites) are never submitted by the agent: the person presses Send and gets the confirm card. New form components get it
   for free (`agent/tests_round3.py` checks every one).
+- **One confirm, floating toasts** (batch 7 Track B): no `window.confirm` / `alert` / `prompt` anywhere
+  (`console/tests_confirm_toasts.py`); `window.attndConfirm(message, {confirm, danger})` → Promise<boolean> is a native
+  `<dialog>` (focus on the primary button, Esc = Cancel, focus back, a pulse on open; delete / remove / unpublish /
+  leave / transfer wording makes it a danger button) and every `data-confirm` button goes through it
+  (`data-confirm-label` names the primary). The chat's always-ask card has the same look (summary in bold, "Nothing
+  happens until you press Confirm", pulse + focus on Confirm). Messages are **toasts** (`[data-toasts]` in base.html:
+  top-right on desktop, bottom on phones; info / success hide after 6 s, 10 s with Undo, errors stay; hover / focus
+  pauses) and `window.attndToast(text, {level})` adds one from JS; the markup is still `.notice`, so Undo / Redo and
+  Ask Attnd's page reading are unchanged.
 - **Draw the eye** (`window.attndReveal(el, kind)` in console.js: `slide`, `in`, `pulse`, `glow`, `collapse`, `scroll`,
   `flip`; ~200–320 ms, nothing with reduced motion): canvas tab switches slide in from their side of the tab order,
   changed cards pulse, new rows fade in, deleted ones collapse, re-sorted lists glide (Scheduled → Sent), AI-filled

@@ -1009,3 +1009,21 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 /* attndReveal's pulse / glow: a ring over the element whose opacity and transform animate (composited) */
 .reveal-ring { position: absolute; inset: -3px; z-index: 1; pointer-events: none; border-radius: inherit;
   box-shadow: 0 0 0 4px var(--ring, var(--color-focus)); opacity: 0; will-change: opacity, transform; }
+
+/* The one confirm dialog (console.js attndConfirm): pages and the chat's always-ask card share its look */
+.confirm-dialog { max-width: min(28rem, calc(100vw - 2 * var(--space-4))); padding: 0; border: 0; border-radius: var(--radius-lg);
+  background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-lg); }
+.confirm-dialog::backdrop { background: var(--color-overlay, rgba(20, 10, 40, .45)); }
+.confirm-dialog__body { position: relative; padding: var(--space-5); display: grid; gap: var(--space-3); border-radius: inherit; }
+.confirm-dialog__title { margin: 0; font-weight: 700; font-size: var(--text-lg); }
+.confirm-dialog__text { margin: 0; }
+.confirm-dialog__actions { justify-content: flex-end; }
+
+/* Toasts: the messages float (top-right on desktop, bottom on phones) */
+.toasts { position: fixed; z-index: 1000; top: calc(var(--space-6) + var(--space-5)); right: var(--space-4); display: grid; gap: var(--space-2);
+  width: min(26rem, calc(100vw - 2 * var(--space-4))); pointer-events: none; }
+.toasts:empty { display: none; }
+.toast { pointer-events: auto; margin: 0; box-shadow: var(--shadow-lg); }
+.toast.is-leaving { opacity: 0; transform: translateY(-6px); transition: opacity .25s ease, transform .25s ease; }
+@media (max-width: 600px) { .toasts { top: auto; bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); left: var(--space-4); right: var(--space-4); width: auto; } }
+@media (prefers-reduced-motion: reduce) { .toast.is-leaving { transition: none; } }
