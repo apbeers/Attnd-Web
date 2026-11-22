@@ -146,3 +146,27 @@ class DemoEventFactsTests(TestCase):
             self.assertTrue(performer['bio'])
             self.assertTrue(performer['genres'])
         self.assertLess(len(json.dumps(b)), 150_000)
+
+    def test_assistant_eval_facts(self):
+        """The facts the assistant eval's questions need (docs/assistant_eval/): amenities, vegan food, links, an
+        urgent set change that agrees with the schedule, a cancelled set."""
+        event_id = self.api('/api/v2/events/lookup/', q='DEMO')['event']['id']
+        b = self.api(f'/api/v2/events/{event_id}/bundle/')
+        kinds = {a['kind'] for a in b['event']['context']['amenities']}
+        self.assertLessEqual({'restrooms', 'water', 'atm', 'first_aid', 'charging', 'info', 'merch',
+                              'accessible_entrance', 'parking', 'shuttle'}, kinds)
+        self.assertNotIn('lockers', kinds)  # "where are the lockers?" must not be invented
+        questions = ' '.join(f['q'] for f in b['event']['context']['faq']).lower()
+        for word in ('drone', 'refund', 'pets', 'bags', 'smoke', 'come back', 'age limit'):
+            self.assertIn(word, questions)
+        by_name = {loc['name']: loc for loc in b['locations']}
+        self.assertTrue(any('vegan' in (m.get('note') or '').lower() for m in by_name['Taco Row']['context']['menu']))
+        self.assertTrue(any('gluten-free' in (m.get('note') or '').lower() for m in by_name['BBQ Pit Lane']['context']['menu']))
+        linked = {i['name'] for i in b['schedule'] for p in (i['context'] or {}).get('performers', [])
+                  if p.get('apple_music_url', '').startswith('https://music.apple.com/')}
+        self.assertEqual(linked, {'The Prairie Lights', 'Ana Morales Trio', 'Velvet Mesquite', 'Neon Armadillo',
+                                  'Juniper Lane', 'Los Hermanos Flores'})
+        self.assertEqual(sum(1 for i in b['schedule'] if i['description'].startswith('Cancelled:')), 1)
+        urgent = next(n for n in b['notifications'] if n['priority'] == 'urgent')
+        self.assertTrue(urgent['body'].startswith('Velvet Mesquite moves to '))
+        self.assertIn('Trinity Stage', urgent['body'])

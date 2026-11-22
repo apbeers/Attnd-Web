@@ -99,6 +99,16 @@ is the reference. Web parts:
 - Apps: everything else (§1–9), including the `/p/` App Link intent filter on Android and an App Clip advanced
   experience for `https://attnd.app/p/` if scanning a share QR should show the clip card (owner, App Store Connect).
 
+### Assistant eval follow-ups (eval built Nov 22, 2026: `docs/assistant_eval/`)
+- **Run the assistant eval on Android once the rewrite lands**: a JVM router-mode test over `questions.json` +
+  `demo_bundle.json` and an instrumented model-mode test on a Gemini Nano phone, same report shape
+  (`docs/assistant_eval/README.md` → Android); first port iOS's new router rules (safety, amenities, FAQ / topics,
+  menus, updates / changes, names inside questions) with the same answers.
+- Run iOS **model mode** on the owner's Mac or iPhone with Apple Intelligence and write its findings.
+- Router gaps left: "is the beer cold?", cheapest food from menu prices, "this morning" as a time word, two-edit typos
+  (a Damerau transposition in the shared search spec).
+- 911 is hard-coded in the safety answers (US events only today); use the event's country when events go abroad.
+
 ### Glance / hearts / planner / Live Activity follow-ups (built Nov 15, 2026; API-009/010/011)
 Built on both apps: relative times, distance + compass, walking routes, map/list glanceables, hearts, the
 on-device planner (identical rules on both, Android's `Planner.kt` is the reference), onboarding, Live
