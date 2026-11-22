@@ -22,6 +22,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 17. Prospects (staff) | ✅ No setup: it uses `ANTHROPIC_API_KEY` (Claude Sonnet's web search, ~$0.01 per search + tokens; stage C). The schedule is off until turned on in `/console/prospects/settings/`. Optional: `PROSPECT_MODEL`, `PROSPECT_DAILY_SPEND_CAP_USD` (default 5), `PROSPECT_RUN_MAX_MINUTES` (step 17). |
 | 18. Ask Attnd (console agent) | ✅ Runs on Anthropic's Claude Haiku 5.5 (`ANTHROPIC_API_KEY` set on dev and production, Nov 21, 2026; Studio on Claude Sonnet 5.5, step 18). Without the key it uses the existing `OPENAI_API_KEY` (gpt-5-mini → gpt-5). Optional: `AGENT_PROVIDER`, `AGENT_ANTHROPIC_MODEL`, `AGENT_DAILY_SPEND_CAP_USD` (default 2 per person per UTC day), `AGENT_MAX_STEPS` (40). |
 | 19. Business listings & discoverability | ⬜ Search Console verified for attnd.app (owner, Nov 21, 2026); the rest of the list under Open owner tasks. Code side done: dev never indexed, canonicals, sitemap with listed events, `public/llms.txt`, schema.org `sameAs` from `SOCIAL_PROFILES`. |
+| 20. Apple Music (API-030 artist links) | ⏳ ✅ Media ID `media.com.arcu.attnd` (MusicKit only; ShazamKit and Apple Music Feed deliberately off) and the MusicKit key "Attnd MusicKit" (Key ID `2X6W6X6PLA`) made Nov 21, 2026; `APPLE_MUSIC_PRIVATE_KEY` + `APPLE_MUSIC_KEY_ID` set on attnd-dev (verified). ⬜ Production later (step 20). Spotify skipped (ROADMAP). |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
@@ -105,20 +106,25 @@ Do these steps once, in order. Each step says which values go where. For any sin
   on attnd-web (comma-separated; the home page's schema.org `sameAs`):
   - [x] Google Search Console: attnd.app verified as a domain property (DNS TXT), Nov 21, 2026. Still to do:
         - [ ] submit https://attnd.app/sitemap.xml;
-        - [ ] after the SEO release reaches production: **Validate fix** on the "Duplicate without user-selected
-              canonical" and "Not found (404)" reports;
+        - [ ] next, after the SEO release reaches production: **Validate fix** on the "Duplicate without
+              user-selected canonical" and "Not found (404)" reports;
         - [ ] add an attnd.site property once a Studio site is published there.
   - [ ] Google Business Profile: only as a service-area business (no storefront); optional.
-  - [ ] Bing Webmaster Tools: verify and add the sitemap (import from Search Console); Bing's index feeds ChatGPT
-        search, Copilot and DuckDuckGo.
-  - [ ] ChatGPT: no listing form; it finds Attnd through Bing and OpenAI's crawler (OAI-SearchBot, allowed by
-        robots.txt). Later, optional: a ChatGPT app (Apps SDK) for organizers.
+  - [x] Bing Webmaster Tools: attnd.app verified (CNAME record), sitemap and the home page submitted (owner, Nov 21,
+        2026); Bing's index feeds ChatGPT search, Copilot and DuckDuckGo. Still to do:
+        - [ ] in a few weeks: look at **AI Performance**;
+        - [ ] after the next production release: run **Site Scan**;
+        - [ ] add attnd.site later (once a Studio site is published).
+        - Microsoft Clarity: deliberately skipped (session recording; the platform keeps to anonymous counts).
+  - [x] ChatGPT: business listing done (category Software, owner, Nov 21, 2026). It also finds Attnd through Bing and
+        OpenAI's crawler (OAI-SearchBot, allowed by robots.txt). Later, optional: a ChatGPT app (Apps SDK).
   - [~] Apple Business (Business Connect): organization "Attnd" submitted for review Nov 21, 2026 (Org ID 552089622879).
         After approval:
         - [x] verify attnd.app under Domains (done, owner, Nov 21, 2026);
         - [x] link the App Store app (done, owner, Nov 21, 2026);
-        - [ ] the rest of the brand (logo, description, website) once approved;
-        - [ ] optional: Branded Mail (needs a DMARC policy of quarantine or reject on mg.attnd.app);
+        - [x] brand logo added (owner, Nov 21, 2026); description and website once approved;
+        - [ ] Branded Mail: pending, needs a DMARC policy of quarantine or reject on mg.attnd.app (Gmail BIMI is
+              skipped, owner, batch 7);
         - no public Location listing (no storefront; the organization's address is private and never goes in the repo).
   - [ ] Perplexity, Claude and other AI search: allowed by robots.txt and `llms.txt`; nothing to submit.
   - [ ] LinkedIn company page, Crunchbase profile, X and Instagram handles (claim "attnd").
@@ -1052,3 +1058,25 @@ Two weeks later:
 ```bash
 heroku config:unset SECRET_KEY_FALLBACKS -a attnd-web
 ```
+
+## 20. Apple Music artist links (API-030)
+
+The server looks performers up in the Apple Music catalog to add "Listen on Apple Music" links (API-030). It signs a
+developer token (ES256) with a MusicKit key; the team is `APPLE_TEAM_ID`.
+
+Done (owner, Nov 21, 2026):
+- Media ID `media.com.arcu.attnd` with **MusicKit** only (ShazamKit and Apple Music Feed deliberately left off).
+- MusicKit key **"Attnd MusicKit"**, Key ID `2X6W6X6PLA`. The `.p8` can be downloaded only once: it is kept on the
+  owner's Mac at `/Users/andrewbeers/Documents/Attnd/ios-signing/AuthKey_2X6W6X6PLA.p8` (and in the password
+  manager). **Never commit it.**
+- `APPLE_MUSIC_KEY_ID` and `APPLE_MUSIC_PRIVATE_KEY` (the whole `.p8`, header lines included) on **attnd-dev**
+  (verified).
+
+To do (production, when releasing API-030):
+```
+heroku config:set APPLE_MUSIC_KEY_ID=2X6W6X6PLA -a attnd-web
+heroku config:set APPLE_MUSIC_PRIVATE_KEY="$(cat /Users/andrewbeers/Documents/Attnd/ios-signing/AuthKey_2X6W6X6PLA.p8)" -a attnd-web
+```
+Without the two variables the lookups are off and nothing else changes. Spotify is skipped (its Web API needs a
+Premium account owner; ROADMAP).
+

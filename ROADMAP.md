@@ -276,3 +276,14 @@ Server: when ready, add `my_schedule` to `events/layout.py`'s catalogue as versi
 - Showcase events on production: set `SHOWCASE_EVENTS=1` on attnd-web when the owner wants the gallery there, and
   `manage.py load_showcase_events --images` once for AI covers (OpenAI, a few cents each).
 - More real screenshots on the home page (the planner, the Live Activity, Studio) from the next store screenshot run.
+
+## Parked / skipped (owner, Nov 21–22, 2026)
+
+- **Spotify artist links: skipped.** Spotify's Web API needs the developer account's owner to have Premium; API-030
+  links Apple Music only. Revisit if that changes (the bundle field would be additive: `spotify_url` on performers).
+- **ShazamKit "What's this song?"**: parked idea (identify the song playing at a stage and link the performer); the
+  Media ID has ShazamKit deliberately off until then.
+- **Android work paused** (batch 7, owner): when it resumes — foldable screenshots for Play (unfolded captures in the
+  phone set), minSdk 35 → 36 (approved), and the parity port (My schedule, the iOS assistant architecture, API-021
+  / 023 / 024 / 027 / 030 in the app).
+

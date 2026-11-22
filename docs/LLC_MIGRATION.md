@@ -79,8 +79,19 @@ Accounts and services:
   Apple Development certificate for CI (expires Nov 14, 2027); Apple Distribution certificate + three App Store
   profiles for CI signing (Nov 19, 2026, expire Nov 2027; files in `/Users/andrewbeers/Documents/Attnd/ios-signing`,
   GitHub secrets `IOS_DIST_*` / `IOS_PROFILE_*`); WeatherKit on `com.arcu.Attnd` (no longer used since Nov 19, 2026;
-  untick it with the next profile); App Attest.
+  untick it with the next profile); App Attest. Profiles regenerated Nov 21, 2026 with the App Group on the app and
+  the clip; **Broadcast** (Push Notifications → Broadcast Capability) turned on for `com.arcu.Attnd` but unused (App
+  Clip App IDs don't offer it, so the channel plan was dropped); the clip's App ID offers no Time Sensitive
+  Notifications. Media ID `media.com.arcu.attnd` (MusicKit only; ShazamKit and Apple Music Feed off) and the MusicKit
+  key "Attnd MusicKit" (Key ID `2X6W6X6PLA`, `.p8` in `/Users/andrewbeers/Documents/Attnd/ios-signing/`; Heroku
+  `APPLE_MUSIC_KEY_ID` / `APPLE_MUSIC_PRIVATE_KEY`, dev set Nov 21, 2026, production later; API-030 artist links): a
+  new team needs a new Media ID and key.
 - App Store Connect: Attnd (id1470627406), App Clip, TestFlight.
+- Apple Business (Business Connect): organization "Attnd" (Org ID 552089622879), attnd.app verified, the App Store
+  app linked, brand logo added; Branded Mail pending DMARC; no public Location. Move it to the LLC's Apple account.
+- Search engines: Google Search Console (attnd.app domain property, DNS TXT), Bing Webmaster Tools (attnd.app via a
+  CNAME record, sitemap + home page submitted; Microsoft Clarity deliberately not used), ChatGPT business listing
+  (category Software). Re-verify under LLC accounts (the DNS records stay).
 - Google Play Console: `com.arcu.attnd` (upload key, Play App Signing), publishing service account.
 - OpenAI (server key; since Nov 21, 2026 (stage C) only Studio's image generation. Before: AI import, website watching, Studio, the staff
   Prospects dashboard's web search tool: billed per search call on the same key/project, and since Nov 20, 2026
