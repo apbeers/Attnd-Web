@@ -11,7 +11,7 @@
   if (!root || !root.dataset.agentSrc) return;
   const get = (key) => { try { return sessionStorage.getItem(key); } catch (e) { return null; } };
   const full = root.dataset.mode === 'full';
-  const PHONE = window.matchMedia('(max-width: 600px)');
+  const phone = () => window.attndScreen.is('phone');  // console/static/console/screen.js
   let loading = false;
   const load = () => {
     if (loading) return;
@@ -33,7 +33,7 @@
   }
   // Opens the chat as the full-screen page when this screen is a phone; false = use the floating panel.
   window.attndOpenChat = (ai) => {
-    if (full || !PHONE.matches) return false;
+    if (full || !phone()) return false;
     location.assign(chatUrl(ai));
     return true;
   };
@@ -73,13 +73,13 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pulse); else pulse();
   }
   // On a phone the panel never opens here, so nothing to load (agent.js loads on the chat page itself).
-  if (full || (!PHONE.matches && (get('attnd.agent.open') === '1' || get('attnd.agent.active') === '1'))) {
+  if (full || (!phone() && (get('attnd.agent.open') === '1' || get('attnd.agent.active') === '1'))) {
     load();
     return;
   }
   const launcher = root.querySelector('[data-agent-open]');
   if (!launcher) return;
-  const early = () => { if (!PHONE.matches) load(); };
+  const early = () => { if (!phone()) load(); };
   launcher.addEventListener('pointerenter', early, { once: true });
   launcher.addEventListener('focus', early, { once: true });
   launcher.addEventListener('click', (e) => {

@@ -6,6 +6,14 @@
    4. Layout          8. Motion
    ========================================================================== */
 
+/* Breakpoints: one responsive codebase, three named widths (`@media` can't read custom properties, so they are
+   written out; console/tests_breakpoints.py fails on any other width in the console's stylesheets):
+     phone   ≤ 600px          @media (max-width: 600px)
+     medium  601px – 1023px   @media (min-width: 601px) / (max-width: 1023px)
+     wide    ≥ 1024px         @media (min-width: 1024px)
+   Components don't use them: they lay themselves out with container queries (`.component` is a container). Scripts
+   ask window.attndScreen (console.js), the one place a width is checked in JS. */
+
 /* 1. Tokens ----------------------------------------------------------------
    Theme (Nov 21, 2026): a soft lavender tint on a light base (and a deep violet-grey dark mode, following the
    system setting), large rounded cards with soft shadows, pill buttons and chips, bold section titles. The brand
@@ -429,9 +437,9 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .event-header h1 { margin: 0 var(--space-2) 0 0; }
 .event-shell { display: grid; gap: var(--space-5) var(--space-6); }
 .event-shell > * { min-width: 0; }
-@media (min-width: 992px) { .event-shell { grid-template-columns: 14rem minmax(0, 1fr); } }
+@media (min-width: 1024px) { .event-shell { grid-template-columns: 14rem minmax(0, 1fr); } }
 .sidenav { display: flex; flex-wrap: wrap; gap: 4px; align-self: start; }
-@media (min-width: 992px) { .sidenav { position: sticky; top: 5rem; flex-direction: column; } }
+@media (min-width: 1024px) { .sidenav { position: sticky; top: 5rem; flex-direction: column; } }
 .sidenav__link { display: flex; align-items: center; gap: .6rem; padding: .55rem .9rem; color: var(--color-muted); font-weight: 550;
   border-radius: var(--radius-pill); text-decoration: none; }
 .sidenav__link:hover { color: var(--color-text); background: var(--color-subtle); }
@@ -563,7 +571,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .spinner { display: inline-block; width: .9em; height: .9em; margin-right: .35em; vertical-align: -.12em; border: 2px solid currentColor;
   border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
 .spinner--large { display: block; width: 3rem; height: 3rem; margin: 0 auto; border-width: .25em; color: var(--color-brand); }
-.task-tray { position: fixed; right: 1rem; bottom: 1rem; z-index: 1050; display: flex; flex-direction: column; align-items: flex-end; gap: .5rem; }
+.task-tray { position: fixed; right: 1rem; bottom: calc(1rem + var(--fab-y, 0rem)); z-index: 1050; display: flex; flex-direction: column; align-items: flex-end; gap: .5rem; }
 .task-toggle { padding: .5rem .9rem; font-weight: 600; color: var(--color-brand-text); background: var(--color-surface); border: 0; border-radius: var(--radius-pill);
   box-shadow: 0 4px 18px rgba(30, 10, 60, .18); cursor: pointer; }
 .task-toggle .spinner { display: none; }
@@ -591,16 +599,8 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .task-step--running { font-weight: 600; }
 .task-step--waiting { font-weight: 600; color: var(--color-warning-text); }
 .task-result { margin-top: var(--space-1); }
-/* Full-screen Ask Attnd: the tray sits at the canvas's top-right corner (next to its tabs), far from the composer,
-   and its panel opens downward. */
-/* Full-screen chat on desktop: the tray sits with the chat, bottom-left above the composer, and opens upward. */
-@media (min-width: 1024px) {
-  body:has(.assistant) .task-tray { top: auto; bottom: 5rem; left: 2.25rem; right: auto; align-items: flex-start; }
-  body:has(.assistant) .task-panel { max-height: min(60vh, 34rem); }
-  body:has(.assistant) .task-toast { top: auto; bottom: 9.5rem; left: 2.25rem; right: auto; }
-}
 .task-inline-result { margin-left: var(--space-2); font-size: var(--text-sm); }
-.task-toast { position: fixed; right: 1rem; bottom: 4.5rem; z-index: 1060; width: min(22rem, calc(100vw - 2rem)); padding: .75rem 1rem;
+.task-toast { position: fixed; right: 1rem; bottom: calc(4.5rem + var(--fab-y, 0rem)); z-index: 1060; width: min(22rem, calc(100vw - 2rem)); padding: .75rem 1rem;
   color: #fff; background: var(--color-brand); border-radius: var(--radius-lg); box-shadow: 0 10px 40px rgba(30, 10, 60, .3); transition: opacity .5s, transform .5s; }
 .task-toast a { color: #fff; font-weight: 600; }
 .task-toast.is-failed { background: var(--color-danger); }
@@ -797,9 +797,13 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
   .sidenav__link[aria-current] { border-color: var(--color-brand-line); }
   h1 { font-size: var(--text-xl); }
 }
-/* The Ask Attnd launcher sits bottom-right: keep the sticky action bar's buttons clear of it. */
-@media (min-width: 601px) { body:has(.agent) .action-bar { padding-right: 10.5rem; } }
-@media (max-width: 600px) { body:has(.agent) .action-bar { bottom: 4.25rem; } }
+/* Ask Attnd's launcher floats bottom-right on every console page but the chat page (agent/_panel.html). One set of
+   tokens keeps the bottom chrome clear of it: --fab-x (medium and wide: sticky bars end before it), --fab-bar-y
+   (phones: sticky bars and toasts sit above it) and --fab-y (the task tray and its toasts stack above it). */
+body:has(.agent__launcher):not(:has(.agent--full)) { --fab-x: 10.5rem; --fab-bar-y: 0rem; --fab-y: 3.5rem; }
+@media (max-width: 600px) { body:has(.agent__launcher):not(:has(.agent--full)) { --fab-x: 0rem; --fab-bar-y: 4rem; } }
+.action-bar { padding-right: max(.8rem, var(--fab-x, 0rem)); bottom: calc(var(--space-3) + var(--fab-bar-y, 0rem)); }
+@media (max-width: 600px) { .action-bar { bottom: calc(var(--space-2) + var(--fab-bar-y, 0rem)); } }
 @media (max-width: 600px) {
   .crumbs ol { flex-wrap: nowrap; overflow: hidden; }
   .crumbs li { flex: none; }
@@ -995,8 +999,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .website-bar { align-items: center; }
 /* (no width / height transition on the preview frame: not composited) */
 /* Clear of the Ask Attnd launcher (bottom-right): beside it on wide screens, above it on phones */
-@media (min-width: 601px) { .publish-bar-slot:not(.canvas__publish) { margin-right: 10.5rem; } }
-@media (max-width: 600px) { .publish-bar-slot:not(.canvas__publish) { bottom: 4.75rem; } }
+.publish-bar-slot:not(.canvas__publish) { margin-right: var(--fab-x, 0rem); bottom: calc(var(--space-3) + var(--fab-bar-y, 0rem)); }
 
 /* Studio: the pre-publish check and the website's visits (batch 7 §6) */
 .site-check { padding: var(--space-3); border-radius: var(--radius-lg); background: var(--color-surface-2); }
@@ -1025,7 +1028,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .toasts:empty { display: none; }
 .toast { pointer-events: auto; margin: 0; box-shadow: var(--shadow-lg); }
 .toast.is-leaving { opacity: 0; transform: translateY(-6px); transition: opacity .25s ease, transform .25s ease; }
-@media (max-width: 600px) { .toasts { top: auto; bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); left: var(--space-4); right: var(--space-4); width: auto; } }
+@media (max-width: 600px) { .toasts { top: auto; bottom: calc(var(--space-4) + env(safe-area-inset-bottom) + var(--fab-bar-y, 0rem)); left: var(--space-4); right: var(--space-4); width: auto; } }
 @media (prefers-reduced-motion: reduce) { .toast.is-leaving { transition: none; } }
 
 /* The Overview's status line (batch 7): status, free limit, the next step; one row on wide, stacked on narrow */
@@ -1082,4 +1085,4 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .site-style__frame--phone iframe { width: 390px; height: 700px; }
 .site-style__scale { width: 600px; height: 400px; overflow: hidden; border-radius: var(--radius-lg); }
 .site-style__frame--wide iframe { width: 1200px; height: 800px; transform: scale(.5); transform-origin: 0 0; }
-@media (max-width: 700px) { .site-style__frame--wide { display: none; } }
+@media (max-width: 600px) { .site-style__frame--wide { display: none; } }

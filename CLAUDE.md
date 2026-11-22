@@ -303,6 +303,20 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   `scripts/ci/phone_check.cjs` (Chrome + the `playwright` npm package) reports page-wide horizontal scroll, components
   sticking out of their gallery frame, small tap targets and small fields; `ATTND_BROWSER_CHECKS=1 uv run python
   manage.py test console.tests_phone` runs it on the console's pages (skipped otherwise, so not in CI).
+- **One responsive codebase** (owner, Nov 22, 2026): layouts follow the width, never the device. **Three breakpoints**,
+  written once at the top of console.css: **phone** ≤ 600px `(max-width: 600px)`, **medium** 601–1023px, **wide**
+  ≥ 1024px `(min-width: 1024px)` (the only `@media` widths in the console's, Ask Attnd's and Platform's stylesheets;
+  `@media` can't read custom properties); components use container queries. JavaScript asks
+  `window.attndScreen.is('phone' | 'medium' | 'wide')` (`console/static/console/screen.js`, loaded first in `<head>`),
+  the only width check in JS. One preference opens the console in the chat (`ConsolePreference.chat_default`; the
+  phones' own `phone_chat`, picked by user agent, was merged into it by migration 0016 and `is_phone` removed). The
+  floating launcher's clearance is one set of tokens in console.css (`--fab-x` for wide sticky bars, `--fab-bar-y` for
+  phone sticky bars and toasts, `--fab-y` for the task tray), set only on pages with the launcher. Ask Attnd decides
+  where a card, detail or form goes in one function (`placement()` in agent.js: the canvas on the wide full-screen
+  page, inline everywhere else; cards render the same either way). **Guard** `console/tests_breakpoints.py`: fails on
+  any other breakpoint, a `matchMedia` width check outside screen.js, or a user-agent check outside the OS-capability
+  allowlist (Open in Attnd, the home page's app buttons, passkey names, sign-in session labels, join redirects, the
+  retired API's update link).
 - **Draw the eye** (`window.attndReveal(el, kind)` in console.js: `slide`, `in`, `pulse`, `glow`, `collapse`, `scroll`,
   `flip`; ~200–320 ms, nothing with reduced motion): canvas tab switches slide in from their side of the tab order,
   changed cards pulse, new rows fade in, deleted ones collapse, re-sorted lists glide (Scheduled → Sent), AI-filled
@@ -800,9 +814,8 @@ on Save does; there is no second copy of any business logic.
     JSON fields searched as text with the `field::json` lookup).
   - **Streaming**: `GET runs/<id>/?wait=10` long-polls (≤ 10 s, at most 2 waiting per process, the DB connection back
     in the pool while sleeping; never inside a transaction), the browser polls again at once after a `waited` answer.
-  - **Phones chat-first**: `ConsolePreference.phone_chat` (default on; the top bar switch on a phone changes it, on a
-    desktop `chat_default`); the full-screen chat on narrow screens shows the event's sections as chips above the
-    composer and a "Pages ↗" chip (hidden while typing on a phone).
+  - **Phones**: the same "Chat as default" as every screen (one preference, Nov 22, 2026); the full-screen chat below
+    wide shows the event's sections as chips above the composer and a "Pages ↗" chip (hidden while typing on a phone).
   - **Organizer emails** (`console/organizer_mail.py`): import finished, website changes waiting for review, a
     scheduled notification went out; to the owner and event admins, each kind off in Account (`ConsolePreference.notify`).
   - **First-run walkthrough** (`first_run`): import → review → layout → publish → share as progress chips for people

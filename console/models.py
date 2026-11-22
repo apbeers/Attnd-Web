@@ -149,8 +149,6 @@ class ConsolePreference(models.Model):
     (/console/, an event's overview) in Ask Attnd's full-screen chat instead of the page."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='console_preference')
     chat_default = models.BooleanField(default=chat_default_on)  # on by default since Nov 21, 2026 (settings)
-    # Stage I15: on phones the console opens on the chat unless the person turned it off there.
-    phone_chat = models.BooleanField(default=True)
     # Stage I16: which organizer emails this person wants ({kind: bool}, console/organizer_mail.KINDS; all on).
     notify = models.JSONField(default=dict, blank=True)
     # Stage I17: the first-run walkthrough was finished or skipped (shown once).
@@ -193,32 +191,26 @@ class ConsolePreference(models.Model):
         return f'{self.user_id}: chat {"on" if self.chat_default else "off"}'
 
     @classmethod
-    def chat_first(cls, user, phone=False):
-        """Does a landing open on the chat? Desktops: "Chat as my default view" (off by default). Phones (stage
-        I15): on by default, the same switch turns it off there."""
+    def chat_first(cls, user):
+        """Does a landing open on the chat? "Chat as my default view": one setting on every screen (Nov 22, 2026: the
+        phones' own setting, picked by user agent, was merged into it; screens differ by width, client-side only)."""
         if not getattr(user, 'is_authenticated', False):
             return False
-        return cls._prefs(user)[1 if phone else 0]
+        return cls._prefs(user)[0]
 
     @classmethod
     def _prefs(cls, user):
-        """(chat_default, phone_chat, walkthrough_done), one query per request (cached on the user object)."""
+        """(chat_default, walkthrough_done), one query per request (cached on the user object)."""
         cached = getattr(user, '_chat_prefs', None)
         if cached is None:
-            row = cls.objects.filter(user=user).values_list('chat_default', 'phone_chat', 'walkthrough_done').first()
-            cached = row or (chat_default_on(), True, False)  # chat as the default view since Nov 21, 2026
+            row = cls.objects.filter(user=user).values_list('chat_default', 'walkthrough_done').first()
+            cached = row or (chat_default_on(), False)  # chat as the default view since Nov 21, 2026
             user._chat_prefs = cached
         return cached
 
     @classmethod
     def walkthrough_pending(cls, user):
-        return bool(getattr(user, 'is_authenticated', False)) and not cls._prefs(user)[2]
-
-    @staticmethod
-    def is_phone(request):
-        import re
-        ua = request.META.get('HTTP_USER_AGENT', '') if request is not None else ''
-        return bool(re.search(r'iPhone|iPod|Android.+Mobile|Mobile Safari|Windows Phone', ua))
+        return bool(getattr(user, 'is_authenticated', False)) and not cls._prefs(user)[1]
 
 
 class UserSession(models.Model):

@@ -1,6 +1,6 @@
 /* Platform → Architecture (batch 7 Track E): tokens only, dark mode through them */
 .arch-layout { display: grid; gap: var(--space-4); }
-@media (min-width: 1100px) { .arch-layout { grid-template-columns: minmax(0, 1fr) 22rem; align-items: start; } }
+@media (min-width: 1024px) { .arch-layout { grid-template-columns: minmax(0, 1fr) 22rem; align-items: start; } }
 .arch-canvas { overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); touch-action: none; cursor: grab; }
 .arch-canvas svg { display: block; width: 100%; height: auto; max-height: 75vh; color: var(--color-muted); }
 .arch-col { font: 700 13px system-ui, sans-serif; fill: var(--color-muted); text-transform: uppercase; letter-spacing: .06em; }
@@ -20,5 +20,5 @@
 .arch-panel { position: sticky; top: var(--space-4); }
 .arch-steps:empty { display: none; }
 .arch-steps li.is-current { font-weight: 700; color: var(--color-brand-text); }
-@media (max-width: 700px) { .arch-canvas { display: none; } .arch-list { display: block; } .arch-list[open], .arch-list { } }
+@media (max-width: 600px) { .arch-canvas { display: none; } .arch-list { display: block; } .arch-list[open], .arch-list { } }
 @media (prefers-reduced-motion: reduce) { .arch-node, .arch-edges path { transition: none; } }

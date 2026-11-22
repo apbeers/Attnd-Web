@@ -128,7 +128,7 @@ class OneChatTests(TestCase):
 
     def test_phones_go_to_the_full_screen_page(self):
         self.assertIn('attndOpenChat', LOADER)
-        self.assertIn('PHONE', LOADER)
+        self.assertIn("attndScreen.is('phone')", LOADER)
         self.assertIn('window.attndOpenChat', JS)  # agent.js opens through the same function
 
 
@@ -139,6 +139,12 @@ class ChatBrowserTests(StaticLiveServerTestCase):
         user = User.objects.create_user('chat', 'chat@example.com', 'pw')
         call_command('load_demo_event', '--owner', 'chat@example.com', stdout=open(os.devnull, 'w'))
         event = Event.objects.get(user=user)
+        from events import drafts
+        from events.models import Location
+        drafts.publish(event, push=False)
+        loc = Location.objects.filter(event=event).first()
+        loc.snippet = (loc.snippet or '') + ' (draft)'
+        loc.save()  # one unpublished change: the sticky publish bar shows on the event's pages
         AgentRun.objects.create(user=user, goal='Add the schedule tab back', status=AgentRun.FAILED, thread='9' * 32,
                                 error='That didn’t work.', event=event,
                                 created_at=timezone.now() - timedelta(hours=2))

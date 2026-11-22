@@ -153,7 +153,7 @@ class ConsoleOnboardingTests(TestCase):
         from console.models import ConsolePreference
         user = User.objects.create_user('c', 'c@example.com', 'pw')
         with override_settings(CHAT_DEFAULT_ON=True):
-            self.assertTrue(ConsolePreference.chat_first(user, False))
+            self.assertTrue(ConsolePreference.chat_first(user))
             ConsolePreference.objects.create(user=user, chat_default=False)
             import_module('console.migrations.0014_chat_default_on').turn_on(apps, None)
             self.assertTrue(ConsolePreference.objects.get(user=user).chat_default)

@@ -66,4 +66,4 @@ class ChatTaskLinesTests(SimpleTestCase):
         js = (Path(settings.BASE_DIR) / 'console' / 'static' / 'console' / 'console.js').read_text()
         self.assertIn('function renderChatLines', js)
         self.assertIn('window.attndRefreshTheme', js)
-        self.assertIn('body:has(.assistant) .task-tray { top: auto; bottom: 5rem; left: 2.25rem;', CONSOLE_CSS)
+        self.assertIn('tray.hidden = tasks.length === 0 || onChatPage;', js)  # no tray on the chat page: its lines are in the chat

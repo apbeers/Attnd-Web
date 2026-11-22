@@ -306,18 +306,22 @@ class LazyPanelTests(AgentTestCase):
         self.assertContains(page, 'data-agent-src="/static/agent/agent.js"')
 
 
-class PhoneChatFirstTests(AgentTestCase):
-    def test_phones_open_on_the_chat_by_default_and_the_switch_turns_it_off_there_only(self):
+class OneChatSettingTests(AgentTestCase):
+    def test_one_setting_on_every_screen_never_by_user_agent(self):
+        """Nov 22, 2026: phones no longer have their own setting picked by user agent; "Chat as default" is one
+        preference and a phone gets exactly what a desktop gets (screens differ by width, client-side)."""
         from console.models import ConsolePreference
         phone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
         url = reverse('console:event', args=[self.event.pk])
-        response = self.client.get(url, HTTP_USER_AGENT=phone, secure=True)
-        self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse('console:assistant'), response['Location'])
-        self.assertEqual(self.client.get(url, secure=True).status_code, 200)  # desktop: the page
-        self.client.post(reverse('console:chat_default'), {'on': '0'}, HTTP_USER_AGENT=phone, secure=True)
-        self.assertEqual(self.client.get(url, HTTP_USER_AGENT=phone, secure=True).status_code, 200)
-        self.assertFalse(ConsolePreference.objects.get(user=self.owner).phone_chat)
+        self.assertEqual(self.client.get(url, HTTP_USER_AGENT=phone, secure=True).status_code, 200)  # off (tests)
+        self.client.post(reverse('console:chat_default'), {'on': '1'}, HTTP_USER_AGENT=phone, secure=True)
+        self.assertTrue(ConsolePreference.objects.get(user=self.owner).chat_default)
+        for ua in (phone, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0)'):
+            response = self.client.get(url, HTTP_USER_AGENT=ua, secure=True)
+            self.assertEqual(response.status_code, 302)
+            self.assertIn(reverse('console:assistant'), response['Location'])
+        self.assertFalse(hasattr(ConsolePreference, 'is_phone'))
+        self.assertNotIn('phone_chat', [f.name for f in ConsolePreference._meta.get_fields()])
 
 
 class LeaveChatTests(AgentTestCase):

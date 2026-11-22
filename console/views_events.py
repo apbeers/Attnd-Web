@@ -104,7 +104,7 @@ def _chat_landing(request, event=None):
 
     from console.models import ConsolePreference
     if (request.method != 'GET' or request.GET.get('page') == '1' or getattr(request, 'agent_run_id', None)
-            or not ConsolePreference.chat_first(request.user, ConsolePreference.is_phone(request))):
+            or not ConsolePreference.chat_first(request.user)):
         return None
     params = {'from': request.path}
     if event is not None:
@@ -131,8 +131,7 @@ def walkthrough_skip(request):
 def chat_default(request):
     from console.models import ConsolePreference
     on = request.POST.get('on') in ('1', 'true', 'on', 'True')
-    field = 'phone_chat' if ConsolePreference.is_phone(request) else 'chat_default'  # phones have their own (I15)
-    ConsolePreference.objects.update_or_create(user=request.user, defaults={field: on})
+    ConsolePreference.objects.update_or_create(user=request.user, defaults={'chat_default': on})  # one setting, every screen
     messages.success(request, 'The chat is now your default view.' if on else 'Pages are your default view again.')
     from django.utils.http import url_has_allowed_host_and_scheme
     back = request.POST.get('next') or ''

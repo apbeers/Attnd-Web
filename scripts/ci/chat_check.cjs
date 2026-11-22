@@ -36,13 +36,38 @@ async function composerClear(page) {
   });
 }
 
+// The bottom chrome of a page (sticky action / publish bars, toasts, the task tray) never sits under the launcher.
+async function clearOfLauncher(page, where) {
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(300);
+  const hits = await page.evaluate(() => {
+    const launcher = document.querySelector('[data-agent-open]');
+    if (!launcher || launcher.offsetParent === null) return ['no launcher'];
+    const a = launcher.getBoundingClientRect();
+    const out = [];
+    for (const el of document.querySelectorAll('.action-bar button, .action-bar a, .publish-bar button, .publish-bar a, .toast, .task-tray:not([hidden]) .task-toggle')) {
+      const b = el.getBoundingClientRect();
+      if (!b.width || !b.height) continue;
+      if (b.left < a.right && b.right > a.left && b.top < a.bottom && b.bottom > a.top) out.push(`${el.className || el.tagName} “${(el.textContent || '').trim().slice(0, 20)}”`);
+    }
+    return out;
+  });
+  check(!hits.length, `${where}: under the launcher: ${hits.join(', ')}`);
+}
+
 async function phone(browser) {
   const url = new URL(base);
   const context = await browser.newContext({ ...devices['iPhone 15 Pro'], ignoreHTTPSErrors: true });
   await context.addCookies([{ name: 'sessionid', value: session, domain: url.hostname, path: '/' }]);
   const page = await context.newPage();
   page.on('pageerror', (e) => problems.push(`phone page error: ${e.message}`));
+  await page.goto(`${base}/console/events/${eventId}/locations/new/`, { waitUntil: 'load' });
+  await page.waitForTimeout(800);
+  await clearOfLauncher(page, 'phone new location');
+  await snap(page, 'phone-0-form');
   await page.goto(`${base}/console/events/${eventId}/locations/`, { waitUntil: 'load' });
+  await page.waitForTimeout(800);
+  await clearOfLauncher(page, 'phone locations');
   await snap(page, 'phone-1-page');
   await page.click('[data-agent-open]');
   await page.waitForSelector('[data-agent-input]:visible', { timeout: 10000 });
@@ -89,6 +114,8 @@ async function phone(browser) {
   await page.waitForTimeout(300);
 
   // History: over the log (not in its flow), closed by a pick; the conversation shown stays the person's.
+  await page.evaluate(() => document.activeElement?.blur());  // done typing (the section chips come back)
+  await page.waitForTimeout(200);
   const logBox = await page.locator('[data-agent-log]').boundingBox();
   await page.click('[data-agent-history]');
   await page.waitForSelector('[data-agent-recent] button', { timeout: 10000 });
@@ -139,7 +166,13 @@ async function desktop(browser) {
   await context.addCookies([{ name: 'sessionid', value: session, domain: url.hostname, path: '/' }]);
   const page = await context.newPage();
   page.on('pageerror', (e) => problems.push(`desktop page error: ${e.message}`));
+  await page.goto(`${base}/console/events/${eventId}/locations/new/`, { waitUntil: 'load' });
+  await page.waitForTimeout(800);
+  await clearOfLauncher(page, 'desktop new location');
+  await snap(page, 'desktop-0-form');
   await page.goto(`${base}/console/events/${eventId}/locations/`, { waitUntil: 'load' });
+  await page.waitForTimeout(800);
+  await clearOfLauncher(page, 'desktop locations');
   await page.click('[data-agent-open]');
   await page.waitForSelector('#agent-panel:visible', { timeout: 10000 });
   await page.waitForTimeout(900);

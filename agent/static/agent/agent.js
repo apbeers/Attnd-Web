@@ -29,8 +29,9 @@
   const full = root.dataset.mode === 'full';
   const canvas = full ? document.querySelector('[data-canvas]') : null;
   const fromPage = root.dataset.from || '';
-  const wide = window.matchMedia('(min-width: 1024px)');
-  const canvasOn = () => full && canvas && wide.matches;  // narrower: the full page works like the panel
+  // Where cards and details go is decided in one place: `placement()` below (the canvas on the wide full-screen page,
+  // inline in the chat everywhere else; the cards themselves are drawn the same way, makeCard).
+  const onCanvas = () => full && !!canvas && window.attndScreen.is('wide');
   const csrf = form.querySelector('input[name=csrfmiddlewaretoken]').value;
   const runUrl = (id, tail) => root.dataset.runUrl.replace(/\/0\/$/, `/${id}/`) + (tail || '');
   const eventId = root.dataset.eventId ? parseInt(root.dataset.eventId, 10) : null;
@@ -183,7 +184,7 @@
       a.href = m[2];
       a.textContent = m[1];
       a.className = 'agent__link';
-      a.addEventListener('click', (e) => { if (canvasOn() && openUrl(m[2], a)) e.preventDefault(); });
+      a.addEventListener('click', (e) => { if (openUrl(m[2], a)) e.preventDefault(); });
       el.append(a);
       at = m.index + m[0].length;
     }
@@ -238,7 +239,7 @@
       link.href = step.url;
       link.textContent = 'Open';
       link.className = 'agent__open';
-      link.addEventListener('click', (e) => { if (canvasOn() && openUrl(step.url)) e.preventDefault(); });
+      link.addEventListener('click', (e) => { if (openUrl(step.url)) e.preventDefault(); });
       el.append(link);
     }
     if (step.undo) addUndo(el, step.undo.id, step.undo.state, step.event_id);
@@ -344,7 +345,7 @@
       return;
     }
     const link = e.target.closest('[data-task-result]');
-    if (link && canvasOn() && openUrl(link.getAttribute('href'))) e.preventDefault();
+    if (link && openUrl(link.getAttribute('href'))) e.preventDefault();
   });
 
   // ---- Undo next to every change (console/undo.py: one recorded change, 24 h, then Redo) ----------------
@@ -895,7 +896,7 @@
   // Stage I15: on a phone, the full-screen chat shows the event's sections as chips above the composer; each shows
   // its cards in the chat, and the pages stay one tap away.
   (function phoneTabs() {
-    if (!full || !eventId || !window.matchMedia('(max-width: 1023px)').matches) return;
+    if (!full || !eventId || window.attndScreen.is('wide')) return;
     const row = document.createElement('div');
     row.className = 'agent__tabs-chips';
     row.setAttribute('role', 'group');
@@ -1181,30 +1182,63 @@
 
   async function showComponents(step) {
     if (step.component.fill) return fillStep(step);
-    if (canvasOn()) {
-      if (step.component.picked) return document.createComment('picked');  // its detail is already on the canvas
-      const box = cardBox();
-      box.classList.add('agent__note');
-      try {
-        const items = live ? await showOnCanvas(step) : null;
-        box.appendChild(canvasNote(step, items));
-      } catch (err) {
-        box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
-      }
-      stick();
-      return box;
-    }
-    const box = cardBox();
-    try {
-      const items = await fetchCards(step.component.name, step.component.items);
-      appendGrouped(box, items);
-    } catch (err) {
-      box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
-    }
-    foldOld();
-    stick();
-    return box;
+    return placement().step(step);
   }
+
+  // ---- Placement: the one place that decides where a card, a detail or a form goes (one chat, Nov 22, 2026) -----
+  // The cards are the same in both (makeCard: the server's chat rendering of the component); only where they land
+  // differs. Canvas = the wide full-screen page (the chat keeps one line, "Showing 18 locations →"); chat = inline,
+  // on every other screen (the floating panel, the full-screen page below wide).
+  const PLACES = {
+    canvas: {
+      async step(step) {
+        if (step.component.picked) return document.createComment('picked');  // its detail is already on the canvas
+        const box = cardBox();
+        box.classList.add('agent__note');
+        try {
+          const items = live ? await showOnCanvas(step) : null;
+          box.appendChild(canvasNote(step, items));
+        } catch (err) {
+          box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
+        }
+        stick();
+        return box;
+      },
+      detail(card) { return openDetail(card); },
+      form(name, ids) { return openComponent(name, ids, null); },
+    },
+    chat: {
+      async step(step) {
+        const box = cardBox();
+        try {
+          appendGrouped(box, await fetchCards(step.component.name, step.component.items));
+        } catch (err) {
+          box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
+        }
+        foldOld();
+        stick();
+        return box;
+      },
+      async detail(card) {
+        if (!run) return;
+        card.classList.add('is-busy');
+        try {
+          const data = await post(root.dataset.pickUrl, { run: run.id, component: card.dataset.component, ids: card.dataset.ids });
+          renderedSteps.add(data.step.id);
+          const box = cardBox();
+          data.items.forEach((item) => box.appendChild(makeCard(item)));
+          foldOld();
+          box.scrollIntoView({ block: 'nearest' });
+        } catch (err) { bubble('error', err.message); }
+        finally { card.classList.remove('is-busy'); }
+      },
+      async form(name, ids) {
+        const box = cardBox();
+        (await fetchCards(name, [ids])).forEach((item) => box.appendChild(makeCard(item)));
+      },
+    },
+  };
+  const placement = () => PLACES[onCanvas() ? 'canvas' : 'chat'];
 
   // ---- Add with AI (every form component) and fill_form ------------------------------------------------------
   // The sparkle button above a form opens the chat with a prompt for that thing and remembers the form; what the
@@ -1310,11 +1344,7 @@
     let form = findForm(name, ids);
     try {
       if (!form) {  // not on screen yet: the canvas overlay (full screen) or a card in the chat
-        if (canvasOn()) await openComponent(name, ids, null);
-        else {
-          const box = cardBox();
-          (await fetchCards(name, [ids])).forEach((item) => box.appendChild(makeCard(item)));
-        }
+        await placement().form(name, ids);
         form = findForm(name, ids);
       }
       if (form) applyFill(form, fill, submit);
@@ -1387,20 +1417,7 @@
     if (eventId && changedEventId === eventId) { refreshButton.hidden = false; syncLinks(); }
   }
 
-  async function pick(card) {
-    if (canvasOn()) return openDetail(card);
-    if (!run) return;
-    card.classList.add('is-busy');
-    try {
-      const data = await post(root.dataset.pickUrl, { run: run.id, component: card.dataset.component, ids: card.dataset.ids });
-      renderedSteps.add(data.step.id);
-      const box = cardBox();
-      data.items.forEach((item) => box.appendChild(makeCard(item)));
-      foldOld();
-      box.scrollIntoView({ block: 'nearest' });
-    } catch (err) { bubble('error', err.message); }
-    finally { card.classList.remove('is-busy'); }
-  }
+  function pick(card) { return placement().detail(card); }
 
   async function act(card, action, form, fields) {
     const body = form ? new FormData(form) : new FormData();
@@ -1486,7 +1503,7 @@
     if (title && card.dataset.detail) { e.preventDefault(); pick(card); return; }
     // Full screen: links to events, locations, the schedule and notifications open on the canvas, not as pages.
     const link = e.target.closest('a[href]');
-    if (link && canvasOn() && !link.target && !link.hasAttribute('download') && openUrl(link.getAttribute('href'), link)) {
+    if (link && !link.target && !link.hasAttribute('download') && openUrl(link.getAttribute('href'), link)) {
       e.preventDefault();
       return;
     }
@@ -1874,7 +1891,7 @@
     catch (e) { return []; }
   })();
   function openUrl(href, opener) {
-    if (!canvasOn() || !href) return false;
+    if (!onCanvas() || !href) return false;
     let url;
     try { url = new URL(href, location.origin); } catch (e) { return false; }
     if (url.origin !== location.origin || url.search) return false;
@@ -2049,7 +2066,7 @@
   }
 
   async function preloadCanvas() {
-    if (!canvasOn()) return;
+    if (!onCanvas()) return;
     if (adoptCanvas()) {
       const kept = rememberedTab();
       const active = [...tabs.values()].find((t) => !t.pane.hidden);
