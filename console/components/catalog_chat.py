@@ -42,17 +42,17 @@ def checks(event, now=None):
     pk = event.pk
     out = []
 
-    def add(key, state, text, url='', link=''):
-        out.append({'key': key, 'state': state, 'text': text, 'url': url, 'link': link})
+    def add(key, state, text, url='', link='', post=False):
+        out.append({'key': key, 'state': state, 'text': text, 'url': url, 'link': link, 'post': post})
 
     waiting = ChangeSet.objects.filter(event=event, status=ChangeSet.PENDING).count()
     if waiting:
         add('review', PROBLEM, f'{waiting} AI update{"s" if waiting != 1 else ""} waiting for your review',
             reverse('console:changesets', args=[pk]), 'Review')
     locations = list(event.location_set.filter(hidden=False).only('id', 'name', 'latitude', 'longitude', 'image',
-                                                                  'image_url'))
+                                                                  'image_url', 'context'))
     items = list(event.scheduleditem_set.filter(hidden=False).only('id', 'name', 'start_time', 'end_time',
-                                                                   'location_id'))
+                                                                   'location_id', 'context'))
     if not locations:
         add('locations', PROBLEM, 'No locations yet', reverse('console:location_new', args=[pk]), 'Add one')
     if not items:
@@ -82,6 +82,20 @@ def checks(event, now=None):
             add('dates', PROBLEM, f'{len(outside)} schedule item{"s" if len(outside) != 1 else ""} outside the '
                 f'event\'s dates ({outside[0].name})', reverse('console:item_edit', args=[pk, outside[0].pk]),
                 'Fix the date')
+    with_details = [it for it in items if any((it.context or {}).values())]
+    if items and len(with_details) < len(items) * 0.8:
+        add('details', PROBLEM if len(with_details) < len(items) / 2 else INFO,
+            f'Details on {len(with_details)} of {len(items)} schedule item{"s" if len(items) != 1 else ""} '
+            '(performers, prices, links: attendees\' phones answer from them)',
+            reverse('console:event_fill_details', args=[pk]) if event.source_urls else
+            reverse('console:schedule', args=[pk]), 'Fill in details' if event.source_urls else 'Add them',
+            post=bool(event.source_urls))
+    places_with = [loc for loc in locations if any((loc.context or {}).values())]
+    if len(locations) >= 3 and len(places_with) < len(locations) / 2:
+        add('place_details', INFO, f'Details on {len(places_with)} of {len(locations)} places (menus, hours, links)',
+            reverse('console:event_fill_details', args=[pk]) if event.source_urls else
+            reverse('console:locations', args=[pk]), 'Fill in details' if event.source_urls else 'Add them',
+            post=bool(event.source_urls))
     if not (event.context or {}).get('about'):
         add('assistant', INFO, 'Details for the assistant are empty (attendees\' phones answer questions from them)',
             reverse('console:event_edit', args=[pk]), 'Add details')

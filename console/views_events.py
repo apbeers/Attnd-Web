@@ -276,6 +276,9 @@ def task_json(job):
         title = f'Website changed: updating {event_name}'
     elif job.kind == IngestJob.KIND_THEME:
         title = f'Picking colours for {event_name}' if job.status != IngestJob.DONE else f'Picked colours for {event_name}'
+    elif job.kind == IngestJob.KIND_DETAILS:
+        title = (f'Filling in details for {event_name}' if job.status != IngestJob.DONE
+                 else f'Filled in details for {event_name}')
     elif job.trigger == IngestJob.TRIGGER_PASTE:
         title = f'Reading {job.upload_name or "what you pasted"} into {event_name}'
     else:
@@ -287,6 +290,10 @@ def task_json(job):
             summary = {'site': 'From your website’s colours', 'default': 'Kept Attnd’s colours'}.get(
                 result.get('theme_source'), 'New colours are on')
             url = reverse('console:event', args=[job.event_id]) + '#theme'
+        elif job.kind == IngestJob.KIND_DETAILS:
+            from scrape.detail_fill import done_text
+            summary = done_text({'items': result.get('details_items', 0), 'places': result.get('details_places', 0)})
+            url = reverse('console:schedule', args=[job.event_id])
         elif job.kind == IngestJob.KIND_REFRESH:
             pending, applied = result.get('pending', 0), result.get('auto_applied', 0)
             summary = ', '.join(filter(None, [
@@ -307,6 +314,7 @@ def task_json(job):
         'steps': [{'text': st.get('text', ''), 'state': st.get('state', 'done')} for st in (job.steps or [])]
                  or ([{'text': 'Waiting to start…', 'state': 'running'}] if job.status == IngestJob.QUEUED else []),
         'result_label': ('See the colours' if job.kind == IngestJob.KIND_THEME
+                         else 'See the schedule' if job.kind == IngestJob.KIND_DETAILS
                          else f"Review {_plural_changes(result.get('pending', 0))}" if url and '/changes/' in url
                          else 'Open the event') if url else '',
         # A failed task can run again (its sources are kept; a file that was attached has to be attached again).
@@ -336,7 +344,8 @@ def _plural_changes(n):
 
 
 def _retryable(job):
-    return job.kind in (IngestJob.KIND_CREATE, IngestJob.KIND_REFRESH, IngestJob.KIND_THEME) and (
+    return job.kind in (IngestJob.KIND_CREATE, IngestJob.KIND_REFRESH, IngestJob.KIND_THEME,
+                        IngestJob.KIND_DETAILS) and (
         job.urls or job.text or job.kind == IngestJob.KIND_THEME or (job.event_id and job.event.source_urls))
 
 
@@ -1470,6 +1479,28 @@ def event_theme_generate(request, event):
         return JsonResponse({'task': task_json(job), 'note': note}, status=202)
     messages.info(request, 'Picking colours… they appear here in a few seconds.' + (f' {note}' if note else ''))
     return redirect(reverse('console:event', args=[event.pk]) + '#theme')
+
+
+@agent_action('fill_in_details', "Read the event's websites again and add \"Details for the assistant\" (performers, "
+              'bios, prices, menus, hours, links) to every schedule item and place that has none; never touches what '
+              'a person wrote. Runs in the background (a task card).', json=True, title='Started filling in details')
+@event_view
+@require_POST
+@ai_credit_required
+def event_fill_details(request, event):
+    if not event.source_urls:
+        msg = 'This event has no website to read details from. Add its website first.'
+        if _wants_json(request):
+            return JsonResponse({'error': msg}, status=400)
+        messages.error(request, msg)
+        return redirect('console:event', event_id=event.pk)
+    job = IngestJob.objects.create(kind=IngestJob.KIND_DETAILS, trigger=IngestJob.TRIGGER_CONSOLE, event=event,
+                                   created_by=request.user, timezone=event.timezone, urls=list(event.source_urls))
+    jobs.enqueue(job)
+    if _wants_json(request):
+        return JsonResponse({'task': task_json(job)}, status=202)
+    messages.info(request, 'Filling in details from the website… it takes a minute or two.')
+    return redirect('console:event', event_id=event.pk)
 
 
 def _preview_html(event, resolved):

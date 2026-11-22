@@ -4,7 +4,8 @@
     <li class="readiness__row readiness__row--{{ r.state }}">
       <span class="status-mark status-mark--{% if r.state == 'problem' %}warning{% else %}info{% endif %}" aria-hidden="true">{% if r.state == 'problem' %}!{% else %}•{% endif %}</span>
       <span class="grow small">{% if d.events > 1 %}<strong>{{ r.event }}</strong> · {% endif %}{{ r.text }}</span>
-      {% if r.url %}<a class="button button--ghost button--small" href="{{ r.url }}">{{ r.link|default:"Open" }}</a>{% endif %}
+      {% if r.url and r.post %}<form method="post" action="{{ r.url }}" data-background>{% csrf_token %}<button class="button button--ghost button--small">{{ r.link }}</button></form>
+      {% elif r.url %}<a class="button button--ghost button--small" href="{{ r.url }}">{{ r.link|default:"Open" }}</a>{% endif %}
     </li>{% endfor %}</ul>
   {% if d.more %}<p class="small muted">And {{ d.more }} more. Ask “Is my event ready?” for one event’s full check.</p>{% endif %}
   {% else %}<p class="small muted">{% if d.events %}Nothing waiting on your events right now.{% else %}No current events. Paste your event’s website or drop a flyer to start one.{% endif %}</p>{% endif %}

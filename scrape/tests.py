@@ -135,15 +135,16 @@ class CreateJobTests(RunJobsInline, TestCase):
 # ---------------------------------------------------------------------------
 
 class ServiceTests(TestCase):
-    @patch("scrape.service._crawl", return_value="Some event page text")
+    @patch("scrape.service.gather_sources", return_value="Some event page text")
     def test_scrape_event_returns_normalized_dict(self, _crawl):
         with fake_claude(_sample_data()):
             data = scrape_event("https://example.com")
         self.assertEqual(data["name"], "Test County Fair")
         self.assertEqual(len(data["schedule"]), 2)
 
-    @patch("scrape.service._crawl", return_value="text")
-    def test_refresh_sends_current_state(self, _crawl):
+    @patch("scrape.service.gather_sources", return_value="text")
+    @patch("scrape.detail_fill.targets", return_value=[])  # the detail-fill pass has its own tests (tests_crawler)
+    def test_refresh_sends_current_state(self, _targets, _crawl):
         with fake_claude(_sample_data()) as claude:
             scrape_event(urls=["https://example.com"], current={"event": {"name": "X"}, "locations": [], "schedule": []})
         self.assertIn("REFRESHING", claude.last["system"][0]["text"])
@@ -157,12 +158,12 @@ class ServiceTests(TestCase):
         types = [p["type"] for p in claude.last["messages"][0]["content"]]
         self.assertEqual(types, ["image", "document"])
 
-    @patch("scrape.service._crawl", return_value="")
+    @patch("scrape.service.gather_sources", return_value="")
     def test_empty_crawl_raises_value_error(self, _crawl):
         with self.assertRaises(ValueError):
             scrape_event("https://example.com")
 
-    @patch("scrape.service._crawl", return_value="text")
+    @patch("scrape.service.gather_sources", return_value="text")
     def test_bad_json_raises_value_error(self, _crawl):
         with fake_claude("not json"), self.assertRaises(ValueError):
             scrape_event("https://example.com")
@@ -188,7 +189,7 @@ class ServiceTests(TestCase):
         refused = anthropic.BadRequestError('the compiled grammar is too large', response=httpx.Response(
             400, request=httpx.Request('POST', 'https://api.anthropic.com/v1/messages')), body=None)
         with fake_claude(refused, tool_reply(_sample_data())) as claude:
-            data = scrape_event(text="Fair on Saturday")
+            data = scrape_event(text="Fair on Saturday", details=False)
         self.assertEqual(data["name"], "Test County Fair")
         self.assertNotIn("format", claude.last["output_config"])
         self.assertEqual(claude.last["tools"][0]["name"], "submit")

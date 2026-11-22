@@ -8,7 +8,8 @@
     <li class="readiness__row readiness__row--{{ c.state }}">
       <span class="status-mark status-mark--{% if c.state == 'problem' %}warning{% elif c.state == 'ok' %}success{% else %}info{% endif %}" aria-hidden="true">{% if c.state == 'problem' %}!{% elif c.state == 'ok' %}✓{% else %}•{% endif %}</span>
       <span class="grow small">{{ c.text }}</span>
-      {% if c.url and c.link %}<a class="button button--ghost button--small" href="{{ c.url }}">{{ c.link }}</a>{% endif %}
+      {% if c.url and c.link and c.post %}<form method="post" action="{{ c.url }}" data-background>{% csrf_token %}<button class="button button--ghost button--small">{{ c.link }}</button></form>
+      {% elif c.url and c.link %}<a class="button button--ghost button--small" href="{{ c.url }}">{{ c.link }}</a>{% endif %}
     </li>{% endfor %}
   </ul>
   {% if d.actions %}<div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}

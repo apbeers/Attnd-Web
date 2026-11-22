@@ -81,7 +81,7 @@ class StepsTests(RunJobsInline, TestCase):
 
             def update(self, text, done=None):
                 steps[-1] = [text, done]
-        with patch.object(service, '_crawl', side_effect=lambda url, **kw: [kw['on_page'](u) for u in ('a', 'b')] and '## Source: a\n\nhi'), \
+        with patch.object(service, 'gather_sources', side_effect=lambda urls, **kw: [kw['on_page'](u) for u in ('a', 'b')] and '## Source: a\n\nhi'), \
                 patch.object(service, '_extract', return_value={'name': 'x'}):
             service.scrape_event(urls=['https://fest.example/'], progress=Progress())
         self.assertEqual(steps[0][1], 'Read 2 web pages')

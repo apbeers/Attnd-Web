@@ -455,17 +455,18 @@ def _normalize(data: dict) -> dict:
     return data
 
 
-def gather_sources(urls: list[str], crawl: bool = True, on_page=None, colors=None) -> str:
-    """Read the URLs. With crawl=False only the pages themselves (the website watcher re-reads just
-    the pages that changed). `on_page(url)` is called for every page read (the task tray's step)."""
-    parts = []
-    for url in urls:
-        try:
-            parts.append(_crawl(url, on_page=on_page, colors=colors) if crawl
-                         else _crawl(url, max_depth=0, max_pages=1, on_page=on_page, colors=colors))
-        except Exception as exc:  # one bad URL should not sink the rest
-            logger.warning("Crawl failed for %s: %s", url, exc)
-    return "\n\n---\n\n".join(p for p in parts if p)
+def gather_sources(urls: list[str], crawl: bool = True, on_page=None, colors=None, extras=None, fetch=None) -> str:
+    """Read the URLs (scrape.crawler: one shared budget, sitemap and detail pages, boilerplate dropped, most useful
+    pages first). With crawl=False only the pages themselves (the website watcher re-reads just the pages that
+    changed). `on_page(url)` is called for every page read (the task tray's step); `extras` (a list) receives the PDFs
+    and schedule images found, for the model to read as documents / images."""
+    from scrape.crawler import Crawl
+    if not urls:
+        return ""
+    run = Crawl(fetch=fetch, on_page=on_page, colors=colors).run(list(dict.fromkeys(urls)), crawl=crawl)
+    if extras is not None:
+        extras.extend(run.attachments)
+    return run.text()
 
 
 # ---------------------------------------------------------------------------
@@ -575,9 +576,14 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
     return data
 
 
+def _n(n, word):
+    return f'{n} {word}{"" if n == 1 else "s"}'
+
+
 def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None = None, text: str = "",
                  attachments: list | None = None, current: dict | None = None,
-                 instructions: str = "", enrich: bool = True, crawl: bool = True, progress=None) -> dict:
+                 instructions: str = "", enrich: bool = True, crawl: bool = True, progress=None,
+                 details: bool = True) -> dict:
     """
     Read the sources and return a normalized extraction dict (see EVENT_SCHEMA).
 
@@ -605,7 +611,11 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
 
     from attnd.colors import most_used_hex
     page_colors = Counter()
-    content = gather_sources(urls, crawl=crawl, on_page=on_page, colors=page_colors) if urls else ""
+    user_files = bool(attachments)
+    found = []  # PDFs and schedule images from the site (scrape.crawler)
+    content = gather_sources(urls, crawl=crawl, on_page=on_page, colors=page_colors, extras=found) if urls else ""
+    if found:
+        attachments = list(attachments or []) + found
     # Every web page that was read, so the website watcher can fingerprint them (scrape.watch).
     pages = list(dict.fromkeys(re.findall(r"^## Source: (https?://\S+)", content, flags=re.M)))
     if text:
@@ -613,12 +623,23 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
     if not content.strip() and not attachments:
         raise ValueError("No content could be retrieved from that URL.")
 
-    if text or attachments:
-        what = ' and '.join(filter(None, ['your notes' if text else '', 'the file you attached' if attachments else '']))
+    if found:
+        say(f'Reading {_n(len(found), "file")} from the website (schedules, maps, menus)…',
+            done=f'Read {_n(len(found), "file")} from the website')
+    if text or user_files:
+        what = ' and '.join(filter(None, ['your notes' if text else '', 'the file you attached' if user_files else '']))
         say(f'Reading {what}…', done=f'Read {what}')
     say('Finding the locations and the schedule…' if current is None else 'Looking for what changed…',
         done='Understood the event' if current is None else 'Read the latest information')
     data = _extract(content, current=current, attachments=attachments, instructions=instructions)
+    if details and urls and crawl and content.strip():  # a crawl's text is the big one; notes and files are read whole
+        # The detail-fill pass (batch 7 A1): items / places the extraction left without assistant details get a
+        # focused second look with only the text that mentions them (scrape.detail_fill).
+        from scrape import detail_fill
+        if detail_fill.targets(data):
+            say('Adding details for the schedule and places…', done='Added details')
+            data["details_added"] = detail_fill.fill(data, content, progress)
+            update(detail_fill.done_text(data["details_added"]), done=detail_fill.done_text(data["details_added"]))
 
     if google_api_key and enrich:
         say('Checking addresses on the map…', done='Checked addresses on the map')

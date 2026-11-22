@@ -38,6 +38,20 @@ attnd-web is the coordinating repo for all three. Any feature that touches the A
 ## Platform model (the "full vision")
 
 1. **AI import** — an organizer (or a visitor through the home page's composer, after signing up) gives URLs / a PDF or image / pasted text. An `IngestJob` crawls + extracts with Claude Haiku structured output (`attnd/claude.py`) and creates the event (`scrape/jobs.py`, `scrape/service.py`).
+   **Reading the website** (`scrape/crawler.py`, batch 7 A): one budget for every source URL (40 pages, 120 s, no page
+   twice), every request through Studio's SSRF-guarded fetcher; `sitemap.xml` (+ robots.txt sitemaps, one index level)
+   and links like "Event details" / `/artists/<slug>/` give the detail pages; order = start page, listing pages
+   (schedule, lineup, map…), detail pages, the rest; up to 3 same-site PDFs whose link says schedule / lineup / map /
+   menu / vendors / program (≤ 10 MB) and the largest 1–2 images (≥ 600 px) of schedule / lineup pages go to the model
+   as documents / images; thin JS pages keep their `__NEXT_DATA__` / `__NUXT__` / `__INITIAL_STATE__`, WordPress sites
+   add The Events Calendar's `/wp-json/tribe/events/v1/events`; lines repeated on 3+ pages (menus, footers) are kept
+   once. The website watcher keeps its own fingerprinting (`service._page_text`, unchanged). **Detail-fill pass**
+   (`scrape/detail_fill.py`): after the extraction of a crawl (imports and full refreshes), every item / place with an
+   empty context gets a focused second look in batches of 15 with only the text that mentions it (Claude Haiku,
+   context only, `events.context.normalize`; step "Added details for 38 schedule items"); **Fill in details**
+   (`console:event_fill_details`, Ask Attnd `fill_in_details`, a background task card, `IngestJob` kind `details`) runs
+   it alone on the event's rows: only empty, unlocked contexts. The readiness / attention checks say "Details on 2 of
+   43 schedule items" (and places) with that button. Tests: `scrape/tests_crawler.py`.
 2. **Manual management** — the organizer console (`/console/`) edits everything. Any field a person edits is added to that row's `locked_fields`. An event has an owner plus a team (`EventMember`: admins manage the team and settings, contributors edit content); invites by email work before the person has an account (`EventInvite`, claimed on sign-up/sign-in).
 3. **Website watching + AI refresh** — `scrape/watch.py` fingerprints the event's pages (conditional GET + hash of visible text/JSON-LD; every 10 min during the event, hourly the week before, 6-hourly earlier) and runs the AI only on pages that changed, with a minimum gap and daily cap (`WATCH_MIN_AI_GAP_MINUTES`, `WATCH_MAX_AI_RUNS_PER_DAY`). `update_mode` review/minor/auto decides what applies itself (removals and locked fields always wait). Manual "Check for updates now" re-crawls everything. The AI re-reads the sources *with the current data* and returns its view; `scrape/diff.py` turns that into a `ChangeSet` of field-level `Change`s. Locked fields become conflicts (unticked), empty AI values never blank data, removals need cited evidence.
 4. **Review** — the organizer accepts per change / per field; `apply_changeset` applies atomically, snapshots an `EventRevision` first (rollback from History), and bumps `content_version` once.

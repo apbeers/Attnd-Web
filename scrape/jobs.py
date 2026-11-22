@@ -193,6 +193,8 @@ def _run_job(job):
             _run_refresh(job)
         elif job.kind == IngestJob.KIND_THEME:
             _run_theme(job)
+        elif job.kind == IngestJob.KIND_DETAILS:
+            _run_details(job)
         else:  # e.g. an old 'tickets' draft job (ticketing is parked on git branch parked/tickets)
             raise ValueError('This kind of job is no longer supported.')
     except ValueError as exc:
@@ -307,6 +309,35 @@ def _run_theme(job):
     job.save()
 
 
+def _run_details(job):
+    """"Fill in details" (batch 7 A1): read the event's websites again and give every item and place with an empty,
+    unlocked assistant context one (scrape.detail_fill); nothing a person wrote is touched."""
+    from scrape import detail_fill
+    from scrape.service import gather_sources
+    event = job.event
+    urls = job.urls or event.source_urls
+    if not urls:
+        raise ValueError('This event has no website to read details from. Add its website first.')
+    steps = Steps(job)
+    read = []
+
+    def on_page(url):
+        read.append(url)
+        steps.update(f'Reading web pages: {len(read)} so far…', done=f'Read {_plural(len(read), "web page")}')
+    steps('Reading the website…', done='Read the website')
+    content = gather_sources(urls, on_page=on_page)
+    if not content.strip():
+        raise ValueError('Could not read the website. Check that it is up and try again.')
+    steps('Adding details for the schedule and places…', done='Added details')
+    done = detail_fill.fill_event(event, content, steps)
+    steps.finish(detail_fill.done_text(done))
+    job.status = IngestJob.DONE
+    job.progress = ''
+    job.finished_at = timezone.now()
+    job.result = {'event_id': event.pk, 'details_items': done['items'], 'details_places': done['places']}
+    job.save()
+
+
 def _bring_into_studio(job, event):
     """Attnd Studio (admins only): an import that creates an event brings its website into Studio automatically (the
     organizer can untick it on the import form): the whole site is crawled, its files copied and the AI rebuilds it.
@@ -340,6 +371,7 @@ def _run_refresh(job):
         current=diff.current_state(event), google_api_key='',  # geocode only what changes, below
         crawl=not (watched or pasted),  # the watcher re-reads only the pages that changed
         progress=None if watched else steps,
+        details=not watched,  # the detail-fill pass on full refreshes and pastes, not on every watched change
     )
     steps('Comparing with your event…', done='Compared with your event')
     changes = diff.compute_changes(event, data)

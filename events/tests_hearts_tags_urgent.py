@@ -157,8 +157,9 @@ class TagTests(Base):
         self.assertEqual(data['locations'][0]['tags'], ['tacos', 'food'])
         self.assertEqual(data['schedule'][0]['tags'], ['food', 'tacos', 'demo', 'a', 'b', 'c'])  # at most 6
 
-    @patch('scrape.service._crawl', return_value='page text')
-    def test_ai_import_tags_locations_and_items(self, _crawl):
+    @patch('scrape.detail_fill.targets', return_value=[])
+    @patch('scrape.service.gather_sources', return_value='page text')
+    def test_ai_import_tags_locations_and_items(self, _crawl, _targets):
         from scrape.diff import create_event_from_extraction
         from scrape.service import EVENT_SCHEMA, scrape_event
         self.assertIn('tags', EVENT_SCHEMA['properties']['locations']['items']['required'])
