@@ -63,17 +63,22 @@ resume note is under "Running when paused" below.
     it goes stale).
   - **To do:** run `lintDebug assembleDebug` on develop (not re-run after the rebase). Mark API-027's Android column
     in `API_CHANGES.md` as partial: `live_activity` is done, the screens aren't.
-- **iOS one-list change** (owner-approved): the spec is pushed, `docs/specs/one_list_spec.md` (`4c708d0`). The
-  button and chat become **"Ask Attnd"**. The planner diffs its result against My schedule and proposes adds and
-  removes with reasons; it only removes its own entries unless asked to. No API change. **No iOS code written yet.**
-  Next:
-  0. First get a clean baseline: `ATTND_ASSISTANT_EVAL=router scripts/linux_harness.sh` with the default test list.
-     Adding `MyScheduleTests` to `HARNESS_TESTS` failed to compile (`error: fatalError`); fix that before relying on it.
-  1. In `MySchedule.swift`, add `source`, `reason` and the preferences record.
-  2. Rewrite `PlanStore.swift` so `Plan` is only an in-memory value (the planner rules and fixture numbers stay)
-     and My schedule is the only thing saved. Remove `apply(plan:)`, `reconcile` and `onApply`.
-  3. Run `scripts/linux_harness.sh` with `MyScheduleTests` added to `HARNESS_TESTS`.
-  4. Keep router mode at 242/247 or better.
+- **iOS one-list change: done** (owner-approved; spec `docs/specs/one_list_spec.md`; Attnd-iOS `2b6114b`).
+  - [x] Baseline: `ATTND_ASSISTANT_EVAL=router scripts/linux_harness.sh` (93 tests, 242/247). The `MyScheduleTests`
+    "fatalError" was `ReminderPlanner` missing: the harness skipped `LiveFollowLogic.swift` (it needs
+    `LiveActivityModel.swift`, ActivityKit). It now copies that file without the import plus an `ActivityAttributes`
+    stand-in; `MyScheduleTests` and `LiveFollowTests` are in the default list (132 tests).
+  - [x] `MySchedule.swift`: `source`, `reason`, `SchedulePreferences`, `ScheduleProposal`, `ScheduleHistory`,
+    `Planner.propose`, `dayPlan` (the derived day view, via `Planner.dayView`), `absorb(legacy:)`.
+  - [x] `PlanStore.swift` rewritten: `Plan` is in memory only; `apply(plan:)`, `reconcile`, `onApply`,
+    replan / keep / clear plan and the `pref.plan` / `pref.planHistory` storage are gone (one-time, idempotent
+    migration, then deleted).
+  - [x] One flow and one Undo history (≤ 20, hearts included); new plans preview before Apply; Live Activity follows
+    My schedule; "Find Another" is a swap proposal; the button and chat are **Ask Attnd**.
+  - [x] Router eval 242/247, critical all pass.
+  - **On a device:** migration from a real older build (plan → entries, keys gone), the Undo toast and card, the Ask
+    Attnd proposal card for "Plan my Saturday", the Duo planning board and the Live Activity. The UI files
+    (AppState, AssistantController, PlanStore, views) weren't compiled here; check the CI archive.
 
 ## Next after those
 
