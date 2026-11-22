@@ -47,9 +47,11 @@ def components(request):
         for entry in gallery_entries(request.user, event):
             if 'found' in entry:
                 found = entry.pop('found')
-                entry['frames'] = [{'width': width, 'surface': surface,
-                                    'html': [C.render(entry['name'], data, request, surface, uid=C.new_uid())
-                                             for _ids, data in found]}
-                                   for width, surface in FRAMES]
+                entry['frames'] = []
+                for width, surface in FRAMES:
+                    html = [C.render(entry['name'], data, request, surface, uid=C.new_uid()) for _ids, data in found]
+                    # Row components are list items (their page draws them in a <ul>): give them one here too.
+                    entry['frames'].append({'width': width, 'surface': surface, 'html': html,
+                                            'list': all(str(h).lstrip().startswith('<li') for h in html)})
             entries.append(entry)
     return render(request, 'platform_admin/components.html', {'events': events, 'event': event, 'entries': entries})

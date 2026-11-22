@@ -327,6 +327,12 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
 - **Site icons** (every page includes `home/_icons.html`): `uv run python scripts/make_icons.py` regenerates them from `brand/app-icon-1024.png` (copy of the iOS 1024 app icon; iOS itself went back from the Icon Composer icon to a PNG app icon set on Nov 19, 2026 because `Assets.car` was ~5 MB, and the website's icons stay as they are) into `public/` — `favicon.ico` (16–256), `icon-32/96/192/512.png` (rounded corners, transparent, so Safari and other tabs show the tile without a plate), `apple-touch-icon.png` 180 (full bleed, opaque; iOS/macOS round it), `icon-maskable-512.png`, `site.webmanifest` — and the console manifest's icons. `home/tests.py` checks the sizes and links.
 - **Homepage screenshots** (`home/static/home/img/demo-map.webp`, `demo-locations.webp`, 768×1670): the raw 6.3" captures `raw/iphone-63/1-map.png` and `4-locations.png` from Attnd-iOS's `store-screenshots` artifact, resized with Pillow (WebP, quality 82). Refresh them after a new screenshot run.
 - **Demo data:** `python manage.py load_demo_event [--owner email]` builds the DEMO event (happening now, every feature populated).
+- **Assistant eval** (`docs/assistant_eval/`, Nov 22, 2026): `questions.json` (247 platform-neutral questions attendees
+  ask, silly and risky ones included, with checks) and `demo_bundle.json` (the DEMO bundle at a fixed moment, from
+  `manage.py export_assistant_eval_bundle`; nothing is saved). The apps run it (iOS: router mode in its unit tests'
+  critical gate and opt-in, model mode on a Mac / iPhone with Apple Intelligence; Android: ROADMAP). DEMO changes the
+  questions rely on are pinned by `events/tests_demo_facts.py → test_assistant_eval_facts`; after a DEMO change
+  re-export the bundle and sync the apps. How to run, grading, adding questions: its README.
 
 ## Onboarding: the home page and "Try it on your event" (owner, Nov 21, 2026; `home/`)
 - **Home page** (`home/views.home`, `home/templates/home/home.html` + `onboarding.css` + `home.js`; our own design and
@@ -1092,6 +1098,18 @@ the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-pick
   automatically adds frame titles, a zoomable viewport, aspect-ratio for assets of known size, lazy loading after the
   first three images, defer on head scripts (pages without inline scripts only) and fonts preconnect + display=swap;
   the designer's prompt and every site style carry the same rules.
+  Third pass (Nov 22, 2026, the staff pages, measured as the dev-only staff account `lighthouse-staff@attnd.app` with
+  `manage.py seed_staff_volume` volume, SETUP.md): long staff lists are paged 50 at a time with Newer / Older links
+  that keep the filters (`console/paging.py` + `console/_pager.html`: Diagnostics sessions and reports, Emails,
+  Prospects, Claims; they used to draw the first 200–300 rows and drop the rest; CSV exports stay complete); the
+  Customers list loads AI-limit overrides once (`ledger.monthly_limit(user, override, settings_row)`, 51 → 10 queries);
+  the Architecture page reads the source tree once per process (`architecture.called_hosts`, os.walk pruning `.venv`);
+  Site styles previews get their `srcdoc` only near the screen (`iframe[data-srcdoc]`, console.js
+  `enhanceLazyFrames`; Chrome's `loading=lazy` doesn't defer srcdoc frames); the Components gallery rows use
+  `content-visibility: auto` (phone_check.cjs turns it off to measure) and row components sit in a `<ul>`; table
+  headers always have text (`visually-hidden` for action columns) and headings step down one level.
+  `platform_admin/tests_staff_pages.py` keeps paging, query / size budgets, the Customers query count, headings and
+  header text for every staff page.
 - **Database review** (batch 7, `docs/db_review.md`): covered FK indexes off (`db_index=False` where a composite starts
   with the column), partial indexes for live preview phones, due notifications and nearby events, the task feed's
   `(created_by, -created_at)` / `finished_at`, JSON shape CHECKs (`events.models.json_is`), `push.reach(event)` (one

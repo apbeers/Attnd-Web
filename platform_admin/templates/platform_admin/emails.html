@@ -27,5 +27,6 @@
     <td class="small muted">{% for e in r.row.events %}{{ e.event }}{% if e.reason %} ({{ e.reason }}){% endif %}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</td>
   </tr>{% empty %}<tr><td colspan="6" class="muted">No emails yet.</td></tr>{% endfor %}
   </tbody></table></div>
+  {% include 'console/_pager.html' with label='Email pages' newer='Newer' older='Older' %}
 </div>
 {% endblock %}

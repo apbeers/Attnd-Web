@@ -12,8 +12,8 @@
     <p>{{ s.best_for }}</p>
     <div class="site-style__body">
       <div class="site-style__previews">
-        <figure class="site-style__frame site-style__frame--phone"><iframe title="{{ s.name }} on a phone" sandbox srcdoc="{{ s.preview }}" width="390" height="700" loading="lazy"></iframe><figcaption class="small muted">Phone · 390 px</figcaption></figure>
-        <figure class="site-style__frame site-style__frame--wide"><div class="site-style__scale"><iframe title="{{ s.name }} on a laptop" sandbox srcdoc="{{ s.preview }}" width="1200" height="800" loading="lazy"></iframe></div><figcaption class="small muted">Laptop · 1200 px (scaled)</figcaption></figure>
+        <figure class="site-style__frame site-style__frame--phone"><iframe title="{{ s.name }} on a phone" sandbox {% if forloop.first %}srcdoc{% else %}data-srcdoc{% endif %}="{{ s.preview }}" width="390" height="700" loading="lazy"></iframe><figcaption class="small muted">Phone · 390 px</figcaption></figure>
+        <figure class="site-style__frame site-style__frame--wide"><div class="site-style__scale"><iframe title="{{ s.name }} on a laptop" sandbox data-srcdoc="{{ s.preview }}" width="1200" height="800" loading="lazy"></iframe></div><figcaption class="small muted">Laptop · 1200 px (scaled)</figcaption></figure>
       </div>
       <div class="site-style__doc small">
         <h3 class="title-4">Pages</h3><p class="mono">{{ s.pages|join:" · " }}</p>

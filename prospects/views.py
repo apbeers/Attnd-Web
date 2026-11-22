@@ -19,6 +19,7 @@ from agent import summaries as S
 from agent.registry import agent_action, param as P
 
 from attnd.permissions import requires
+from console import paging
 
 staff_required = requires('prospects.view_prospect')  # the Staff role (attnd.permissions)
 from prospects import discover, testing
@@ -26,7 +27,6 @@ from prospects.models import Prospect, ProspectActivity, ProspectContact, Prospe
 
 SORTS = {'fit': ('-fit_score', 'start_date', 'id'), 'date': ('start_date', '-fit_score', 'id'),
          'newest': ('-created_at', 'id')}
-PAGE = 300
 
 
 class SettingsForm(forms.ModelForm):
@@ -99,15 +99,16 @@ def prospect_list(request):
     if request.method == 'POST':
         return _bulk(request)
     qs, filters = _filtered(request)
-    prospects = list(qs.select_related('event', 'ingest_job')
-                     .prefetch_related(Prefetch('contacts', queryset=ProspectContact.objects.order_by('id')))
-                     .annotate(contact_count=Count('contacts', distinct=True))[:PAGE])
+    pager = paging.page(request, qs.select_related('event', 'ingest_job')
+                        .prefetch_related(Prefetch('contacts', queryset=ProspectContact.objects.order_by('id')))
+                        .annotate(contact_count=Count('contacts', distinct=True)))
+    prospects = list(pager)
     counts = dict(Prospect.objects.values_list('status').annotate(n=Count('id')))
     return render(request, 'prospects/list.html', {
         'tab': 'prospects', 'prospects': prospects, 'filters': filters, 'statuses': Prospect.STATUS_CHOICES,
         'status_counts': [(v, label, counts[v]) for v, label in Prospect.STATUS_CHOICES if counts.get(v)],
         'total': sum(counts.values()), 'running': discover.running_run(),
-        'export_query': request.GET.urlencode(), 'page_size': PAGE})
+        'export_query': request.GET.urlencode(), 'pager': pager})
 
 
 def _selected(request):
@@ -312,7 +313,7 @@ def claims_view(request):
             claims.decline(claim, request.user)
             messages.info(request, 'Claim declined.')
         return redirect('prospects:claims')
-    rows = ClaimRequest.objects.select_related('event', 'prospect', 'user', 'decided_by').order_by(
-        '-status', '-created_at')[:200]  # pending sorts first ('pending' > 'declined' > 'approved')
-    return render(request, 'prospects/claims.html', {'tab': 'claims', 'claims': rows,
+    pager = paging.page(request, ClaimRequest.objects.select_related('event', 'prospect', 'user', 'decided_by')
+                        .order_by('-status', '-created_at'))  # pending sorts first ('pending' > 'declined' > 'approved')
+    return render(request, 'prospects/claims.html', {'tab': 'claims', 'claims': pager, 'pager': pager,
                                                       'waiting': ClaimRequest.objects.filter(status='pending').count()})

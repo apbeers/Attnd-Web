@@ -4,7 +4,7 @@
     {% if d.actions %}{% include 'components/_actions.html' with actions=d.actions %}{% endif %}</div>
   {% if not d.stripe %}<p class="small muted">{% icon "info" %} Payments aren't set up yet: Remove the limit or Upgrade sends Attnd a request, and we email you an invoice.</p>{% endif %}
   {% if d.invoices %}<div class="table-scroll"><table class="data-table data-table--compact">
-    <thead><tr><th>Invoice</th><th>Date</th><th>For</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Invoice</th><th>Date</th><th>For</th><th>Amount</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody>{% for i in d.invoices %}<tr>
       <td class="mono">{{ i.number }}</td><td class="nowrap small">{{ i.date }}</td><td class="small">{{ i.description }}</td>
       <td>${{ i.amount }}</td><td>{% if i.status == 'paid' %}<span class="badge badge--success">Paid</span>{% elif i.status == 'void' %}<span class="badge badge--neutral">Void</span>{% else %}<span class="badge badge--warning">Due</span>{% endif %}</td>

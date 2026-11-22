@@ -20,6 +20,7 @@ from django.views.decorators.http import require_POST
 from attnd.permissions import requires
 from agent.registry import agent_action, param as P
 
+from console import paging
 from diagnostics import records, retrace, storage, summary, symbolicate, timing
 from diagnostics.models import (APP_CATEGORIES, LEVELS, REASONS, SERVER_CATEGORY, DiagnosticReport,
                                 DiagnosticSession, SymbolFile)
@@ -91,7 +92,8 @@ def overview(request):
         sessions = sessions.filter(last_entry_at__gte=since)
     if until:
         sessions = sessions.filter(started_at__lte=until)
-    sessions = list(sessions[:200])
+    pager = paging.page(request, sessions)
+    sessions = list(pager)
     names = _event_names({s.event_id for s in sessions})
     for s in sessions:
         s.event_name = names.get(s.event_id, '')
@@ -103,7 +105,7 @@ def overview(request):
     report_groups = [{**g, 'report': latest.get(g['last_id'])} for g in groups]
     used, cap = storage.used_bytes(), storage.cap_bytes()
     return render(request, 'diagnostics/overview.html', {
-        'section': 'diagnostics', 'sessions': sessions, 'filters': request.GET, 'reasons': REASONS,
+        'section': 'diagnostics', 'sessions': sessions, 'pager': pager, 'filters': request.GET, 'reasons': REASONS,
         'used_mb': used / 1024 / 1024, 'cap_mb': cap / 1024 / 1024, 'used_pct': min(100, round(100 * used / cap)) if cap else 0,
         'report_groups': report_groups, 'perf': _perf(),
         'symbol_count': SymbolFile.objects.count(),
@@ -166,8 +168,9 @@ def reports(request):
         rows = rows.filter(Q(app_version__icontains=request.GET['app']) | Q(build=request.GET['app']))
     if request.GET.get('signature'):
         rows = rows.filter(signature=request.GET['signature'])
+    pager = paging.page(request, rows.defer('payload', 'stack', 'retraced', 'symbolication'))
     return render(request, 'diagnostics/reports.html', {
-        'section': 'diagnostics', 'reports': rows.defer('payload', 'stack', 'retraced')[:200],
+        'section': 'diagnostics', 'reports': pager, 'pager': pager,
         'filters': request.GET, 'kinds': DiagnosticReport.KINDS})
 
 

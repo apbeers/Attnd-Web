@@ -19,7 +19,7 @@
         <button class="button button--secondary button--small">Restore</button></form></div>{% endfor %}</div>{% endif %}
   <div class="panel panel--flush">
     <table class="data-table">
-      <thead><tr><th>When</th><th>Site</th><th>Reason</th><th>Details</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>When</th><th>Site</th><th>Reason</th><th>Details</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
       <tbody>
       {% for r in reports %}
         <tr><td class="nowrap small">{{ r.created_at|date:"M j, g:i A" }}</td>

@@ -1,0 +1,6 @@
+{# Newer / Older links under a paged list (console/paging.py); `pager` = the Page. #}
+{% if pager.paginator.num_pages > 1 %}<nav class="pager cluster" aria-label="{{ label|default:'Pages' }}">
+  <span class="small muted">{{ pager.start_index }}–{{ pager.end_index }} of {{ pager.paginator.count }}</span>
+  {% if pager.has_previous %}<a class="button button--ghost button--small" rel="prev" href="?{% if pager.query %}{{ pager.query }}&amp;{% endif %}page={{ pager.previous_page_number }}">← {{ newer|default:'Previous' }}</a>{% endif %}
+  {% if pager.has_next %}<a class="button button--ghost button--small" rel="next" href="?{% if pager.query %}{{ pager.query }}&amp;{% endif %}page={{ pager.next_page_number }}">{{ older|default:'Next' }} →</a>{% endif %}
+</nav>{% endif %}

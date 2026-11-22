@@ -11,6 +11,8 @@ const WIDTHS = [360, 768, 1280];
 
 function inPage() {
   const W = window.innerWidth;
+  // The gallery skips off-screen rows (content-visibility: auto); measure them all.
+  document.querySelectorAll('.gallery-row').forEach((row) => { row.style.contentVisibility = 'visible'; });
   const out = { overflow: [], small: [], inputs: [] };
   const visible = (el) => {
     const r = el.getBoundingClientRect();

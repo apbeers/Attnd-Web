@@ -55,7 +55,7 @@
       <td>{% if p.event %}<a href="{% url 'console:event' p.event.pk %}" class="mono">{{ p.event.event_code }}</a>{% elif p.ingest_job and not p.ingest_job.is_finished %}<span class="muted small">Importing…</span>{% elif p.ingest_job.status == 'failed' %}<span class="badge badge--danger">Import failed</span>{% else %}–{% endif %}</td>
     </tr>{% empty %}<tr><td colspan="8" class="muted">No prospects yet. Press Run now (or turn on the schedule in Settings).</td></tr>{% endfor %}</tbody>
   </table></div></div>
-  {% if prospects|length == page_size %}<p class="muted small">Showing the first {{ page_size }}; narrow the filters to see more.</p>{% endif %}
+  {% include 'console/_pager.html' with label='Prospect pages' %}
 </form>
 </div>
 {% endblock %}

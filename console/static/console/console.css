@@ -397,6 +397,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .data-table .num { text-align: right; }
 .data-table--diff td { padding: .4rem .5rem; }
 .scroll-x { overflow-x: auto; }
+.pager { justify-content: flex-end; padding: var(--space-2) var(--space-3); }
 
 /* Thumbnails */
 .thumb { width: 48px; height: 48px; border-radius: var(--radius); object-fit: cover; flex-shrink: 0; }
@@ -1074,6 +1075,8 @@ body:has(.agent__launcher):not(:has(.agent--full)) { --fab-x: 10.5rem; --fab-bar
 .gallery-frame__body { display: grid; gap: var(--space-3); min-width: 0; }
 .gallery-frame__body > * { min-width: 0; }
 .gallery-row, .gallery-row__frames { min-width: 0; max-width: 100%; }
+/* Every component three times is ~30k elements: rows off screen skip style, layout and paint until scrolled to. */
+.gallery-row { content-visibility: auto; contain-intrinsic-size: auto 640px; }
 
 /* Platform → Site styles: each style's phone preview at its real width and a laptop preview scaled to half. */
 .site-style__body { display: grid; gap: var(--space-5); }

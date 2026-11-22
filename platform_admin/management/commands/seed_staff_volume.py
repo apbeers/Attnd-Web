@@ -30,7 +30,7 @@ class Command(BaseCommand):
         parser.add_argument('--entries', type=int, default=20000, help='Entries in the one big log session')
 
     def handle(self, *args, clean=False, entries=20000, **options):
-        if getattr(settings, 'SITE_URL', '').rstrip('/') == 'https://attnd.app' and not settings.DEBUG:
+        if getattr(settings, 'SITE_URL', '').rstrip('/') == 'https://attnd.app' and not (settings.DEBUG or settings.TESTING):
             raise CommandError('Not on production.')
         removed = self.clean()
         self.stdout.write(f'Removed {removed}')
@@ -83,10 +83,11 @@ class Command(BaseCommand):
         sessions = []
         sizes = [big] + [rng.randint(5, 60) for _ in range(149)]
         for n, size in enumerate(sizes):
-            start = now - timedelta(hours=rng.randint(1, 24 * 12))
+            # within the last 3 days: older debug sessions are purged (dev builds after 7 days, purge.py)
+            start = now - timedelta(minutes=rng.randint(30, 60 * 24 * 3) if n else 120)
             sessions.append(DiagnosticSession(
                 code=self._code(rng, used), platform=rng.choice(['ios', 'android']),
-                reason=rng.choice(['dev', 'debug_mode']), app_version=f'2.0.{rng.randint(150, 190)}',
+                reason='debug_mode' if n == 0 else rng.choice(['dev', 'debug_mode']), app_version=f'2.0.{rng.randint(150, 190)}',
                 build=str(rng.randint(150, 190)), os=rng.choice(['iOS 27.1', 'Android 17']), model=MARK,
                 last_entry_at=start + timedelta(minutes=10), first_ts=start, last_ts=start + timedelta(minutes=10),
                 entry_count=size, error_count=0, bytes=size * 300))

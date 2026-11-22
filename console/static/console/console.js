@@ -1086,9 +1086,23 @@
     });
   }
 
+  // Heavy srcdoc previews (Platform → Site styles) render only near the screen: Chrome's loading="lazy" doesn't
+  // defer srcdoc frames, and ten full site previews cost seconds of main thread on a phone.
+  function enhanceLazyFrames(scope) {
+    const frames = scope.querySelectorAll('iframe[data-srcdoc]:not([srcdoc])');
+    if (!frames.length) return;
+    const show = (f) => { f.srcdoc = f.dataset.srcdoc; delete f.dataset.srcdoc; };
+    if (!('IntersectionObserver' in window)) { frames.forEach(show); return; }
+    const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+      if (e.isIntersecting) { io.unobserve(e.target); show(e.target); }
+    }), { rootMargin: '300px 0px' });
+    frames.forEach((f) => io.observe(f));
+  }
+
   window.attndEnhance = function (scope) {
     window.attndTabLimits?.(scope);
     scope = scope || document;
+    enhanceLazyFrames(scope);
     enhanceHexFields(scope);
     enhanceLockPreview(scope);
     enhanceTimeZones(scope);

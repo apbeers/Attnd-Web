@@ -766,6 +766,14 @@ default off), an **admin member of the DEMO event** (DEMO's owner unchanged), us
 console's pages. Its password lives only in the tester's scratchpad, never in the repo. Nothing for the owner to do;
 delete the account on dev when it's no longer wanted (Django admin → Users).
 
+**Staff test account** (dev only, Nov 22, 2026): `lighthouse-staff@attnd.app`, `is_staff` (not a superuser), an
+authenticator-app second factor and a **contributor on DEMO** (for Platform → Components), used to measure the staff
+pages. Its password and TOTP secret live only in the tester's scratchpad. Recommended: delete it on dev when no longer
+needed (Django admin → Users). The measured volume came from `python manage.py seed_staff_volume` on dev (marked rows:
+150 log sessions with ~25k entries, 300 crash reports, 120 prospects, 600 email log rows, 30 claims and their
+`@lighthouse-seed.example` accounts, 500 AI spend rows); `python manage.py seed_staff_volume --clean` removes exactly
+those. It refuses to run on production.
+
 ## 14. Diagnostics: iOS symbolication token (5 min)
 
 The staff **Diagnostics** panel (`/console/diagnostics/`, API-013) symbolicates iOS crash reports by dispatching the
