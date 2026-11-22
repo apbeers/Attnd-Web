@@ -213,13 +213,14 @@ class PagePerfTests(PerfBase):
         for i in range(3):
             Event.objects.create(name=f'Other {i}', event_code=f'OTHER{i}', start_time=timezone.now(), user=self.user)
         # +2 on pages with the top bar: the person's group / own permissions, once per request (attnd.permissions).
+        # +1 on event pages: the header's plan / override badges (one query, batch 7).
         bounds = {'/console/': 10,
-                  f'/console/events/{self.event.id}/': 25,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2), +4 the status line's next step (readiness checks, batch 7)
-                  f'/console/events/{self.event.id}/locations/': 11,
-                  f'/console/events/{self.event.id}/schedule/': 12,
-                  f'/console/events/{self.event.id}/usage/': 21,
+                  f'/console/events/{self.event.id}/': 26,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2), +4 the status line's next step (readiness checks, batch 7)
+                  f'/console/events/{self.event.id}/locations/': 12,
+                  f'/console/events/{self.event.id}/schedule/': 13,
+                  f'/console/events/{self.event.id}/usage/': 22,
                   # db_review: one aggregate for the phones a notification reaches, shared with the form component.
-                  f'/console/events/{self.event.id}/notifications/': 12,
+                  f'/console/events/{self.event.id}/notifications/': 13,
                   '/console/tasks/': 5}
         for url, most in bounds.items():
             with self.subTest(url=url):

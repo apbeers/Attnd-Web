@@ -32,24 +32,29 @@ PLAN_TITLES = {FREE: 'Free: an unpaid demo, limited phones', STANDARD: 'Standard
 
 def override_details(event):
     """What the Platform admin changed for this event (EventOverride) and for its owner's AI credit, as short lines;
-    [] when nothing applies (a row with only notes or defaults doesn't count)."""
-    from platform_admin.models import EventOverride
+    [] when nothing applies (a row with only notes or defaults doesn't count). One query."""
+    from events.models import Event
+    if not event.pk:
+        return []
+    row = getattr(event, '_override_row', None)
+    if row is None:
+        row = Event.objects.filter(pk=event.pk).values(
+            'override__free_device_limit', 'override__no_free_limit', 'override__allow_publishing',
+            'override__studio_daily_cap_usd', 'user__ai_limit__unlimited', 'user__ai_limit__monthly_usd').first() or {}
+        event._override_row = row
     out = []
-    o = EventOverride.of(event)
-    if o is not None:
-        if o.no_free_limit:
-            out.append('No free phone limit')
-        elif o.free_device_limit is not None:
-            out.append(f'Free phones: {o.free_device_limit}')
-        if o.allow_publishing:
-            out.append('Website publishing allowed without Studio')
-        if o.studio_daily_cap_usd is not None:
-            out.append(f'Studio AI per day: ${o.studio_daily_cap_usd:,.2f}')
-    if event.user_id:
-        from credit.models import AiLimitOverride
-        ai = AiLimitOverride.objects.filter(user_id=event.user_id).first()
-        if ai is not None and (ai.unlimited or ai.monthly_usd is not None):
-            out.append("Owner's AI credit: " + ('no limit' if ai.unlimited else f'${ai.monthly_usd:,.0f} a month'))
+    if row.get('override__no_free_limit'):
+        out.append('No free phone limit')
+    elif row.get('override__free_device_limit') is not None:
+        out.append(f'Free phones: {row["override__free_device_limit"]}')
+    if row.get('override__allow_publishing'):
+        out.append('Website publishing allowed without Studio')
+    if row.get('override__studio_daily_cap_usd') is not None:
+        out.append(f'Studio AI per day: ${row["override__studio_daily_cap_usd"]:,.2f}')
+    if row.get('user__ai_limit__unlimited'):
+        out.append("Owner's AI credit: no limit")
+    elif row.get('user__ai_limit__monthly_usd') is not None:
+        out.append(f"Owner's AI credit: ${row['user__ai_limit__monthly_usd']:,.0f} a month")
     return out
 
 
