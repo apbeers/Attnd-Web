@@ -91,3 +91,28 @@ task feed at 5; `DbReviewTests`).
   `EventJoin`, so nothing visible changes).
 - `events_usagecount` will be the largest table in production; it already has `(event, bucket)` and `(bucket)`, and the
   Usage page reads one event at a time. Partition by month only if it passes ~10 M rows.
+
+## 8. Async server (ASGI)
+
+Owner: "do it", with numbers. Done without a new dependency: gunicorn 27 ships an ASGI worker (`--worker-class
+asgi`). Django's own ASGI handler was tried first and dropped: with our synchronous middleware it starts a new thread
+per request (`ThreadSensitiveContext`), which cut `/health/` from ~820 to ~290 requests a second. So `attnd/asgi.py`
+keeps Django's WSGI application on a fixed thread pool (`attnd/wsgi_bridge.py`) and only the long-polls are handled
+on the event loop (`attnd/longpoll_asgi.py`).
+
+Measured locally (one worker, Postgres 18 in Docker, 16 concurrent clients for throughput; N preview phones waiting
+on `changes/` while a probe hits `/health/` every 100 ms for 15 s):
+
+| | gthread, 4 threads (before) | ASGI + thread pool (after) |
+|---|---|---|
+| `/health/` throughput | 820 req/s (p50 18 ms) | 601 req/s (p50 22 ms) |
+| DEMO `bundle/` throughput (cached bundle) | 139 req/s (p50 107 ms) | 136 req/s (p50 112 ms) |
+| 10 waiting preview phones | 2 held, 8 told "poll again in 15 s" | 10 held |
+| 100 waiting preview phones | 2 held, 98 told to poll again | 100 held, `/health/` p50 3.1 ms, max 7 ms |
+| 300 waiting preview phones | — | 300 held, `/health/` p50 2.7 ms, max 9 ms |
+| Wake-up after a change (50 waiting) | ≤ 1 s for the 2 held | all 50 answered within 0.9 s of the change |
+| Database while waiting | 1 query per waiter per second | 2 queries per process every 0.5 s, for all waiters |
+
+The ~0.5 ms per request the bridge adds only shows on a trivial endpoint; real pages are dominated by their own work.
+Not measured on dev: the load script needs a preview phone and the dev API key, which this session doesn't use (owner
+rule: secrets stay out of the session). `scripts/longpoll_load.py` (stdlib only, the key from `ATTND_LOAD_KEY`) runs the same test against any server.

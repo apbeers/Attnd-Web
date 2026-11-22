@@ -1080,3 +1080,14 @@ heroku config:set APPLE_MUSIC_PRIVATE_KEY="$(cat /Users/andrewbeers/Documents/At
 Without the two variables the lookups are off and nothing else changes. Spotify is skipped (its Web API needs a
 Premium account owner; ROADMAP).
 
+
+## 21. Web server: ASGI (batch 7, nothing to set up)
+
+Since Nov 22, 2026 the `web` process runs gunicorn's own ASGI worker (`Procfile`: `gunicorn attnd.asgi --worker-class
+asgi`), no new package. Django still runs as before on a pool of `WEB_THREADS` threads (default 4, optional config
+var); long-polls (preview phones, Ask Attnd) wait on the event loop instead of holding a thread. To go back, change
+the Procfile's web line to `gunicorn attnd.wsgi --worker-class gthread --workers 1 --threads 4 --timeout 300` and
+push (nothing else depends on it). Check after a deploy:
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://dev.attnd.app/health/
+```

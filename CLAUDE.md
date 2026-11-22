@@ -83,7 +83,12 @@ Upgrade Python packages with `uv run python scripts/upgrade_deps.py` (also runs 
 - **PostgreSQL 18 everywhere**: Heroku Postgres (essential-0), CI (`postgres:18` service) and local dev/tests (`scripts/dev_db.sh`, Docker). No SQLite: without `DATABASE_URL` the settings point at the local `postgres://attnd:attnd@localhost:5432/attnd`
 - **Cloudinary** for media storage in production (falls back to local filesystem)
 - **Whitenoise** for static files
-- **Gunicorn** (gthread, 1 worker × 4 threads) as WSGI server
+- **Gunicorn** with its own **ASGI worker** (no extra dependency; batch 7): `attnd/asgi.py` = Django's WSGI app on a
+  fixed pool of `WEB_THREADS` (4) threads (`attnd/wsgi_bridge.py`: the same middleware and views as under gthread)
+  behind `attnd/longpoll_asgi.py`, which lets the preview phones' `changes/` and Ask Attnd's `?wait=` long-polls wait
+  on the event loop (no thread, no DB connection; one poller per process checks every waiter in two queries every
+  0.5 s; ≤ 500 per process) and then hands them to Django marked as waited. `attnd/wsgi.py` still works (the views keep
+  their thread-based wait, ≤ 2). Numbers: `docs/db_review.md` → Async server. Tests: `attnd/tests_asgi.py`.
 - **psycopg 3** with Django's connection pool (`psycopg[binary,pool]`, `DB_POOL` on by default, `DB_POOL_MAX` 8 per
   process; essential-0 allows 20 connections in all); **database cache** (`django_cache` table `attnd_cache`, made by
   `createcachetable` in the release phase) for rate limits and shared caches, `caches['local']` (LocMemCache) for
@@ -170,7 +175,7 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   available / used / expired). The run-level "Undo all" (History snapshot) stays. Not covered: `QuerySet.update()`
   writes (drag-to-reorder) and deleting a whole event. Expired entries are purged by `run_scheduled_tasks`. Tests:
   `console/tests_undo.py`.
-- **Live editing:** every attendee-visible change bumps `content_version` and schedules a silent push (`events.push.content_changed`: the first change at once, later ones within 15 s grouped into one follow-up; API-026); it goes to every joined device with a push token, `subscribed` or not (API-007), attendees with `jitter_ms` scaled to the event (< 100 phones 1 s, < 1,000 5 s, else 10 s), preview phones with 0. **Preview phones** (API-026, `events/preview.py`): the QR card's **Preview on my phone** QR / Open as preview = the join link + a signed token (person + event, 7 days); `join/` with `preview_token` marks `Device.preview_until` / `preview_by` (not an attendee: `Device.objects.attendees()` for every count, no free spot; ≤ 3 live per event); `GET events/<id>/changes/?since=` long-polls ≤ 25 s for them only (DB connection released while sleeping; ≤ 2 waiting per process, shared with Ask Attnd's long-poll in `events/longpoll.py`; over a cap `retry_after: 15`); Remove on the card (`remove_preview_phone`). `bundle/` records `Device.last_version`, so the card's live line says "Updated on 31 of 37 phones" (attendee phones seen in the last day, `console:event_phones`, polled every 10 s). Attendee live connections need an async server (ROADMAP). Open apps refresh on that push, on resume and pull-to-refresh, and poll every 60 s only without a push token (5 min safety poll with one). App layout autosaves. The "Live on your phone" panel (QR) replaces the old phone mock-up; `_phone_preview.html` (`console.views_events._preview_html`) is now only Studio's app-look preview.
+- **Live editing:** every attendee-visible change bumps `content_version` and schedules a silent push (`events.push.content_changed`: the first change at once, later ones within 15 s grouped into one follow-up; API-026); it goes to every joined device with a push token, `subscribed` or not (API-007), attendees with `jitter_ms` scaled to the event (< 100 phones 1 s, < 1,000 5 s, else 10 s), preview phones with 0. **Preview phones** (API-026, `events/preview.py`): the QR card's **Preview on my phone** QR / Open as preview = the join link + a signed token (person + event, 7 days); `join/` with `preview_token` marks `Device.preview_until` / `preview_by` (not an attendee: `Device.objects.attendees()` for every count, no free spot; ≤ 3 live per event); `GET events/<id>/changes/?since=` long-polls ≤ 25 s for them only (on the event loop under ASGI, `attnd/longpoll_asgi.py`, ≤ 500 per process; under WSGI in a thread, DB connection released while sleeping, ≤ 2 per process shared with Ask Attnd's long-poll in `events/longpoll.py`; over a cap `retry_after: 15`); Remove on the card (`remove_preview_phone`). `bundle/` records `Device.last_version`, so the card's live line says "Updated on 31 of 37 phones" (attendee phones seen in the last day, `console:event_phones`, polled every 10 s). Attendee live connections: the async server is in place (ASGI), the attendee side is still ROADMAP. Open apps refresh on that push, on resume and pull-to-refresh, and poll every 60 s only without a push token (5 min safety poll with one). App layout autosaves. The "Live on your phone" panel (QR) replaces the old phone mock-up; `_phone_preview.html` (`console.views_events._preview_html`) is now only Studio's app-look preview.
 - **Draft and Publish** (batch 6 §4, owner Nov 21, 2026; `events/drafts.py`): the database rows are the **draft**
   (every console save, Ask Attnd change, chat card, AI review); the organizer's preview phones (API-026) see it live
   (draft-only pushes reach only them, `push.notify_previews`; preview phones may even join a draft event). Attendees
@@ -1303,7 +1308,7 @@ CI/CD for all three repos (develop → dev, main → production) is documented i
 Heroku `Procfile`:
 ```
 release: python manage.py migrate --noinput && python manage.py createcachetable && python manage.py collectstatic --noinput && python manage.py seed_test_data && python manage.py load_showcase_events --if-enabled
-web: gunicorn attnd.wsgi --worker-class gthread --workers 1 --threads 4 --timeout 300
+web: gunicorn attnd.asgi --worker-class asgi --workers 1 --timeout 300
 worker: python manage.py process_ingest_jobs   # optional, scaled to 0 by default
 ```
 `seed_test_data` keeps the App Review sample events FWFM2026 / ATIS2026 / DACN2026 current (start times rolled forward

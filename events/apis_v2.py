@@ -246,7 +246,12 @@ class ChangesV2(ApiKeyRequired, View):
         if not is_preview:
             return JsonResponse({'content_version': version, 'changed': version > since, 'preview': False,
                                  'retry_after': 300})
-        version, changed, waited = preview.wait_for_change(event_id, since)
+        from attnd import longpoll_asgi
+        if longpoll_asgi.waited(request):  # the ASGI layer already waited, without a thread
+            version = Event.objects.filter(id=event_id).values_list('content_version', flat=True).first()
+            changed, waited = version is not None and version > since, True
+        else:
+            version, changed, waited = preview.wait_for_change(event_id, since)
         if version is None:
             return JsonResponse({'error': 'Not found'}, status=404)
         return JsonResponse({'content_version': version, 'changed': changed, 'preview': True,

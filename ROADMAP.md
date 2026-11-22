@@ -132,9 +132,11 @@ entry: what `push_token` carries, how `events/push.py` sends to it (FCM HTTP v1 
 the server accepts both. Do it before the old API is removed.
 
 ### Live connections for attendees (parked, Nov 21, 2026)
-API-026 gives only the organizers' preview phones a long-poll (`changes/`, ≤ 2 waiting per process). Holding a
-connection open for every attendee (SSE / WebSocket / long-poll) needs an async server (ASGI, e.g. uvicorn workers or a
-small separate push relay) and more dynos; until then attendees stay on push + the slow safety poll. Also parked:
+API-026 gives only the organizers' preview phones a long-poll (`changes/`). Since batch 7 the web dyno runs ASGI and
+long-polls wait on the event loop (`attnd/longpoll_asgi.py`, ≤ 500 per process, measured 300 held with no effect on
+other requests), so the server side of attendee long-polls exists; what's left is an API change (tracker entry, apps
+opt in) and a decision on how many attendees one dyno should hold. Until then attendees stay on push + the slow
+safety poll. Also parked:
 partial bundles (send only what changed) and content inside the push.
 
 ## Growth: prospects → free app → Studio (dashboard built Nov 19, 2026)

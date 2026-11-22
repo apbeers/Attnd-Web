@@ -334,7 +334,7 @@ def runs(request):
 def run(request, run_id):
     r = _run(request, run_id)
     after = int(request.GET.get('after') or 0) if str(request.GET.get('after') or '0').isdigit() else 0
-    waited = _wait_for_news(r, after, request.GET.get('wait'))
+    waited = _wait_for_news(r, after, request.GET.get('wait'), request)
     if waited:
         r.refresh_from_db()
     rows = list(r.steps.filter(seq__gt=after).order_by('seq')[:200])
@@ -351,8 +351,12 @@ def run(request, run_id):
 from events import longpoll as _longpoll
 
 
-def _wait_for_news(r, after, wait):
+def _wait_for_news(r, after, wait, request=None):
     from django.db import connection
+
+    from attnd import longpoll_asgi
+    if request is not None and str(wait or '').isdigit() and longpoll_asgi.waited(request):
+        return True  # the ASGI layer already waited, without a thread (attnd/longpoll_asgi.py)
     if not str(wait or '').isdigit() or not r.active or connection.in_atomic_block:
         return False
     if r.steps.filter(seq__gt=after).exists():
