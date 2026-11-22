@@ -56,6 +56,8 @@ resume note is under "Running when paused" below.
   button and chat become **"Ask Attnd"**. The planner diffs its result against My schedule and proposes adds and
   removes with reasons; it only removes its own entries unless asked to. No API change. **No iOS code written yet.**
   Next:
+  0. First get a clean baseline: `ATTND_ASSISTANT_EVAL=router scripts/linux_harness.sh` with the default test list.
+     Adding `MyScheduleTests` to `HARNESS_TESTS` failed to compile (`error: fatalError`); fix that before relying on it.
   1. In `MySchedule.swift`, add `source`, `reason` and the preferences record.
   2. Rewrite `PlanStore.swift` so `Plan` is only an in-memory value (the planner rules and fixture numbers stay)
      and My schedule is the only thing saved. Remove `apply(plan:)`, `reconcile` and `onApply`.
