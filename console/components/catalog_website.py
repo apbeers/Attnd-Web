@@ -43,7 +43,8 @@ def _start_form(action, label, style, busy):
            '"No website yet" with Build from your current website / Start from scratch. Changes are asked for in the '
            'chat (design_website). Publishing needs the Studio plan: without it, Upgrade to publish (a request to Attnd).',
            actions=(('publish_website', 'Publish the draft'), ('unpublish_website', 'Take the site offline'),
-                    ('request_upgrade', 'Upgrade to publish')),
+                    ('request_upgrade', 'Upgrade to publish'), ('fix_website_issues', 'Fix automatically'),
+                    ('update_website_from_check', 'Update the site')),
            audience='studio', permission='studio.change_site', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
 def website_overview(user, event_id=None, event=None):
     from studio import hosting
@@ -80,6 +81,19 @@ def website_overview(user, event_id=None, event=None):
         starts.append(_start_form(reverse('studio:start', args=[event.pk]), 'Start from scratch',
                                   'outline' if source else 'primary', 'Starting your website…'))
     live_shown = bool(live and not site.suspended)
+    check = website_check(event, site, draft) if built else None
+    from studio import safety
+    rights = built and safety.needs_rights(site)
+    if rights:
+        for a in actions:
+            if a['name'] == 'publish_website':
+                a['label'], a['fields'] = 'Confirm rights and publish', {'confirm_rights': '1'}
+    if check:
+        if check['fixable']:
+            actions.append({'name': 'fix_website_issues', 'style': 'outline',
+                            'label': f'Fix {check["fixable"]} automatically'})
+        if check['needs_update']:
+            actions.append({'name': 'update_website_from_check', 'style': 'outline'})
     return {**base, 'actions': actions if built else [a for a in actions if a['name'] not in ('publish_website', 'request_upgrade')],
             'plan': plans.LABELS[plans.plan_of(event)], 'can_go_live': plans.can_go_live(event),
             'built': built, 'source': website_source(event) if not built else '',
@@ -89,7 +103,58 @@ def website_overview(user, event_id=None, event=None):
             # The address only once published (never the raw sites host of a draft).
             'public_url': site.public_url() if live_shown else '',
             'suspended': site.suspended, 'pages': draft.pages if built else [],
-            'working': run_task(active) if active else None, 'starts': starts}
+            'working': run_task(active) if active else None, 'starts': starts,
+            'check': check, 'rights_text': safety.RIGHTS_TEXT if rights else '',
+            'held': site.review_status == site.REVIEW_HELD, 'rejected': site.review_status == site.REVIEW_REJECTED,
+            'event_draft': event.status == event.STATUS_DRAFT, 'demo': not event.paid,
+            'translate': _translate_form(event) if built else None}
+
+
+class TranslateForm(forms.Form):
+    language = forms.ChoiceField(label='Add a translated version', choices=())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from studio.quality import LANGS
+        self.fields['language'].choices = list(LANGS.items())
+
+
+def _translate_form(event):
+    data = form_json(TranslateForm(), ['language'], action=reverse('studio:translate', args=[event.pk]),
+                     submit=[{'label': 'Translate', 'style': 'outline'}])
+    data['background'] = 'Translating the website…'
+    data['no_ai'] = True
+    return data
+
+
+def website_check(event, site, version):
+    """The pre-publish check (studio.quality) for the overview: counts, the issues (≤ 12), what can be fixed."""
+    from studio import quality
+    from studio.quality import AUTO_FIXES
+    report = quality.check(site, version)
+    issues = report['issues']
+    langs = quality.translations(version)
+    return {'counts': report['counts'], 'blocked': report['blocked'], 'fixable': report['fixable'],
+            'issues': issues[:12], 'more': max(0, len(issues) - 12), 'ok': not issues,
+            'needs_update': any(i['fix'] and i['fix'] not in AUTO_FIXES for i in issues),
+            'translations': [{'code': c, 'name': v['name'], 'pages': len(v['pages']), 'stale': len(v['stale'])}
+                             for c, v in langs.items()]}
+
+
+@component('website_analytics', 'Website visits', "Cookie-free numbers for the event's Studio website over the last "
+           '30 days: page views per day, the top pages, sites that sent visitors, Open in Attnd and app-store taps. '
+           'No visitor is identified.', audience='studio', permission='studio.change_site',
+           page=lambda ids: reverse('studio:editor', args=[ids['event_id']]) + '#website-analytics')
+def website_analytics(user, event_id=None, event=None):
+    from studio import analytics
+    event = _event(user, event_id, event)
+    site = _site(event)
+    data = analytics.summary(site)
+    with timezone.override(_tz(event)):
+        for d in data['per_day']:
+            d['label'] = d['day'].strftime('%b %-d')
+            d['day'] = d['day'].isoformat()
+    return {'event_id': event.pk, 'name': f'Website visits · {event.name}', 'live': bool(site.published_id), **data}
 
 
 def website_source(event):

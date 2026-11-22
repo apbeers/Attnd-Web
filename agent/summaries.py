@@ -267,7 +267,11 @@ def cancel_invite(ctx):
 def studio_publish(ctx):
     site = getattr(ctx.event, 'studio_site', None)
     where = site.public_url() if site else 'its address'
-    return f'Publish the Studio website of {_name(ctx)} at {where}, and apply its app look and flyer to the app.'
+    text = f'Publish the Studio website of {_name(ctx)} at {where}, and apply its app look and flyer to the app.'
+    if str(ctx.args.get('confirm_rights')).lower() in ('1', 'true', 'on'):
+        from studio.safety import RIGHTS_TEXT
+        text += f' You confirm: “{RIGHTS_TEXT}”'
+    return text
 
 
 @safe
@@ -316,3 +320,13 @@ def studio_asset_delete(ctx):
 @safe
 def studio_entry_delete(ctx):
     return f'Delete one website form entry of {_name(ctx)}.'
+
+
+@safe
+def studio_review(ctx):
+    from studio.models import Site
+    site = Site.objects.filter(pk=ctx.args.get('site') or 0).select_related('event').first()
+    name = f'“{site.event.name}” ({site.slug})' if site else 'this site'
+    if ctx.args.get('action') == 'approve':
+        return f'Approve the held website {name}: its version goes live now.'
+    return f'Reject the held website {name}: it stays offline and its owner is emailed.'

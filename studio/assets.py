@@ -94,6 +94,9 @@ def create_asset(event, data: bytes, filename, user=None, generated=False, origi
     if len(data) > LIMITS[kind]:
         raise AssetError(f'{filename or "That file"} is too big: {kind.upper() if kind != "image" else "images"} '
                          f'can be up to {LIMITS[kind] // MB} MB.')
+    if kind == StudioAsset.KIND_IMAGE:
+        from studio.safety import strip_metadata
+        data = strip_metadata(data, content_type)  # no EXIF / GPS on a public site (the digest stays the original's)
     check_library(event, len(data))
     width = height = None
     if kind == StudioAsset.KIND_IMAGE:

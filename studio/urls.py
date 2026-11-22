@@ -23,6 +23,10 @@ urlpatterns = [
     path('events/<int:event_id>/studio/assets/delete/', v.asset_delete, name='asset_delete'),
     path('events/<int:event_id>/studio/assets/<uuid:asset_id>/', v.asset_action, name='asset'),
     path('events/<int:event_id>/studio/flyer/', v.flyer, name='flyer'),
+    path('events/<int:event_id>/studio/fix/', v.fix_issues, name='fix'),
+    path('events/<int:event_id>/studio/update-from-check/', v.update_from_check, name='update_from_check'),
+    path('events/<int:event_id>/studio/translate/', v.translate, name='translate'),
+    path('events/<int:event_id>/studio/text/', v.text_edit, name='text_edit'),
     path('events/<int:event_id>/studio/forms/<slug:form_name>.csv', v.form_csv, name='form_csv'),
     path('events/<int:event_id>/studio/forms/entries/delete/', v.form_delete, name='form_delete'),
 ]

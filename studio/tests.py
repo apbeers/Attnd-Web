@@ -343,7 +343,11 @@ class DataTests(StudioTestCase):
     def test_draft_event_leaks_nothing(self):
         Event.objects.filter(pk=self.event.pk).update(status=Event.STATUS_DRAFT)
         self.publish()
-        data = self.sites(f'/{self.site.slug}/_attnd/data.json').json()
+        # Publish limits (batch 7 §6): a draft event's site is preview-only; the preview's data leaks nothing either.
+        self.assertEqual(self.sites(f'/{self.site.slug}/_attnd/data.json').status_code, 404)
+        self.site.refresh_from_db()
+        token = hosting.make_preview_token(self.site)
+        data = self.sites(f'/{self.site.slug}/_preview/{token}/_attnd/data.json').json()
         self.assertEqual(data['event']['name'], 'Arts Fair')
         self.assertEqual((data['schedule'], data['locations'], data['updates']), ([], [], []))
 

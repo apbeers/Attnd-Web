@@ -203,6 +203,8 @@ class RegistryTests(AgentTestCase):
             ('diagnostics/session.html', ''): 'delete_diagnostics_session',
             ('prospects/claims.html', ''): 'approve_event_claim',
             ('studio/reports.html', 'suspend'): 'take_down_studio_site',
+            ('studio/reports.html', 'approve'): 'approve_held_site',
+            ('studio/reports.html', 'reject'): 'reject_held_site',
             ('console/team.html', 'transfer'): 'transfer_event_ownership',
             ('console/team.html', 'leave'): 'leave_event',
             ('console/history.html', 'revision'): 'restore_version',

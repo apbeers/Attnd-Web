@@ -824,6 +824,16 @@ hosts the site.
   keep the copies; Retry reuses them.
 - **Publishing** (`publishing.py`): publish = site serves that version + its app look (accent, logo, display) and flyer
   are copied onto the event + `content_version` bump; the bundle's `event.website_url` (API-016) is the live URL.
+- **Quality, SEO, analytics, safeguards** (batch 7 §6, spec §15): the pre-publish check (`studio/quality.py`: links,
+  images, alt, headings, contrast, weight, mobile, SEO, drift, stale translations; errors = outside forms / password or
+  card fields / outside scripts block Publish) above Publish with **Fix automatically** and **Update the site**;
+  translations under `<code>/` kept in sync by `attnd-source` hashes; served pages get Event JSON-LD, Open Graph,
+  hreflang, `/<slug>/sitemap.xml` + `robots.txt`, the **Get the app** card with the join QR and a cookie-free beacon
+  (`SiteHit`, `website_analytics` on Metrics); **Edit text** in the full screen preview (no AI, a version with Undo);
+  `studio/safety.py`: the Claude Haiku content scan at Publish (hold → Platform → Studio reports → Held for review),
+  links `rel="noopener nofollow ugc"`, forms / fields / scripts refused at save and neutralised at serve, a draft
+  event's site preview-only, unpaid events' sites with a Demo ribbon, staff email at 2 open reports, EXIF stripped,
+  rights confirmed (and logged in History) before an imported site's first publish.
 - Custom domains are designed (spec §13), not built.
 
 ## Plans and the Platform admin (D1 + D2, owner Nov 21, 2026; `platform_admin/`)

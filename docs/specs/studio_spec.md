@@ -218,6 +218,70 @@ Sidenav "Studio" (beta badge) for users with access; topbar "Studio reports" (st
 `STUDIO_RUN_MAX_MINUTES`, `STUDIO_IMPORT_SECONDS`, `STUDIO_IMPORT_MAX_MB`, `STUDIO_PREVIEW_LINK_DAYS`, `STUDIO_PRICES`,
 rate limits `studio_form_ip`, `studio_form_site`, `studio_report_ip`.
 
+## 15. Quality, SEO, analytics and safeguards (batch 7 §6, Nov 22, 2026)
+
+**Pre-publish check** (`studio/quality.py`, no AI, no network): every page of the draft is parsed (stdlib
+`html.parser`) for broken links and images (site files and the event's assets), alt text, one `h1` and heading order,
+contrast of simple CSS rules (WCAG maths, < 4.5:1), page weight (code + referenced images; info > 0.7 MB, warning
+> 1.5 MB), mobile layout by static analysis (viewport meta, fixed widths > 600 px, text < 12 px), SEO basics (title,
+meta description, `lang`), safety (forms posting elsewhere, password / card fields, scripts from other sites: **errors,
+they block Publish**; shortener / risky-TLD links: warning) and **drift** (dates outside the event's days, an item's
+time near its name that no longer matches, the home page not naming the event after a rename). It is drawn above
+Publish in `website_overview` ("Before you publish", counts, ≤ 12 issues). **Fix N automatically**
+(`fix_website_issues`, `studio:fix`) adds alt text (asset alt or the file name), the viewport, `lang`, a title and the
+meta description, as one new version (Undo). **Update the site** (`update_website_from_check`) sends the rest (drift,
+stale translations, broken links, contrast) to the designer as one instruction.
+
+**Translations** (`translate_website`, `studio:translate`, a background run): pages under `<code>/` (es, fr, de, it, pt,
+zh, ja, ko, vi, ar, nl, pl), each with `<meta name="attnd-source" content="<page> <sha1[:12]>">` of its source page.
+A changed source page makes the translation **out of date** (a check warning; Update the site refreshes it). Served pages
+get `hreflang` alternates (+ `x-default`).
+
+**SEO** (`studio/seo.py`, added at serve time, a page's own tags win): schema.org `Event` JSON-LD on the home page from
+the event's real data (name, start / end in its zone, place, address, geo, description, flyer / logo image), Open Graph
+(`og:title`, `og:description`, `og:url`, `og:image` = the page's first image, else the flyer / logo) and
+`twitter:card`; canonicals (unchanged); `/<slug>/sitemap.xml` (every page) and `/<slug>/robots.txt`; the host's root
+robots.txt lists the host sitemap.
+
+**Get the app**: every served page (previews too) gets a small fixed card with the join QR (`_attnd/qr.svg`), the event
+code and **Open in Attnd** (the join link); closed for the tab with sessionStorage (no cookie); hidden in print.
+
+**Analytics** (cookie-free, `studio/analytics.py`, model `SiteHit`): live pages send `navigator.sendBeacon` to
+`/<slug>/_attnd/hit` with `{k: view|open_app|get_app, p: path, r: referring host}`; one upsert per (site, UTC day, kind,
+path, referrer host). No IP, user agent or identifier is stored (the IP only feeds the `studio_hit_ip` rate limit);
+previews never count. Component `website_analytics` (views per day, top pages, referrers, taps) on the Website page,
+the event's Metrics page (once the site is published) and the canvas Metrics tab.
+
+**Quick text edits** (`edit_website_text`, `studio:text_edit`, no AI): **Edit text** in the full screen preview makes
+the bridge (`bridge.js`) turn a clicked text-only element `contenteditable="plaintext-only"`; leaving it posts the old
+and new text to the console, which replaces that one text run between tags (never markup, scripts or styles) as a new
+version with Undo.
+
+**Safeguards**
+- **Forms, fields, scripts** are refused at save (`agent.check_safety`, every AI write and code save) and neutralised
+  when served (`hosting.sanitize`: an outside `action` → `#` + `data-attnd-blocked`, password / card inputs removed,
+  outside `<script src>` removed). Outbound links get `rel="noopener nofollow ugc"`.
+- **Content scan** (`studio/safety.py`) at Publish, once per version (`SiteVersion.scan`): the check's errors
+  (`blocked`, the organizer fixes them) + Claude Haiku over the pages' text, outbound links and ≤ 6 used images
+  (phishing, scams, impersonation, adult, hate, malware). **hold** → `Site.review_status = held`, staff emailed, the
+  organizer sees "Attnd is reviewing this website"; Platform → **Studio reports → Held for review** (Preview, Approve =
+  publish as asked, Reject = stays offline + email to the owner; `approve_held_site` / `reject_held_site`, always ask,
+  permission `studio.review_site`). A failed scan never blocks.
+- **Publish limits**: a site is live only while the event itself isn't a draft (a draft event's site is preview-only,
+  also for `website_url`), on the Studio plan or the owner's override. **Unpaid events** (an override) are served with a
+  "Demo event · made with Attnd" ribbon (chosen over preview-only: the organizer can share a real link while the
+  ribbon says it's a demo).
+- **Snapshots**: every AI run starts from the draft, which is always a stored version, and ends in a new version, so
+  Undo / Restore always reach the site before the edit.
+- **Reports**: 2+ open reports on one site email staff once (`Site.reports_alerted_at`, cleared by Resolve).
+- **Caps**: ≤ 40 files, 300 KB each, 2 MB of code per version; the asset library ≤ 200 files / 300 MB, per-kind size
+  limits; uploaded JPEG / PNG / WebP lose EXIF / GPS / XMP (`safety.strip_metadata`, orientation applied first).
+- **Rights**: before the first publish of a site with an imported version, Publish reads **Confirm rights and publish**
+  (`confirm_rights=1`, also an Ask Attnd parameter) and the confirmation is stored (`Site.rights_confirmed_at` / `_by`)
+  and logged in the event's History.
+
+Tests: `studio/tests_safeguards.py`.
+
 ## 13. Custom domains (later, not built)
 `Site.custom_domain` + verification; the server adds it with the Heroku Platform API (`POST /apps/<app>/domains`, ACM)
 and shows the DNS target; the middleware maps `Host` → site and serves it at `/` (`<base href="/">`, so the same

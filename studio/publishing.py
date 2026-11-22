@@ -166,6 +166,6 @@ def website_url(event):
     if not can_go_live(event):
         return None
     site = Site.objects.filter(event=event).first()
-    if site is None or not site.published_id or site.suspended:
+    if site is None or not site.is_live:  # published, not taken down, the event itself published (batch 7 §6)
         return None
     return hosting.site_url(site) or None

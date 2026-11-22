@@ -269,11 +269,15 @@ def undo(request, event):
     return redirect('studio:editor', event_id=event.pk)
 
 
-@agent_action('publish_website', 'Publish the website draft (and its app look and flyer).', confirm=True,
-              summary=S.studio_publish, url_name='studio:publish', title='Published the website')
+@agent_action('publish_website', 'Publish the website draft (and its app look and flyer). A site brought in from '
+              'another website needs confirm_rights once (the person confirms they may use its content).', confirm=True,
+              summary=S.studio_publish, url_name='studio:publish', title='Published the website',
+              params={'confirm_rights': P('boolean', 'the person confirmed they own or may use the content', nullable=True)})
 @agent_action('publish_website_version', 'Publish one earlier website version.', confirm=True,
               summary=S.studio_publish, url_name='studio:publish_version',
-              params={'version': P('integer', 'the version id')}, title='Published a website version')
+              params={'version': P('integer', 'the version id'),
+                      'confirm_rights': P('boolean', 'the person confirmed they own or may use the content', nullable=True)},
+              title='Published a website version')
 @studio_event_view
 @require_POST
 def publish(request, event):
@@ -289,6 +293,9 @@ def publish(request, event):
     if version is None or 'index.html' not in version.files:
         messages.error(request, 'The site needs a home page (index.html) before it can be published.')
         return redirect('studio:editor', event_id=event.pk)
+    blocked = _publish_blocked(request, site, version)
+    if blocked:
+        return blocked
     publishing.publish(site, version, request.user)
     if not hosting.sites_origin():
         messages.warning(request, 'Published, but no sites address is configured (SITES_HOST), so nobody can open it yet.')
@@ -299,6 +306,153 @@ def publish(request, event):
         messages.info(request, 'Your event itself is still a draft: the schedule, lineup and map stay empty on the '
                                'site until you publish the event.')
     return redirect('studio:editor', event_id=event.pk)
+
+
+def _publish_blocked(request, site, version):
+    """The safeguards before a version goes live (batch 7 §6): rights to an imported site, the quality check's errors,
+    the content scan (a hold waits for staff). A redirect with the reason, or None to go ahead."""
+    from studio import quality, safety
+    back = redirect('studio:editor', event_id=site.event_id)
+    if site.review_status == site.REVIEW_HELD:
+        messages.info(request, 'Attnd is reviewing this website before it goes live. We’ll email you.')
+        return back
+    if safety.needs_rights(site):
+        if request.POST.get('confirm_rights') not in ('1', 'true', 'on', 'True'):
+            messages.error(request, 'This site was brought in from another website. Confirm you have the rights to its '
+                                    'text and images (tick the box above Publish), then publish.')
+            return back
+        safety.confirm_rights(site, request.user)
+    report = quality.check(site, version, include_drift=False)
+    if report['blocked']:
+        messages.error(request, 'Fix these before publishing: ' + ' '.join(
+            i['text'] for i in report['issues'] if i['level'] == quality.ERROR)[:600])
+        return back
+    result = safety.scan(site, version)
+    if result.get('verdict') == 'blocked':
+        messages.error(request, 'Fix these before publishing: ' + ' '.join(result.get('reasons') or [])[:600])
+        return back
+    if result.get('verdict') == 'hold' and not result.get('approved_by'):
+        safety.hold(site, version, request.user, result.get('reasons') or [])
+        messages.info(request, 'Attnd needs to look at this website before it goes live (usually within a day). '
+                               'We’ll email you when it’s up.')
+        return back
+    if site.review_status == site.REVIEW_REJECTED:
+        safety.clear(site)  # a new version passed the scan
+    return None
+
+
+@agent_action('fix_website_issues', "Apply the pre-publish check's automatic fixes to the website draft (alt text, "
+              'mobile viewport, language, page titles, meta descriptions): a new draft version, no AI.',
+              title='Fixed website issues')
+@studio_event_view
+@require_POST
+def fix_issues(request, event):
+    from studio import quality
+    site = _site_or_404(event)
+    if not site.draft:
+        messages.info(request, 'Nothing to fix yet.')
+        return redirect('studio:editor', event_id=event.pk)
+    files, count = quality.autofix(site, site.draft.files)
+    if count and files != site.draft.files:
+        version = publishing.new_version(site, request.user, files=files, summary=f'Fixed {count} small issues',
+                                         source=SiteVersion.SOURCE_CODE)
+        messages.success(request, f'Fixed {count} small issue{"s" if count != 1 else ""} (version {version.number}). '
+                                  f'Undo goes back.')
+    else:
+        messages.info(request, 'Nothing to fix automatically.')
+    return redirect('studio:editor', event_id=event.pk)
+
+
+@agent_action('update_website_from_check', "Ask Studio's designer to fix what the pre-publish check found that needs "
+              'a person or the AI: text that no longer matches the event (dates, times, the name), out-of-date '
+              'translations, broken links, contrast. Background, a new draft version.', json=True,
+              title='Started updating the website')
+@studio_event_view
+@require_POST
+@ai_credit_required
+def update_from_check(request, event):
+    from studio import quality
+    site = _site_or_404(event)
+    if not site.draft or 'index.html' not in site.draft.files:
+        return _json_error('Build the website first.')
+    issues = [i for i in quality.check(site, site.draft)['issues'] if i['fix'] not in quality.AUTO_FIXES
+              and i['level'] != quality.INFO]
+    if not issues:
+        return _json_error('The check found nothing to update.')
+    lines = '\n'.join(f'- {i["page"] or "site"}: {i["text"]}' for i in issues[:20])
+    text = ('Update the website so it matches the event as it is now and fix what the pre-publish check found. Use '
+            'the data library (<attnd-schedule>, <attnd-event> …) instead of hard-coded dates and times where you can. '
+            f'For translations, translate the changed source pages again and keep their attnd-source meta current.\n{lines}')
+    return _start_design(request, event, text)
+
+
+@agent_action('translate_website', "Add (or refresh) a translated version of the website, kept in sync with the main "
+              'pages: pages under /<language code>/ (es, fr, de …). Background, a new draft version.', json=True,
+              params={'language': P('string', 'the language code: es, fr, de, it, pt, zh, ja, ko, vi, ar, nl or pl')},
+              title='Started a translation')
+@studio_event_view
+@require_POST
+@ai_credit_required
+def translate(request, event):
+    from studio import quality
+    site = _site_or_404(event)
+    code = (request.POST.get('language') or '').strip().lower()[:2]
+    if code not in quality.LANGS:
+        return _json_error('Pick one of: ' + ', '.join(f'{c} ({n})' for c, n in quality.LANGS.items()))
+    if not site.draft or 'index.html' not in site.draft.files:
+        return _json_error('Build the website first.')
+    hashes = '\n'.join(f'- {p}: {quality.source_hash(t)}' for p, t in site.draft.files.items() if p.endswith('.html')
+                       and p.split('/', 1)[0] not in quality.LANGS)
+    text = (f'Make a {quality.LANGS[code]} version of the website: one page under {code}/ for each main page (same '
+            f'design, files and data library; the visible text translated; <html lang="{code}">; links to the other '
+            f'{quality.LANGS[code]} pages; a small language switch on every page in both languages). Put '
+            f'<meta name="{quality.SOURCE_META}" content="<source page> <hash>"> in each translated page\'s head with '
+            f'the hash of its source page from this list, so Attnd can tell when a translation is out of date:\n'
+            f'{hashes}')
+    return _start_design(request, event, text)
+
+
+@agent_action('edit_website_text', "Change one piece of text on a website page by hand (no AI): the exact old text and "
+              'the new text. A new draft version with Undo.', json=True,
+              params={'page': P('string', 'the page file, e.g. index.html'),
+                      'old': P('string', 'the exact text on the page now'), 'new': P('string', 'the new text')},
+              title='Edited website text')
+@studio_event_view
+@require_POST
+def text_edit(request, event):
+    """Quick text edits from the preview (the selection bridge) or the chat: replaces one text run between tags,
+    never markup."""
+    import html as h
+    import re
+    site = _site_or_404(event)
+    page = (request.POST.get('page') or 'index.html').strip().lstrip('/') or 'index.html'
+    if page.endswith('/') or '.' not in page.rsplit('/', 1)[-1]:
+        page = (page.rstrip('/') + '/index.html').lstrip('/') if page.strip('/') else 'index.html'
+    old = (request.POST.get('old') or '').strip()
+    new = (request.POST.get('new') or '').strip()
+    files = dict(site.draft.files) if site.draft else {}
+    if page not in files:
+        return _json_error('That page isn’t on the site.')
+    if not old or len(old) > 2000 or len(new) > 2000:
+        return _json_error('Pick a piece of text (up to 2,000 characters).')
+    if old == new:
+        return JsonResponse({'saved': False})
+    source = files[page]
+    # Only in text between tags (never inside a tag or a script / style).
+    pattern = re.compile(r'(>[^<]*?)(' + re.escape(h.escape(old, quote=False)) + '|' + re.escape(old) + r')([^<]*<)')
+    skip = [(m.start(), m.end()) for m in re.finditer(r'<(script|style)\b.*?</\1\s*>', source, re.I | re.S)]
+    for m in pattern.finditer(source):
+        if any(a <= m.start(2) < b for a, b in skip):
+            continue
+        files[page] = source[:m.start(2)] + h.escape(new, quote=False) + source[m.end(2):]
+        break
+    else:
+        return _json_error('That text wasn’t found as plain text on the page (it may be split by formatting). '
+                           'Ask in the chat instead.')
+    version = publishing.new_version(site, request.user, files=files, summary=f'Edited text on {page}',
+                                     source=SiteVersion.SOURCE_CODE)
+    return JsonResponse({'saved': True, 'number': version.number, 'page': page,
+                         'undo': reverse('studio:undo', args=[event.pk])})
 
 
 @agent_action('unpublish_website', 'Take the website offline.', confirm=True, summary=S.studio_unpublish,
@@ -527,6 +681,12 @@ def form_delete(request, event):
               params={'site': P('integer', 'the site id')}, title='Reinstated a site')
 @agent_action('resolve_studio_reports', "Mark a site's open reports resolved (staff).", fixed={'action': 'resolve'},
               params={'site': P('integer', 'the site id')}, title='Resolved reports')
+@agent_action('approve_held_site', 'Approve a Studio site the content scan held: its version goes live (staff).',
+              confirm=True, fixed={'action': 'approve'}, params={'site': P('integer', 'the site id')},
+              summary=S.studio_review, title='Approved a held site')
+@agent_action('reject_held_site', 'Reject a Studio site the content scan held: it stays offline (staff).',
+              confirm=True, fixed={'action': 'reject'}, params={'site': P('integer', 'the site id')},
+              summary=S.studio_review, title='Rejected a held site')
 @agent_action('studio_reports', 'Abuse reports about Studio sites and the sites taken down (staff).', kind='read')
 @staff_required
 def reports(request):
@@ -541,9 +701,22 @@ def reports(request):
             messages.success(request, f'{site.slug} is back online (if it is published).')
         elif action == 'resolve':
             site.reports.filter(status=SiteReport.OPEN).update(status=SiteReport.RESOLVED)
+            site.reports_alerted_at = None  # the next 2 reports alert again
+            site.save(update_fields=['reports_alerted_at'])
             messages.info(request, f'Reports for {site.slug} marked resolved.')
+        elif action in ('approve', 'reject'):
+            from studio import safety
+            if not request.user.has_perm('studio.review_site') or site.review_status != Site.REVIEW_HELD:
+                raise Http404
+            if action == 'approve':
+                version = safety.approve(site, request.user)
+                messages.success(request, f'{site.slug}: version {version.number if version else "?"} is live.')
+            else:
+                safety.reject(site, request.user)
+                messages.info(request, f'{site.slug} stays offline; the owner was emailed.')
         return redirect('studio:reports')
     open_reports = SiteReport.objects.select_related('site', 'site__event').order_by('-created_at')[:200]
     suspended = Site.objects.filter(suspended=True).select_related('event')
-    return render(request, 'studio/reports.html', {'reports': open_reports, 'suspended': suspended})
+    held = Site.objects.filter(review_status=Site.REVIEW_HELD).select_related('event', 'held_version', 'held_by')
+    return render(request, 'studio/reports.html', {'reports': open_reports, 'suspended': suspended, 'held': held})
 

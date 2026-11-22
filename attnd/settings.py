@@ -251,6 +251,7 @@ RATE_LIMITS = {
     'studio_form_ip': _rate('studio_form_ip', '10/600'),       # Studio site form posts per IP per site, 10 min
     'studio_form_site': _rate('studio_form_site', '300/3600'),  # Studio site form posts per site, 1 hour
     'studio_report_ip': _rate('studio_report_ip', '5/3600'),    # "Report this site" per IP, 1 hour
+    'studio_hit_ip': _rate('studio_hit_ip', '120/600'),         # site analytics beacons per IP per site, 10 min
     'attest_nonce_ip': _rate('attest_nonce_ip', '30/60'),       # attestation challenges per IP, 1 minute
     'place_search_user': _rate('place_search_user', '60/600'),  # the location form's address searches per person
     'location_fill_user': _rate('location_fill_user', '30/3600'),  # "Fill from this website?" per person, 1 hour

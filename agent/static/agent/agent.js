@@ -1484,7 +1484,7 @@
                   live_on_phone: 'Overview', needs_review: 'Overview', event_readiness: 'Overview', event_header: 'Overview', event_form: 'Overview',
                   object_history: 'History', location_row: 'Locations', location_form: 'Locations',
                   schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Notifications',
-                  notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics', usage_answer: 'Metrics',
+                  notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics', usage_answer: 'Metrics', website_analytics: 'Metrics',
                   event_map: 'Overview', event_lifecycle: 'Overview', sharing_kit: 'Overview', event_exports: 'Overview', event_rollover: 'Overview',
                   changeset_review: 'Review', app_layout: 'Settings', website_watching: 'Settings', event_theme: 'Overview',
                   event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
@@ -2044,7 +2044,7 @@
     const parent = { event_id: eventId };
     for (const name of ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'event_rollover', 'changeset_review',
                         'location_row', 'schedule_item_row', 'notification_form', 'notification_row',
-                        'event_team', 'event_metrics', 'usage_answer', 'app_layout', 'website_watching', 'event_context_form',
+                        'event_team', 'event_metrics', 'usage_answer', 'website_analytics', 'app_layout', 'website_watching', 'event_context_form',
                         'event_flyer', 'object_history', 'event_versions']) {
       let items = [];
       try { items = await fetchCards(name, [parent]); } catch (e) { /* none yet: the section says so */ }

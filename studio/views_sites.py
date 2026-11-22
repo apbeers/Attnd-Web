@@ -77,9 +77,18 @@ def _target(slug, token, asset=False):
     return Target(site, version.files if version else {}, version, base, preview=True)
 
 
-def _page_response(target, text, status=200):
+def _page_response(target, text, status=200, path=''):
+    from studio import seo
     canonical = '' if target.preview or status != 200 else hosting.sites_origin() + target.base + getattr(target, 'path', '')
-    body = hosting.render_page(text, target.base, preview=target.preview, bridge=target.preview, canonical=canonical)
+    origin_base = hosting.sites_origin() + target.base
+    site = target.site
+    head = seo.head_tags(site, target.files, path, canonical or origin_base, origin_base) if status == 200 else ''
+    body_start = seo.demo_ribbon() if not site.event.paid and not target.preview else ''
+    body_end = seo.app_banner(site, target.base)
+    if not target.preview and status == 200:
+        body_end += seo.beacon(getattr(target, 'path', '') or '/')
+    body = hosting.render_page(text, target.base, preview=target.preview, bridge=target.preview, canonical=canonical,
+                               head=head, body_start=body_start, body_end=body_end)
     response = HttpResponse(body, content_type=CONTENT_TYPES['html'], status=status)
     response['Cache-Control'] = 'no-store' if target.preview else 'public, max-age=60'
     if target.preview:
@@ -110,6 +119,11 @@ def serve(request, slug, rest=None):
     if request.method not in ('GET', 'HEAD'):
         return HttpResponseNotAllowed(['GET', 'HEAD'])
     files = target.files
+    from studio import seo
+    if path == 'sitemap.xml' and path not in files:
+        return HttpResponse(seo.site_sitemap(target.site, files), content_type='application/xml')
+    if path == 'robots.txt' and path not in files:
+        return HttpResponse(seo.site_robots(target.site), content_type=CONTENT_TYPES['txt'])
     candidates = ['index.html'] if path in ('', 'index') else (
         [path + 'index.html'] if path.endswith('/') else [path, path + '.html', path + '/index.html'])
     for candidate in candidates:
@@ -117,7 +131,7 @@ def serve(request, slug, rest=None):
             ext = candidate.rsplit('.', 1)[-1]
             if ext == 'html':
                 target.path = '' if candidate == 'index.html' else (path if not path.endswith('.html') else path)
-                return _page_response(target, files[candidate])
+                return _page_response(target, files[candidate], path=candidate)
             response = HttpResponse(files[candidate], content_type=CONTENT_TYPES.get(ext, 'text/plain'))
             response['Cache-Control'] = 'no-store' if target.preview else 'public, max-age=60'
             return response
@@ -144,6 +158,8 @@ def _internal(request, target, path):
         return _form(request, target, path[len('forms/'):].strip('/'))
     if path in ('report', 'report/'):
         return _report(request, target)
+    if path == 'hit':
+        return _hit(request, target)
     raise Http404
 
 
@@ -291,10 +307,39 @@ def _report(request, target):
             SiteReport.objects.create(site=site, reason=reason, details=request.POST.get('details', '')[:2000],
                                       email=request.POST.get('email', '')[:254] if '@' in request.POST.get('email', '')
                                       else '', page=request.POST.get('page', '')[:200])
+            from studio import safety
+            safety.report_filed(site)
         return render(request, 'studio/site_report.html', {'site': site, 'base': target.base, 'done': True})
     return render(request, 'studio/site_report.html', {
         'site': site, 'base': target.base, 'reasons': SiteReport.REASONS,
         'page': request.GET.get('page', '')[:200]})
+
+
+HIT_KINDS = {'view', 'open_app', 'get_app'}
+
+
+def _hit(request, target):
+    """Cookie-free analytics (batch 7 §6): one count per beacon; nothing about the visitor is kept (the IP only
+    feeds the rate limit, in the cache)."""
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if target.preview:
+        return HttpResponse(status=204)
+    limit = RateLimit('studio_hit_ip')
+    key = f'{target.site.pk}:{client_ip(request)}'
+    if limit.exceeded(key):
+        return HttpResponse(status=204)
+    limit.hit(key)
+    try:
+        data = json.loads(request.body[:2000] or b'{}')
+    except ValueError:
+        return HttpResponse(status=204)
+    kind = data.get('k') if isinstance(data, dict) else None
+    if kind not in HIT_KINDS:
+        return HttpResponse(status=204)
+    from studio import analytics
+    analytics.count(target.site, kind, str(data.get('p') or '/'), str(data.get('r') or ''))
+    return HttpResponse(status=204)
 
 
 def not_found(request, exception=None):

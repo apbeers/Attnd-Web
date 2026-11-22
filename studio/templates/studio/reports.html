@@ -6,6 +6,13 @@
   {% platform_nav "studio_reports" %}
   <h2 class="title-3">{% icon "warning" %} Studio site reports</h2>
   <p class="muted">Visitors report hosted sites with the "Report this site" link in every site's footer. Take a site down to stop serving it (the organizer keeps their versions).</p>
+  {% if held %}<div class="panel stack stack--tight"><h2 class="title-4">Held for review</h2>
+    <p class="small muted">The pre-publish content scan held these versions. Approve publishes them as their organizer asked; Reject keeps them offline and emails the owner.</p>
+    {% for s in held %}<div class="stack stack--tight"><div class="cluster"><span class="grow"><span class="mono">{{ s.slug }}</span> · {{ s.event.name }} · version {{ s.held_version.number }}<span class="small muted"> · {{ s.held_by.email|default:"" }} · {{ s.held_at|date:"M j, g:i A" }}</span></span>
+      {% if s.held_version %}<a class="button button--outline button--small" href="{% url 'studio:version_preview' s.event_id s.held_version_id %}" target="_blank" rel="noopener">Preview ↗</a>{% endif %}
+      {% if perms.studio.review_site %}<form method="post">{% csrf_token %}<input type="hidden" name="site" value="{{ s.pk }}"><input type="hidden" name="action" value="approve"><button class="button button--primary button--small" data-confirm="Approve {{ s.slug }}? Its version goes live now.">Approve</button></form>
+      <form method="post">{% csrf_token %}<input type="hidden" name="site" value="{{ s.pk }}"><input type="hidden" name="action" value="reject"><button class="button button--danger button--small" data-confirm="Reject {{ s.slug }}? It stays offline and the owner is emailed.">Reject</button></form>{% endif %}</div>
+      {% if s.held_version.scan.reasons %}<ul class="small">{% for r in s.held_version.scan.reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}</div>{% endfor %}</div>{% endif %}
   {% if suspended %}<div class="panel stack stack--tight"><h2 class="title-4">Taken down</h2>
     {% for s in suspended %}<div class="cluster"><span class="grow mono">{{ s.slug }}</span><span class="small muted">{{ s.event.name }} · {{ s.suspended_reason }}</span>
       <form method="post">{% csrf_token %}<input type="hidden" name="site" value="{{ s.pk }}"><input type="hidden" name="action" value="reinstate">

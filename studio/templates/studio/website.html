@@ -9,6 +9,7 @@
   {% if studio %}<div class="grid grid--2">
     {% component "website_versions" event=event %}
     <div class="stack">{% component "website_forms" event=event %}{% component "website_assets" event=event %}</div>
-  </div>{% endif %}
+  </div>
+  {% component "website_analytics" event=event %}{% endif %}
 </div>
 {% endblock %}

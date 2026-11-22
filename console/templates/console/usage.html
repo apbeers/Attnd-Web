@@ -6,6 +6,7 @@
 <p class="muted">How attendees used the app for this event. Everything here is anonymous: the app only reports counts (for example "the Map tab was opened"), never who did it. Times are in the event's time zone ({{ event.timezone|default:"UTC" }}).</p>
 
 <div class="panel">{% component "event_metrics" event=event usage=usage %}</div>
+{% if event.studio_site.published_id %}<div class="panel">{% component "website_analytics" event=event %}</div>{% endif %}
 <div class="panel">{% component "event_exports" event=event %}</div>
 
 {% if not usage.has_data %}

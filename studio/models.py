@@ -9,7 +9,7 @@ from django.db import models
 from django.utils import timezone as dj_tz
 from django.utils.text import slugify
 
-from events.models import Event
+from events.models import Event, json_is
 
 
 SLUG_RE = re.compile(r'^[a-z0-9](?:[a-z0-9-]{1,48})[a-z0-9]$')
@@ -47,10 +47,21 @@ class Site(models.Model):
     preview_secret = models.CharField(max_length=32, default=new_secret)
     applied_flyer = models.CharField(max_length=40, blank=True)  # asset id last copied into Event.flyer
     notify_on_forms = models.BooleanField(default=True, help_text='Email the owner and admins on each form entry')
+    # Batch 7 §6 safeguards: rights to an imported site's content, the pre-publish content scan, report alerts
+    rights_confirmed_at = models.DateTimeField(null=True, blank=True)
+    rights_confirmed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    REVIEW_NONE, REVIEW_HELD, REVIEW_REJECTED = '', 'held', 'rejected'
+    review_status = models.CharField(max_length=10, blank=True, default='',
+                                     help_text='held = a version waits for staff review before it goes live')
+    held_version = models.ForeignKey('SiteVersion', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    held_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    held_at = models.DateTimeField(null=True, blank=True)
+    reports_alerted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=dj_tz.now)
 
     class Meta:
-        permissions = [('publish_site', 'Publish an event website (also needs the Studio plan)')]
+        permissions = [('publish_site', 'Publish an event website (also needs the Studio plan)'),
+                       ('review_site', 'Approve or reject Studio sites held by the content scan')]
 
     def __str__(self):
         return f'{self.slug} ({self.event})'
@@ -58,7 +69,10 @@ class Site(models.Model):
     @property
     def is_live(self):
         from platform_admin.plans import can_go_live
-        return bool(self.published_id) and not self.suspended and can_go_live(self.event)
+        # Publish limits (batch 7 §6): only while the event itself is published (a draft event's site stays
+        # preview-only), on the Studio plan or the owner's override, and not taken down or held for review.
+        return (bool(self.published_id) and not self.suspended and self.event.status != Event.STATUS_DRAFT
+                and can_go_live(self.event))
 
     def public_url(self):
         from studio import hosting
@@ -83,11 +97,13 @@ class SiteVersion(models.Model):
     source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default=SOURCE_AI)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     run = models.ForeignKey('StudioRun', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    scan = models.JSONField(default=dict, blank=True)  # the content scan: {verdict, reasons, model, at}
     created_at = models.DateTimeField(default=dj_tz.now)
 
     class Meta:
         ordering = ['-number']
-        constraints = [models.UniqueConstraint(fields=['site', 'number'], name='site_version_number')]
+        constraints = [models.UniqueConstraint(fields=['site', 'number'], name='site_version_number'),
+                       json_is('scan', 'object')]
 
     def __str__(self):
         return f'{self.site.slug} v{self.number}'
@@ -249,3 +265,20 @@ class SiteReport(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class SiteHit(models.Model):
+    """Cookie-free site analytics (batch 7 §6): counts per site, UTC day, kind, page and referring host. No IP, user
+    agent or identifier is kept; previews never count."""
+    VIEW, OPEN_APP, GET_APP = 'view', 'open_app', 'get_app'
+    KINDS = [(VIEW, 'Page view'), (OPEN_APP, 'Open in Attnd'), (GET_APP, 'Get the app')]
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='hits', db_index=False)
+    day = models.DateField()
+    kind = models.CharField(max_length=10, choices=KINDS)
+    path = models.CharField(max_length=120, blank=True)
+    referrer = models.CharField(max_length=100, blank=True)  # the referring host only ('' = direct)
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['site', 'day', 'kind', 'path', 'referrer'],
+                                               name='studio_site_hit_key')]

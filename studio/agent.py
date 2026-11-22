@@ -55,6 +55,34 @@ def check_files(files):
         total += size
     if total > MAX_TOTAL_BYTES:
         raise ToolError('The site is over 2 MB of code. Make it smaller (images belong in the asset library).')
+    check_safety(files)
+
+
+SAVE_ERRORS = ('form_origin', 'password_field', 'card_field', 'outside_script')
+
+
+def check_safety(files):
+    """Batch 7 §6, at save: forms only to Attnd's handler, no password / card fields, no outside scripts (the same
+    rules are applied again when pages are served)."""
+    from studio import quality
+    for path, text in files.items():
+        if not path.endswith('.html'):
+            continue
+        page = quality.parse(text)
+        for form in page.forms:
+            action = form.get('action', '')
+            if action and not quality._local(action) and not action.startswith('#'):
+                raise ToolError(f'{path}: forms may only post to Attnd\'s form handler (data-attnd-form, '
+                                f'action "_attnd/forms/<name>"), not {action[:80]}.')
+        for field in page.inputs:
+            words = ' '.join(field.get(k, '') for k in ('name', 'id', 'autocomplete', 'placeholder'))
+            if field.get('type', '').lower() == 'password' or 'password' in words.lower():
+                raise ToolError(f'{path}: sites can\'t ask for passwords.')
+            if quality.CARD_WORDS.search(words) or field.get('autocomplete', '').startswith('cc-'):
+                raise ToolError(f'{path}: sites can\'t ask for card or bank details.')
+        outside = [s.get('src') for s in page.scripts if s.get('src') and not quality._local(s['src'])]
+        if outside:
+            raise ToolError(f'{path}: scripts from other sites aren\'t allowed ({outside[0][:80]}).')
 
 
 TOOLS = [

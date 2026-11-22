@@ -15,7 +15,7 @@ KINDS = {
     'event_tile': 'Events', 'event_overview': 'Overview', 'event_readiness': 'Overview', 'event_lifecycle': 'Overview', 'sharing_kit': 'Overview',
     'event_exports': 'Overview', 'event_rollover': 'Overview', 'changeset_review': 'Review', 'location_row': 'Locations',
     'schedule_item_row': 'Schedule', 'notification_form': 'Notifications', 'notification_row': 'Notifications',
-    'event_team': 'Team', 'event_metrics': 'Metrics', 'usage_answer': 'Metrics', 'app_layout': 'Settings', 'website_watching': 'Settings',
+    'event_team': 'Team', 'event_metrics': 'Metrics', 'usage_answer': 'Metrics', 'website_analytics': 'Metrics', 'app_layout': 'Settings', 'website_watching': 'Settings',
     'event_context_form': 'Settings', 'event_flyer': 'Settings', 'object_history': 'History', 'event_theme': 'Overview',
     # Every admin tool is one Platform tab (owner, Nov 22, 2026: organizers and staff see the same tabs but this one).
     'event_versions': 'History', 'prospect_run_row': 'Platform', 'prospect_row': 'Platform',
@@ -30,7 +30,7 @@ ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications
 WEBSITE_SECTIONS = ['website_overview', 'website_versions', 'website_forms', 'website_assets']
 EVENT_SECTIONS = ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'event_rollover',
                   'changeset_review', 'location_row', 'schedule_item_row', 'notification_form', 'notification_row', 'event_team',
-                  'event_metrics', 'usage_answer', 'app_layout', 'website_watching', 'event_context_form', 'event_flyer',
+                  'event_metrics', 'usage_answer', 'website_analytics', 'app_layout', 'website_watching', 'event_context_form', 'event_flyer',
                   'object_history', 'event_versions']
 EMPTY = {'location_row': 'No locations yet. Add stages, booths, food, anywhere attendees go.',
          'schedule_item_row': 'No schedule items yet.', 'notification_row': 'No notifications sent or scheduled yet.',

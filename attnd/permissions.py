@@ -60,6 +60,7 @@ STAFF = frozenset({
     'diagnostics.view_diagnosticsession', 'diagnostics.delete_diagnosticsession',  # app logs, reports, symbols
     'credit.view_aispend', 'credit.change_ailimits',  # AI spend, limits, per-person overrides
     'studio.view_sitereport', 'studio.change_sitereport',  # Studio abuse reports, take down / restore
+    'studio.review_site',  # approve / reject sites the pre-publish content scan held
     'events.mark_event_paid',  # going live (no checkout yet)
     'events.view_showcase',  # the "Showcase & demo" section of Your events
     'platform_admin.view_platformsettings',  # the Platform page (its sub-tabs ask their own permissions)

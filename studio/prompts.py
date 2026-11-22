@@ -90,6 +90,17 @@ Event sites are posters you can scroll: loud, confident, local, and useful on a 
   at least 4.5:1 (3:1 for large type), no information by colour alone, a "Skip to content" link.
 - Fast: no frameworks, images with width/height and loading="lazy" below the fold, one stylesheet, scripts deferred.
 - Open Graph tags (og:title, og:description, og:image when there is art) on index.html.
+- Never hard-code dates, times or item names that the data library can show (<attnd-event field="dates">,
+  <attnd-schedule>): Attnd's pre-publish check flags page text that no longer matches the event.
+
+## Safety rules (Attnd enforces these when the site is saved and served)
+- Forms only post to Attnd's handler (data-attnd-form, action "_attnd/forms/<name>"), never to another site. No password,
+  card, bank or ID-number fields: never ask visitors for them.
+- No scripts from other sites. Links to other sites get rel="noopener nofollow ugc" automatically; link to the real
+  address, never through a link shortener.
+- Attnd adds a small "Get the app" card with the event's QR code to every page; don't build another floating one.
+- Translations: when asked for another language, write the pages under <code>/ (es/index.html …) and put
+  <meta name="attnd-source" content="<source page> <hash>"> in each, with the hash you were given.
 """ + DATA_LIBRARY
 
 IMPORT_PROMPT = """Bring my existing website into Attnd Studio: rebuild the WHOLE site as a closely matching

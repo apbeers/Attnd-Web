@@ -104,6 +104,69 @@
     dialog.querySelector('[data-site-stage]').dataset.siteStage = b.dataset.siteSize;
   });
 
+  // Quick text edits in the full screen preview (batch 7 §6, no AI): "Edit text" asks the preview's bridge to make
+  // text editable; each changed text comes back by postMessage and is saved through studio:text_edit as a new draft
+  // version (Undo in the status line). Only messages from this dialog's own iframe are accepted.
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-site-edit-text]');
+    if (!b) return;
+    const dialog = b.closest('[data-site-full]');
+    const frame = dialog && dialog.querySelector('iframe');
+    if (!frame) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    try { frame.contentWindow.postMessage({ type: 'attnd-studio-edit', on }, '*'); } catch (err) { /* not loaded */ }
+    let status = dialog.querySelector('[data-site-edit-status]');
+    if (!status) {
+      status = document.createElement('span');
+      status.className = 'small';
+      status.setAttribute('data-site-edit-status', '');
+      status.setAttribute('aria-live', 'polite');
+      b.after(status);
+    }
+    status.textContent = on ? 'Click any text, type, then click outside it.' : '';
+  });
+  window.addEventListener('message', async (e) => {
+    const data = e.data;
+    if (!data || data.type !== 'attnd-studio-text') return;
+    const dialog = Array.from(document.querySelectorAll('[data-site-full]')).find((d) => {
+      const f = d.querySelector('iframe');
+      return f && f.contentWindow === e.source;
+    });
+    if (!dialog) return;
+    const button = dialog.querySelector('[data-site-edit-text]');
+    const status = dialog.querySelector('[data-site-edit-status]');
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+    const body = new FormData();
+    body.set('page', data.page || 'index.html');
+    body.set('old', data.old || '');
+    body.set('new', data.new || '');
+    if (status) status.textContent = 'Saving…';
+    try {
+      const r = await fetch(button.dataset.textUrl, { method: 'POST', body, credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-CSRFToken': csrf ? csrf.value : '' } });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Not saved');
+      if (status) {
+        status.textContent = d.saved ? `✓ Saved as version ${d.number} · ` : '';
+        if (d.saved && d.undo) {
+          const undo = document.createElement('button');
+          undo.type = 'button';
+          undo.className = 'link-button';
+          undo.textContent = 'Undo';
+          undo.addEventListener('click', async () => {
+            await fetch(d.undo, { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrf ? csrf.value : '' } });
+            status.textContent = 'Undone.';
+            dialog.querySelector('iframe').src = dialog.querySelector('iframe').src;
+          });
+          status.appendChild(undo);
+        }
+      }
+    } catch (err) {
+      if (status) status.textContent = err.message;
+    }
+  });
+
   // Native dialogs: [data-dialog-open="#id"] opens <dialog id> as a modal (the browser traps focus and Esc closes);
   // [data-dialog-close] inside closes it; a click on the backdrop closes it too. Focus goes back to the opener.
   document.addEventListener('click', (e) => {

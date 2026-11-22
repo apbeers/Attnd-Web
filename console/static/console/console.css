@@ -997,3 +997,10 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 /* Clear of the Ask Attnd launcher (bottom-right): beside it on wide screens, above it on phones */
 @media (min-width: 601px) { .publish-bar-slot:not(.canvas__publish) { margin-right: 10.5rem; } }
 @media (max-width: 600px) { .publish-bar-slot:not(.canvas__publish) { bottom: 4.75rem; } }
+
+/* Studio: the pre-publish check and the website's visits (batch 7 §6) */
+.site-check { padding: var(--space-3); border-radius: var(--radius-lg); background: var(--color-surface-2); }
+.site-check__list { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.site-check__item { display: flex; gap: var(--space-2); align-items: flex-start; }
+.site-visits { display: flex; align-items: flex-end; gap: 2px; height: 64px; }
+.site-visits__bar { flex: 1; min-width: 2px; height: max(2px, var(--h)); border-radius: 2px 2px 0 0; background: var(--color-brand); opacity: .75; }
