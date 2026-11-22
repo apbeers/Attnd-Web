@@ -18,7 +18,7 @@ from studio.tests import PAGE, StudioTestCase
 
 GOOD = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" '
         'content="width=device-width, initial-scale=1"><title>Arts Fair</title><meta name="description" '
-        'content="A fair"></head><body><h1>Arts Fair</h1><p>See you there.</p></body></html>')
+        'content="A fair"></head><body><main><h1>Arts Fair</h1><p>See you there.</p></main></body></html>')
 
 
 def version_with(site, user, files, summary='Test'):
@@ -59,7 +59,8 @@ class QualityCheckTests(StudioTestCase):
         self.site.event.refresh_from_db()
         page = '<html><head></head><body><h1>x</h1><img src="img/big-stage.png"></body></html>'
         files, count = quality.autofix(self.site, {'index.html': page, 'styles.css': 'a{}'})
-        self.assertEqual(count, 5)  # alt, viewport, lang, title, description
+        self.assertEqual(count, 6)  # alt, viewport, lang, title, description, main
+        self.assertIn('<main id="main"><h1>x</h1>', files['index.html'])
         self.assertIn('alt="Big stage"', files['index.html'])
         self.assertIn('lang="en"', files['index.html'])
         self.assertIn('<title>Arts Fair</title>', files['index.html'])

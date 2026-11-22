@@ -24,6 +24,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
+from attnd.public import public
 from attnd.links import join_url, qr_png
 from attnd.permissions import SIGNED_IN, declare, requires, signed_in
 from console.recent_auth import recent_auth_required, require as require_recent_auth
@@ -413,8 +414,10 @@ def service_worker(request):
     return response
 
 
-@declare(SIGNED_IN)
+@public
 def manifest(request):
+    """Public (Lighthouse, Nov 22, 2026): browsers fetch the manifest without credentials, so behind a sign-in it was
+    a redirect to the sign-in page ("Manifest: Line 1, column 1, Syntax error"). It holds nothing private."""
     from django.templatetags.static import static
     return JsonResponse({
         'name': 'Attnd Console', 'short_name': 'Attnd', 'start_url': '/console/', 'scope': '/console/',

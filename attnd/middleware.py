@@ -57,6 +57,13 @@ def indexable():
     return (getattr(settings, 'SITE_URL', '') or '').rstrip('/') == 'https://attnd.app'
 
 
+def private_path(path):
+    """The console, sign-in / account pages and the admin: never indexed (Lighthouse, Nov 22, 2026)."""
+    from django.conf import settings
+    admin = '/' + (getattr(settings, 'ADMIN_URL_PATH', 'manage-attnd/') or '').lstrip('/')
+    return path.startswith(('/console/', '/accounts/', admin))
+
+
 class NoIndexMiddleware:
     """Off production: robots.txt disallows everything and every response says `X-Robots-Tag: noindex, nofollow`
     (also the Studio sites on dev.attnd.site). First in MIDDLEWARE, so it wraps the sites host too."""
@@ -66,7 +73,10 @@ class NoIndexMiddleware:
 
     def __call__(self, request):
         if indexable():
-            return self.get_response(request)
+            response = self.get_response(request)
+            if private_path(request.path):  # the console and sign-in pages are private on every host
+                response['X-Robots-Tag'] = 'noindex, nofollow'
+            return response
         if request.path == '/robots.txt':
             from django.http import HttpResponse
             response = HttpResponse('User-agent: *\nDisallow: /\n', content_type='text/plain')

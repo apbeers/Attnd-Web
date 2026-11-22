@@ -40,12 +40,15 @@ class _Page(HTMLParser):
         self.links, self.images, self.scripts, self.forms, self.inputs = [], [], [], [], []
         self.headings, self.metas, self.styles, self.inline_styles = [], {}, [], []
         self.html_lang = None
+        self.has_main = False
         self.title = ''
         self.text = []
         self._in = []
 
     def handle_starttag(self, tag, attrs):
         a = {k: (v or '') for k, v in attrs}
+        if tag == 'main' or a.get('role') == 'main':
+            self.has_main = True
         if tag == 'html':
             self.html_lang = a.get('lang', '')
         elif tag == 'a' and 'href' in a:
@@ -328,6 +331,9 @@ def check(site, version, include_drift=True):
             issues.append(_issue('h1', INFO, path, 'No main heading (h1).'))
         elif h.count(1) > 1:
             issues.append(_issue('h1', INFO, path, f'{h.count(1)} main headings (h1); one is best.'))
+        if not page.has_main:
+            issues.append(_issue('main', WARNING, path, 'No main landmark (<main>): screen readers can’t jump to the '
+                                 'content.', 'main'))
         skipped = next((f'h{a} → h{b}' for a, b in zip(h, h[1:]) if b > a + 1), '')
         if skipped:
             issues.append(_issue('headings', INFO, path, f'Headings skip a level ({skipped}).'))
@@ -412,7 +418,7 @@ def check(site, version, include_drift=True):
 # Automatic fixes (trivial ones only)
 # ---------------------------------------------------------------------------
 
-AUTO_FIXES = ('alt', 'viewport', 'lang', 'title', 'description')
+AUTO_FIXES = ('alt', 'viewport', 'lang', 'title', 'description', 'main')
 IMG_NO_ALT = re.compile(r'<img\b(?![^>]*\balt\s*=)([^>]*?)(/?)>', re.I)
 
 
@@ -465,5 +471,27 @@ def autofix(site, files):
         if 'description' not in page.metas and description:
             text = _insert_head(text, f'<meta name="description" content="{h.escape(description)}">')
             fixes += 1
+        if not page.has_main:
+            wrapped = _wrap_main(text)
+            if wrapped != text:
+                text, fixes = wrapped, fixes + 1
         out[path] = text
     return out, fixes
+
+
+def _wrap_main(text):
+    """<main> around the page's content: after the first </header> (else <body>), before the last <footer> (else
+    </body>). Unchanged when the page has no body."""
+    body = re.search(r'<body\b[^>]*>', text, re.I)
+    end = list(re.finditer(r'</body\s*>', text, re.I))
+    if not body or not end:
+        return text
+    start = body.end()
+    header = re.search(r'</header\s*>', text[start:], re.I)
+    if header:
+        start += header.end()
+    stop = end[-1].start()
+    footers = [m for m in re.finditer(r'<footer\b', text[start:stop], re.I)]
+    if footers:
+        stop = start + footers[-1].start()
+    return text[:start] + '<main id="main">' + text[start:stop] + '</main>' + text[stop:]

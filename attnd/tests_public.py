@@ -5,7 +5,8 @@ from django.urls import URLPattern, URLResolver, get_resolver, reverse
 
 PUBLIC = {
     # site
-    'health', 'place_photo', 'indexnow_key', 'django.contrib.sitemaps.views.sitemap', 'homepage', 'home_page', 'privacy', 'csp_report',
+    'health', 'place_photo', 'manifest',  # the console's web app manifest (browsers fetch it without cookies)
+    'indexnow_key', 'django.contrib.sitemaps.views.sitemap', 'homepage', 'home_page', 'privacy', 'csp_report',
     # the apps' API (API keys / attestation, never a session)
     'nearby', 'lookup', 'bundle', 'join', 'changes', 'download', 'download_app', 'download_get', 'leave', 'usage', 'device', 'diagnostics_logs', 'diagnostics_reports',
     'app_status', 'symbols', 'symbolicate', 'attest-nonce', 'attest-ios', 'attest-android',
@@ -50,3 +51,14 @@ class PublicPagesTests(TestCase):
                     '/.well-known/assetlinks.json', reverse('password_reset')):
             self.assertEqual(self.client.get(url, secure=True).status_code, 200, url)
         self.assertNotEqual(self.client.get('/api/v2/events/nearby/', secure=True).status_code, 302)
+
+
+class ManifestTests(TestCase):
+    def test_manifest_opens_signed_out_as_json(self):
+        response = self.client.get(reverse('console:manifest'), secure=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/manifest+json')
+        data = response.json()
+        self.assertEqual(data['start_url'], '/console/')
+        for icon in data['icons']:
+            self.assertEqual(self.client.get(icon['src'], secure=True).status_code, 200, icon['src'])
