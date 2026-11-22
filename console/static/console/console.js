@@ -1112,6 +1112,12 @@
     enhanceEventMaps(scope);
   };
   document.addEventListener('DOMContentLoaded', () => window.attndEnhance(document));  // after maps.js has loaded
+  // Keep the current Platform sub-tab in view when the row scrolls sideways (phones).
+  document.addEventListener('DOMContentLoaded', () => {
+    const cur = document.querySelector('.platform-tabs [aria-current="page"]');
+    const row = cur && cur.parentElement;
+    if (row && row.scrollWidth > row.clientWidth) row.scrollLeft = cur.offsetLeft - (row.clientWidth - cur.offsetWidth) / 2;
+  });
 
   // ---------------------------------------------------------------------------
   // Background tasks (AI imports and updates)

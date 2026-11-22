@@ -1090,3 +1090,6 @@ body:has(.agent__launcher):not(:has(.agent--full)) { --fab-x: 10.5rem; --fab-bar
 .site-style__scale { width: 600px; height: 400px; overflow: hidden; border-radius: var(--radius-lg); }
 .site-style__frame--wide iframe { width: 1200px; height: 800px; transform: scale(.5); transform-origin: 0 0; }
 @media (max-width: 600px) { .site-style__frame--wide { display: none; } }
+/* Platform sub-tabs: one row that scrolls sideways on phones (it wrapped onto five rows). */
+@media (max-width: 600px) { .platform-tabs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .platform-tabs .tabs__tab { flex: none; white-space: nowrap; } }

@@ -22,6 +22,14 @@ LAYERS = [('clients', 'Clients'), ('edge', 'Edge'), ('apps', 'Django apps'), ('d
 TAGS = ['infra', 'data', 'ai', 'push', 'store', 'web', 'mail', 'pay']
 GITHUB = 'https://github.com/apbeers/Attnd-Web/blob/develop/'
 SKIP_DIRS = {'.venv', 'node_modules', 'staticfiles', 'media', 'live_tests', 'scripts', '.git'}
+# Where installed Python lives when it sits inside the project (Heroku: /app/.heroku/python/…site-packages).
+THIRD_PARTY_PARTS = {'.venv', '.heroku', 'site-packages', 'dist-packages'}
+
+
+def _first_party(path):
+    """True for our own code: inside the repository and not an installed package (Django contrib, cloudinary…)."""
+    path = Path(path)
+    return ROOT in path.parents and not (THIRD_PARTY_PARTS & set(path.relative_to(ROOT).parts))
 
 
 def load():
@@ -38,7 +46,7 @@ def local_apps():
     out = []
     for cfg in django_apps.get_app_configs():
         path = Path(cfg.path)
-        if ROOT in path.parents and '.venv' not in path.parts:
+        if _first_party(path):
             out.append(cfg.label)
     return sorted(out)
 
@@ -47,7 +55,8 @@ def _source_files():
     """Our non-test .py files. Walks with os.walk and prunes SKIP_DIRS (.venv alone is ~30k files) instead of
     globbing everything and filtering afterwards."""
     for folder, dirs, files in os.walk(ROOT):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and d != 'migrations' and d != '__pycache__']
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and d not in THIRD_PARTY_PARTS and not d.startswith('.')
+                   and d != 'migrations' and d != '__pycache__']
         for name in files:
             if not name.endswith('.py') or name.startswith('test'):
                 continue
