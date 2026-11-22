@@ -232,7 +232,7 @@ def _email_person(user, level, s):
         subject = "You've used 80% of this month's AI credit"
         body = (f"You've used ${s['used']:.2f} of this month's ${s['limit']:.0f} Attnd AI credit. It renews on "
                 f"{s['renews_label']}.")
-    _send(subject, body, [user.email])
+    _send(subject, body, [user.email], kind='ai_credit')
 
 
 def platform_total(since=None):
@@ -252,12 +252,15 @@ def platform_alert():
     admins = [a[1] if isinstance(a, (list, tuple)) else a for a in getattr(settings, 'ADMINS', [])]
     if admins:
         _send(f'Attnd AI spend passed ${amount:.0f} this month',
-              f'All AI calls together have cost ${platform_total():.2f} since the 1st. See the AI spend page.', admins)
+              f'All AI calls together have cost ${platform_total():.2f} since the 1st. See the AI spend page.', admins,
+              kind='platform_alert')
 
 
-def _send(subject, body, to):
-    from django.core.mail import send_mail
+def _send(subject, body, to, kind):
+    from console import mail
     try:
-        send_mail(subject=subject, message=body, from_email=None, recipient_list=list(to))
+        button = ({'label': 'See your AI credit', 'url': mail.site_url('/console/account/#ai-credit')}
+                  if kind == 'ai_credit' else {'label': 'Open AI spend', 'url': mail.site_url('/console/ai-spend/')})
+        mail.send(kind, list(to), subject, paragraphs=body.split('\n\n'), button=button, fail_silently=False)
     except Exception:
         logger.exception('AI credit email failed')

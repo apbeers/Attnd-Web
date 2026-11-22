@@ -12,7 +12,6 @@ from functools import lru_cache
 from pathlib import Path
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.http import (Http404, HttpResponse, HttpResponseNotAllowed, HttpResponseRedirect, JsonResponse)
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -277,11 +276,12 @@ def _notify(site, submission):
                   .exclude(user__email='').values_list('user__email', flat=True))
     if not emails:
         return
-    lines = '\n'.join(f'{k}: {v}' for k, v in submission.data.items())
+    from console import mail
     try:
-        send_mail(f'New “{submission.form}” entry on {event.name}',
-                  f'{lines}\n\nAll entries: {site_url(f"/console/events/{event.pk}/studio/")}#forms\n',
-                  from_email=None, recipient_list=sorted(emails))
+        mail.send('site_form_entry', sorted(emails), f'New “{submission.form}” entry on {event.name}',
+                  details=[(k, str(v)) for k, v in submission.data.items()],
+                  button={'label': 'All entries', 'url': f'{site_url(f"/console/events/{event.pk}/studio/")}#forms'},
+                  fail_silently=False)
     except Exception:
         logger.exception('Could not email the form entry for site %s', site.pk)
 

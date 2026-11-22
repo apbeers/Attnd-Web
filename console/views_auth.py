@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from attnd.permissions import signed_in
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import forms as auth_forms
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
@@ -69,8 +70,28 @@ class SignInView(auth_views.LoginView):
         return response
 
 
+class BrandedPasswordResetForm(auth_forms.PasswordResetForm):
+    """Django's reset form; the email goes through console.mail (the branded template, the email log)."""
+
+    def send_mail(self, subject_template_name, email_template_name, context, from_email, to_email,
+                  html_email_template_name=None):
+        from django.template import loader
+
+        from console import mail
+        subject = ''.join(loader.render_to_string(subject_template_name, context).splitlines())
+        url = f'{context["protocol"]}://{context["domain"]}' + reverse(
+            'password_reset_confirm', kwargs={'uidb64': context['uid'], 'token': context['token']})
+        mail.send('password_reset', [to_email], subject, heading='Reset your password',
+                  paragraphs=[f'Someone asked to reset the password for the Attnd account {context["email"]}.',
+                              'Choose a new password here (the link works once, for 3 days):'],
+                  button={'label': 'Choose a new password', 'url': url},
+                  after=['If it wasn’t you, ignore this email; your password stays the same.'],
+                  from_email=from_email, fail_silently=False)
+
+
 class ResetPasswordView(auth_views.PasswordResetView):
     """Django's PasswordResetView, with requests limited per email and per IP."""
+    form_class = BrandedPasswordResetForm
 
     def form_valid(self, form):
         ip, email = client_ip(self.request), form.cleaned_data['email']

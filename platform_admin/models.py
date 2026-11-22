@@ -8,6 +8,8 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
+from events.models import json_is
+
 
 class PlatformSettings(models.Model):
     """Singleton (pk 1): used everywhere a price or the free limit shows."""
@@ -134,3 +136,39 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f'{self.number} · {self.event} · ${self.amount_usd}'
+
+
+class EmailLog(models.Model):
+    """One row per recipient of every email the platform sends (console.mail.send): who, which kind, the subject
+    (6-digit codes masked), the status and Mailgun's later events. Never the body (it may hold codes or links that
+    sign someone in). Kept EMAIL_LOG_DAYS (90) days (run_scheduled_tasks → purge)."""
+    SENT, LOGGED, BLOCKED, SKIPPED, FAILED = 'sent', 'logged', 'blocked', 'skipped', 'failed'
+    DELIVERED, DEFERRED, BOUNCED, COMPLAINED, UNSUBSCRIBED = 'delivered', 'deferred', 'bounced', 'complained', 'unsubscribed'
+    STATUSES = [(SENT, 'Sent'), (LOGGED, 'Logged only (email off)'), (BLOCKED, 'Not on the allow list'),
+                (SKIPPED, 'Turned off by the person'), (FAILED, 'Failed'), (DELIVERED, 'Delivered'),
+                (DEFERRED, 'Delayed'), (BOUNCED, 'Bounced'), (COMPLAINED, 'Marked as spam'),
+                (UNSUBSCRIBED, 'Unsubscribed')]
+    created_at = models.DateTimeField(default=timezone.now)
+    kind = models.CharField(max_length=40)
+    to = models.CharField(max_length=254)
+    subject = models.CharField(max_length=200)
+    status = models.CharField(max_length=20, choices=STATUSES)
+    message_id = models.CharField(max_length=250, blank=True)
+    error = models.CharField(max_length=300, blank=True)
+    events = models.JSONField(default=list, blank=True)  # Mailgun webhook events [{event, at, reason}], ≤ 10
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['-created_at'], name='emaillog_recent'),
+                   models.Index(fields=['message_id'], name='emaillog_message'),
+                   models.Index(fields=['kind', '-created_at'], name='emaillog_kind')]
+        constraints = [json_is('events', 'array')]
+
+    def __str__(self):
+        return f'{self.kind} → {self.to} ({self.status})'
+
+    @classmethod
+    def purge(cls, days=None):
+        days = days or int(getattr(settings, 'EMAIL_LOG_DAYS', 90))
+        return cls.objects.filter(created_at__lt=timezone.now() - __import__('datetime').timedelta(days=days)).delete()[0]

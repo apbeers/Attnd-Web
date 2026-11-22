@@ -13,6 +13,7 @@ from console import views_auth, views_passkeys
 from events.app_status import app_status_view, retired_api_view
 from home.sitemaps import EventSitemap, StaticSitemap
 from join import views as join_views
+from platform_admin import views_email
 
 sitemaps = {
     'static': StaticSitemap,
@@ -30,6 +31,8 @@ urlpatterns = [
     path(settings.ADMIN_URL_PATH + 'login/', public(views_auth.admin_login)),
     path(settings.ADMIN_URL_PATH, admin.site.urls),
     path('csp-report/', public(attnd_views.csp_report), name='csp_report'),
+    path('email/unsubscribe/<str:token>/', views_email.unsubscribe, name='email_unsubscribe'),  # RFC 8058
+    path('email/mailgun/', views_email.mailgun_webhook, name='mailgun_webhook'),
     path('console/diagnostics/', include('diagnostics.urls')),  # staff only (API-013)
     path('console/ai-spend/', include('credit.urls')),  # staff; also the Platform admin's AI spend tab
     path('console/platform/', include('platform_admin.urls')),  # superusers: prices, customers, upgrades (D2)  # staff only: AI spend, limits, overrides (credit/)

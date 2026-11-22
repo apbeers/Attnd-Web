@@ -455,8 +455,6 @@ def contact(request):
     """Stage I18: "Talk to a person". Emails the Attnd team (ADMIN_EMAILS) the person's message with the context
     that helps (their email to reply to, the run id, its request and outcome, the page and event); never session keys,
     attachments or anything a page showed."""
-    from django.core.mail import EmailMessage
-
     from attnd.ratelimit import RateLimit
     from console.mail import email_enabled, site_url
     message = (request.POST.get('message') or '').strip()[:4000]
@@ -478,8 +476,9 @@ def contact(request):
         if run.event_id:
             lines.append(f'Event: {run.event_id} {getattr(run.event, "name", "")}')
         lines.append(f'Admin: {site_url("/" + settings.ADMIN_URL_PATH + f"agent/agentrun/{run.pk}/change/")}')
-    EmailMessage(subject=f'Attnd help request from {request.user.email}', body='\n'.join(lines),
-                 to=recipients, reply_to=[request.user.email]).send(fail_silently=True)
+    from console import mail
+    mail.send('contact', recipients, f'Attnd help request from {request.user.email}', heading='Help request',
+              paragraphs=['\n'.join(lines)], reply_to=[request.user.email])
     return JsonResponse({'sent': True, 'text': f'Sent to the Attnd team. We’ll reply to {request.user.email} by email.'})
 
 

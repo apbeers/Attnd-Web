@@ -9,17 +9,12 @@ from django.urls import reverse
 
 logger = logging.getLogger(__name__)
 
-KINDS = {
-    'import_done': 'An AI import finished',
-    'review_waiting': 'Website changes are waiting for review',
-    'notification_sent': 'A scheduled notification went out',
-}
+from console.mail import OPTIONAL_KINDS as KINDS  # noqa: E402  (every optional kind, shown in Account)
 
 
 def wants(user, kind):
-    from console.models import ConsolePreference
-    pref = ConsolePreference.objects.filter(user=user).values_list('notify', flat=True).first()
-    return (pref or {}).get(kind, True)
+    from console.mail import wants as _wants
+    return _wants(user, kind)
 
 
 def recipients(event, kind, extra=()):
@@ -38,20 +33,12 @@ def recipients(event, kind, extra=()):
 
 
 def send(event, kind, subject, lines, path, extra=()):
-    from django.core.mail import send_mail
-
-    from console.mail import email_enabled, site_url
+    from console import mail
     to = recipients(event, kind, extra)
-    if not to or not email_enabled():
+    if not to or not mail.email_enabled():
         return 0
-    account = site_url(reverse('console:account'))
-    body = '\n'.join(lines) + f'\n\nOpen it: {site_url(path)}\n\n—\nTurn these emails off in Account: {account}\n'
-    try:
-        send_mail(subject=subject, message=body, from_email=None, recipient_list=sorted(to))
-    except Exception:
-        logger.exception('Organizer email (%s) failed', kind)
-        return 0
-    return len(to)
+    return mail.send(kind, sorted(to), subject, paragraphs=lines,
+                     button={'label': 'Open it in Attnd', 'url': mail.site_url(path)})
 
 
 def import_done(job, event):

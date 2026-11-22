@@ -1811,18 +1811,18 @@ def _set_owner(event, new_owner):
 
 def _email_invite(event, email, inviter):
     """Email the invitation when outgoing mail is configured. Returns True if sent."""
-    from django.core.mail import send_mail
+    from console import mail
     from console.mail import email_enabled, site_url
     if not email_enabled():
         return False
     try:
-        send_mail(
-            subject=f'You\'re invited to help run {event.name} on Attnd',
-            message=(f'{inviter.email} invited you to help manage {event.name} on Attnd.\n\n'
-                     f'Sign up with this email address to get access: {site_url(reverse("console:signup"))}\n'
-                     f'Already have an account? Sign in with this email: {site_url(reverse("login"))}\n'),
-            from_email=None, recipient_list=[email])
-        return True
+        return bool(mail.send(
+            'invite', [email], f'You\'re invited to help run {event.name} on Attnd',
+            paragraphs=[f'{inviter.email} invited you to help manage {event.name} on Attnd.',
+                        'Sign up with this email address to get access.'],
+            button={'label': 'Sign up', 'url': site_url(reverse("console:signup"))},
+            after=[f'Already have an account? Sign in with this email: {site_url(reverse("login"))}'],
+            fail_silently=False))
     except Exception:
         logger.exception('Could not email the invitation to %s', email)
         return False

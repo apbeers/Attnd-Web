@@ -381,6 +381,9 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 ADMINS = [('Attnd admin', e.strip()) for e in os.getenv('ADMIN_EMAILS', '').split(',') if e.strip()]
 # Comma-separated addresses or @domains; when set, mail to anyone else is logged and dropped (use on dev).
 EMAIL_ALLOWED_RECIPIENTS = [e.strip().lower() for e in os.getenv('EMAIL_ALLOWED_RECIPIENTS', '').split(',') if e.strip()]
+# Mailgun's webhook signing key (Sending → Webhooks): delivered / failed / complained events update the Emails log.
+MAILGUN_WEBHOOK_SIGNING_KEY = os.getenv('MAILGUN_WEBHOOK_SIGNING_KEY', '')
+EMAIL_LOG_DAYS = int(os.getenv('EMAIL_LOG_DAYS', '90'))  # the Emails log's retention
 MAILERS = {
     'default': ({'BACKEND': 'console.mail.AllowListSMTPBackend', 'OPTIONS': EMAIL_SMTP_OPTIONS} if EMAIL_ENABLED
                 else {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}),

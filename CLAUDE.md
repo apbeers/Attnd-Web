@@ -392,6 +392,29 @@ event name the apps may log are in **`LOG_EVENTS.md`** (add a row there before a
   `textContent`; no inline scripts.
 - **API-014:** `perf_*` usage metrics with bucket details (`events/usage.py` `PERF_METRICS`); not interactions.
 
+## Emails (batch 7 Track B; `console/mail.py`, `templates/emails/`, `platform_admin/views_email.py`)
+
+- **One way to send**: `console.mail.send(kind, to, subject, heading=, paragraphs=, code=, details=, button=, after=,
+  reply_to=, attachments=)` renders `templates/emails/message.html` (branded card, logo, dark mode via
+  `prefers-color-scheme`; the only place literal colours are allowed: email clients ignore CSS custom properties) and
+  `message.txt` (the plain-text part) from the same parts. No `send_mail` / `EmailMessage` anywhere else
+  (`platform_admin/tests_emails.py` fails on one). Password reset goes through `views_auth.BrandedPasswordResetForm`.
+- **Kinds** (`mail.KINDS`: label + category): **optional** (import done, review waiting, notification sent, AI credit
+  warnings, website form entries) = one message per person, only when `ConsolePreference.notify[kind]` isn't off, with
+  RFC 8058 one-click unsubscribe (`List-Unsubscribe: <…/email/unsubscribe/<signed token>/>` + `List-Unsubscribe-Post`;
+  the page asks on GET, a POST unsubscribes without a session, "Turn them back on" undoes it; Account → Email me when…
+  lists the same kinds); **transactional** (invites, receipts, claim approved, website review), **security** (password
+  reset, sign-in codes, new sign-in) and **internal** (to `ADMINS`: upgrade requests, claims, help requests, platform
+  alerts) can't be unsubscribed. A new email = a kind in `KINDS` + `mail.send`.
+- **Emails log** (`platform_admin.EmailLog`, Platform sub-tab **Emails**, `platform_admin.view_emaillog` = Staff): one
+  row per recipient (to, kind, subject with 6-digit codes masked, status sent / logged / blocked (allow list) / skipped
+  (turned off) / failed, Mailgun's later events); **never the body**. Kept `EMAIL_LOG_DAYS` (90), purged by
+  `run_scheduled_tasks`. `EMAIL_ALLOWED_RECIPIENTS` still applies (blocked rows are logged; the SMTP backend still
+  drops them too). **Mailgun webhook** `POST /email/mailgun/` (HMAC of timestamp + token with
+  `MAILGUN_WEBHOOK_SIGNING_KEY`, ≤ 15 min old; 404 without the key, 406 on a bad signature): delivered → delivered,
+  failed → bounced (permanent) / delayed, complained, unsubscribed (also turns that kind off). Our own `Message-ID`
+  joins them. The Architecture page's Mailgun status reads the log (24 h sent vs failed / bounced).
+
 ## AI credit (`credit/`, batch 6 §2, owner Nov 21, 2026)
 
 Every AI call goes into one ledger and counts toward a monthly credit per person.
@@ -1296,6 +1319,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `INDEXNOW_KEY` | No | IndexNow key (8–128 letters, digits, `-`), production only: ping search engines about changed public pages (attnd/indexnow.py) |
 | `GOOGLE_PLACE_PHOTOS` / `GOOGLE_PHOTOS_DAILY_MAX` | No | API-031 live Google place photos (default on with the key; `0` = off) / loads per Pacific day (2000; each load is 2 billed calls) |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Email | Mailgun SMTP credentials for the sending domain (`postmaster@mg.attnd.app` on prod; dev uses its sandbox). No password = mail goes to the log. They feed Django 6.1's `MAILERS` (settings `EMAIL_ENABLED`, `EMAIL_SMTP_OPTIONS`); the deprecated `EMAIL_*` Django settings aren't used |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` / `EMAIL_LOG_DAYS` | No | Mailgun's webhook signing key (delivered / bounced events in the Emails log; unset = the webhook is off) / the log's retention (90) |
 | `DEFAULT_FROM_EMAIL` | No | Default `Attnd <noreply@mg.attnd.app>` |
 | `SITE_URL` | No | Base URL for links in emails, default `https://attnd.app` (dev: `https://dev.attnd.app`) |
 | `SIGNUPS_OPEN` | No | Default on (Nov 21, 2026): anyone signs up and makes demo events (20 phones each, API-025). `0` = invited emails only (console.signups) |

@@ -12,9 +12,9 @@ import io
 import logging
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
 
+from console import mail
 from studio import quality
 
 logger = logging.getLogger(__name__)
@@ -133,9 +133,9 @@ def reject(site, user):
     owner = site.event.user
     if owner and owner.email:
         try:
-            send_mail(f'Your website for {site.event.name} wasn’t published',
-                      'Attnd reviewed the website before it went live and couldn’t publish it. Reply to this email '
-                      'if you think this is a mistake.', None, [owner.email], fail_silently=True)
+            mail.send('site_review', [owner.email], f'Your website for {site.event.name} wasn’t published',
+                      paragraphs=['Attnd reviewed the website before it went live and couldn’t publish it. Reply to '
+                                  'this email if you think this is a mistake.'])
         except Exception:
             logger.exception('Could not email the owner of site %s', site.pk)
 
@@ -165,7 +165,7 @@ def _mail_staff(subject, body):
                 set(User.objects.filter(is_staff=True, is_active=True).exclude(email='')
                     .values_list('email', flat=True)[:20]))
     if to:
-        send_mail(subject, body, None, to, fail_silently=True)
+        mail.send('platform_alert', to, subject, paragraphs=body.split('\n\n'))
 
 
 # ---------------------------------------------------------------------------

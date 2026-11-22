@@ -166,7 +166,9 @@ ITEM_LABELS = {'name': 'Name', 'description': 'Description', 'start_time': 'Star
 def _diff_rows(kind, name, before, after, labels, skip=('locked_fields', 'id')):
     rows, seen = [], set()
     for field in after:
-        if field in skip or before.get(field) == after.get(field):
+        # A field the published copy doesn't have yet (added to the model after it was published) isn't a change:
+        # otherwise every row shows "— → False" until the next Publish and Discard can't clear it.
+        if field in skip or field not in before or before.get(field) == after.get(field):
             continue
         label = labels.get(field, field.replace('_', ' ').capitalize())
         if label in seen:

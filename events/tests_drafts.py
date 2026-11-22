@@ -79,6 +79,13 @@ class DraftTests(DraftTestCase):
         draft.save()
         self.assertIsNotNone(drafts.published(draft))
 
+    def test_a_field_added_after_the_publish_is_not_a_change(self):
+        pb = drafts.published(self.event)
+        for row in pb.source['locations']:
+            row.pop('google_photo', None)  # an older copy, from before the field existed
+        pb.save()
+        self.assertEqual(drafts.changes(self.event), [])
+
     def test_a_draft_change_pushes_only_the_preview_phones(self):
         from events import push
         self.stage.name = 'Draft'

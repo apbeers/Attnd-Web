@@ -49,6 +49,8 @@ class Command(BaseCommand):
         purge_undo()  # Undo entries a day past their 24 h
         from console.user_sessions import purge as purge_sessions
         purge_sessions()
+        from platform_admin.models import EmailLog
+        EmailLog.purge()  # the Emails log keeps EMAIL_LOG_DAYS (90) days
         from events import showcase
         showcase.refresh()  # the home page's showcase events stay happening now (dev only for now)
         from home.onboarding import purge_pending

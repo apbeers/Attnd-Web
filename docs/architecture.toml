@@ -420,10 +420,10 @@ id = "mailgun"
 label = "Mailgun"
 layer = "external"
 tags = ["mail"]
-description = "Every email (SMTP, mg.attnd.app)."
-code = ["attnd/settings.py", "console/mail.py"]
+description = "Every email (SMTP, mg.attnd.app): one branded HTML template + plain text, the Emails log, one-click unsubscribe; its signed webhook reports delivered / failed / complained."
+code = ["attnd/settings.py", "console/mail.py", "templates/emails/", "platform_admin/views_email.py"]
 env = ["EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD", "DEFAULT_FROM_EMAIL", "EMAIL_ALLOWED_RECIPIENTS", "MAILGUN_SMTP_LOGIN",
-       "MAILGUN_SMTP_PASSWORD", "MAILGUN_SMTP_PORT", "MAILGUN_SMTP_SERVER"]
+       "MAILGUN_SMTP_PASSWORD", "MAILGUN_SMTP_PORT", "MAILGUN_SMTP_SERVER", "MAILGUN_WEBHOOK_SIGNING_KEY", "EMAIL_LOG_DAYS"]
 status = "mail"
 
 [[node]]

@@ -92,20 +92,20 @@ def _on_sign_in(sender, request, user, **kwargs):
 def _email_new_sign_in(user, user_agent):
     if not user.email:
         return
-    from django.core.mail import send_mail
-
-    from console.mail import site_url
     from django.urls import reverse
+
+    from console import mail
+    from console.mail import site_url
     when = timezone.now().strftime('%b %-d, %Y at %H:%M UTC')
     try:
-        send_mail(
-            'New sign-in to Attnd',
-            f'Your Attnd account ({user.email}) was just signed in on a new device:\n\n'
-            f'    {describe(user_agent)}\n    {when}\n\n'
-            'If this was you, there is nothing to do.\n\n'
-            'If it wasn’t, sign that device out and change your password on your Account page:\n'
-            f'{site_url(reverse("console:account"))}#sessions\n',
-            settings.DEFAULT_FROM_EMAIL, [user.email])
+        mail.send('new_sign_in', [user.email], 'New sign-in to Attnd',
+                  paragraphs=[f'Your Attnd account ({user.email}) was just signed in on a new device:'],
+                  details=[('Device', describe(user_agent)), ('When', when)],
+                  after=['If this was you, there is nothing to do.',
+                         'If it wasn’t, sign that device out and change your password on your Account page.'],
+                  button={'label': 'Review where you’re signed in',
+                          'url': f'{site_url(reverse("console:account"))}#sessions'},
+                  from_email=settings.DEFAULT_FROM_EMAIL, fail_silently=False)
     except Exception:  # a sign-in never fails because of the email
         logger.exception('Could not send the new sign-in email')
 

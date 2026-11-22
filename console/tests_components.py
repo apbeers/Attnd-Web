@@ -391,3 +391,11 @@ class WalkthroughTests(ComponentTestCase):
         self.client.force_login(self.owner)
         self.client.post(reverse('console:walkthrough_skip'), secure=True)
         self.assertFalse(show_walkthrough(self.owner))
+
+
+class ModelJsonActionTests(TestCase):
+    def test_actions_without_a_label_never_fail(self):
+        text = C.model_json({'actions': [{'name': 'save_display'}, {'name': 'publish_changes', 'confirm': True},
+                                         'plain']})
+        self.assertIn('save_display', text)
+        self.assertIn('publish_changes — asks to confirm', text)

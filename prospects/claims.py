@@ -7,10 +7,11 @@ from urllib.parse import urlsplit
 
 from django import forms
 from django.conf import settings
-from django.core.mail import send_mail
 from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
+
+from console import mail
 
 
 class ClaimForm(forms.Form):
@@ -62,9 +63,10 @@ def request_claim(user, event, data):
                                         domain_match=domain_hint(data['email'], event, prospect))
     admins = [email for _, email in getattr(settings, 'ADMINS', [])]
     if admins:
-        send_mail(f'Claim: {event.name}', f'{data["email"]} ({data["role"]}) asks for “{event.name}” ({event.event_code}).\n'
-                  f'{claim.domain_match or "No domain match."}\n\n{settings.SITE_URL}{reverse("prospects:claims")}',
-                  None, admins, fail_silently=True)
+        mail.send('claim_request', admins, f'Claim: {event.name}',
+                  paragraphs=[f'{data["email"]} ({data["role"]}) asks for “{event.name}” ({event.event_code}).',
+                              claim.domain_match or 'No domain match.'],
+                  button={'label': 'Review claims', 'url': f'{settings.SITE_URL}{reverse("prospects:claims")}'})
     return True, 'Thanks! We check every claim by hand and email you when the event is yours.'
 
 
@@ -85,9 +87,9 @@ def approve(claim, staff):
         Prospect.objects.filter(pk=claim.prospect_id).update(status=Prospect.CLAIMED)
         ProspectActivity.objects.create(prospect_id=claim.prospect_id, user=staff,
                                         text=f'Claimed by {claim.email} ({claim.role}); event handed over.')
-    send_mail(f'{event.name} is yours on Attnd', f'Your claim was approved. Open it here:\n'
-              f'{settings.SITE_URL}{reverse("console:event", args=[event.pk])}', None, [claim.user.email],
-              fail_silently=True)
+    mail.send('claim_approved', [claim.user.email], f'{event.name} is yours on Attnd',
+              paragraphs=['Your claim was approved.'],
+              button={'label': 'Open your event', 'url': f'{settings.SITE_URL}{reverse("console:event", args=[event.pk])}'})
 
 
 def decline(claim, staff):

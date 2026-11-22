@@ -7,6 +7,7 @@ PUBLIC = {
     # site
     'health', 'place_photo', 'manifest', 'stripe_webhook',  # the console's web app manifest (browsers fetch it without cookies)
     'indexnow_key', 'django.contrib.sitemaps.views.sitemap', 'homepage', 'home_page', 'privacy', 'brand', 'csp_report',
+    'email_unsubscribe', 'mailgun_webhook',  # one-click unsubscribe (RFC 8058, a signed token), Mailgun's signed events
     # the apps' API (API keys / attestation, never a session)
     'nearby', 'lookup', 'bundle', 'join', 'changes', 'download', 'download_app', 'download_get', 'leave', 'usage', 'device', 'diagnostics_logs', 'diagnostics_reports',
     'app_status', 'symbols', 'symbolicate', 'attest-nonce', 'attest-ios', 'attest-android',

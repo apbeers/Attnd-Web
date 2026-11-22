@@ -21,6 +21,7 @@ AREAS = [
     ('architecture', 'Architecture', 'platform:architecture', '', 'platform_admin.view_architecture'),
     ('app_options', 'App options', 'platform:app_options', '', 'platform_admin.view_architecture'),
     ('brand', 'Brand', 'platform:brand', '', 'platform_admin.view_platformsettings'),
+    ('emails', 'Emails', 'platform:emails', '', 'platform_admin.view_emaillog'),
 ]
 # Platform home's own ?tab= values → the area key
 HOME_TABS = {'overview': 'health', 'customers': 'customers', 'requests': 'requests', 'pricing': 'pricing',

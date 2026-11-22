@@ -1,0 +1,19 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en" data-scheme="auto">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Email settings · Attnd</title>{% include 'home/_icons.html' %}
+  <link rel="stylesheet" href="{% static 'home/site.css' %}"></head>
+<body><main class="page wrap stack stack--loose unsubscribe">
+  <h1>{% if wanted %}Stop these emails?{% else %}You’re unsubscribed{% endif %}</h1>
+  <p class="muted">{{ email }} · “{{ label }}”</p>
+  {% if wanted %}
+    {% if undone %}<p>Done: you’ll get these emails again.</p>{% endif %}
+    <p>Attnd won’t send you “{{ label }}” emails any more. Security emails (sign-in codes, new sign-ins) and receipts still arrive.</p>
+    <form method="post"><input type="hidden" name="action" value="unsubscribe"><button class="button button--primary">Unsubscribe</button></form>
+  {% else %}
+    <p>Attnd won’t send you “{{ label }}” emails any more. You can turn them back on any time.</p>
+    <form method="post"><input type="hidden" name="action" value="resubscribe"><button class="button">Turn them back on</button></form>
+  {% endif %}
+  <p class="small muted"><a href="{{ account_url }}">All email settings</a> (sign in to change the others).</p>
+</main></body></html>

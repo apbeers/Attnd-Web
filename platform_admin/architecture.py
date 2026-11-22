@@ -213,7 +213,7 @@ def status():
     try:
         from platform_admin.models import EmailLog
         qs = EmailLog.objects.filter(created_at__gte=since)
-        failed = qs.filter(status=EmailLog.FAILED).count()
+        failed = qs.filter(status__in=[EmailLog.FAILED, EmailLog.BOUNCED]).count()
         out['mailgun'] = {'state': 'red' if failed and failed == qs.count() else 'amber' if failed else 'green',
                           'text': f'{qs.count()} sent, {failed} failed in 24 h'}
     except Exception:

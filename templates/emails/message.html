@@ -1,0 +1,59 @@
+{% comment %}One template for every email Attnd sends (console.mail.render). Email clients ignore CSS custom properties
+and most stylesheets, so the brand colours are written inline here (the only place outside the CSS token files);
+the <style> block adds dark mode for the clients that support it.{% endcomment %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{ subject }}</title>
+<style>
+  body { margin: 0; padding: 0; }
+  .attnd-button:hover { background: #5a2fb0 !important; }
+  @media (prefers-color-scheme: dark) {
+    .attnd-bg { background: #15121c !important; }
+    .attnd-card { background: #221d2c !important; border-color: #3a3348 !important; }
+    .attnd-text, .attnd-heading { color: #f1edf7 !important; }
+    .attnd-muted { color: #b3aac2 !important; }
+    .attnd-code { background: #2d2540 !important; color: #f1edf7 !important; }
+    .attnd-link { color: #b9a2f0 !important; }
+    .attnd-button { background: #9d7bea !important; color: #15121c !important; }
+  }
+  @media (max-width: 600px) { .attnd-card { padding: 24px 20px !important; } }
+</style>
+</head>
+<body class="attnd-bg" style="margin:0;padding:0;background:#f4f1fa;">
+<div style="display:none;max-height:0;overflow:hidden;">{{ paragraphs.0|default:heading }}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="attnd-bg" style="background:#f4f1fa;">
+  <tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+      <tr><td style="padding:0 4px 16px 4px;">
+        <a href="{{ site_url }}" style="text-decoration:none;"><img src="{{ logo_url }}" width="36" height="36" alt="Attnd" style="border-radius:9px;vertical-align:middle;border:0;"><span class="attnd-heading" style="font:700 20px/36px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#431f86;vertical-align:middle;padding-left:10px;">attnd.</span></a>
+      </td></tr>
+      <tr><td class="attnd-card" style="background:#ffffff;border:1px solid #e6e0f0;border-radius:18px;padding:32px 36px;font:16px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <h1 class="attnd-heading" style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#1d1726;">{{ heading }}</h1>
+        {% for p in paragraphs %}<p class="attnd-text" style="margin:0 0 14px 0;color:#2c2536;white-space:pre-line;">{{ p }}</p>{% endfor %}
+        {% if code %}<p class="attnd-code" style="margin:18px 0;padding:14px 18px;background:#f0eaff;border-radius:12px;font:700 28px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:6px;color:#1d1726;text-align:center;">{{ code }}</p>{% endif %}
+        {% if details %}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 16px 0;">
+          {% for label, value in details %}<tr><td class="attnd-muted" style="padding:3px 16px 3px 0;color:#6b6178;font-size:14px;vertical-align:top;">{{ label }}</td><td class="attnd-text" style="padding:3px 0;color:#2c2536;font-size:14px;">{{ value }}</td></tr>{% endfor %}
+        </table>{% endif %}
+        {% if button %}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0;"><tr><td style="border-radius:999px;background:#431f86;">
+          <a class="attnd-button" href="{{ button.url }}" style="display:inline-block;padding:13px 26px;border-radius:999px;background:#431f86;color:#ffffff;font-weight:600;text-decoration:none;">{{ button.label }}</a>
+        </td></tr></table>{% endif %}
+        {% for p in after %}<p class="attnd-muted" style="margin:0 0 12px 0;color:#6b6178;font-size:14px;white-space:pre-line;">{{ p }}</p>{% endfor %}
+        {% if button %}<p class="attnd-muted" style="margin:16px 0 0 0;color:#6b6178;font-size:13px;word-break:break-all;">Or open: <a class="attnd-link" href="{{ button.url }}" style="color:#431f86;">{{ button.url }}</a></p>{% endif %}
+      </td></tr>
+      <tr><td class="attnd-muted" style="padding:18px 8px;color:#6b6178;font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;text-align:center;">
+        {% if category == 'optional' %}You get this email because “{{ kind_label }}” is on for your Attnd account.<br>
+        {% if unsubscribe_url %}<a class="attnd-link" href="{{ unsubscribe_url }}" style="color:#431f86;">Unsubscribe</a> · {% endif %}<a class="attnd-link" href="{{ preferences_url }}" style="color:#431f86;">Email settings</a>
+        {% elif category == 'security' %}This is a security email about your Attnd account, so it can’t be turned off.
+        {% elif category == 'internal' %}An Attnd team email.
+        {% else %}Sent by Attnd because of something you or your team did.{% endif %}
+        <br><a class="attnd-link" href="{{ site_url }}" style="color:#6b6178;">attnd.app</a>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

@@ -1038,3 +1038,4 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 /* The guided "Preview on my phone" steps (batch 7) */
 .guided-steps { margin: 0; padding-left: 1.4em; display: grid; gap: var(--space-1); }
 .guided-steps li::marker { font-weight: 700; color: var(--color-brand-text); }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }

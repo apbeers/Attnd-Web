@@ -1,6 +1,6 @@
 from django.urls import path
 
-from platform_admin import views, views_arch
+from platform_admin import views, views_arch, views_email
 
 app_name = 'platform'
 urlpatterns = [
@@ -16,4 +16,5 @@ urlpatterns = [
     path('architecture/', views_arch.architecture, name='architecture'),
     path('app-options/', views_arch.app_options, name='app_options'),
     path('brand/', views_arch.brand, name='brand'),
+    path('emails/', views_email.emails, name='emails'),
 ]

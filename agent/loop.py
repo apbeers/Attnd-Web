@@ -330,7 +330,11 @@ def _first_message(run):
     page_text, events_text = '(none)', ''
     if run.page_url:
         step = add_step(run, tool='read_page', arguments={'path': run.page_url}, text='Reading this page…')
-        drawn = components.page_json(run.user, run.page_url)  # the page's component as JSON, when it has one
+        try:  # the page's component as JSON, when it has one; a bad component falls back to reading the page
+            drawn = components.page_json(run.user, run.page_url)
+        except Exception:
+            logger.exception('page_json failed for %s', run.page_url)
+            drawn = None
         if drawn is not None:
             title, page_text = drawn
             step.text, step.url = f'Read “{title}”', run.page_url

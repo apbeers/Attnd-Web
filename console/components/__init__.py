@@ -280,6 +280,17 @@ DROP_KEYS = {'url', 'csv', 'pdf', 'locations_url', 'pins', 'center', 'ids_json',
              'multipart', 'layout', 'attrs', 'id_attr'}
 
 
+def _action_text(a):
+    """One action for the model: its tool name and label. Unresolved actions (no label yet) and plain strings are
+    fine too: this must never fail, because it runs on whatever page the person happens to be on."""
+    if not isinstance(a, dict):
+        return str(a)
+    name = a.get('name') or ''
+    label = a.get('label') or a.get('title') or ''
+    text = f'{name} ({label})' if label and label != name else name
+    return text + (' — asks to confirm' if a.get('confirm') else '')
+
+
 def model_json(data, limit=4000):
     """A compact copy for the model: no URLs or markup details; actions → their tool names; forms → field values."""
     def slim(value, key=''):
@@ -293,7 +304,7 @@ def model_json(data, limit=4000):
                     if k not in DROP_KEYS and not k.endswith(('_url', '_png', '_svg')) and v not in ('', None, [], {})}
         if isinstance(value, list):
             if key == 'actions':
-                return [f'{a["name"]} ({a["label"]}){" — asks to confirm" if a.get("confirm") else ""}' for a in value]
+                return [_action_text(a) for a in value]
             if key == 'badges':
                 return [b['label'] for b in value]
             return [slim(v) for v in value]

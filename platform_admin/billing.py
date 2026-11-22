@@ -210,13 +210,14 @@ def pdf(invoice):
 
 def send_receipt(invoice, to):
     """Email the receipt (or invoice) with its PDF to someone."""
-    from django.core.mail import EmailMessage
+    from console import mail
     kind = 'Receipt' if invoice.status == invoice.PAID else 'Invoice'
-    body = (f'{kind} {invoice.number} from Attnd\n\n{invoice.description}\nAmount: ${invoice.amount_usd:,.2f} USD\n'
-            + ('Paid, thank you.\n' if invoice.status == invoice.PAID else 'Due on receipt.\n'))
-    message = EmailMessage(f'{kind} {invoice.number} · {invoice.event.name}', body, None, [to])
-    message.attach(f'{invoice.number}.pdf', pdf(invoice), 'application/pdf')
-    message.send(fail_silently=False)
+    mail.send('receipt', [to], f'{kind} {invoice.number} · {invoice.event.name}', heading=f'{kind} {invoice.number} from Attnd',
+              paragraphs=[invoice.description],
+              details=[('Amount', f'${invoice.amount_usd:,.2f} USD'), ('Event', invoice.event.name),
+                       ('Status', 'Paid, thank you.' if invoice.status == invoice.PAID else 'Due on receipt.')],
+              after=['The PDF is attached.'],
+              attachments=[(f'{invoice.number}.pdf', pdf(invoice), 'application/pdf')], fail_silently=False)
 
 
 def csv_export(invoices):

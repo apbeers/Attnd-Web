@@ -29,12 +29,13 @@ class OrganizerMailTests(TestCase):
         cs = ChangeSet.objects.create(event=self.event, summary='2 new sets', status=ChangeSet.PENDING)
         with mock.patch('console.mail.email_enabled', return_value=True):
             organizer_mail.review_waiting(self.event, cs, 2)
-            self.assertEqual(sorted(mail.outbox[0].to), ['admin@example.com', 'owner@example.com'])
+            self.assertEqual(sorted(a for m in mail.outbox for a in m.to), ['admin@example.com', 'owner@example.com'])
+            mail.outbox.clear()
             self.client.force_login(self.admin)
             self.client.post(reverse('console:account'), {'action': 'notify', 'import_done': 'on'}, secure=True)
             organizer_mail.review_waiting(self.event, cs, 2)
-            self.assertEqual(mail.outbox[1].to, ['owner@example.com'])
-            self.assertIn('Turn these emails off in Account', mail.outbox[1].body)
+            self.assertEqual(mail.outbox[0].to, ['owner@example.com'])
+            self.assertIn('Turn these emails off in Account', mail.outbox[0].body)
 
     def test_a_scheduled_notification_going_out_is_reported(self):
         from events import push

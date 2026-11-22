@@ -1,0 +1,18 @@
+{% autoescape off %}{{ heading }}
+
+{% for p in paragraphs %}{{ p }}
+
+{% endfor %}{% if code %}    {{ code }}
+
+{% endif %}{% for label, value in details %}{{ label }}: {{ value }}
+{% endfor %}{% if details %}
+{% endif %}{% if button %}{{ button.label }}:
+{{ button.url }}
+
+{% endif %}{% for p in after %}{{ p }}
+
+{% endfor %}—
+{% if category == 'optional' %}You get this email because “{{ kind_label }}” is on for your Attnd account.
+Turn these emails off in Account: {{ preferences_url }}{% if unsubscribe_url %}
+Unsubscribe: {{ unsubscribe_url }}{% endif %}{% elif category == 'security' %}A security email about your Attnd account.{% elif category == 'internal' %}An Attnd team email.{% else %}Attnd · {{ site_url }}{% endif %}
+{% endautoescape %}

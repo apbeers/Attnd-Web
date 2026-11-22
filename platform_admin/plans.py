@@ -36,8 +36,9 @@ def can_go_live(event):
 
 def request_upgrade(event, user, kind, message=''):
     """An upgrade request (one pending per event and kind) + an email to the admins. Returns (request, created)."""
-    from django.core.mail import send_mail
     from django.urls import reverse
+
+    from console import mail
 
     from platform_admin.models import UpgradeRequest
     pending = UpgradeRequest.objects.filter(event=event, kind=kind, status=UpgradeRequest.PENDING).first()
@@ -47,10 +48,11 @@ def request_upgrade(event, user, kind, message=''):
                                         message=(message or '')[:2000])
     admins = [email for _, email in getattr(settings, 'ADMINS', [])]
     if admins:
-        body = (f'{getattr(user, "email", "Someone")} asks for {LABELS[kind]} ({price_label(kind)}) on “{event.name}” '
-                f'({event.event_code}, id {event.pk}).\n\n{message or "(no note)"}\n\n'
-                f'Decide in the Platform admin: {settings.SITE_URL}{reverse("platform:home")}?tab=requests')
-        send_mail(f'Upgrade request: {event.name} → {LABELS[kind]}', body, None, admins, fail_silently=True)
+        mail.send('upgrade_request', admins, f'Upgrade request: {event.name} → {LABELS[kind]}',
+                  paragraphs=[f'{getattr(user, "email", "Someone")} asks for {LABELS[kind]} ({price_label(kind)}) on '
+                              f'“{event.name}” ({event.event_code}, id {event.pk}).', message or '(no note)'],
+                  button={'label': 'Decide in the Platform admin',
+                          'url': f'{settings.SITE_URL}{reverse("platform:home")}?tab=requests'})
     return req, True
 
 

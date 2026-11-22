@@ -64,6 +64,7 @@ STAFF = frozenset({
     'events.mark_event_paid',  # going live (no checkout yet)
     'events.view_showcase',  # the "Showcase & demo" section of Your events
     'platform_admin.view_platformsettings',  # the Platform page (its sub-tabs ask their own permissions)
+    'platform_admin.view_emaillog',  # the Emails log (who got which email, its status; never the body)
 })
 PLATFORM_ADMIN = STAFF | {
     'platform_admin.change_platformsettings',  # the Platform admin: prices, customers, upgrades, overrides
