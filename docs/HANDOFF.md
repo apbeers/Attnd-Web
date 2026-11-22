@@ -82,8 +82,17 @@ resume note is under "Running when paused" below.
 
 ## Next after those
 
-1. **Android one-list update:** follow `docs/specs/one_list_spec.md` and switch Android's ported My schedule (phase
-   3a: `ScheduleStore`, `ScheduleController`, `PlanStore.onApply` / reconcile) to the single list.
+1. **Android one-list update: done** (Attnd-Android `1bdd57c`, spec `docs/specs/one_list_spec.md`).
+   - [x] `source` / `reason` on entries, `SchedulePreferences` and the check-off set per event.
+   - [x] No stored Plan: `PlanStore` keeps none; `applyPlan`, reconcile, `PlanHistory`, re-plan / keep / clear and
+     "Your plan changed" removed. `Planner.propose` → `ScheduleProposal` (only `planner` entries removed unless asked).
+   - [x] One flow and one Undo history over My schedule (≤ 20, hearts included); new plans preview as a proposal.
+   - [x] Derived day view (`MySchedule.dayPlan`) for the timeline, routes, live hints, WhyNot, sharing and the Live
+     Update (no plan source).
+   - [x] One-time idempotent migration of `plan_<id>` / `plan_history_<id>`, keys deleted.
+   - [x] "My plan" → Ask Attnd in the UI. 432 unit tests, eval router 245/247, critical 50/50; lint and build green.
+   - **On a device:** migration from a real older build, Ask Attnd's proposal for "Plan my Saturday", Undo, the Live
+     Update. The heart's Undo snackbar is phase 3b (`ScheduleController.undo` is ready).
 2. **Android remaining phases:**
    - 3b: My schedule UI;
    - 5b: the renderer, details, Home, context, Apple Music, photo credit; turn on `X-Attnd-Sections: 2`;
