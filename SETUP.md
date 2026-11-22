@@ -93,6 +93,8 @@ Do these steps once, in order. Each step says which values go where. For any sin
   attnd-web` and `heroku ps:scale tasks=1:basic -a attnd-web` (with a go-ahead).
 - [x] DEMO reloaded on dev with its theme (owner, Nov 21, 2026). Production: the same `load_demo_event` with a go-ahead
   after the release.
+- [x] Production sign-ups: **invite-only** (owner, Nov 22, 2026; `SIGNUPS_OPEN=0` set on attnd-web before the batch 7
+  release, v121). Dev stays open.
 - [ ] Onboarding (Nov 21, 2026, on dev): sign-ups are **open by default** now (`SIGNUPS_OPEN` defaults to on; anyone
   makes demo events, capped at 20 phones each, API-025). Before releasing to production decide: keep it open, or
   `heroku config:set SIGNUPS_OPEN=0 -a attnd-web` (invited emails only). Showcase events are dev-only (`SHOWCASE_EVENTS`
