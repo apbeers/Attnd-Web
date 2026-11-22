@@ -285,6 +285,15 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   the map, colours, Visibility (lifecycle) beside Share it; website watching, most liked, recent AI updates and App
   layout fold into "Settings and recent activity". The canvas Overview composite (`event_overview`) has the same
   order. `free_limit.status` is kept on the event object for the request.
+- **Page ↔ chat parity** (batch 7; `console/parity.py`, `docs/parity.md`, `console/tests_parity.py`): the table is
+  generated from the code: every console URL with its read action, the components its page really draws (their
+  `component--<name>` classes in the page's HTML, fetched as a superuser on the DEMO event) and, per write tool, how the
+  chat reaches it (a component's declared action, or a button / form URL in a component's JSON). The test fails when a
+  write has no way in from a component and isn't in `TOOL_ONLY` (Ask Attnd calls it; e.g. the top bar's chat switch,
+  Undo in toasts) or `SHOWN_WHEN` (a button a component draws only in some states), when a page is drawn by no
+  component and isn't `BESPOKE` / in `BESPOKE_AREAS` (diagnostics, Platform, Prospects, Studio's code editor), or when
+  `docs/parity.md` is stale (`UPDATE_PARITY=1 uv run python manage.py test console.tests_parity`). A new feature =
+  a registered action + a component that offers it, or an entry there with its reason.
 - **Width and phones** (batch 7): every component's root is `component component--<name>` (a container; container
   queries decide its layout, so the 26rem chat, a phone and a wide canvas use one template; `console/tests_phone.py`
   fails a root without it). Phones (≤ 600px, the block at the end of console.css): tap targets ≥ 44 × 44 px (buttons,
