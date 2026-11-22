@@ -236,8 +236,9 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 
 | Event | Category | Level | Fields | When |
 |-------|----------|-------|--------|------|
-| `perf.signpost` | `perf` | debug | **`name`** (`launch`/`bundle_fetch`/`bundle_decode`/`planner`/`map_first_render`/`search_index`), **`ms`** | an `OSSignposter` interval / Android `Trace` section ended |
+| `perf.signpost` | `perf` | debug | **`name`** (`launch`/`bundle_fetch`/`bundle_decode`/`bundle_apply`/`bundle_save`/`planner`/`map_first_render`/`search_index`), **`ms`** | an `OSSignposter` interval / Android `Trace` section ended |
 | `perf.metric` | `perf` | debug | **`name`** (an API-014 metric, e.g. `perf_bundle_fetch`), **`bucket`** | a value went into the anonymous perf counts |
+| `perf.hang` | `perf` | warning | **`ms`**, `signpost` (the interval running, if any) | Debug/Dev builds (iOS): the main thread didn't answer for > 100 ms |
 | `perf.frame_drops` | `perf` | debug | **`screen`**, **`dropped`**, `ms` | janky frames on a screen (when measured) |
 
 ### auth
