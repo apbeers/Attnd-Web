@@ -62,10 +62,16 @@ class JoinTests(PreviewTestCase):
         self.join('phone-0')
         self.assertTrue(EventJoin.objects.filter(device_id='phone-0').exists())
         token = preview.make_token(self.owner, self.event)
-        for i in range(5):
-            self.join(f'phone-{i}', preview_token=token)
+        answers = [self.join(f'phone-{i}', preview_token=token).json() for i in range(5)]
         self.assertFalse(EventJoin.objects.filter(device_id='phone-0').exists())
         self.assertEqual(Device.objects.previews().filter(event=self.event).count(), 3)
+        # Batch 7: the 4th and 5th join silently as attendees (the first three stay previews; the free limit applies).
+        self.assertEqual([a.get('preview') for a in answers[:3]], [True, True, True])
+        self.assertEqual(answers[3].get('preview'), False)
+        self.assertEqual(set(Device.objects.previews().values_list('pk', flat=True)), {'phone-0', 'phone-1', 'phone-2'})
+        self.assertTrue(EventJoin.objects.filter(device_id='phone-3').exists())
+        # A preview phone joining again keeps its place.
+        self.assertTrue(self.join('phone-1', preview_token=token).json()['preview'])
 
     def test_leaving_or_switching_ends_it(self):
         self.join('p', preview_token=preview.make_token(self.owner, self.event))

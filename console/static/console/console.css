@@ -1034,3 +1034,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .status-line__main, .status-line__next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .status-line__limit { font-size: var(--text-sm); }
 @container component (min-width: 48rem) { .status-line { grid-template-columns: 1fr auto; align-items: center; } }
+
+/* The guided "Preview on my phone" steps (batch 7) */
+.guided-steps { margin: 0; padding-left: 1.4em; display: grid; gap: var(--space-1); }
+.guided-steps li::marker { font-weight: 700; color: var(--color-brand-text); }

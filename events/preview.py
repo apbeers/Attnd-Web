@@ -19,7 +19,7 @@ from django.utils import timezone
 
 SALT = 'attnd.preview.v1'
 TOKEN_DAYS = 7
-MAX_DEVICES = 3  # active preview phones per event (a fourth replaces the oldest)
+MAX_DEVICES = 3  # active preview phones per event (batch 7: a fourth joins as an ordinary attendee)
 WAIT_SECONDS = 25  # under Heroku's 30 s router timeout
 RETRY_SECONDS = 15
 CHECK_EVERY = 1.0
@@ -71,17 +71,21 @@ def open_links(event, user):
             'fallback': fallback}
 
 
+def has_room(event, device_id, now=None):
+    """May this device become (or stay) a live preview phone? At most MAX_DEVICES per event; one that already is keeps
+    its place. Over the cap the phone joins as an ordinary attendee (batch 7, the join answer says preview: false)."""
+    from events.models import Device
+    others = Device.objects.previews(now or timezone.now()).filter(event=event).exclude(pk=str(device_id)).count()
+    return others < MAX_DEVICES
+
+
 def mark(device, event, user, now=None):
-    """Make a joined device a preview phone of this event for TOKEN_DAYS; keeps at most MAX_DEVICES per event."""
+    """Make a joined device a preview phone of this event for TOKEN_DAYS (the caller checked has_room)."""
     from events.models import Device
     now = now or timezone.now()
     from events.models import EventJoin
     Device.objects.filter(pk=device.pk).update(preview_until=now + timedelta(days=TOKEN_DAYS), preview_by=user)
     EventJoin.objects.filter(event=event, device_id=device.pk).delete()  # an attendee before: its free spot back
-    extra = list(Device.objects.previews(now).filter(event=event).exclude(pk=device.pk)
-                 .order_by('-joined_at').values_list('pk', flat=True)[MAX_DEVICES - 1:])
-    if extra:
-        Device.objects.filter(pk__in=extra).update(preview_until=now)  # stays a preview device, just not live
 
 
 def remove(event, device_id):
@@ -155,6 +159,19 @@ def wait_for_change(event_id, since, seconds=WAIT_SECONDS):
 ACTIVE_WINDOW = timedelta(hours=24)  # attendee phones counted: seen in the last day, with a version reported
 
 
+def seen_ago(delta):
+    """"10 s ago", "3 min ago", "2 h ago", "4 days ago" (the preview phones' status line)."""
+    seconds = max(int(delta.total_seconds()), 0)
+    if seconds < 60:
+        return f'{max(seconds, 1)} s ago'
+    if seconds < 3600:
+        return f'{seconds // 60} min ago'
+    if seconds < 86400:
+        return f'{seconds // 3600} h ago'
+    days = seconds // 86400
+    return f'{days} day{"s" if days != 1 else ""} ago'
+
+
 def phones(event, now=None):
     """{'updated', 'total', 'text', 'previews': [...]} from the version each device last fetched."""
     from django.db.models import Count, Q
@@ -184,12 +201,7 @@ def phones(event, now=None):
         live = bool(d.preview_until and d.preview_until > now)
         current = d.last_version is not None and d.last_version >= version
         seen = d.last_seen
-        if current and seen and now - seen < timedelta(minutes=2):
-            state = 'updated just now'
-        elif current:
-            state = 'up to date'
-        else:
-            state = 'not updated yet'
+        state = ('Live' if current else 'Catching up') + (f' · seen {seen_ago(now - seen)}' if seen else ' · not seen yet')
         previews.append({'id': d.pk, 'label': f'{"iPhone" if d.platform == "ios" else "Android" if d.platform == "android" else "Phone"}'
                                              f'{" · " + d.preview_by.email if d.preview_by_id else ""}',
                          'state': state if live else 'preview ended', 'live': live, 'current': current})

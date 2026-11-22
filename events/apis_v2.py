@@ -213,6 +213,11 @@ class JoinV2(ApiKeyRequired, View):
         # expired token just joins as an attendee.
         from events import preview
         preview_user = preview.read_token(body.pop('preview_token', None), event)
+        over_cap = preview_user is not None and not preview.has_room(event, device_id)
+        if over_cap:
+            if event.status == Event.STATUS_DRAFT:  # nobody else may join a draft
+                return JsonResponse({'error': 'Not found'}, status=404)
+            preview_user = None  # batch 7: a 4th preview phone quietly joins as an attendee
         # API-025: an unpaid event takes FREE_DEVICE_LIMIT different devices; a device that joined before always can.
         # A preview phone never uses one of them.
         from events import free_limit
@@ -223,6 +228,10 @@ class JoinV2(ApiKeyRequired, View):
         if preview_user is not None:
             preview.mark(device, event, preview_user)
             answer['preview'] = True
+        elif over_cap:
+            from events.models import Device
+            Device.objects.filter(pk=device.pk).update(preview_until=None, preview_by=None)  # not a preview any more
+            answer['preview'] = False
         return JsonResponse(answer)
 
 

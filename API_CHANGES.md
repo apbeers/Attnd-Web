@@ -157,6 +157,9 @@ when the answer has `preview: true`, hold `changes/?since=<content_version>` whi
 on `changed`, honour `retry_after`, stop on `preview: false`); use `jitter_ms` from `content_updated` (0–`jitter_ms`
 ms, else 0–10 s). Old builds ignore all of it.
 **Android:** parked (owner, Nov 21, 2026). Builds ignore the new keys; `jitter_ms` would be the only easy win.
+- **Nov 22, 2026 (batch 7, additive):** over the cap of 3 live preview phones a phone with a valid token joins as an
+  ordinary attendee and the answer says `"preview": false` (before, it replaced the oldest preview phone). Apps: treat
+  `preview: false` like no key (nothing to show; no `changes/` long-poll). No app change needed.
 
 ### API-025: Free limit on unpaid events
 **Why:** anyone can now sign up and create demo events (owner, Nov 21, 2026); going live stays invite-only (an admin

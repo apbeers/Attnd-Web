@@ -110,7 +110,9 @@ Send it as `preview_token` in the join body:
 → `{ "status": "ok", "content_version": 15, "preview": true }`. A valid token (made for someone on the event's team, 7
 days) makes the device that event's preview phone: it isn't an attendee (not counted, never refused by the free limit),
 its `content_updated` pushes carry `jitter_ms: 0`, and while the app is on screen it may hold `changes/` (below). An
-invalid or expired token is ignored (an ordinary join, no `preview` key). Joining another event or leaving ends it; the
+invalid or expired token is ignored (an ordinary join, no `preview` key). With 3 live preview phones already (batch 7)
+the phone joins as an ordinary attendee and the answer says `"preview": false` (the app shows nothing special; it
+counts toward an unpaid event's free limit like any attendee). Joining another event or leaving ends it; the
 console can remove a preview phone (it leaves the event). Keep the token only for that join; never show it.
 
 ### `GET events/<id>/changes/?since=<content_version>` (API-026, preview phones only)

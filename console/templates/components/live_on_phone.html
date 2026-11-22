@@ -3,11 +3,7 @@
   <div class="live-pill"><span class="live-dot"></span> Live on your phone</div>
   <img src="{{ d.qr_url }}" alt="QR code to open {{ d.name }} in the Attnd app" width="180" height="180">
   <div class="display-code">{{ d.code }}</div>
-  <ol class="small">
-    <li>Scan the code with your phone's camera. It opens the Attnd app, or an instant App Clip on iPhone with nothing to install.</li>
-    <li>Keep the app open and change something here: a location, the schedule, a tab or a color.</li>
-    <li>Watch your phone update within a few seconds. Attendees see the same thing.</li>
-  </ol>
+  <p class="small">Attendees scan this code (or open the link) to join. It opens the Attnd app, or an instant App Clip on iPhone with nothing to install.</p>
   {% if d.draft %}<p class="small tone-warning">Drafts can only be opened by your team. Publish to let attendees join.</p>{% endif %}
 </div>{% endpartialdef %}
 <div class="stack stack--tight component component--live_on_phone">{% partial panel %}
@@ -22,9 +18,14 @@
       <div class="small muted break center">{{ d.join_url }}</div>
       <p class="small center" data-phones-line data-phones-url="{{ d.phones_url }}" data-version="{{ d.phones.version }}" role="status">{{ d.phones.text }}</p>
       <details class="preview-phone stack stack--tight"{% if d.phones.previews %} open{% endif %}>
-        <summary class="small strong">{% icon "phone" %} Preview on my phone</summary>
-        <p class="small muted">Your phone sees every change the moment you make it, before attendees (they get it within seconds). It isn't counted as an attendee. The code works for 7 days and only for you.</p>
+        <summary class="small strong">{% icon "phone" %} Preview on my phone · instant updates</summary>
+        <ol class="guided-steps small">
+          <li><strong>Scan this code with your phone.</strong> It works for 7 days and only for you; it isn't counted as an attendee.</li>
+          <li><strong>Your phone shows changes as you make them</strong>, drafts too, within a second.</li>
+          <li><strong>Attendees see them when you Publish</strong> (the bar at the bottom says how many changes wait).</li>
+        </ol>
         <img class="center-block" src="{{ d.preview_qr_url }}" alt="QR code to preview {{ d.name }} on your phone" width="150" height="150" loading="lazy">
+        <p class="small muted">Up to 3 preview phones; a 4th just joins as an attendee.</p>
         <a class="button button--secondary button--block open-in-app" href="{{ d.preview_open.fallback }}" data-open-app
            data-ios="{{ d.preview_open.ios }}" data-android="{{ d.preview_open.android }}" data-fallback="{{ d.preview_open.fallback }}" hidden>{% icon "phone" %} Open as preview</a>
         {% if d.phones.previews %}<ul class="list list--inset small" data-preview-phones>{% for p in d.phones.previews %}<li class="cluster"><span class="grow">{{ p.label }}<br><span class="muted" data-preview-state="{{ p.id }}">{{ p.state }}</span></span>{% include 'components/_actions.html' with actions=p.actions %}</li>{% endfor %}</ul>{% endif %}
