@@ -26,6 +26,8 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
+- [ ] IndexNow on production (step 22): `heroku config:set -a attnd-web INDEXNOW_KEY=$(openssl rand -hex 16)` (batch 7).
+- [ ] Privacy policy rewrite: read `docs/privacy_policy_draft.md` (five decisions at the top), then say publish (batch 7).
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
 - [x] Protect `main` in all three repos: ruleset "Protect main" blocks force-push and deletion (Nov 14, 2026). Add "require status checks" once releases go through pull requests.
@@ -1091,3 +1093,12 @@ push (nothing else depends on it). Check after a deploy:
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" https://dev.attnd.app/health/
 ```
+
+## 22. IndexNow (batch 7, 1 min, production only)
+
+Tells Bing and the other IndexNow engines when a listed event's join page or a Studio site changes. Off until the key
+is set (dev never sends). A random key, then nothing else (the key file is served automatically):
+```bash
+heroku config:set -a attnd-web INDEXNOW_KEY=$(openssl rand -hex 16)
+```
+Check after the next deploy: Diagnostics → Endpoints → IndexNow shows "0 waiting" and the counts per day.

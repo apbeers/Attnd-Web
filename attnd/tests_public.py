@@ -5,7 +5,7 @@ from django.urls import URLPattern, URLResolver, get_resolver, reverse
 
 PUBLIC = {
     # site
-    'health', 'place_photo', 'django.contrib.sitemaps.views.sitemap', 'homepage', 'home_page', 'privacy', 'csp_report',
+    'health', 'place_photo', 'indexnow_key', 'django.contrib.sitemaps.views.sitemap', 'homepage', 'home_page', 'privacy', 'csp_report',
     # the apps' API (API keys / attestation, never a session)
     'nearby', 'lookup', 'bundle', 'join', 'changes', 'download', 'download_app', 'download_get', 'leave', 'usage', 'device', 'diagnostics_logs', 'diagnostics_reports',
     'app_status', 'symbols', 'symbolicate', 'attest-nonce', 'attest-ios', 'attest-android',

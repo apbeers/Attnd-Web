@@ -1043,7 +1043,11 @@ contributor) are object permissions from `PermissionMixin` (on the site's one au
   `SOCIAL_PROFILES`), WebSite and SoftwareApplication. One host: `WwwRedirectMiddleware` 301s www.attnd.app to
   https://attnd.app (same path and query) except `/.well-known/` (the AASA must not redirect); http → https is
   `SECURE_SSL_REDIRECT`. Old app links `/download/`, `/app/`, `/get/` → App Store / Google Play / the home page's app
-  section (302, by device). Tests: `home/tests_seo.py`.
+  section (302, by device). Tests: `home/tests_seo.py`. **IndexNow** (batch 7, `attnd/indexnow.py`, production only with
+  `INDEXNOW_KEY`): a listed event's join page (published content, listed / unlisted) and a Studio site's address
+  (published, unpublished, taken down) are queued in the database cache and sent by `run_scheduled_tasks` as one POST
+  per host (`api.indexnow.org`); the key file `/<key>.txt` on attnd.app (`indexnow_key`) and the sites host
+  (`studio.middleware`); counters on Diagnostics → Endpoints. Tests: `attnd/tests_indexnow.py`.
 - **Admin** lives at `ADMIN_URL_PATH` (default `manage-attnd/`); `/admin/` is a 404. Link to it with `{% url 'admin:index' %}`.
 
 ## Data Models (`events/models.py`)
@@ -1233,6 +1237,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `DATABASE_URL` | Prod | PostgreSQL connection string |
 | `CLOUDINARY_URL` | Prod | Cloudinary connection string |
 | `GOOGLE_PLACES_API_KEY` | No | Location image fetching during scrape |
+| `INDEXNOW_KEY` | No | IndexNow key (8–128 letters, digits, `-`), production only: ping search engines about changed public pages (attnd/indexnow.py) |
 | `GOOGLE_PLACE_PHOTOS` / `GOOGLE_PHOTOS_DAILY_MAX` | No | API-031 live Google place photos (default on with the key; `0` = off) / loads per Pacific day (2000; each load is 2 billed calls) |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Email | Mailgun SMTP credentials for the sending domain (`postmaster@mg.attnd.app` on prod; dev uses its sandbox). No password = mail goes to the log. They feed Django 6.1's `MAILERS` (settings `EMAIL_ENABLED`, `EMAIL_SMTP_OPTIONS`); the deprecated `EMAIL_*` Django settings aren't used |
 | `DEFAULT_FROM_EMAIL` | No | Default `Attnd <noreply@mg.attnd.app>` |

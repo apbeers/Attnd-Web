@@ -113,6 +113,8 @@ def publish(site, version, user):
         site.save(update_fields=['published', 'published_at', 'published_by'])
         apply_look(site, version)
     _attendees_now(event)
+    from attnd import indexnow
+    indexnow.site_changed(site)
     return site
 
 
@@ -121,6 +123,8 @@ def unpublish(site):
         site.published = None
         site.save(update_fields=['published'])
     _attendees_now(site.event)
+    from attnd import indexnow
+    indexnow.site_changed(site)  # gone: engines drop it sooner
     return site
 
 
@@ -136,6 +140,8 @@ def suspend(site, reason):
         site.suspended, site.suspended_reason = True, reason[:256]
         site.save(update_fields=['suspended', 'suspended_reason'])
     _attendees_now(site.event)
+    from attnd import indexnow
+    indexnow.site_changed(site)
 
 
 def reinstate(site):

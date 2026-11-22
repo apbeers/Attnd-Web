@@ -33,6 +33,8 @@ def _event_saved(sender, instance, created, update_fields=None, **kwargs):
     from events import drafts
     before = getattr(instance, '_bypass_before', None)
     if before and any(before.get(f) != getattr(instance, f) for f in drafts.BYPASS_EVENT_FIELDS):
+        from attnd import indexnow
+        indexnow.event_changed(instance, before)  # listed / unlisted, published / ended
         if instance.status != Event.STATUS_DRAFT and not drafts.published(instance):
             drafts.publish(instance, push=False)  # its first Publish (draft → published)
         else:

@@ -86,6 +86,8 @@ def publish(event, user=None, push=True):
     if push:
         from events import push as push_module
         push_module.content_changed(event.pk)  # version == published: the attendees' push
+    from attnd import indexnow
+    indexnow.event_changed(event)  # its join page shows the published copy
     return pb
 
 

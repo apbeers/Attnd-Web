@@ -72,6 +72,12 @@ class Command(BaseCommand):
             logging.getLogger(__name__).exception('Diagnostics purge failed')
 
         # Idempotent and cheap: delete unclaimed trial events past their expiry
+        try:
+            from attnd import indexnow
+            indexnow.flush()  # IndexNow: the queued page changes, one POST per host (production only)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('IndexNow flush failed')
         call_command('expire_trial_events', stdout=self.stdout)
 
         # The demo event (store reviewers and sales demos use it) must always be happening now.

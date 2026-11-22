@@ -5,7 +5,7 @@ from django.urls import include, path, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 
-from attnd import views as attnd_views
+from attnd import indexnow, views as attnd_views
 from events import views_photos
 from attnd.permissions import SIGNED_IN, declare
 from attnd.public import mark, public, public_include
@@ -21,6 +21,7 @@ sitemaps = {
 
 urlpatterns = [
     path('health/', public(attnd_views.health), name='health'),
+    re_path(r'^(?P<filename>[A-Za-z0-9-]{8,128}\.txt)$', public(indexnow.key_file), name='indexnow_key'),
     path('img/places/<int:location_id>/', public(views_photos.place_photo), name='place_photo'),  # API-031
     path('sitemap.xml', public(sitemap), {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
     path('', public_include('home.urls'), name='home'),

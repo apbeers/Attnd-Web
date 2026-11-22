@@ -630,6 +630,8 @@ if TESTING:
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 # API-031 (owner: OK): live Google Places photos for places no free source had a photo for; never stored.
+# IndexNow (attnd/indexnow.py): production only; 8–128 letters, digits or '-' (any random string).
+INDEXNOW_KEY = os.getenv('INDEXNOW_KEY', '')
 GOOGLE_PLACE_PHOTOS = os.getenv('GOOGLE_PLACE_PHOTOS', '1') not in ('0', 'false', '')
 GOOGLE_PHOTOS_DAILY_MAX = int(os.getenv('GOOGLE_PHOTOS_DAILY_MAX', '2000'))  # loads per Pacific day (2 calls each)
 

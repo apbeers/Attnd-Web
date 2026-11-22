@@ -36,6 +36,8 @@ class SitesHostMiddleware:
             from django.conf import settings
             from django.http import HttpResponsePermanentRedirect
             response = HttpResponsePermanentRedirect(settings.SITE_URL.rstrip('/') + '/home/')
+        elif (key := __import__('attnd.indexnow', fromlist=['x']).key_response(request.path.lstrip('/'))) is not None:
+            response = key  # IndexNow's key file on the sites host too
         elif request.path == '/robots.txt':
             from studio import hosting as _h
             response = HttpResponse('User-agent: *\nAllow: /\nDisallow: /*/_preview/\n'

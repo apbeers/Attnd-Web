@@ -34,5 +34,12 @@
   <thead><tr><th>Day</th><th class="num">Calls</th><th class="num">Cache hits</th><th class="num">Found</th><th class="num">Nothing</th><th class="num">Errors</th><th class="num">Paused</th></tr></thead>
   <tbody>{% for n in music.days %}<tr><td>{{ n.day }}</td><td class="num">{{ n.calls }}</td><td class="num">{{ n.hits }}</td><td class="num">{{ n.found }}</td><td class="num">{{ n.none }}</td><td class="num">{{ n.errors }}</td><td class="num">{{ n.paused }}</td></tr>{% endfor %}</tbody>
 </table></div></div>
+<h2 class="title-3" id="indexnow">IndexNow</h2>
+<p class="muted small">Changed public pages (listed events' join pages, Studio sites) queued for search engines and sent
+  in one batch per host every 10 minutes (attnd/indexnow.py). {% if not indexnow.enabled %}<strong>Off</strong>: production only, with INDEXNOW_KEY set.{% else %}{{ indexnow.pending }} waiting.{% endif %}</p>
+<div class="panel panel--flush"><div class="scroll-x"><table class="data-table data-table--compact">
+  <thead><tr><th>Day</th><th class="num">Queued</th><th class="num">Calls</th><th class="num">URLs sent</th><th class="num">Errors</th></tr></thead>
+  <tbody>{% for n in indexnow.days %}<tr><td>{{ n.day }}</td><td class="num">{{ n.queued }}</td><td class="num">{{ n.calls }}</td><td class="num">{{ n.urls }}</td><td class="num">{{ n.errors }}</td></tr>{% endfor %}</tbody>
+</table></div></div>
 </div>
 {% endblock %}

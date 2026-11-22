@@ -235,7 +235,18 @@ def endpoints(request):
         'windows': ['1h', '24h', '7d', '30d'],
         'google': [{'day': d, 'api': api, 'over': i == 0 and google.over_quota(api), **n}
                    for i, d in enumerate(days) for api, n in google.usage(d).items()],
-        'music': _music_rows()})
+        'music': _music_rows(), 'indexnow': _indexnow_rows()})
+
+
+def _indexnow_rows():
+    """IndexNow pings per UTC day (attnd.indexnow)."""
+    from datetime import date
+
+    from attnd import indexnow
+    today = date.fromisoformat(indexnow._today())
+    from django.core.cache import cache
+    return {'enabled': indexnow.enabled(), 'pending': len(cache.get(indexnow.QUEUE) or []),
+            'days': [{'day': d, **indexnow.usage(d)} for d in ((today - timedelta(days=n)).isoformat() for n in range(3))]}
 
 
 def _music_rows():
