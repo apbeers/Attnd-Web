@@ -37,7 +37,7 @@ SITE = {
         '<h2>Lineup</h2><p>Allyn Fincher · 5 PM</p><a href="/artists/allyn-fincher/">Event Details</a>'
         '<p>Amelia Rose · 6 PM</p><a href="/x?id=2">Event Details</a>'
         '<a href="/files/full-schedule.pdf">Download the schedule (PDF)</a><a href="/files/annual-report.pdf">Report</a>'
-        '<img src="/img/lineup-poster.png"><img src="/img/tiny.png">')),
+        '<img src="/img/lineup-poster.png"><img src="/img/tiny.png"><img src="/img/Verizon_logo.png">')),
     'https://fest.example/artists/allyn-fincher/': ('text/html', page(
         '<h1>Allyn Fincher</h1><p>Painter of Texas skies. Original prints from $40.</p>')),
     'https://fest.example/x?id=2': ('text/html', page('<h1>Amelia Rose</h1><p>Folk singer from Denton.</p>')),
@@ -49,6 +49,7 @@ SITE = {
     'https://fest.example/files/full-schedule.pdf': ('application/pdf', b'%PDF-1.4 schedule'),
     'https://fest.example/img/lineup-poster.png': ('image/png', png(900, 1200)),
     'https://fest.example/img/tiny.png': ('image/png', png(40, 40)),
+    'https://fest.example/img/Verizon_logo.png': ('image/png', png(1600, 1600)),
     'https://fest.example/wp-json/tribe/events/v1/events?per_page=50': (
         'application/json', json.dumps({'events': [{'title': 'Gallery night', 'start_date': '2026-11-19 17:00:00',
                                                     'secret': 'x'}]}).encode()),
@@ -82,6 +83,7 @@ class CrawlerTests(TestCase):
         self.assertNotIn('annual-report.pdf', names)  # a PDF without schedule words isn't read
         self.assertIn('lineup-poster.png', names)  # the big image of the lineup page, not the tiny one
         self.assertNotIn('tiny.png', names)
+        self.assertNotIn('Verizon_logo.png', names)  # sponsor logos aren't schedules
         text = run.text()
         self.assertIn('Gallery night', text)  # The Events Calendar
         self.assertNotIn('secret', text)

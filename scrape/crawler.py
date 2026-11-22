@@ -278,7 +278,8 @@ class Crawl:
             if host == self.primary and pri in (PRI_START, PRI_LISTING) and any(
                     w in url.lower() for w in ('schedule', 'lineup', 'line-up', 'program', 'timetable', 'agenda',
                                                'entertainment')):
-                self.images += images[:8]
+                self.images += [i for i in images if not re.search(r'logo|wordmark|sponsor|icon|badge|avatar',
+                                                                    i.rsplit('/', 1)[-1], re.I)][:8]
         if crawl:
             self._extras()
         return self
