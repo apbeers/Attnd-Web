@@ -98,8 +98,23 @@ resume note is under "Running when paused" below.
     organizer changes, My Schedule chip, saved places, no "like" wording.
 - **Android stopped mid-phase** (each pushed to its `wip/…` branch; read its last commit and the phase in
   `docs/ios_parity_plan.md`):
-  - 6b `wip/android-p6b`: Ask Attnd chat UI + Gemini Nano JSON tool loop + download prompt + eval model mode.
-  - 11 `wip/android-p11`: performance off the main thread, hang detector, UPLOAD_LOGS, dev server switch, map polish.
+  - **6b** `wip/android-p6b` `d37d61c` (worktree `/root/wt/android-p6b` kept): chat UI (`ui/assistant/PlanChat.kt`),
+    40-turn chat per event, Gemini Nano tool loop (`AssistantTools.run` + `OnDeviceAssistant.toolRound`, router
+    fallback), download card, planner only on Gemini-capable phones, eval model mode (`app/src/evalShared`,
+    `AssistantEvalModelTest`). Unit tests + lint + build were green before the eval move; since then only compiled.
+    **Resume:** `./gradlew --no-daemon --max-workers=1 testDebugUnitTest -PassistantEval --tests '*AssistantEvalTest*'`
+    (must stay ≥ 245/247, critical 50/50), then the full `testDebugUnitTest lintDebug assembleDebug`, check the eval
+    JSON is packaged in the androidTest APK, rebase, push develop, mark 6b done, add the Android model-mode section to
+    `docs/assistant_eval/README.md`. On a phone with Gemini Nano: `./gradlew connectedDebugAndroidTest
+    -Pandroid.testInstrumentationRunnerArguments.attndAssistantEval=model`.
+  - **11** `wip/android-p11` `abd1de0` (worktree `/root/wt/android-p11` kept): `uiState` + search index off the main
+    thread, `MainThreadWatchdog` (`perf.hang`), new Trace sections, missing LogEvent names, dev-build server switch,
+    map polish (24 dp clusters, follow modes, chip refit), tests `ServerSwitchTest` / `MapCameraTest` / LoggingTest.
+    Only `compileDebugKotlin` has run (no tests yet). **Resume:** `./gradlew --no-daemon --max-workers=1
+    testDebugUnitTest lintDebug assembleDebug`, fix, rebase, push develop, mark 11 done, CLAUDE.md. Deferred:
+    `map.tiles.error`, `planner.changed` (removed with one-list), JankStats, Baseline Profile, server switch doesn't
+    change the share-link host.
+  - The container (and the worktrees) may be gone in a new session: then `git worktree add` from the wip branches.
 - **Android left after those:** 10b (needs 6b), the schedule Share (QR) button (needs 6b's share sheet), the Map's
   empty My Schedule message, 12 (tracker), then the assistant eval on Android in model mode on a device.
 
