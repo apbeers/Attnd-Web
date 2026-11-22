@@ -76,6 +76,7 @@
     ':where(.attnd-map__frame){position:relative;overflow:hidden;border-radius:var(--attnd-radius,12px);background:#dde3ea;touch-action:none}' +
     ':where(.attnd-map__tile){position:absolute;width:256px;height:256px;user-select:none}' +
     ':where(.attnd-map__pin){position:absolute;width:28px;height:28px;margin:-28px 0 0 -14px;padding:0;border:0;background:none;cursor:pointer;color:var(--attnd-accent,#431f86)}' +
+    ':where(.attnd-map__count){position:absolute;top:-6px;right:-8px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#111;color:#fff;font:700 11px/18px sans-serif;text-align:center}' +
     ':where(.attnd-map__credit){position:absolute;right:4px;bottom:2px;font-size:11px;background:rgba(255,255,255,.8);color:#333;padding:0 4px}' +
     ':where(.attnd-map__zoom){position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px}' +
     ':where(.attnd-map__zoom button){width:34px;height:34px;font-size:20px;border:0;border-radius:8px;background:#fff;color:#111;cursor:pointer}' +
@@ -93,12 +94,56 @@
   (document.head || document.documentElement).prepend(style);
 
   // ---- elements ----
+  // ---- readable text (Lighthouse, Nov 22, 2026): the site's CSS colours our elements (e.g. "Happening now" in white
+  // on a yellow accent); where a text colour ends up under 4.5:1 (3:1 for large text) on the background behind it,
+  // switch that text to near-black or white, whichever reads better. Only our elements' own text is touched. ----
+  function rgba(v) {
+    var m = /rgba?\(([^)]+)\)/.exec(v || '');
+    if (!m) return null;
+    var p = m[1].split(/[\s,/]+/).filter(Boolean).map(parseFloat);
+    return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+  }
+  function lum(c) {
+    var a = c.slice(0, 3).map(function (v) { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+  }
+  function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function backdrop(node) {
+    for (var n = node; n && n.nodeType === 1; n = n.parentElement) {
+      var cs = getComputedStyle(n);
+      if (cs.backgroundImage && cs.backgroundImage !== 'none') return null;  // a picture or gradient: can't tell
+      var c = rgba(cs.backgroundColor);
+      if (c && c[3] >= 0.95) return c;
+      if (c && c[3] > 0.05) return null;  // translucent over something else
+    }
+    return [255, 255, 255, 1];
+  }
+  function readable(root) {
+    root.querySelectorAll('*').forEach(function (n) {
+      if (n.closest('svg') || !Array.prototype.some.call(n.childNodes, function (c) { return c.nodeType === 3 && c.textContent.trim(); })) return;
+      var cs = getComputedStyle(n), fg = rgba(cs.color), bg = backdrop(n);
+      if (!fg || !bg || fg[3] < 0.95) return;
+      var size = parseFloat(cs.fontSize), bold = parseInt(cs.fontWeight, 10) >= 700;
+      var need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+      if (ratio(fg, bg) >= need) return;
+      var dark = [17, 17, 17], light = [255, 255, 255];
+      n.style.color = ratio(dark, bg) >= ratio(light, bg) ? '#111' : '#fff';
+    });
+  }
+
   function define(name, render) {
     if (customElements.get(name)) return;
     customElements.define(name, class extends HTMLElement {
       connectedCallback() {
         var self = this;
-        if (!this._bound) { this._bound = true; onData(function (d) { if (self.isConnected) render(self, d); }); }
+        if (!this._bound) {
+          this._bound = true;
+          onData(function (d) {
+            if (!self.isConnected) return;
+            render(self, d);
+            requestAnimationFrame(function () { try { readable(self); } catch (e) {} });
+          });
+        }
       }
     });
   }
@@ -246,6 +291,8 @@
       });
       node.replaceChildren(wrap);
     }
+    var first = tick;
+    tick = function () { first(); try { readable(node); } catch (e) {} };
     tick();
     clearInterval(node._timer);
     node._timer = setInterval(tick, 30000);
@@ -322,17 +369,39 @@
         for (var ty = Math.floor(y0 / TILE); ty <= Math.floor((y0 + h) / TILE); ty++) {
           if (ty < 0 || ty >= max) continue;
           var img = el('img', 'attnd-map__tile'); img.alt = ''; img.draggable = false;
+          img.width = img.height = TILE; img.decoding = 'async'; img.loading = 'lazy';
           img.src = 'https://tile.openstreetmap.org/' + zoom + '/' + (((tx % max) + max) % max) + '/' + ty + '.png';
           img.style.left = (tx * TILE - x0) + 'px'; img.style.top = (ty * TILE - y0) + 'px';
           layer.append(img);
         }
       }
+      // Pins closer than a tap target (32px) merge into one numbered pin that zooms in on them (Lighthouse:
+      // overlapping pins were targets too small to hit); at the closest zoom it names them instead.
+      var groups = [];
       pins.forEach(function (p) {
-        var xy = project(p.latitude, p.longitude, zoom);
+        var xy = project(p.latitude, p.longitude, zoom), x = xy[0] - x0, y = xy[1] - y0;
+        var g = groups.find(function (g) { return Math.abs(g.x - x) < 32 && Math.abs(g.y - y) < 32; });
+        if (g) { g.pins.push(p); g.x = (g.x * (g.pins.length - 1) + x) / g.pins.length; g.y = (g.y * (g.pins.length - 1) + y) / g.pins.length; }
+        else groups.push({ x: x, y: y, pins: [p] });
+      });
+      groups.forEach(function (g) {
         var b = el('button', 'attnd-map__pin'); b.type = 'button'; b.innerHTML = PIN;
-        b.setAttribute('aria-label', p.name);
-        b.style.left = (xy[0] - x0) + 'px'; b.style.top = (xy[1] - y0) + 'px';
-        b.addEventListener('click', function () { label.textContent = p.name + (p.address ? ' — ' + p.address : ''); });
+        b.style.left = g.x + 'px'; b.style.top = g.y + 'px';
+        if (g.pins.length === 1) {
+          var p = g.pins[0];
+          b.setAttribute('aria-label', p.name);
+          b.addEventListener('click', function () { label.textContent = p.name + (p.address ? ' — ' + p.address : ''); });
+        } else {
+          var names = g.pins.map(function (p) { return p.name; });
+          b.classList.add('attnd-map__pin--group');
+          b.append(el('span', 'attnd-map__count', String(g.pins.length)));
+          b.setAttribute('aria-label', g.pins.length + ' places: ' + names.join(', '));
+          b.addEventListener('click', function () {
+            if (zoom >= 19) { label.textContent = names.join(' · '); return; }
+            var f = Math.pow(2, Math.min(19, zoom + 2) - zoom);
+            cx = (x0 + g.x) * f; cy = (y0 + g.y) * f; zoom = Math.min(19, zoom + 2); draw();
+          });
+        }
         layer.append(b);
       });
     }

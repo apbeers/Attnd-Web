@@ -35,6 +35,17 @@ class SeoTests(TestCase):
         demo = c.get('/join/DEMOFAIR/', secure=True, HTTP_USER_AGENT='Mozilla/5.0 (Macintosh)')
         self.assertContains(demo, '<meta name="robots" content="noindex">')
 
+    @override_settings(SITE_URL='https://attnd.app')
+    def test_public_pages_have_absolute_canonicals_and_descriptions(self):
+        """Lighthouse SEO (Nov 22, 2026): /brand/ had a relative canonical and no meta description."""
+        import re
+        c = Client()
+        for path in ('/home/', '/privacy/', '/brand/'):
+            body = c.get(path, secure=True).content.decode()
+            canonical = re.search(r'<link rel="canonical" href="([^"]+)"', body)
+            self.assertTrue(canonical and canonical.group(1).startswith('https://attnd.app/'), path)
+            self.assertRegex(body, r'<meta name="description" content="[^"]{20,}"', path)
+
     def test_sitemap_lists_only_findable_events(self):
         body = Client().get('/sitemap.xml', secure=True).content.decode()
         self.assertIn('/join/BIGFAIR/', body)

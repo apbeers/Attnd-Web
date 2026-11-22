@@ -221,13 +221,23 @@
   async function position() {
     try {
       const saved = JSON.parse(localStorage.getItem('attnd.home.geo') || 'null');
-      if (saved && typeof saved.lat === 'number' && Date.now() - saved.at < 864e5) return saved;
-    } catch (e) { /* no storage */ }
+      if (saved && Date.now() - saved.at < 864e5) {
+        if (saved.none) throw new Error('geolocate');  // Google couldn't place this visitor today: don't ask again
+        if (typeof saved.lat === 'number') return saved;
+      }
+    } catch (e) { if (e.message === 'geolocate') throw e; /* no storage */ }
     const resp = await fetch(`https://www.googleapis.com/geolocation/v1/geolocate?key=${encodeURIComponent(key)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ considerIp: true }),
       credentials: 'omit', referrerPolicy: 'strict-origin',
     });
-    if (!resp.ok) throw new Error('geolocate');
+    if (!resp.ok) {
+      // 404 = Google can't place this address (Chrome logs the failed request anyway; there's no quiet way to ask).
+      // Remembered for a day like a found position, so the visitor's later visits don't ask (or log it) again.
+      if (resp.status === 404) {
+        try { localStorage.setItem('attnd.home.geo', JSON.stringify({ none: true, at: Date.now() })); } catch (e) { /* no storage */ }
+      }
+      throw new Error('geolocate');
+    }
     const d = await resp.json();
     const pos = { lat: Math.round(d.location.lat * 10) / 10, lng: Math.round(d.location.lng * 10) / 10, at: Date.now() };
     try { localStorage.setItem('attnd.home.geo', JSON.stringify(pos)); } catch (e) { /* no storage */ }

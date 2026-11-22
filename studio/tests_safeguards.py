@@ -76,6 +76,65 @@ class QualityCheckTests(StudioTestCase):
         self.assertIn('name="viewport"', self.site.draft.files['index.html'])
 
 
+class LighthouseChecksTests(StudioTestCase):
+    """The checks that map to Lighthouse failures on built sites (Nov 22, 2026) and their safe automatic fixes."""
+
+    def codes(self, files):
+        v = version_with(self.site, self.owner, files)
+        return {i['code']: i for i in quality.check(self.site, v)['issues']}
+
+    def test_finds_lighthouse_failures(self):
+        page = GOOD.replace('<meta name="viewport" content="width=device-width, initial-scale=1">',
+                            '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">'
+                            '<script src="js/site.js"></script><link rel="stylesheet" '
+                            'href="https://fonts.googleapis.com/css2?family=Inter">').replace(
+            '<p>See you there.</p>',
+            '<button><svg aria-hidden="true"></svg></button><a href="faq.html"><img src="i.png"></a>'
+            '<input name="email" type="email"><iframe src="https://www.youtube-nocookie.com/embed/x"></iframe>'
+            '<img src="a.png" alt="a"><img src="b.png" alt="b"><img src="c.png" alt="c"><img src="d.png" alt="d">')
+        found = self.codes({'index.html': page, 'js/site.js': '', 'faq.html': GOOD, 'i.png': '', 'a.png': '',
+                            'b.png': '', 'c.png': '', 'd.png': ''})
+        for code in ('button_name', 'link_name', 'label', 'frame_title', 'zoom', 'img_size', 'img_lazy',
+                     'render_blocking', 'fonts'):
+            self.assertIn(code, found, code)
+
+    def test_named_and_labelled_things_pass(self):
+        page = GOOD.replace('<p>See you there.</p>',
+                            '<button aria-label="Menu"><svg aria-hidden="true"></svg></button>'
+                            '<a href="index.html"><img src="logo.png" alt="Home" width="10" height="10"></a>'
+                            '<label>Email <input name="email"></label><label for="n">Name</label><input id="n">'
+                            '<iframe title="Video" src="https://player.vimeo.com/x"></iframe>'
+                            '<svg><title>Not the page title</title></svg>')
+        found = self.codes({'index.html': page, 'logo.png': ''})
+        self.assertFalse({'button_name', 'link_name', 'label', 'frame_title', 'img_size', 'title'} & set(found), found)
+
+    def test_autofix_makes_them_pass(self):
+        page = GOOD.replace('initial-scale=1">', 'initial-scale=1, user-scalable=no"><script src="_attnd/attnd.js">'
+                            '</script><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">'
+                            ).replace('<p>See you there.</p>',
+                                      '<iframe src="https://www.youtube-nocookie.com/embed/x"></iframe>'
+                                      + ''.join(f'<img src="{n}.png" alt="{n}" width="9" height="9">' for n in 'abcd'))
+        files, count = quality.autofix(self.site, {'index.html': page})
+        text = files['index.html']
+        self.assertIn('title="Video"', text)
+        self.assertIn('content="width=device-width, initial-scale=1">', text)
+        self.assertIn('<script src="_attnd/attnd.js" defer>', text)
+        self.assertIn('family=Inter&display=swap', text)
+        self.assertIn('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>', text)
+        self.assertEqual(text.count('loading="lazy"'), 1)  # only the 4th image; the first three may be the banner
+        v = version_with(self.site, self.owner, files)
+        codes = {i['code'] for i in quality.check(self.site, v)['issues']}
+        self.assertFalse({'frame_title', 'zoom', 'render_blocking', 'fonts', 'img_lazy'} & codes, codes)
+
+    def test_defer_is_left_alone_with_inline_scripts(self):
+        page = GOOD.replace('</head>', '<script src="js/site.js"></script></head>').replace(
+            '<p>See you there.</p>', '<script>Site.start()</script>')
+        files, _ = quality.autofix(self.site, {'index.html': page, 'js/site.js': ''})
+        self.assertIn('<script src="js/site.js"></script>', files['index.html'])
+        found = self.codes({'index.html': page, 'js/site.js': ''})
+        self.assertEqual(found['render_blocking']['fix'], '')
+
+
 class DriftTests(StudioTestCase):
     def test_dates_times_and_name(self):
         tz_start = self.event.start_time.astimezone(__import__('zoneinfo').ZoneInfo('America/Chicago'))

@@ -4,6 +4,7 @@ Only reachable through studio.urls_sites, which SitesHostMiddleware selects for 
 routes here. Nothing here reads or sets cookies.
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -12,7 +13,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from django.conf import settings
-from django.http import (Http404, HttpResponse, HttpResponseNotAllowed, HttpResponseRedirect, JsonResponse)
+from django.http import (Http404, HttpResponse, HttpResponseNotAllowed, HttpResponseNotModified, HttpResponseRedirect,
+                         JsonResponse)
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
@@ -131,17 +133,34 @@ def serve(request, slug, rest=None):
             if ext == 'html':
                 target.path = '' if candidate == 'index.html' else (path if not path.endswith('.html') else path)
                 return _page_response(target, files[candidate], path=candidate)
-            response = HttpResponse(files[candidate], content_type=CONTENT_TYPES.get(ext, 'text/plain'))
-            response['Cache-Control'] = 'no-store' if target.preview else 'public, max-age=60'
-            return response
+            if target.preview:
+                response = HttpResponse(files[candidate], content_type=CONTENT_TYPES.get(ext, 'text/plain'))
+                response['Cache-Control'] = 'no-store'
+                return response
+            return _cached_file(request, files[candidate], CONTENT_TYPES.get(ext, 'text/plain'), FILE_CACHE)
     return _not_found(target)
+
+
+# Lighthouse (Nov 22, 2026): stylesheets and scripts were cached for a minute and refetched in full. They now carry a
+# strong ETag of their bytes (a 304 after a publish costs nothing) and may be used while revalidating.
+FILE_CACHE = 'public, max-age=300, stale-while-revalidate=86400'
+LIBRARY_CACHE = 'public, max-age=3600, stale-while-revalidate=604800'
+
+
+def _cached_file(request, text, content_type, cache_control):
+    etag = '"' + hashlib.sha256(text.encode()).hexdigest()[:20] + '"'
+    if etag in [t.strip() for t in request.headers.get('If-None-Match', '').split(',')]:
+        response = HttpResponseNotModified()
+    else:
+        response = HttpResponse(text, content_type=content_type)
+    response['ETag'] = etag
+    response['Cache-Control'] = cache_control
+    return response
 
 
 def _internal(request, target, path):
     if path == 'attnd.js':
-        response = HttpResponse(_static_text('attnd.js'), content_type=CONTENT_TYPES['js'])
-        response['Cache-Control'] = 'public, max-age=300'
-        return response
+        return _cached_file(request, _static_text('attnd.js'), CONTENT_TYPES['js'], LIBRARY_CACHE)
     if path == 'bridge.js' and target.preview:
         response = HttpResponse(_static_text('bridge.js').replace(
             '__CONSOLE_ORIGINS__', json.dumps(settings.STUDIO_CONSOLE_ORIGINS)), content_type=CONTENT_TYPES['js'])

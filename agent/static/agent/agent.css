@@ -151,6 +151,10 @@
 /* ---- Full screen (/console/assistant/): chat column + canvas ---------------------------------------------- */
 .page:has(.assistant) { padding: var(--space-3) clamp(.75rem, 1.1vw, 1.25rem) var(--space-3); }
 .assistant { display: grid; gap: var(--space-4); grid-template-columns: minmax(20rem, 36%) minmax(0, 1fr); }
+/* Placed by column, not by DOM order (Lighthouse, Nov 22, 2026): the canvas comes first in the HTML, so a paint while
+   the page was still arriving put it in the chat's column and it jumped right when the chat arrived (CLS 0.57). */
+.assistant > .agent--full { grid-column: 1; grid-row: 1; }
+.assistant > .canvas { grid-column: 2; grid-row: 1; }
 /* One chat, every width (Nov 22, 2026): the page is an opaque app shell of exactly the visible height (no outer page
    scroll, nothing of a page behind it): the top bar, then the chat (and the canvas when wide). --app-height /
    --app-top come from the visual viewport (agent.js; iOS Safari's keyboard only shrinks that), else 100dvh. */
@@ -247,6 +251,7 @@ body:has(.assistant) > .page > .assistant { flex: 1 1 auto; height: auto; min-he
 @media (max-width: 1023px) {
   .assistant { grid-template-columns: 1fr; }
   .canvas { display: none; }
+  .assistant > .canvas { grid-column: auto; }
 }
 /* Phones: the chat is the whole screen (its header has Exit back to the page), edge to edge, the composer above the
    home indicator; toasts at the top so they never cover the composer; 44px targets, 16px input (no iOS zoom). */

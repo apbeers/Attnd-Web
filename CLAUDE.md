@@ -1078,7 +1078,20 @@ the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-pick
   that becomes interactive on hover / focus / touch or when idle on screen (needs the Maps Static API on the browser
   key, SETUP.md); attndReveal's pulse / glow / collapse and the chat's pulses animate only opacity / transform
   (`.reveal-ring`, `::after` rings); collectstatic minifies our own CSS (`attnd/static_storage.py`, comments and
-  whitespace only; JS not minified: no safe stdlib minifier, gzip / brotli apply).
+  whitespace only; JS not minified: no safe stdlib minifier, gzip / brotli apply). Second pass (Nov 22, 2026,
+  measured signed in as the dev-only `lighthouse-test@attnd.app`, SETUP.md): `/console/sw.js` public (a cookie-less
+  fetch was a redirect registration refused); status fills read at 4.5:1 in both modes (`--color-on-success / -info /
+  -danger`, `console/tests_contrast.py`); headings in order on Schedule, Team, Metrics, History (components use h2 on
+  pages, their old level in the chat); the full-screen chat places chat and canvas by grid column (the canvas jumped
+  when the chat arrived, CLS 0.57); `/brand/` absolute canonical + description (`home/tests_seo.py`); home.js
+  remembers a Geolocation 404 for a day. **Studio sites**: attnd.js fixes unreadable text in its elements (dark or white,
+  whichever reads), merges map pins closer than 32px into a numbered pin that zooms in, lazy map tiles with sizes;
+  served pages get Google Fonts preconnects; site CSS / JS / attnd.js carry strong ETags + stale-while-revalidate; the
+  pre-publish check adds button / link names, field labels, frame titles, zoom blocked, unsized / eager / oversized
+  images, render-blocking head scripts and Google Fonts (headings and meta description now warnings), and Fix
+  automatically adds frame titles, a zoomable viewport, aspect-ratio for assets of known size, lazy loading after the
+  first three images, defer on head scripts (pages without inline scripts only) and fonts preconnect + display=swap;
+  the designer's prompt and every site style carry the same rules.
 - **Database review** (batch 7, `docs/db_review.md`): covered FK indexes off (`db_index=False` where a composite starts
   with the column), partial indexes for live preview phones, due notifications and nearby events, the task feed's
   `(created_by, -created_at)` / `finished_at`, JSON shape CHECKs (`events.models.json_is`), `push.reach(event)` (one

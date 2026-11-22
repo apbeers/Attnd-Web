@@ -237,6 +237,26 @@ class PageTests(StudioTestCase):
         self.assertEqual(self.sites(f'/{slug}/_attnd/attnd.js')['Content-Type'], 'text/javascript; charset=utf-8')
         self.assertEqual(self.sites(f'/{slug}/_attnd/bridge.js').status_code, 404)  # previews only
 
+    def test_site_files_revalidate_with_etags(self):
+        """Lighthouse (Nov 22, 2026): stylesheets, scripts and attnd.js carry a strong ETag and a 304 answers a
+        repeat; previews are never cached."""
+        self.publish()
+        slug = self.site.slug
+        for path, cache in ((f'/{slug}/styles.css', 'max-age=300'), (f'/{slug}/_attnd/attnd.js', 'max-age=3600')):
+            first = self.sites(path)
+            self.assertIn(cache, first['Cache-Control'])
+            self.assertIn('stale-while-revalidate', first['Cache-Control'])
+            again = self.sites(path, HTTP_IF_NONE_MATCH=first['ETag'])
+            self.assertEqual(again.status_code, 304, path)
+
+    def test_google_fonts_get_preconnects(self):
+        page = ('<html><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter&display=swap">'
+                '</head><body><main><h1>Hi</h1></main></body></html>')
+        body = hosting.render_page(page, '/x/')
+        self.assertEqual(body.count('rel="preconnect" href="https://fonts.gstatic.com" crossorigin'), 1)
+        self.assertLess(body.index('preconnect'), body.index('fonts.googleapis.com/css2'))
+        self.assertNotIn('preconnect', hosting.render_page('<html><head></head><body></body></html>', '/x/'))
+
     def test_custom_404_page(self):
         publishing.new_version(self.site, self.owner, files={**self.site.draft.files, '404.html': '<p>Lost?</p>'})
         self.publish()

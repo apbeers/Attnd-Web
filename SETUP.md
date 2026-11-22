@@ -759,6 +759,13 @@ key is set, **Integration · prod** fails, as a warning only: it never blocks a 
 To rotate: run step 1 again (the old key stops working the moment `CI_API_KEYS` changes). Several keys can be set at once,
 comma-separated, to rotate without a gap. Keys shorter than 32 characters are ignored.
 
+### Lighthouse test account (dev only, Nov 22, 2026)
+
+`lighthouse-test@attnd.app` on **dev.attnd.app only**: an ordinary organizer (not staff, no second factor, Chat as
+default off), an **admin member of the DEMO event** (DEMO's owner unchanged), used to sign in and run Lighthouse on the
+console's pages. Its password lives only in the tester's scratchpad, never in the repo. Nothing for the owner to do;
+delete the account on dev when it's no longer wanted (Django admin → Users).
+
 ## 14. Diagnostics: iOS symbolication token (5 min)
 
 The staff **Diagnostics** panel (`/console/diagnostics/`, API-013) symbolicates iOS crash reports by dispatching the

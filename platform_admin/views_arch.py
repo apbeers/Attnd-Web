@@ -117,7 +117,9 @@ def _brand(request, template):
         response = HttpResponse(MARK_SVG if request.GET['file'] == 'wordmark.svg' else ICON_SVG, content_type='image/svg+xml')
         response['Content-Disposition'] = f'attachment; filename="attnd-{request.GET["file"]}"'
         return response
-    return render(request, template, {'b': BRAND, 'mark_svg': MARK_SVG, 'icon_svg': ICON_SVG})
+    from django.conf import settings
+    return render(request, template, {'b': BRAND, 'mark_svg': MARK_SVG, 'icon_svg': ICON_SVG,
+                                      'site_url': settings.SITE_URL.rstrip('/')})
 
 
 @agent_action('platform_brand', "Attnd's brand center (staff): logo, mark, app icon (SVG and PNG), colours, type, voice, "
