@@ -285,6 +285,15 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   the map, colours, Visibility (lifecycle) beside Share it; website watching, most liked, recent AI updates and App
   layout fold into "Settings and recent activity". The canvas Overview composite (`event_overview`) has the same
   order. `free_limit.status` is kept on the event object for the request.
+- **Width and phones** (batch 7): every component's root is `component component--<name>` (a container; container
+  queries decide its layout, so the 26rem chat, a phone and a wide canvas use one template; `console/tests_phone.py`
+  fails a root without it). Phones (≤ 600px, the block at the end of console.css): tap targets ≥ 44 × 44 px (buttons,
+  fields, tabs, chips, summaries, checkbox labels; table checkboxes 24px per WCAG 2.5.8), fields 16px (no iOS zoom),
+  map controls 44px, wide tables in `.table-scroll`. **Platform → Components** (`platform:components`, staff) draws
+  every component of one event at 360 px (chat) and 768 / 1280 px (page) side by side. **Browser check**:
+  `scripts/ci/phone_check.cjs` (Chrome + the `playwright` npm package) reports page-wide horizontal scroll, components
+  sticking out of their gallery frame, small tap targets and small fields; `ATTND_BROWSER_CHECKS=1 uv run python
+  manage.py test console.tests_phone` runs it on the console's pages (skipped otherwise, so not in CI).
 - **Draw the eye** (`window.attndReveal(el, kind)` in console.js: `slide`, `in`, `pulse`, `glow`, `collapse`, `scroll`,
   `flip`; ~200–320 ms, nothing with reduced motion): canvas tab switches slide in from their side of the tab order,
   changed cards pulse, new rows fade in, deleted ones collapse, re-sorted lists glide (Scheduled → Sent), AI-filled

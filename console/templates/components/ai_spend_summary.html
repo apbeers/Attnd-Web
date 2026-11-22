@@ -21,7 +21,7 @@
       {% if d.events %}<ul class="list list--inset small">{% for r in d.events %}<li class="cluster"><a class="grow" href="{{ r.url }}">{{ r.name }}</a><span class="muted mono">{{ r.code }}</span><span class="nowrap">${{ r.cost }}</span></li>{% endfor %}</ul>{% else %}<p class="small muted">—</p>{% endif %}</div>
   </div>
   {% if d.latest %}<div class="panel stack stack--tight"><h3 class="eyebrow">Latest calls</h3>
-    <table class="data-table data-table--compact small"><thead><tr><th>When</th><th>Who</th><th>Feature</th><th>Event</th><th>Model</th><th>Cost</th></tr></thead><tbody>
+    <div class="table-scroll"><table class="data-table data-table--compact small"><thead><tr><th>When</th><th>Who</th><th>Feature</th><th>Event</th><th>Model</th><th>Cost</th></tr></thead><tbody>
     {% for r in d.latest %}<tr><td class="nowrap">{{ r.when }}</td><td>{{ r.who }}</td><td>{{ r.feature }}{% if r.background %} <span class="badge">background</span>{% endif %}{% if r.exempt %} <span class="badge">not counted</span>{% endif %}</td><td>{% if r.url %}<a href="{{ r.url }}">{{ r.event }}</a>{% endif %}</td><td class="mono">{{ r.model }}</td><td class="nowrap">${{ r.cost }}</td></tr>{% endfor %}
-    </tbody></table></div>{% endif %}
+    </tbody></table></div></div>{% endif %}
 </div>

@@ -271,13 +271,15 @@ def event_stats(user, event_id=None, event=None):
            actions=(('remove_preview_phone', 'Remove'),))
 def live_on_phone(user, event_id=None, event=None):
     from attnd.links import join_url, open_in_app_links
+    from console.components import get, resolve_actions
     from events import preview
     event = editable_event(user, event_id, event)
     qr = reverse('console:event_qr', args=[event.pk])
     phones = preview.phones(event)
     for p in phones['previews']:
-        p['actions'] = [{'name': 'remove_preview_phone', 'style': 'ghost', 'fields': {'device': p['id']},
-                         'confirm_text': 'Remove this preview phone? It leaves the event.'}]
+        p['actions'] = resolve_actions(get('live_on_phone'), {'event_id': event.pk}, [
+            {'name': 'remove_preview_phone', 'style': 'ghost', 'fields': {'device': p['id']},
+             'confirm_text': 'Remove this preview phone? It leaves the event.'}])
     actions = [a for p in phones['previews'] for a in p['actions']]
     return {'name': event.name, 'code': event.event_code, 'qr_url': qr, 'qr_download_url': f'{qr}?download=1',
             'poster_url': reverse('console:event_poster', args=[event.pk]), 'join_url': join_url(event),

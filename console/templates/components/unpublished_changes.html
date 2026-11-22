@@ -10,9 +10,9 @@
   {% elif not d.count %}<p class="muted">No unpublished changes: attendees see exactly what you see.</p>
   {% else %}
   <p>{{ d.summary }} · {{ d.phones }} phone{{ d.phones|pluralize }} get them when you publish. Notifications and the event's status don't wait for this.</p>
-  <table class="data-table data-table--compact small"><thead><tr><th>What</th><th>Change</th><th>Attendees see</th><th>After Publish</th></tr></thead><tbody>
+  <div class="table-scroll"><table class="data-table data-table--compact small"><thead><tr><th>What</th><th>Change</th><th>Attendees see</th><th>After Publish</th></tr></thead><tbody>
   {% for r in d.rows %}<tr><td><span class="muted">{{ r.kind }}</span> {{ r.name }}</td><td>{% if r.change == 'changed' %}{{ r.field }}{% else %}<span class="badge">{{ r.change }}</span>{% endif %}</td><td>{{ r.old }}</td><td>{{ r.new }}</td></tr>{% endfor %}
-  </tbody></table>
+  </tbody></table></div>
   <div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>
   {% endif %}
 </div>

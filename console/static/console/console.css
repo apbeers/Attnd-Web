@@ -1040,3 +1040,33 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .guided-steps li::marker { font-weight: 700; color: var(--color-brand-text); }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .badge--link { text-decoration: none; } .badge--link:hover, .badge--link:focus-visible { text-decoration: underline; }
+
+/* Phones (batch 7 phone pass; checked by scripts/ci/phone_check.cjs at 360 px): every tap target at least 44 × 44 px,
+   16px text in fields (iOS zooms into anything smaller on focus), the map's controls finger-sized. */
+@media (max-width: 600px) {
+  input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]), select, select.small, textarea,
+  input.small, .field--small :is(input, select) { font-size: 16px; }
+  :is(td, th) > input[type=checkbox] { width: 1.5rem; height: 1.5rem; }  /* dense tables: WCAG 2.5.8's 24px */
+  input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]), select, select.small { min-height: 44px; }
+  .button, .button--small, summary.button, .chat-switch, .topbar__link, .sidenav__link, .tabs__tab, .chip,
+  .badge--link { min-height: 44px; }
+  .button, .button--small, .screens-row__move .button, .tabs__tab { min-width: 44px; }
+  .tabs__tab { justify-content: center; }
+  .badge--link { display: inline-flex; align-items: center; }
+  .crumbs__back { width: 44px; height: 44px; }
+  input[type=color] { min-width: 44px; min-height: 44px; }
+  .check, .field--check > label, label:has(> input[type=checkbox]), label:has(> input[type=radio]) { min-height: 44px; display: inline-flex; align-items: center; }
+  details > summary { min-height: 44px; display: list-item; padding-block: .6rem; box-sizing: border-box; }
+  details > summary.button { display: inline-flex; padding-block: .32rem; }
+  .pin-map .zoom button { width: 44px; height: 44px; }
+  .pin-map__other::before { content: ''; position: absolute; inset: -16px; }  /* a 44px hit area around the dot */
+}
+
+/* Platform → Components: each frame is a fixed width; the components inside decide their layout by container queries. */
+.gallery-row__frames { display: flex; gap: var(--space-4); overflow-x: auto; padding-bottom: var(--space-2); align-items: flex-start; }
+.gallery-frame { flex: none; padding: var(--space-3); background: var(--color-surface-2); border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg); overflow: hidden; position: relative; contain: paint; }
+.gallery-frame--360 { width: 360px; } .gallery-frame--768 { width: 768px; } .gallery-frame--1280 { width: 1280px; }
+.gallery-frame__body { display: grid; gap: var(--space-3); min-width: 0; }
+.gallery-frame__body > * { min-width: 0; }
+.gallery-row, .gallery-row__frames { min-width: 0; max-width: 100%; }
