@@ -16,7 +16,7 @@ form (all of them always ask in the chat). The Team page keeps its own layout; t
     {% endfor %}
   </ul>
   {% if d.invite %}<div class="stack stack--tight">
-    <h4 class="eyebrow">Invite someone</h4>
+    <{% if surface == 'chat' %}h4{% else %}h2{% endif %} class="eyebrow">Invite someone</{% if surface == 'chat' %}h4{% else %}h2{% endif %}>
     <p class="small muted">They get access as soon as they sign up with that email (invites work before they have an account).</p>
     {% include 'components/_form.html' with form=d.invite %}
   </div>{% endif %}

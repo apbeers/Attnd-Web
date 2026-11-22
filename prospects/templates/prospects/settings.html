@@ -6,7 +6,7 @@
 <div class="split">
 <div class="split__main panel">{% component "prospect_settings_form" form=form %}</div>
 <aside class="split__aside panel stack small">
-  <h3 class="title-4">How a run works</h3>
+  <h2 class="title-4">How a run works</h2>
   <p>1. Web search ({{ model }}, web search) for upcoming events in the region within the look-ahead, a few themes per search.</p>
   <p>2. For each event not seen before (and not already an Attnd event): read its page plus up to two about / contact / sponsor pages, score the fit and keep the organizer contacts published there. Emails and phone numbers are kept only when they are written on the page they came from.</p>
   <p>A run stops after {{ max_minutes }} minutes, at its cap of new events, or when today's AI budget (${{ cap|floatformat:2 }} over all runs, setting <span class="mono">PROSPECT_DAILY_SPEND_CAP_USD</span>) is used up. Runs never overlap.</p>

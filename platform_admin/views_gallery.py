@@ -3,6 +3,8 @@ frame as the chat / phone draws it, and at 768 and 1280 px as a page or the canv
 width (the components adapt by container queries, not the window), so one page shows all three at once and the
 phone check (scripts/ci/phone_check.cjs) flags anything that sticks out of its frame."""
 
+import inspect
+
 from django.http import Http404
 from django.shortcuts import render
 
@@ -24,7 +26,12 @@ def gallery_entries(user, event):
             continue
         items = [{'event_id': event.pk}] if 'event_id' in comp.all_ids else [{}]
         try:
-            found = C.instances(user, name, items, limit=SAMPLES)
+            if not comp.expand and 'event_id' in comp.all_ids and 'event' in inspect.signature(comp.data).parameters:
+                # Like a page: hand the event already loaded and checked on (one query, not one per component).
+                ids = C.clean_ids(comp, items[0])
+                found = [(ids, C.load(user, name, ids, {'event': event}))]
+            else:
+                found = C.instances(user, name, items, limit=SAMPLES)
         except (C.IdError, Http404, KeyError, ValueError, TypeError) as error:
             out.append({'name': name, 'title': comp.title, 'skipped': type(error).__name__})
             continue
@@ -47,9 +54,11 @@ def components(request):
         for entry in gallery_entries(request.user, event):
             if 'found' in entry:
                 found = entry.pop('found')
-                entry['frames'] = [{'width': width, 'surface': surface,
-                                    'html': [C.render(entry['name'], data, request, surface, uid=C.new_uid())
-                                             for _ids, data in found]}
-                                   for width, surface in FRAMES]
+                entry['frames'] = []
+                for width, surface in FRAMES:
+                    html = [C.render(entry['name'], data, request, surface, uid=C.new_uid()) for _ids, data in found]
+                    # Row components are list items (their page draws them in a <ul>): give them one here too.
+                    entry['frames'].append({'width': width, 'surface': surface, 'html': html,
+                                            'list': all(str(h).lstrip().startswith('<li') for h in html)})
             entries.append(entry)
     return render(request, 'platform_admin/components.html', {'events': events, 'event': event, 'entries': entries})

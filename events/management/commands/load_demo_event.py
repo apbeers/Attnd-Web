@@ -23,6 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from events import context, usage
+from events import music as music_links
 from events.content import batch_changes, save_revision
 from events.models import (Device, Event, EventInvite, EventMember, Location, Notification, ScheduledItem,
                            UsageCount, next_send_slot)
@@ -110,6 +111,17 @@ EVENT_CONTEXT = {
         {'q': 'What if it rains?', 'a': 'The festival goes on in light rain. In a storm, sets pause and we send an '
                                         'urgent update in the app with where to shelter.'},
         {'q': 'Where is lost and found?', 'a': 'At the Info Booth by the main gate. Lost children go to First Aid.'},
+        # Batch 7 (the assistant eval, docs/assistant_eval/): the questions people really ask at the gate.
+        {'q': 'Can I bring a drone?', 'a': 'No. Drones are not allowed anywhere on Panther Island during the festival.'},
+        {'q': 'Can I get a refund?', 'a': 'Entry is free, so there is nothing to refund. For a problem with food or '
+                                          'a drink, talk to that stand; they handle their own refunds.'},
+        {'q': 'Can I bring food or water?', 'a': 'Sealed water bottles and empty refillable bottles are fine. No '
+                                                  'outside food, except baby food and food for medical needs.'},
+        {'q': 'Is there an age limit?', 'a': 'All ages are welcome. The Craft Beer Garden is 21+ with ID; under-18s '
+                                             'need an adult after 9 pm.'},
+        {'q': 'What if I get separated from my group?', 'a': 'Pick a meeting point such as the Info Booth. Lost '
+                                                              'children are taken to First Aid; tell any staff member '
+                                                              'in a yellow shirt.'},
     ],
     'amenities': [
         {'kind': 'restrooms', 'name': 'Restrooms North', 'location_name': 'Restrooms North',
@@ -122,6 +134,8 @@ EVENT_CONTEXT = {
         {'kind': 'atm', 'name': 'ATM', 'location_name': 'Info Booth', 'note': ''},
         {'kind': 'charging', 'name': 'Phone charging', 'location_name': 'Info Booth', 'note': 'Free, 30 minutes'},
         {'kind': 'info', 'name': 'Info Booth', 'location_name': 'Info Booth', 'note': 'Maps, lost and found'},
+        {'kind': 'info', 'name': 'Lost and found', 'location_name': 'Info Booth', 'note': 'Lost children: First Aid'},
+        {'kind': 'merch', 'name': 'Festival merch', 'location_name': 'Info Booth', 'note': 'T-shirts and posters'},
         {'kind': 'accessible_entrance', 'name': 'Step-free entrance', 'location_name': None,
          'note': 'Main gate, left lane'},
         {'kind': 'parking', 'name': 'Overflow Parking', 'location_name': 'Overflow Parking', 'note': '$10'},
@@ -159,7 +173,8 @@ LOCATION_CONTEXT = {
     'Taco Row': {'hours': '11 am – 10 pm', 'menu': [
         {'name': 'Al pastor taco', 'price': '$4', 'note': ''},
         {'name': 'Brisket taco', 'price': '$5', 'note': ''},
-        {'name': 'Nopales taco', 'price': '$4', 'note': 'Vegetarian (trucks 3, 7 and 11)'},
+        {'name': 'Nopales taco', 'price': '$4', 'note': 'Vegan; corn tortilla, gluten-free (trucks 3, 7 and 11)'},
+        {'name': 'Veggie bowl', 'price': '$9', 'note': 'Vegan and gluten-free'},
         {'name': 'Elote', 'price': '$6', 'note': 'Vegetarian'},
         {'name': 'Horchata', 'price': '$4', 'note': ''}]},
     'BBQ Pit Lane': {'hours': '11 am until sold out (usually 8 pm)', 'menu': [
@@ -169,7 +184,7 @@ LOCATION_CONTEXT = {
         {'name': 'Mac and cheese', 'price': '$5', 'note': 'Vegetarian'}]},
     'Sweet Spot': {'hours': '10 am – 11 pm', 'menu': [
         {'name': 'Kolache', 'price': '$3', 'note': 'Fruit or sausage'},
-        {'name': 'Paleta', 'price': '$4', 'note': 'Dairy-free options'},
+        {'name': 'Paleta', 'price': '$4', 'note': 'Fruit paletas are vegan'},
         {'name': 'Cold brew', 'price': '$5', 'note': ''},
         {'name': 'Cupcake', 'price': '$4', 'note': ''}]},
     'Craft Beer Garden': {'age_limit': '21+ with ID', 'hours': '12 pm – 11 pm', 'menu': [
@@ -206,6 +221,16 @@ DEMO_CONTEXT = {
     'Kolache masterclass': 'The Sweet Spot\'s bakers fold fruit and sausage kolaches; everyone gets one to try.',
 }
 
+# API-030: half the acts get an organizer-set Apple Music link (a search link: the acts are made up, so no artist page
+# is invented); the rest have none, so "listen to X" must not make one up.
+MUSIC_LINKED = {'The Prairie Lights', 'Ana Morales Trio', 'Velvet Mesquite', 'Neon Armadillo', 'Juniper Lane',
+                'Los Hermanos Flores'}
+# One set is cancelled (organizer-change questions); it stays on the schedule with the note, like real organizers do.
+CANCELLED = ('The Fort Worth Strings', 0, 'Trinity Stage')  # (act, day index, stage)
+# The urgent "Set time change" moves this set 30 minutes later; its body names the new time, so the two agree.
+MOVED = ('Velvet Mesquite', 0)
+CANCELLED_NOTE = 'Cancelled: The Fort Worth Strings can\'t make it today. The stage is dark for this slot.'
+
 ACTS = ['The Prairie Lights', 'Ana Morales Trio', 'Cowtown Brass', 'DJ Lone Star', 'Velvet Mesquite', 'Sundown Choir',
         'The Fort Worth Strings', 'Kid Rodeo', 'Neon Armadillo', 'Juniper Lane', 'Los Hermanos Flores', 'Big Sky Radio']
 
@@ -237,7 +262,7 @@ class Command(BaseCommand):
         fields = dict(
             name='Demo: Fort Worth Food & Music Festival', user=owner_user,
             description='Three days of Texas food, live music and local makers along the Trinity River. '
-                        'Free entry; food and drink tickets at the gate.',
+                        'Free entry; food and drinks are paid at each stand.',
             address='Panther Island, Fort Worth, TX 76102', latitude=CENTER[0], longitude=CENTER[1],
             start_time=start, end_time=start + timedelta(days=2, hours=10), timezone='America/Chicago',
             status=Event.STATUS_PUBLISHED, paid=True, public=True, logo_url='', accent_color='',
@@ -268,7 +293,7 @@ class Command(BaseCommand):
         with batch_changes(event):
             locations = self._locations(event, owner_user)
             items = self._schedule(event, owner_user, locations, start, rng)
-            notifications = self._notifications(event, owner_user, start, now)
+            notifications = self._notifications(event, owner_user, start, now, items)
             # API-018: the event's context names its amenities' locations; stored with their ids.
             ids = {loc.name: loc.id for loc in locations}
             Event.objects.filter(pk=event.pk).update(context=context.resolve_named(
@@ -320,12 +345,24 @@ class Command(BaseCommand):
                 for slot in range(4):
                     t = day_start + timedelta(hours=2 + slot * 2 + s * 0.5)
                     act = ACTS[(day * 7 + s * 3 + slot) % len(ACTS)]
+                    cancelled = (act, day, stage.name) == CANCELLED
+                    if (act, day) == MOVED:
+                        t += timedelta(minutes=30)
+                    item_context = {'performers': [{'name': act, 'bio': ACT_BIOS[act], 'genres': [ACT_GENRES[act]]}],
+                                    'price': 'Free with entry', 'age_limit': 'All ages'}
+                    if stage.name == 'Main Stage':
+                        item_context['accessibility'] = 'Accessible viewing platform; ASL interpreter for headliners.'
+                    if cancelled:
+                        item_context['about'] = CANCELLED_NOTE
+                    music = {}
+                    if act in MUSIC_LINKED:
+                        url = 'https://music.apple.com/us/search?term=' + act.replace(' ', '%20')
+                        music[music_links.norm(act)] = {'url': url, 'locked': True}
                     items.append(ScheduledItem.objects.create(
-                        event=event, user=user, location=stage, name=act, description=f'{act} live on the {stage.name}.',
+                        event=event, user=user, location=stage, name=act,
+                        description=CANCELLED_NOTE if cancelled else f'{act} live on the {stage.name}.',
                         start_time=t, end_time=t + timedelta(minutes=75),
-                        tags=['live music', ACT_GENRES[act]],
-                        context={'performers': [{'name': act, 'bio': ACT_BIOS[act], 'genres': [ACT_GENRES[act]]}],
-                                 'price': 'Free with entry', 'age_limit': 'All ages'}))
+                        tags=['live music', ACT_GENRES[act]], context=item_context, music=music))
             for d, dish in enumerate(['Brisket 101', 'Street tacos at home', 'Kolache masterclass']):
                 t = day_start + timedelta(hours=3 + d * 3)
                 items.append(ScheduledItem.objects.create(
@@ -341,13 +378,18 @@ class Command(BaseCommand):
                 context={'price': 'Free', 'age_limit': 'Ages 2–12 with an adult'}))
         return items
 
-    def _notifications(self, event, user, start, now):
+    def _notifications(self, event, user, start, now, items):
         out = []
+        from zoneinfo import ZoneInfo
+        moved = next(i for i in items if i.name == MOVED[0])
+        at = moved.start_time.astimezone(ZoneInfo(event.timezone))
+        moved_text = (f'{MOVED[0]} moves to {at.strftime("%I:%M %p").lstrip("0").lower()} '
+                      f'on the {moved.location.name}.')
         sent = [
             (start + timedelta(minutes=5), 'Welcome!', 'Gates are open. Grab a map at the Info Booth by the main gate.'),
             (start + timedelta(hours=2), 'Taco Row is open', 'All twelve taco trucks are serving now.'),
             (start + timedelta(hours=4), 'Shade & water', 'Free water refills at the Lemonade Stand and First Aid.'),
-            (now - timedelta(minutes=40), 'Set time change', 'Velvet Mesquite moves to 8:30 pm on the Main Stage.'),
+            (now - timedelta(minutes=40), 'Set time change', moved_text),
         ]
         for when, title, body in sent:
             # The set time change went out as an urgent announcement (API-011).
@@ -385,7 +427,7 @@ class Command(BaseCommand):
         velvet = next((i for i in items if i.name == 'Velvet Mesquite'), items[1])
         Change.objects.create(changeset=applied, entity=Change.ENTITY_ITEM, op=Change.OP_UPDATE, target_id=velvet.id,
                               label=velvet.name, data={'start_time': velvet.start_time.isoformat()},
-                              reason='The lineup page now lists Velvet Mesquite at 8:30 pm.', status=Change.ACCEPTED)
+                              reason='The lineup page now lists Velvet Mesquite 30 minutes later.', status=Change.ACCEPTED)
         Change.objects.create(changeset=applied, entity=Change.ENTITY_LOCATION, op=Change.OP_CREATE,
                               label='Sweet Spot', data={'name': 'Sweet Spot', 'category': 'Food'},
                               reason='New dessert area on the vendor page.', status=Change.ACCEPTED, sort=1)

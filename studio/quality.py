@@ -44,9 +44,36 @@ class _Page(HTMLParser):
         self.title = ''
         self.text = []
         self._in = []
+        # Lighthouse-style checks (Nov 22, 2026): accessible names, labels, frames, what loads in <head>
+        self.named = []           # [{'tag', 'attrs', 'text'}] for every <a href> and <button>
+        self._naming = []
+        self.label_for, self.label_ids = set(), set()
+        self.iframes, self.head_scripts, self.head_links = [], [], []
+        self.ids = set()
 
     def handle_starttag(self, tag, attrs):
         a = {k: (v or '') for k, v in attrs}
+        if a.get('id'):
+            self.ids.add(a['id'])
+        if tag == 'img' and self._naming:
+            for rec in self._naming:
+                rec['text'] += ' ' + a.get('alt', '')
+        if tag in ('a', 'button') and (tag == 'button' or 'href' in a):
+            rec = {'tag': tag, 'attrs': a, 'text': ''}
+            self.named.append(rec)
+            self._naming.append(rec)
+        if tag == 'label':
+            if a.get('for'):
+                self.label_for.add(a['for'])
+        elif tag == 'iframe':
+            self.iframes.append(a)
+        if 'head' in self._in and 'body' not in self._in:
+            if tag == 'script' and a.get('src'):
+                self.head_scripts.append(a)
+            elif tag == 'link':
+                self.head_links.append(a)
+        if tag in ('input', 'select', 'textarea') and 'label' in self._in:
+            a = {**a, '_in_label': '1'}
         if tag == 'main' or a.get('role') == 'main':
             self.has_main = True
         if tag == 'html':
@@ -75,13 +102,20 @@ class _Page(HTMLParser):
             self._in.append(tag)
 
     def handle_endtag(self, tag):
+        if tag in ('a', 'button'):
+            for i in range(len(self._naming) - 1, -1, -1):
+                if self._naming[i]['tag'] == tag:
+                    del self._naming[i]
+                    break
         if tag in self._in:
             while self._in and self._in.pop() != tag:
                 pass
 
     def handle_data(self, data):
         current = self._in[-1] if self._in else ''
-        if current == 'title':
+        for rec in self._naming:
+            rec['text'] += data
+        if current == 'title' and 'svg' not in self._in:
             self.title += data
         elif current == 'style':
             self.styles.append(data)
@@ -197,6 +231,96 @@ def _low_contrast(blocks):
 
 
 # ---------------------------------------------------------------------------
+# Lighthouse-style checks (Nov 22, 2026): what Lighthouse marks down on the sites we built
+# ---------------------------------------------------------------------------
+
+FONT_HOSTS = ('fonts.googleapis.com', 'fonts.gstatic.com')
+LAZY_AFTER = 3    # the first images may be the banner; later ones can wait
+OVERSIZED = 2.5   # an image file more than 2.5× wider than it is shown (2× covers high-density screens)
+
+
+def _asset_of(src):
+    return src.split('_attnd/assets/', 1)[1].split('/', 1)[0] if '_attnd/assets/' in (src or '') else ''
+
+
+def _px(value):
+    m = re.fullmatch(r'\s*(\d+(?:\.\d+)?)(?:px)?\s*', value or '')
+    return float(m.group(1)) if m else None
+
+
+def _plural(n, word):
+    return f'{n} {word}{"s" if n != 1 else ""}'
+
+
+def _lighthouse(path, page, assets, source=''):
+    """Accessible names, labels, frame titles, zoom, image sizes and loading, render-blocking scripts and fonts."""
+    out = []
+    unnamed = [r for r in page.named if not (r['text'].strip() or r['attrs'].get('aria-label', '').strip()
+                                             or r['attrs'].get('aria-labelledby') or r['attrs'].get('title', '').strip())]
+    buttons = sum(1 for r in unnamed if r['tag'] == 'button')
+    if buttons:
+        out.append(_issue('button_name', WARNING, path, f'{_plural(buttons, "button")} without a name (an icon-only '
+                          f'button needs aria-label): screen readers just say “button”.'))
+    links = len(unnamed) - buttons
+    if links:
+        out.append(_issue('link_name', WARNING, path, f'{_plural(links, "link")} without text or aria-label (an icon '
+                          f'or an image without alt).'))
+    fields = [f for f in page.inputs
+              if f.get('type', '').lower() not in ('hidden', 'submit', 'button', 'reset', 'image')
+              and not f.get('_in_label') and not (f.get('id') and f['id'] in page.label_for)
+              and not f.get('aria-label', '').strip() and not f.get('aria-labelledby') and not f.get('title')
+              and f.get('name') != '_hp']
+    if fields:
+        out.append(_issue('label', WARNING, path, f'{_plural(len(fields), "form field")} without a label.'))
+    frames = [f for f in page.iframes if not f.get('title', '').strip() and not f.get('aria-label', '').strip()]
+    if frames:
+        out.append(_issue('frame_title', WARNING, path, f'{_plural(len(frames), "embedded frame")} (video, map) '
+                          f'without a title.', 'frame_title'))
+    viewport = page.metas.get('viewport', '').lower().replace(' ', '')
+    scale = re.search(r'maximum-scale=([\d.]+)', viewport)
+    if 'user-scalable=no' in viewport or 'user-scalable=0' in viewport or (scale and float(scale.group(1)) < 5):
+        out.append(_issue('zoom', WARNING, path, 'The page stops people from zooming in (user-scalable=no / '
+                          'maximum-scale).', 'zoom'))
+    unsized = [img for img in page.images if not (img.get('width') and img.get('height'))
+               and not re.search(r'(^|;)\s*(width|aspect-ratio)\s*:', img.get('style', ''))]
+    if unsized:
+        out.append(_issue('img_size', WARNING, path, f'{_plural(len(unsized), "image")} without width and height: '
+                          f'the page jumps as they load.', 'img_size' if any(
+                              (assets.get(_asset_of(i.get('src'))) or {}).get('width') for i in unsized) else ''))
+    if len(page.images) > LAZY_AFTER:
+        eager = [img for img in page.images[LAZY_AFTER:] if img.get('loading', '').lower() != 'lazy'
+                 and img.get('fetchpriority', '').lower() != 'high']
+        if eager:
+            out.append(_issue('img_lazy', INFO, path, f'{_plural(len(eager), "image")} further down the page load '
+                              f'straight away (loading="lazy" waits until they’re needed).', 'img_lazy'))
+    big = []
+    for img in page.images:
+        asset = assets.get(_asset_of(img.get('src'))) or {}
+        shown = _px(img.get('width'))
+        if asset.get('width') and shown and asset['width'] > shown * OVERSIZED and (asset.get('size') or 0) > 100_000:
+            big.append(img.get('src', '').rsplit('/', 1)[-1])
+        elif (asset.get('size') or 0) > 1_000_000:
+            big.append(img.get('src', '').rsplit('/', 1)[-1])
+    if big:
+        out.append(_issue('img_oversized', INFO, path, f'Images much larger than they’re shown: '
+                          f'{", ".join(big[:3])}{" …" if len(big) > 3 else ""}.'))
+    blocking = [sc.get('src') for sc in page.head_scripts if 'defer' not in sc and 'async' not in sc
+                and sc.get('type', '').lower() != 'module']
+    if blocking:
+        out.append(_issue('render_blocking', WARNING, path, f'Scripts in <head> hold up the first paint: '
+                          f'{", ".join(blocking[:3])} (add defer).',
+                          '' if INLINE_SCRIPT.search(source or '') else 'defer'))
+    fonts = [link for link in page.head_links if 'stylesheet' in link.get('rel', '').lower()
+             and 'fonts.googleapis.com' in link.get('href', '')]
+    preconnected = any('preconnect' in link.get('rel', '').lower() and 'fonts.gstatic.com' in link.get('href', '')
+                       for link in page.head_links)
+    if fonts and (not preconnected or any('display=' not in link['href'] for link in fonts)):
+        out.append(_issue('fonts', INFO, path, 'Google Fonts load without preconnect or display=swap: text shows '
+                          'later than it could.', 'fonts'))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Drift: what the pages hard-code vs. the event now
 # ---------------------------------------------------------------------------
 
@@ -300,7 +424,8 @@ def translations(version):
 def check(site, version, include_drift=True):
     from studio.models import StudioAsset
     files = version.files or {}
-    assets = {str(a['id']): a for a in StudioAsset.objects.filter(event=site.event).values('id', 'size', 'alt')}
+    assets = {str(a['id']): a for a in StudioAsset.objects.filter(event=site.event).values('id', 'size', 'alt', 'width',
+                                                                                         'height')}
     issues = []
     if 'index.html' not in files:
         return {'issues': [_issue('no_home', ERROR, '', 'The site needs a home page (index.html).')],
@@ -336,13 +461,15 @@ def check(site, version, include_drift=True):
                                  'content.', 'main'))
         skipped = next((f'h{a} → h{b}' for a, b in zip(h, h[1:]) if b > a + 1), '')
         if skipped:
-            issues.append(_issue('headings', INFO, path, f'Headings skip a level ({skipped}).'))
+            issues.append(_issue('headings', WARNING, path, f'Headings skip a level ({skipped}): screen readers use '
+                                 f'them to find their way.'))
         # Contrast
         low = _low_contrast(blocks)
         if low:
             sel, ratio, fg, bg = low[0]
             issues.append(_issue('contrast', WARNING, path, f'Low contrast: {fg} on {bg} ({ratio:.1f}:1, needs 4.5:1)'
                                  f' in {sel[:60]}{f" and {len(low) - 1} more" if len(low) > 1 else ""}.'))
+        issues.extend(_lighthouse(path, page, assets, files[path]))
         # Mobile
         if 'viewport' not in page.metas:
             issues.append(_issue('viewport', WARNING, path, 'No mobile viewport: phones show it zoomed out.',
@@ -373,7 +500,7 @@ def check(site, version, include_drift=True):
         if not page.title.strip():
             issues.append(_issue('title', WARNING, path, 'No page title.', 'title'))
         if 'description' not in page.metas:
-            issues.append(_issue('description', INFO, path, 'No meta description for search results.',
+            issues.append(_issue('description', WARNING, path, 'No meta description for search results.',
                                  'description'))
         if not page.html_lang:
             issues.append(_issue('lang', INFO, path, 'The page doesn’t say its language.', 'lang'))
@@ -418,7 +545,14 @@ def check(site, version, include_drift=True):
 # Automatic fixes (trivial ones only)
 # ---------------------------------------------------------------------------
 
-AUTO_FIXES = ('alt', 'viewport', 'lang', 'title', 'description', 'main')
+AUTO_FIXES = ('alt', 'viewport', 'lang', 'title', 'description', 'main', 'frame_title', 'zoom', 'img_size', 'img_lazy',
+              'defer', 'fonts')
+IMG_TAG = re.compile(r'<img\b[^>]*>', re.I)
+IFRAME_TAG = re.compile(r'<iframe\b[^>]*>', re.I)
+VIEWPORT_TAG = re.compile(r'<meta\b[^>]*name\s*=\s*["\']?viewport[^>]*>', re.I)
+SCRIPT_SRC_TAG = re.compile(r'<script\b[^>]*\bsrc\s*=[^>]*>', re.I)
+FONT_LINK_TAG = re.compile(r'<link\b[^>]*fonts\.googleapis\.com[^>]*>', re.I)
+INLINE_SCRIPT = re.compile(r'<script\b(?![^>]*\bsrc\s*=)(?![^>]*application/ld\+json)[^>]*>\s*\S', re.I)
 IMG_NO_ALT = re.compile(r'<img\b(?![^>]*\balt\s*=)([^>]*?)(/?)>', re.I)
 
 
@@ -442,7 +576,11 @@ def autofix(site, files):
     import html as h
     from studio.models import StudioAsset
     event = site.event
-    assets_alt = {str(a): alt for a, alt in StudioAsset.objects.filter(event=event).values_list('id', 'alt')}
+    assets_alt, assets_size = {}, {}
+    for asset_id, alt, width, height in StudioAsset.objects.filter(event=event).values_list('id', 'alt', 'width',
+                                                                                         'height'):
+        assets_alt[str(asset_id)] = alt
+        assets_size[str(asset_id)] = (width, height)
     out, fixes = dict(files), 0
     description = re.sub(r'\s+', ' ', (event.description or '')).strip()[:155]
     for path in [p for p in files if p.endswith('.html')]:
@@ -475,8 +613,109 @@ def autofix(site, files):
             wrapped = _wrap_main(text)
             if wrapped != text:
                 text, fixes = wrapped, fixes + 1
-        out[path] = text
+        text, n = _lighthouse_fixes(text, files, assets_size)
+        out[path], fixes = text, fixes + n
     return out, fixes
+
+
+def _frame_title(src):
+    host = (urlsplit(src or '').hostname or '').lower()
+    if 'youtube' in host or 'vimeo' in host:
+        return 'Video'
+    if 'openstreetmap' in host or 'google' in host:
+        return 'Map'
+    return 'Embedded content'
+
+
+def _lighthouse_fixes(text, files, assets_size):
+    """(text, fixes) for the Lighthouse-style issues that can be fixed without changing how the page looks:
+    frame titles, zoom allowed, aspect-ratio on images of known size, lazy loading below the first images, defer on
+    head scripts (only on pages without inline scripts, and never a script that writes the document), Google Fonts
+    preconnect + display=swap."""
+    fixes = 0
+
+    def frame(m):
+        nonlocal fixes
+        tag = m.group(0)
+        if re.search(r'\b(title|aria-label)\s*=', tag, re.I):
+            return tag
+        fixes += 1
+        src = re.search(r'\bsrc\s*=\s*["\']([^"\']*)', tag, re.I)
+        return tag[:-1].rstrip('/').rstrip() + f' title="{_frame_title(src.group(1) if src else "")}">'
+    text = IFRAME_TAG.sub(frame, text)
+
+    def viewport(m):
+        nonlocal fixes
+        tag = m.group(0)
+        low = tag.lower().replace(' ', '')
+        scale = re.search(r'maximum-scale=([\d.]+)', low)
+        if 'user-scalable=no' in low or 'user-scalable=0' in low or (scale and float(scale.group(1)) < 5):
+            fixes += 1
+            return '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        return tag
+    text = VIEWPORT_TAG.sub(viewport, text)
+
+    count = 0
+
+    def image(m):
+        nonlocal fixes, count
+        tag = m.group(0)
+        count += 1
+        src = re.search(r'\bsrc\s*=\s*["\']([^"\']*)', tag, re.I)
+        dims = assets_size.get(_asset_of(src.group(1) if src else '')) or (None, None)
+        sized = re.search(r'\bwidth\s*=', tag, re.I) and re.search(r'\bheight\s*=', tag, re.I)
+        if not sized and dims[0] and dims[1] and 'aspect-ratio' not in tag:
+            style = re.search(r'\bstyle\s*=\s*(["\'])(.*?)\1', tag, re.I | re.S)
+            ratio = f'aspect-ratio:{dims[0]}/{dims[1]}'
+            if style:
+                body = style.group(2).strip().rstrip(';')
+                tag = tag[:style.start()] + f'style="{(body + ";") if body else ""}{ratio}"' + tag[style.end():]
+            else:
+                tag = tag[:-1].rstrip('/').rstrip() + f' style="{ratio}">'
+            fixes += 1
+        if count > LAZY_AFTER and not re.search(r'\bloading\s*=', tag, re.I) \
+                and not re.search(r'fetchpriority\s*=\s*["\']?high', tag, re.I):
+            tag = tag[:-1].rstrip('/').rstrip() + ' loading="lazy" decoding="async">'
+            fixes += 1
+        return tag
+    text = IMG_TAG.sub(image, text)
+
+    head_end = re.search(r'</head\s*>', text, re.I)
+    if head_end and not INLINE_SCRIPT.search(text):
+        head = text[:head_end.start()]
+
+        def defer(m):
+            nonlocal fixes
+            tag = m.group(0)
+            if re.search(r'\b(defer|async)\b', tag, re.I) or re.search(r'type\s*=\s*["\']?module', tag, re.I):
+                return tag
+            src = re.search(r'\bsrc\s*=\s*["\']?([^"\'\s>]+)', tag, re.I)
+            path = _resolve('', src.group(1)) if src else ''
+            if not _local(src.group(1) if src else '') or 'document.write' in (files.get(path) or ''):
+                return tag
+            fixes += 1
+            return tag[:-1].rstrip() + ' defer>'
+        new_head = SCRIPT_SRC_TAG.sub(defer, head)
+        text = new_head + text[head_end.start():]
+
+    fonts = FONT_LINK_TAG.findall(text)
+    if fonts and any('stylesheet' in f.lower() for f in fonts):
+        def swap(m):
+            nonlocal fixes
+            tag = m.group(0)
+            if 'stylesheet' in tag.lower() and 'display=' not in tag:
+                fixes += 1
+                return re.sub(r'(href\s*=\s*["\'][^"\']*)', lambda h: h.group(1) + '&display=swap', tag, count=1)
+            return tag
+        text = FONT_LINK_TAG.sub(swap, text)
+        if not re.search(r'rel\s*=\s*["\']?preconnect[^>]*fonts\.gstatic\.com|fonts\.gstatic\.com[^>]*preconnect',
+                         text, re.I):
+            first = FONT_LINK_TAG.search(text)
+            hint = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
+                    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
+            text = text[:first.start()] + hint + text[first.start():]
+            fixes += 1
+    return text, fixes
 
 
 def _wrap_main(text):

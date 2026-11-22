@@ -8,7 +8,7 @@
   const LEVEL_COLORS = ['#adb5bd', '#868e96', '#0b8bd6', '#431f86', '#f2b705', '#c62828', '#7a0b0b'];
   const LEVEL_BADGES = ['badge--muted', 'badge--muted', 'badge--info', 'badge--primary', 'badge--warning', 'badge--danger', 'badge--danger'];
   const AROUND_MS = 30000;
-  const PAGE = 1500;
+  const PAGE = 200;  // rows drawn at first and per "Show more" (1,500 rows were ~12,000 elements on load)
 
   const filtersEl = root.querySelector('[data-diag-filters]');
   const statusEl = root.querySelector('[data-diag-status]');
@@ -175,6 +175,9 @@
     moreEl.textContent = `Show more (${shown.length - limit} left)`;
   }
   moreEl.addEventListener('click', () => { limit += PAGE; renderRows(); });
+  document.addEventListener('click', e => {
+    if (waterfallStale && e.target.closest('[data-tab-target="#diag-waterfall"]')) renderWaterfall();
+  });
 
   function scrollTo(e) {
     const tr = rowsEl.querySelector(`tr[data-id="${e.id}"]`);
@@ -191,7 +194,11 @@
   }
 
   // ---- network waterfall -----------------------------------------------------------------------------
+  let waterfallStale = false;
   function renderWaterfall() {
+    // Drawn only while its tab shows (up to 400 bars); the tab's click draws it when the filters changed meanwhile.
+    if (waterfallEl.closest('[hidden]')) { waterfallStale = true; return; }
+    waterfallStale = false;
     waterfallEl.replaceChildren();
     const reqs = shown.filter(e => e.src === 'app' && (e.e === 'net.request.finished' || e.e === 'net.request.failed'))
       .slice(-400).map(e => ({e, end: e.t, start: e.t - (num(e.f.ms) || 0)}));

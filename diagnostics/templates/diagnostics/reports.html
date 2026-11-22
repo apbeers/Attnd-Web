@@ -15,7 +15,7 @@
   <button class="button button--primary">Filter</button><a class="button button--ghost" href="{% url 'diagnostics:reports' %}">Clear</a>
 </form>
 <div class="panel panel--flush"><div class="scroll-x"><table class="data-table">
-  <thead><tr><th>Received</th><th>Kind</th><th>Platform</th><th>App</th><th>Device</th><th>Summary</th><th></th></tr></thead>
+  <thead><tr><th>Received</th><th>Kind</th><th>Platform</th><th>App</th><th>Device</th><th>Summary</th><th><span class="visually-hidden">Same problem</span></th></tr></thead>
   <tbody>{% for r in reports %}<tr>
     <td class="nowrap">{{ r.received_at|date:"M j, g:i A" }}</td><td>{{ r.kind }}</td><td>{{ r.platform }}</td>
     <td>{{ r.app_version|default:"?" }} <span class="muted small">({{ r.build|default:"?" }})</span></td>
@@ -23,6 +23,7 @@
     <td><a href="{% url 'diagnostics:report' r.id %}">{{ r.summary|default:r.reason|default:"(no message)"|truncatechars:90 }}</a></td>
     <td><a class="small" href="?signature={{ r.signature }}">same</a></td>
   </tr>{% empty %}<tr><td colspan="7" class="muted">No reports.</td></tr>{% endfor %}</tbody>
-</table></div></div>
+</table></div>
+{% include 'console/_pager.html' with label='Report pages' newer='Newer' older='Older' %}</div>
 </div>
 {% endblock %}

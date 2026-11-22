@@ -17,11 +17,8 @@ from django.views.decorators.http import require_POST
 from agent.registry import agent_action
 from attnd.permissions import requires
 from attnd.public import public
-from console import mail
+from console import mail, paging
 from platform_admin.models import EmailLog
-
-PAGE = 200
-
 
 @agent_action('platform_emails', 'The Emails log (staff): every email the platform sent, to whom, its kind, subject, '
               'status and Mailgun events (never the body). Filter with ?kind=, ?status=, ?q= (address).', kind='read')
@@ -38,9 +35,10 @@ def emails(request):
     since = timezone.now() - timezone.timedelta(hours=24)
     counts = dict(EmailLog.objects.filter(created_at__gte=since).values_list('status').annotate(n=Count('pk')))
     labels = dict(EmailLog.STATUSES)
+    pager = paging.page(request, rows)
     return render(request, 'platform_admin/emails.html', {
         'rows': [{'row': r, 'kind_label': mail.KINDS.get(r.kind, (r.kind, ''))[0],
-                  'category': mail.KINDS.get(r.kind, ('', ''))[1]} for r in rows[:PAGE]],
+                  'category': mail.KINDS.get(r.kind, ('', ''))[1]} for r in pager], 'pager': pager,
         'kinds': [{'key': k, 'label': label, 'category': cat} for k, (label, cat) in mail.KINDS.items()],
         'statuses': EmailLog.STATUSES, 'kind': kind, 'status': status, 'q': q,
         'counts': [{'label': labels.get(s, s), 'n': n, 'status': s} for s, n in sorted(counts.items())],

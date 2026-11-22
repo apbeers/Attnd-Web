@@ -130,10 +130,15 @@ def limits():
     return AiLimits.load()
 
 
-def monthly_limit(user):
-    """The person's monthly limit in USD, or None for no limit."""
+_LOOKUP = object()
+
+
+def monthly_limit(user, override=_LOOKUP, settings_row=None):
+    """The person's monthly limit in USD, or None for no limit. Lists pass `override` (their AiLimitOverride or
+    None) and `settings_row` (limits()) when they loaded them once for every row."""
     from credit.models import AiLimitOverride
-    override = AiLimitOverride.objects.filter(user=user).first()
+    if override is _LOOKUP:
+        override = AiLimitOverride.objects.filter(user=user).first()
     if override is not None:
         if override.unlimited:
             return None
@@ -141,7 +146,7 @@ def monthly_limit(user):
             return Decimal(override.monthly_usd)
     if getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False):
         return None  # staff: counted, never limited (an override can still set an amount)
-    return Decimal(limits().monthly_default_usd)
+    return Decimal((settings_row or limits()).monthly_default_usd)
 
 
 def used_this_month(user):

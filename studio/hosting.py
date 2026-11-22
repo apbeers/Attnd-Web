@@ -141,6 +141,10 @@ HASH_LINK_SCRIPT = (
 
 
 _CANONICAL_RE = re.compile(r'<link[^>]+rel=["\']?canonical', re.I)
+_FONT_PRECONNECT_RE = re.compile(r'<link[^>]+preconnect[^>]+fonts\.gstatic\.com|<link[^>]+fonts\.gstatic\.com[^>]+preconnect',
+                                 re.I)
+FONT_PRECONNECT = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
+                   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>')
 
 
 _A_RE = re.compile(r'<a\b[^>]*>', re.I)
@@ -212,6 +216,10 @@ def render_page(source, base_href, preview=False, bridge=False, canonical='', he
     elif canonical and not _CANONICAL_RE.search(text):
         base += f'<link rel="canonical" href="{html.escape(canonical)}">'
     base += head
+    if 'fonts.googleapis.com' in text and not _FONT_PRECONNECT_RE.search(text):
+        # Lighthouse (Nov 22, 2026): Google Fonts' stylesheet blocks the first paint; opening both connections
+        # straight away saves a round trip or two on phones.
+        base += FONT_PRECONNECT
     match = _HEAD_RE.search(text)
     if match:
         text = text[:match.end()] + base + text[match.end():]

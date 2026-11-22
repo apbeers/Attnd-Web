@@ -401,9 +401,12 @@ def tasks_feed(request):
     return JsonResponse({'tasks': tasks, 'active': sum(t['status'] in ('queued', 'running') for t in tasks)})
 
 
-@declare(SIGNED_IN)  # static script for signed-in pages
+@public
 def service_worker(request):
-    """The console's service worker, served from /console/ so it can control every console page."""
+    """The console's service worker, served from /console/ so it can control every console page. Public
+    (Lighthouse, Nov 22, 2026): a fetch of the script without the session (an expired sign-in, a tool that sends
+    the cookie only with page requests) was a redirect to the sign-in page, which registration refuses ("The script
+    resource is behind a redirect"). It is the same static file as /static/console/sw.js."""
     from django.contrib.staticfiles import finders
     path = finders.find('console/sw.js')
     with open(path, encoding='utf-8') as f:

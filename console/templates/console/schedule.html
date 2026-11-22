@@ -13,7 +13,7 @@
 </div>
 {% for day, items in days %}
 <section class="section">
-  <h3 class="eyebrow">{{ day|date:"l, F j" }}</h3>
+  <h2 class="eyebrow">{{ day|date:"l, F j" }}</h2>
   <div class="panel panel--flush"><ul class="list">
   {% for it in items %}
     {% component "schedule_item_row" event=event item=it hearts=it.hearts %}

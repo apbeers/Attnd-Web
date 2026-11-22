@@ -44,8 +44,9 @@
   --color-success: #198754;  --color-success-soft: #e7f6ee; --color-success-line: #b9e3c9; --color-success-text: #146c43;
   --color-danger: #c62828;   --color-danger-soft: #fdeeee;  --color-danger-line: #f5c7c7; --color-danger-text: #b11f1f;
   --color-on-danger: #ffffff;  /* text on a danger fill (alert badges) */
+  --color-on-success: #ffffff; --color-on-info: #ffffff;  /* text on success / info fills (badges; ≥ 4.5:1) */
   --color-warning: #f2b705;  --color-warning-soft: #fff7df; --color-warning-line: #f4e0a3; --color-warning-text: #8a6100;
-  --color-info: #0b8bd6;     --color-info-soft: #e8f4fd;    --color-info-line: #bfe1f7;
+  --color-info: #0b75b8;     --color-info-soft: #e8f4fd;    --color-info-line: #bfe1f7; --color-info-text: #0a5f96;
   --color-code: #a3195b;
   --color-focus: rgba(67, 31, 134, .38);
   --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%236b6880' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
@@ -87,10 +88,9 @@
     --color-strong: #fff;
     --color-success: #3fb47a; --color-success-soft: #15291f; --color-success-line: #22533a; --color-success-text: #79d6a3;
     --color-danger: #ef5b5b;  --color-danger-soft: #2f1719;  --color-danger-line: #5d2629; --color-danger-text: #ff9b9b;
-  --color-on-danger: #1d0c0d;
-    --color-on-danger: #1d0c0d;
+    --color-on-danger: #1d0c0d; --color-on-success: #0c1d14; --color-on-info: #0b1826;
     --color-warning: #f2b705; --color-warning-soft: #2c2412; --color-warning-line: #5a4815; --color-warning-text: #f2c94c;
-    --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b;
+    --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b; --color-info-text: #8fd0f7;
     --color-code: #ff8fc0;
     --color-focus: rgba(196, 176, 255, .5);
     --map-tile-filter: invert(.92) hue-rotate(180deg) saturate(.55) brightness(.9) contrast(.9);
@@ -112,7 +112,8 @@
   --color-success: #3fb47a; --color-success-soft: #15291f; --color-success-line: #22533a; --color-success-text: #79d6a3;
   --color-danger: #ef5b5b;  --color-danger-soft: #2f1719;  --color-danger-line: #5d2629; --color-danger-text: #ff9b9b;
   --color-warning: #f2b705; --color-warning-soft: #2c2412; --color-warning-line: #5a4815; --color-warning-text: #f2c94c;
-  --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b;
+  --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b; --color-info-text: #8fd0f7;
+  --color-on-danger: #1d0c0d; --color-on-success: #0c1d14; --color-on-info: #0b1826;
   --color-code: #ff8fc0;
   --color-focus: rgba(196, 176, 255, .5);
   --map-tile-filter: invert(.92) hue-rotate(180deg) saturate(.55) brightness(.9) contrast(.9);
@@ -262,9 +263,9 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .button--secondary { border-color: var(--color-control-border); color: var(--color-text); background: var(--color-surface); }
 .button--secondary:hover { background: var(--color-subtle); color: var(--color-text); }
 .button--danger { border-color: var(--color-danger-line); color: var(--color-danger-text); background: var(--color-surface); }
-.button--danger:hover { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
-.button--success { background: var(--color-success); color: #fff; }
-.button--success:hover { background: var(--color-success-text); color: #fff; }
+.button--danger:hover { background: var(--color-danger); border-color: var(--color-danger); color: var(--color-on-danger); }
+.button--success { background: var(--color-success); color: var(--color-on-success); }
+.button--success:hover { background: var(--color-success-text); color: var(--color-on-success); }
 .button--ghost { color: var(--color-brand-text); border: 0; padding-inline: .6rem; }
 .button--ghost:hover { background: var(--color-brand-soft); color: var(--color-brand-text); }
 .button--ghost.muted { color: var(--color-muted); }
@@ -352,10 +353,10 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
   border-radius: var(--radius-pill); white-space: nowrap; vertical-align: middle; background: var(--color-subtle); color: var(--color-text); }
 .badge--neutral { background: var(--color-surface); border: 1px solid var(--color-border); }
 .badge--primary { background: var(--color-brand); color: var(--color-on-brand); }
-.badge--success { background: var(--color-success); color: #fff; }
-.badge--danger { background: var(--color-danger); color: #fff; }
+.badge--success { background: var(--color-success); color: var(--color-on-success); }
+.badge--danger { background: var(--color-danger); color: var(--color-on-danger); }
 .badge--warning { background: var(--color-warning); color: #1b1830; }
-.badge--info { background: var(--color-info); color: #fff; }
+.badge--info { background: var(--color-info); color: var(--color-on-info); }
 .badge--muted { background: var(--color-muted); color: var(--color-surface); }
 .badge--dark { background: var(--color-strong); color: var(--color-bg); }
 .badge--ended { border: 1px solid var(--color-border); color: var(--color-muted); }
@@ -396,6 +397,7 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .data-table .num { text-align: right; }
 .data-table--diff td { padding: .4rem .5rem; }
 .scroll-x { overflow-x: auto; }
+.pager { justify-content: flex-end; padding: var(--space-2) var(--space-3); }
 
 /* Thumbnails */
 .thumb { width: 48px; height: 48px; border-radius: var(--radius); object-fit: cover; flex-shrink: 0; }
@@ -1073,6 +1075,8 @@ body:has(.agent__launcher):not(:has(.agent--full)) { --fab-x: 10.5rem; --fab-bar
 .gallery-frame__body { display: grid; gap: var(--space-3); min-width: 0; }
 .gallery-frame__body > * { min-width: 0; }
 .gallery-row, .gallery-row__frames { min-width: 0; max-width: 100%; }
+/* Every component three times is ~30k elements: rows off screen skip style, layout and paint until scrolled to. */
+.gallery-row { content-visibility: auto; contain-intrinsic-size: auto 640px; }
 
 /* Platform → Site styles: each style's phone preview at its real width and a laptop preview scaled to half. */
 .site-style__body { display: grid; gap: var(--space-5); }
@@ -1086,3 +1090,6 @@ body:has(.agent__launcher):not(:has(.agent--full)) { --fab-x: 10.5rem; --fab-bar
 .site-style__scale { width: 600px; height: 400px; overflow: hidden; border-radius: var(--radius-lg); }
 .site-style__frame--wide iframe { width: 1200px; height: 800px; transform: scale(.5); transform-origin: 0 0; }
 @media (max-width: 600px) { .site-style__frame--wide { display: none; } }
+/* Platform sub-tabs: one row that scrolls sideways on phones (it wrapped onto five rows). */
+@media (max-width: 600px) { .platform-tabs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .platform-tabs .tabs__tab { flex: none; white-space: nowrap; } }

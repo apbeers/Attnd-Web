@@ -159,7 +159,14 @@ def prompt_text(style):
             f'{", ".join(style["pages"])}. Layout of the home page: {layout}. Type: display {t["display"]}; body '
             f'{t["body"]}; scale {t["scale"]}. Colours (the event theme): {style["colours"]} Set --attnd-accent and '
             f'the other --attnd-* properties from them. Do: {"; ".join(style["do"])}. Don\'t: '
-            f'{"; ".join(style["dont"])}.')
+            f'{"; ".join(style["dont"])}. {EVERY_STYLE}')
+
+
+# Every style (Lighthouse, Nov 22, 2026): what kept built sites from 100 in accessibility, best practices and SEO.
+EVERY_STYLE = ('Every style: white or dark text on the accent, whichever reads at 4.5:1 (light accents such as yellow '
+               'need dark text); the banner image eager with fetchpriority="high", later images lazy, all with width '
+               'and height; tap targets 24px or more apart; headings in order; one Google Font family with '
+               'display=swap.')
 
 
 def colours(event=None):

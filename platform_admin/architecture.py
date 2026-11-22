@@ -3,6 +3,7 @@ generated from the code at request time (Django apps and models, URL namespaces,
 Attnd actions, scheduled tasks, integrations configured) + a live status per service. The drift checks
 (`drift()`) are what attnd/tests_architecture.py runs in CI."""
 
+import os
 import re
 import tomllib
 from collections import defaultdict
@@ -21,6 +22,14 @@ LAYERS = [('clients', 'Clients'), ('edge', 'Edge'), ('apps', 'Django apps'), ('d
 TAGS = ['infra', 'data', 'ai', 'push', 'store', 'web', 'mail', 'pay']
 GITHUB = 'https://github.com/apbeers/Attnd-Web/blob/develop/'
 SKIP_DIRS = {'.venv', 'node_modules', 'staticfiles', 'media', 'live_tests', 'scripts', '.git'}
+# Where installed Python lives when it sits inside the project (Heroku: /app/.heroku/python/…site-packages).
+THIRD_PARTY_PARTS = {'.venv', '.heroku', 'site-packages', 'dist-packages'}
+
+
+def _first_party(path):
+    """True for our own code: inside the repository and not an installed package (Django contrib, cloudinary…)."""
+    path = Path(path)
+    return ROOT in path.parents and not (THIRD_PARTY_PARTS & set(path.relative_to(ROOT).parts))
 
 
 def load():
@@ -37,28 +46,37 @@ def local_apps():
     out = []
     for cfg in django_apps.get_app_configs():
         path = Path(cfg.path)
-        if ROOT in path.parents and '.venv' not in path.parts:
+        if _first_party(path):
             out.append(cfg.label)
     return sorted(out)
 
 
 def _source_files():
-    for p in ROOT.rglob('*.py'):
-        rel = p.relative_to(ROOT)
-        if set(rel.parts) & SKIP_DIRS or 'migrations' in rel.parts:
-            continue
-        if p.name.startswith('test') or p.name.startswith('tests'):
-            continue
-        yield rel, p
+    """Our non-test .py files. Walks with os.walk and prunes SKIP_DIRS (.venv alone is ~30k files) instead of
+    globbing everything and filtering afterwards."""
+    for folder, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and d not in THIRD_PARTY_PARTS and not d.startswith('.')
+                   and d != 'migrations' and d != '__pycache__']
+        for name in files:
+            if not name.endswith('.py') or name.startswith('test'):
+                continue
+            p = Path(folder) / name
+            yield p.relative_to(ROOT), p
 
 
-def called_hosts():
-    """{host: [files]} of every https:// host written in our non-test code."""
+@lru_cache(maxsize=1)
+def _called_hosts():
     out = defaultdict(set)
     for rel, p in _source_files():
         for m in re.finditer(r'https://([a-z0-9.-]+\.[a-z]{2,})', p.read_text(errors='ignore')):
             out[m.group(1)].add(str(rel))
     return {h: sorted(f) for h, f in out.items()}
+
+
+def called_hosts():
+    """{host: [files]} of every https:// host written in our non-test code. The code can't change while a process
+    runs, so it is read once per process (the Architecture page took ~0.4–2 s re-reading every file)."""
+    return {h: list(f) for h, f in _called_hosts().items()}
 
 
 ENV_RE = re.compile(r'(?:getenv|environ\.get|environ\[|_flag|_int|_float|_rate|_list|_env\w*)\(\s*[\'"]([A-Z][A-Z0-9_]+)')

@@ -90,7 +90,16 @@ Event sites are posters you can scroll: loud, confident, local, and useful on a 
   description, landmarks (header, nav, main, footer), exactly one <h1> per page and headings in order, alt text on
   every informative image (alt="" on decorative ones), labels on every form field, visible focus styles, text contrast
   at least 4.5:1 (3:1 for large type), no information by colour alone, a "Skip to content" link.
-- Fast: no frameworks, images with width/height and loading="lazy" below the fold, one stylesheet, scripts deferred.
+- Fast: no frameworks, one stylesheet, every <script src> deferred (defer, in <head>), every <img> with width and
+  height (the file's own size) and loading="lazy" + decoding="async" below the fold; the banner image is never lazy
+  (fetchpriority="high" instead). Images no more than about twice as wide as they are shown. Google Fonts: one family,
+  `&display=swap`, after <link rel="preconnect" href="https://fonts.googleapis.com"> and
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>.
+- Lighthouse (Attnd's check uses the same rules; aim for 100 in accessibility, best practices and SEO): every button
+  and link has a name (icon-only ones an aria-label), every iframe a title, no maximum-scale or user-scalable=no in
+  the viewport, tap targets at least 24px with space between them (44px for main actions), text on the accent
+  colour readable (check white AND dark text on --attnd-accent; light accents need dark text), headings never skip a
+  level, links that say where they go (not "click here"), no console errors (no missing files).
 - Open Graph tags (og:title, og:description, og:image when there is art) on index.html.
 - Never hard-code dates, times or item names that the data library can show (<attnd-event field="dates">,
   <attnd-schedule>): Attnd's pre-publish check flags page text that no longer matches the event.

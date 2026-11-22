@@ -52,13 +52,16 @@ def customer_rows(users):
     total = dict(AiSpend.objects.filter(user_id__in=ids).values_list('user').annotate(t=Sum('cost_usd')))
     paid = dict(PaymentRecord.objects.filter(event__user_id__in=ids).values_list('event__user')
                 .annotate(t=Sum('amount_usd')))
+    from credit.models import AiLimitOverride
+    overrides = {o.user_id: o for o in AiLimitOverride.objects.filter(user_id__in=ids)}
+    settings_row = ledger.limits()
     from events.models import Event
     event_plans = {}
     for e in Event.objects.filter(user_id__in=ids).only('id', 'user_id', 'plan', 'paid', 'name'):
         event_plans.setdefault(e.user_id, []).append(plans.LABELS[plans.plan_of(e)])
     rows = []
     for u in users:
-        limit = ledger.monthly_limit(u)
+        limit = ledger.monthly_limit(u, overrides.get(u.pk), settings_row)
         rows.append({
             'id': u.pk, 'email': u.email, 'joined': u.date_joined, 'last_active': u.last_login,
             'events': u.n_events, 'plans': ', '.join(sorted(set(event_plans.get(u.pk, [])))) or '—',

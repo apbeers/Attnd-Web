@@ -13,7 +13,7 @@
     {% if c.skipped %}<p class="small muted">Not drawn here: {{ c.skipped }}.</p>
     {% else %}<div class="gallery-row__frames">{% for f in c.frames %}<div class="gallery-frame gallery-frame--{{ f.width }}" data-gallery-frame="{{ f.width }}">
       <p class="eyebrow">{{ f.width }} px · {{ f.surface }}</p>
-      <div class="gallery-frame__body">{% for html in f.html %}{{ html|safe }}{% endfor %}</div>
+      {% if f.list %}<ul class="gallery-frame__body list">{% else %}<div class="gallery-frame__body">{% endif %}{% for html in f.html %}{{ html|safe }}{% endfor %}{% if f.list %}</ul>{% else %}</div>{% endif %}
     </div>{% endfor %}</div>{% endif %}
   </section>{% endfor %}
 </div>

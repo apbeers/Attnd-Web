@@ -6,7 +6,7 @@ Django 6.1 backend serving the REST API consumed by the iOS and Android apps, pl
 ## Branching (initial development)
 
 - `main` = production (default branch), `develop` = dev/beta. Pushing to `develop` deploys to the dev server / TestFlight / Play internal testing; pushing to `main` deploys to production.
-- **Prefer giving the user a command to paste** (`heroku`, `gh`, etc.) over click-by-click instructions. The user has the Heroku and GitHub CLIs installed.
+- **Run it yourself** (owner, Nov 22, 2026): set keys and run Heroku commands through the Heroku Platform API (`api.heroku.com`, token injected by the proxy) on dev and production instead of asking the owner; never print secret values (check them by name, shape or fingerprint; copying a value between apps is fine). Only a genuinely destructive command (deleting data, apps, add-ons, scaling to zero) still needs the owner's go-ahead. When something needs the owner's own machine or accounts (a file on their Mac, a web console), give a command to paste rather than click-by-click steps. Note: the first config-var `PATCH` of a session has twice come back without applying; always read the vars back and retry once.
 - **docs/LLC_MIGRATION.md is the running list for moving Attnd to an LLC.** Whenever a feature adds an account, key, certificate, service, domain, store listing or legal text, add it to its inventory in the same commit.
 - **ROADMAP.md lists agreed future work** (things needed before release, and later features). Add items there when the user parks an idea; remove them once built.
 - **SETUP.md is the living setup checklist.** When the user reports completing a setup step, record it in SETUP.md (progress table and the step itself) instead of repeating instructions in chat. **At the start of each working session, remind the user of the unchecked "Open owner tasks" in SETUP.md.**
@@ -327,6 +327,18 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
 - **Site icons** (every page includes `home/_icons.html`): `uv run python scripts/make_icons.py` regenerates them from `brand/app-icon-1024.png` (copy of the iOS 1024 app icon; iOS itself went back from the Icon Composer icon to a PNG app icon set on Nov 19, 2026 because `Assets.car` was ~5 MB, and the website's icons stay as they are) into `public/` — `favicon.ico` (16–256), `icon-32/96/192/512.png` (rounded corners, transparent, so Safari and other tabs show the tile without a plate), `apple-touch-icon.png` 180 (full bleed, opaque; iOS/macOS round it), `icon-maskable-512.png`, `site.webmanifest` — and the console manifest's icons. `home/tests.py` checks the sizes and links.
 - **Homepage screenshots** (`home/static/home/img/demo-map.webp`, `demo-locations.webp`, 768×1670): the raw 6.3" captures `raw/iphone-63/1-map.png` and `4-locations.png` from Attnd-iOS's `store-screenshots` artifact, resized with Pillow (WebP, quality 82). Refresh them after a new screenshot run.
 - **Demo data:** `python manage.py load_demo_event [--owner email]` builds the DEMO event (happening now, every feature populated).
+- **Assistant eval** (`docs/assistant_eval/`, Nov 22, 2026): `questions.json` (247 platform-neutral questions attendees
+  ask, silly and risky ones included, with checks) and `demo_bundle.json` (the DEMO bundle at a fixed moment, from
+  `manage.py export_assistant_eval_bundle`; nothing is saved). The apps run it (iOS: router mode in its unit tests'
+  critical gate and opt-in, model mode on a Mac / iPhone with Apple Intelligence; Android: router mode, the same critical gate and opt-in, model mode ROADMAP). DEMO changes the
+  questions rely on are pinned by `events/tests_demo_facts.py → test_assistant_eval_facts`; after a DEMO change
+  re-export the bundle and sync the apps. How to run, grading, adding questions: its README.
+- **Assistant eval** (`docs/assistant_eval/`, Nov 22, 2026): `questions.json` (247 platform-neutral questions attendees
+  ask, silly and risky ones included, with checks) and `demo_bundle.json` (the DEMO bundle at a fixed moment, from
+  `manage.py export_assistant_eval_bundle`; nothing is saved). The apps run it (iOS: router mode in its unit tests'
+  critical gate and opt-in, model mode on a Mac / iPhone with Apple Intelligence; Android: router mode, the same critical gate and opt-in, model mode ROADMAP). DEMO changes the
+  questions rely on are pinned by `events/tests_demo_facts.py → test_assistant_eval_facts`; after a DEMO change
+  re-export the bundle and sync the apps. How to run, grading, adding questions: its README.
 
 ## Onboarding: the home page and "Try it on your event" (owner, Nov 21, 2026; `home/`)
 - **Home page** (`home/views.home`, `home/templates/home/home.html` + `onboarding.css` + `home.js`; our own design and
@@ -1078,7 +1090,32 @@ the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-pick
   that becomes interactive on hover / focus / touch or when idle on screen (needs the Maps Static API on the browser
   key, SETUP.md); attndReveal's pulse / glow / collapse and the chat's pulses animate only opacity / transform
   (`.reveal-ring`, `::after` rings); collectstatic minifies our own CSS (`attnd/static_storage.py`, comments and
-  whitespace only; JS not minified: no safe stdlib minifier, gzip / brotli apply).
+  whitespace only; JS not minified: no safe stdlib minifier, gzip / brotli apply). Second pass (Nov 22, 2026,
+  measured signed in as the dev-only `lighthouse-test@attnd.app`, SETUP.md): `/console/sw.js` public (a cookie-less
+  fetch was a redirect registration refused); status fills read at 4.5:1 in both modes (`--color-on-success / -info /
+  -danger`, `console/tests_contrast.py`); headings in order on Schedule, Team, Metrics, History (components use h2 on
+  pages, their old level in the chat); the full-screen chat places chat and canvas by grid column (the canvas jumped
+  when the chat arrived, CLS 0.57); `/brand/` absolute canonical + description (`home/tests_seo.py`); home.js
+  remembers a Geolocation 404 for a day. **Studio sites**: attnd.js fixes unreadable text in its elements (dark or white,
+  whichever reads), merges map pins closer than 32px into a numbered pin that zooms in, lazy map tiles with sizes;
+  served pages get Google Fonts preconnects; site CSS / JS / attnd.js carry strong ETags + stale-while-revalidate; the
+  pre-publish check adds button / link names, field labels, frame titles, zoom blocked, unsized / eager / oversized
+  images, render-blocking head scripts and Google Fonts (headings and meta description now warnings), and Fix
+  automatically adds frame titles, a zoomable viewport, aspect-ratio for assets of known size, lazy loading after the
+  first three images, defer on head scripts (pages without inline scripts only) and fonts preconnect + display=swap;
+  the designer's prompt and every site style carry the same rules.
+  Third pass (Nov 22, 2026, the staff pages, measured as the dev-only staff account `lighthouse-staff@attnd.app` with
+  `manage.py seed_staff_volume` volume, SETUP.md): long staff lists are paged 50 at a time with Newer / Older links
+  that keep the filters (`console/paging.py` + `console/_pager.html`: Diagnostics sessions and reports, Emails,
+  Prospects, Claims; they used to draw the first 200–300 rows and drop the rest; CSV exports stay complete); the
+  Customers list loads AI-limit overrides once (`ledger.monthly_limit(user, override, settings_row)`, 51 → 10 queries);
+  the Architecture page reads the source tree once per process (`architecture.called_hosts`, os.walk pruning `.venv`);
+  Site styles previews get their `srcdoc` only near the screen (`iframe[data-srcdoc]`, console.js
+  `enhanceLazyFrames`; Chrome's `loading=lazy` doesn't defer srcdoc frames); the Components gallery rows use
+  `content-visibility: auto` (phone_check.cjs turns it off to measure) and row components sit in a `<ul>`; table
+  headers always have text (`visually-hidden` for action columns) and headings step down one level.
+  `platform_admin/tests_staff_pages.py` keeps paging, query / size budgets, the Customers query count, headings and
+  header text for every staff page.
 - **Database review** (batch 7, `docs/db_review.md`): covered FK indexes off (`db_index=False` where a composite starts
   with the column), partial indexes for live preview phones, due notifications and nearby events, the task feed's
   `(created_by, -created_at)` / `finished_at`, JSON shape CHECKs (`events.models.json_is`), `push.reach(event)` (one

@@ -1,8 +1,10 @@
 """Batch 7 Track B: page ↔ chat parity. Every console write has a button or form in some component (so the chat and
 the canvas offer it, not only the page), or is in TOOL_ONLY with its reason; every console page is drawn by components
 or is a BESPOKE screen with its reason; docs/parity.md is the generated table (UPDATE_PARITY=1 rewrites it)."""
+import datetime as dt
 import os
 from pathlib import Path
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -14,10 +16,20 @@ from console.testing import TwoFactorClient
 from events.models import Event
 
 DOC = Path(settings.BASE_DIR) / 'docs' / 'parity.md'
+# The table follows what the DEMO event's pages show (now / next, readiness), so it is made at one fixed moment:
+# with the real clock it changed during the day and failed CI.
+FIXED_NOW = dt.datetime(2026, 11, 14, 22, 0, tzinfo=dt.UTC)
 
 
 @override_settings(SITE_URL='https://attnd.app')
 class ParityTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._clock = mock.patch('django.utils.timezone.now', return_value=FIXED_NOW)
+        cls._clock.start()
+        cls.addClassCleanup(cls._clock.stop)
+        super().setUpClass()
+
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user('parity', 'parity@example.com', 'pw', is_staff=True, is_superuser=True)

@@ -19,6 +19,30 @@ class ArchitectureDriftTests(TestCase):
         self.assertIn('env', kinds)
         self.assertIn('flow', kinds)  # studio_publish names studio
 
+    def test_installed_packages_inside_the_project_are_ignored(self):
+        """Heroku installs Python under /app/.heroku/python: Django contrib, cloudinary and the stdlib's docstrings
+        (python.org, rfc-editor.org…) once showed up as 259 'missing' things on the Architecture page."""
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pkgs = root / '.heroku' / 'python' / 'lib' / 'python3.15' / 'site-packages' / 'django' / 'contrib' / 'auth'
+            pkgs.mkdir(parents=True)
+            (pkgs / 'hashers.py').write_text('# see https://docs.python.org/3/library/hashlib.html\n')
+            (root / 'myapp').mkdir()
+            (root / 'myapp' / 'views.py').write_text("URL = 'https://api.example.com/v1/'\n")
+            cfg = mock.Mock(label='auth', path=str(pkgs))
+            ours = mock.Mock(label='myapp', path=str(root / 'myapp'))
+            with mock.patch.object(architecture, 'ROOT', root), \
+                    mock.patch.object(architecture.django_apps, 'get_app_configs', return_value=[cfg, ours]):
+                architecture._called_hosts.cache_clear()
+                try:
+                    self.assertEqual(architecture.local_apps(), ['myapp'])
+                    self.assertEqual(list(architecture.called_hosts()), ['api.example.com'])
+                finally:
+                    architecture._called_hosts.cache_clear()
+
     def test_generators(self):
         self.assertIn('events', architecture.local_apps())
         self.assertEqual(architecture.push_types(), ['content_updated', 'notification'])

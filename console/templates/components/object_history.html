@@ -1,6 +1,6 @@
 {% load console_tags %}{% comment %} object_history: who changed what and when (LogEntry, console/history.py), newest first; field
 old → new, how it was made, and Undo while the change can still be undone. {% endcomment %}<div class="stack stack--tight component component--object_history">
-  <h3 class="title-4">{% if d.scope == 'item' %}History{% else %}Changes{% endif %}</h3>
+  <{% if surface == 'chat' %}h3{% else %}h2{% endif %} class="title-4">{% if d.scope == 'item' %}History{% else %}Changes{% endif %}</{% if surface == 'chat' %}h3{% else %}h2{% endif %}>
   {% if d.rows %}<ol class="timeline">
   {% for r in d.rows %}<li class="timeline__row">
       <span class="status-mark status-mark--{% if r.flag == 'added' %}added{% elif r.flag == 'deleted' %}danger{% else %}success{% endif %}" aria-hidden="true">{% if r.flag == 'added' %}+{% elif r.flag == 'deleted' %}×{% else %}✓{% endif %}</span>

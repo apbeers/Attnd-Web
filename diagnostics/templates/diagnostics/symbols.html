@@ -6,7 +6,7 @@
 <div class="stack stack--loose">
 <p class="muted small">R8 <code>mapping.txt</code> files uploaded by attnd-android's CI for each release build (<code>POST /api/diagnostics/symbols/</code>). The newest 20 are kept. Reports from a build with a mapping are retraced automatically.</p>
 <div class="panel panel--flush"><div class="scroll-x"><table class="data-table">
-  <thead><tr><th>Version</th><th>Build</th><th class="num">Size</th><th>SHA-256</th><th>Uploaded</th><th></th></tr></thead>
+  <thead><tr><th>Version</th><th>Build</th><th class="num">Size</th><th>SHA-256</th><th>Uploaded</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
   <tbody>{% for f in files %}<tr><td>{{ f.app_version }}</td><td class="mono">{{ f.build }}</td><td class="num">{{ f.size|filesizeformat }}</td>
     <td class="mono small">{{ f.sha256|truncatechars:16 }}</td><td class="nowrap">{{ f.uploaded_at|date:"M j, Y g:i A" }}</td>
     <td><form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ f.id }}"><button class="button button--ghost button--small tone-danger" name="action" value="delete" data-confirm="Delete the mapping for build {{ f.build }}?">Delete</button></form></td></tr>

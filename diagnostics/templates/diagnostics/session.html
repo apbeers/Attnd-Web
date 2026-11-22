@@ -69,14 +69,14 @@
 </div>
 
 <div class="panel">
-  <div class="tabs" data-tabs>
-    <button type="button" class="tabs__tab" data-tab-target="#diag-list" aria-selected="true">Entries</button>
-    <button type="button" class="tabs__tab" data-tab-target="#diag-waterfall" aria-selected="false">Network waterfall</button>
+  <div class="tabs" data-tabs role="tablist" aria-label="Entries or network">
+    <button type="button" class="tabs__tab" role="tab" id="diag-list-tab" aria-controls="diag-list" data-tab-target="#diag-list" aria-selected="true">Entries</button>
+    <button type="button" class="tabs__tab" role="tab" id="diag-waterfall-tab" aria-controls="diag-waterfall" data-tab-target="#diag-waterfall" aria-selected="false">Network waterfall</button>
   </div>
-  <div id="diag-list"><div class="scroll-x"><table class="data-table data-table--compact diag-table">
+  <div id="diag-list" role="tabpanel" aria-labelledby="diag-list-tab"><div class="scroll-x"><table class="data-table data-table--compact diag-table">
     <thead><tr><th>Time</th><th>Level</th><th>Category</th><th>Event</th><th>Message</th></tr></thead><tbody data-diag-rows></tbody></table></div>
     <button type="button" class="button button--outline button--small" data-diag-more hidden>Show more</button></div>
-  <div id="diag-waterfall" hidden><div class="waterfall" data-diag-waterfall></div>
+  <div id="diag-waterfall" role="tabpanel" aria-labelledby="diag-waterfall-tab" hidden><div class="waterfall" data-diag-waterfall></div>
     <p class="small muted">Bars: app request time (start = finish − ms); the darker inner bar is the server's own time for the same X-Request-Id.</p></div>
 </div>
 </div>

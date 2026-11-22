@@ -26,7 +26,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
-- [ ] IndexNow on production (step 22): `heroku config:set -a attnd-web INDEXNOW_KEY=$(openssl rand -hex 16)` (batch 7).
+- [x] IndexNow on production (step 22): `INDEXNOW_KEY` set on attnd-web by Claude (Nov 22, 2026, release v122; `/<key>.txt` answers 200).
 - [ ] Maps Static API on the browser key (Lighthouse, Nov 22, 2026): Google Cloud console → APIs & Services → enable
       **Maps Static API**, then add it to the **browser key**'s API restrictions (the key behind
       `GOOGLE_MAPS_BROWSER_KEY`). The event map now starts as a static image; without the API the image fails and the
@@ -35,11 +35,11 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `heroku config:set -a attnd-dev STRIPE_SECRET_KEY=sk_test_… STRIPE_WEBHOOK_SECRET=whsec_…` (a webhook to
       `https://dev.attnd.app/console/billing/stripe/webhook/`, event `checkout.session.completed`; turn on the Customer
       Portal in Stripe's settings); production later with live keys and `https://attnd.app/...`.
-- [ ] Mailgun events in the Emails log (batch 7): Mailgun → Sending → Webhooks → copy the **HTTP webhook signing key**,
-      `heroku config:set -a attnd-dev MAILGUN_WEBHOOK_SIGNING_KEY=…` (then `-a attnd-web` with production's key), and add
-      webhooks for **Delivered**, **Permanent failure**, **Temporary failure**, **Spam complaints** and **Unsubscribes**
-      to `https://dev.attnd.app/email/mailgun/` (production: `https://attnd.app/email/mailgun/`). Without the key the
-      log still records sent / failed; it just never moves on to delivered / bounced.
+- [x] Mailgun events in the Emails log (batch 7; done by Claude Nov 22, 2026 through the Mailgun and Heroku APIs):
+      each app's `MAILGUN_WEBHOOK_SIGNING_KEY` is its own Mailgun account's HTTP signing key (production: the
+      `mg.attnd.app` account; dev: its sandbox account), and both domains (`mg.attnd.app`, dev's sandbox) send Delivered,
+      Permanent / Temporary failure, Spam complaints and Unsubscribes to `https://attnd.app/email/mailgun/` /
+      `https://dev.attnd.app/email/mailgun/` (an unsigned POST answers 406, so the key is active).
 - [ ] Privacy policy rewrite: read `docs/privacy_policy_draft.md` (five decisions at the top), then say publish (batch 7).
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
@@ -93,6 +93,8 @@ Do these steps once, in order. Each step says which values go where. For any sin
   attnd-web` and `heroku ps:scale tasks=1:basic -a attnd-web` (with a go-ahead).
 - [x] DEMO reloaded on dev with its theme (owner, Nov 21, 2026). Production: the same `load_demo_event` with a go-ahead
   after the release.
+- [x] Production sign-ups: **invite-only** (owner, Nov 22, 2026; `SIGNUPS_OPEN=0` set on attnd-web before the batch 7
+  release, v121). Dev stays open.
 - [ ] Onboarding (Nov 21, 2026, on dev): sign-ups are **open by default** now (`SIGNUPS_OPEN` defaults to on; anyone
   makes demo events, capped at 20 phones each, API-025). Before releasing to production decide: keep it open, or
   `heroku config:set SIGNUPS_OPEN=0 -a attnd-web` (invited emails only). Showcase events are dev-only (`SHOWCASE_EVENTS`
@@ -757,6 +759,21 @@ key is set, **Integration · prod** fails, as a warning only: it never blocks a 
 To rotate: run step 1 again (the old key stops working the moment `CI_API_KEYS` changes). Several keys can be set at once,
 comma-separated, to rotate without a gap. Keys shorter than 32 characters are ignored.
 
+### Lighthouse test account (dev only, Nov 22, 2026)
+
+`lighthouse-test@attnd.app` on **dev.attnd.app only**: an ordinary organizer (not staff, no second factor, Chat as
+default off), an **admin member of the DEMO event** (DEMO's owner unchanged), used to sign in and run Lighthouse on the
+console's pages. Its password lives only in the tester's scratchpad, never in the repo. Nothing for the owner to do;
+delete the account on dev when it's no longer wanted (Django admin → Users).
+
+**Staff test account** (dev only, Nov 22, 2026): `lighthouse-staff@attnd.app`, `is_staff` (not a superuser), an
+authenticator-app second factor and a **contributor on DEMO** (for Platform → Components), used to measure the staff
+pages. Its password and TOTP secret live only in the tester's scratchpad. Recommended: delete it on dev when no longer
+needed (Django admin → Users). The measured volume came from `python manage.py seed_staff_volume` on dev (marked rows:
+150 log sessions with ~25k entries, 300 crash reports, 120 prospects, 600 email log rows, 30 claims and their
+`@lighthouse-seed.example` accounts, 500 AI spend rows); `python manage.py seed_staff_volume --clean` removes exactly
+those. It refuses to run on production.
+
 ## 14. Diagnostics: iOS symbolication token (5 min)
 
 The staff **Diagnostics** panel (`/console/diagnostics/`, API-013) symbolicates iOS crash reports by dispatching the
@@ -1087,7 +1104,7 @@ Done (owner, Nov 21, 2026):
 - `APPLE_MUSIC_KEY_ID` and `APPLE_MUSIC_PRIVATE_KEY` (the whole `.p8`, header lines included) on **attnd-dev**
   (verified).
 
-To do (production, when releasing API-030):
+Done on production (Nov 22, 2026): Claude copied both from attnd-dev to attnd-web through the Heroku API (no value printed). For reference, the commands were:
 ```
 heroku config:set APPLE_MUSIC_KEY_ID=2X6W6X6PLA -a attnd-web
 heroku config:set APPLE_MUSIC_PRIVATE_KEY="$(cat /Users/andrewbeers/Documents/Attnd/ios-signing/AuthKey_2X6W6X6PLA.p8)" -a attnd-web
