@@ -175,7 +175,8 @@ class HomeStaysTests(DraftTestCase):
         self.assertEqual(again['ETag'], with_sections['ETag'])
         self.assertEqual(with_sections.json()['display']['tabs'][0], 'home')
 
-    def test_saved_tab_lists_lose_home(self):
+    @patch('events.display.empty_tabs', return_value=set())  # these rules, not batch 7 Q2's empty tabs
+    def test_saved_tab_lists_lose_home(self, _empty):
         import importlib
 
         from django.apps import apps
@@ -188,3 +189,71 @@ class HomeStaysTests(DraftTestCase):
         drafts.publish(self.event, push=False)
         display = self.bundle(HTTP_X_ATTND_SECTIONS='2').json()['display']
         self.assertEqual((display['tabs'], display['default_tab']), (['home', 'schedule', 'map'], 'home'))
+
+
+class PreviewTabsTests(DraftTestCase):
+    """Owner bug (iOS 2.0.173 as a preview phone): removing the Schedule tab in App layout reached the phone at once,
+    re-adding it did not. Remove → re-add, within the push grouping window and after, as the console's autosave
+    posts it; the preview phone's bundle (draft, ETag …d), its changes/ long-poll and the push must all follow."""
+
+    def setUp(self):
+        super().setUp()
+        from events.models import ScheduledItem
+        ScheduledItem.objects.create(event=self.event, user=self.owner, name='Set', location=self.stage,
+                                     start_time=timezone.now() + timedelta(hours=4))
+        self.console = TwoFactorClient()
+        self.console.force_login(self.owner)
+        self.url_display = reverse('console:display', args=[self.event.pk])
+
+    def save_tabs(self, tabs):
+        return self.console.post(self.url_display, {
+            'preset': 'auto', 'customize_tabs': 'on', 'tabs': tabs,
+            'tab_order': 'map,locations,schedule,flyer,notifications', 'accent_default': 'on'},
+            HTTP_ACCEPT='application/json', HTTP_X_REQUESTED_WITH='fetch', secure=True)
+
+    def preview_tabs(self, etag=None):
+        extra = {'HTTP_X_ATTND_SECTIONS': '2'}
+        if etag:
+            extra['HTTP_IF_NONE_MATCH'] = etag
+        response = self.bundle('phone-p', **extra)
+        return response, (response.json()['display']['tabs'] if response.status_code == 200 else None)
+
+    def test_remove_then_re_add_reaches_the_preview_phone(self):
+        with patch('events.push._schedule'):
+            first, tabs = self.preview_tabs()
+            self.assertIn('schedule', tabs)
+            self.assertIn(self.save_tabs(['map', 'locations', 'notifications']).status_code, (200, 302))
+            removed, tabs = self.preview_tabs(first['ETag'])
+            self.assertEqual(removed.status_code, 200)
+            self.assertNotIn('schedule', tabs)
+            self.assertIn(self.save_tabs(['map', 'locations', 'schedule', 'notifications']).status_code, (200, 302))
+            again, tabs = self.preview_tabs(removed['ETag'])
+            self.assertEqual(again.status_code, 200, 'the re-add must not answer 304')
+            self.assertIn('schedule', tabs)
+            self.assertEqual(tabs[0], 'home')
+            # The long-poll sees the newer version at once.
+            since = int(removed['ETag'].split('-v')[1].split('d')[0].split('-')[0])
+            changes = self.api.get(f'/api/v2/events/{self.event.pk}/changes/?since={since}', secure=True,
+                                   HTTP_X_DEVICE_ID='phone-p', **AUTH)
+            self.assertEqual(changes.status_code, 200)
+            self.assertGreater(changes.json().get('content_version', 0), since)
+
+    def test_an_empty_flyer_tab_never_blocks_a_re_add(self):
+        """IFICCK70 on dev: the saved list was [map, locations, flyer, notifications] with no flyer uploaded, so
+        re-adding Schedule made five besides Home and the form refused it. Empty tabs don't count (batch 7 Q2)."""
+        with patch('events.push._schedule'):
+            Event.objects.filter(pk=self.event.pk).update(display_config={
+                'tabs': ['map', 'locations', 'flyer', 'notifications']})
+            response = self.save_tabs(['map', 'locations', 'schedule', 'flyer', 'notifications'])
+            self.assertEqual(response.status_code, 200, response.content)
+            self.event.refresh_from_db()
+            self.assertIn('schedule', self.event.display_config['tabs'])
+            self.assertIn('flyer', self.event.display_config['tabs'])  # kept: shown again once a flyer is uploaded
+            _, tabs = self.preview_tabs()
+            self.assertEqual(tabs[0], 'home')
+            self.assertIn('schedule', tabs)
+            self.assertNotIn('flyer', tabs)  # nothing to show
+        from console import components as C
+        html = C.render('app_layout', C.load(self.owner, 'app_layout', {'event_id': self.event.pk}))
+        self.assertIn('left out automatically, shown again once there is something in it', html)
+        self.assertIn('<input type="hidden" name="tabs" value="flyer">', html)

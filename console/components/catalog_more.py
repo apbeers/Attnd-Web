@@ -111,24 +111,26 @@ def app_layout(user, event_id=None, event=None, form=None):
     from events.layout import CATALOGUE_VERSION
     event = editable_event(user, event_id, event)
     overrides = clean_overrides(event.display_config)
-    form = form or DisplayForm(initial=DisplayForm.initial_from(overrides))
+    from events.display import empty_tabs
+    stats = event_stats(event)
+    empty = empty_tabs(stats)  # the apps leave these out automatically (batch 7 Q2); they don't count toward five
+    form = form or DisplayForm(initial=DisplayForm.initial_from(overrides), empty=empty)
     initial = DisplayForm.initial_from(overrides)
     order = [t for t in (initial.get('tab_order') or '').split(',') if t in TABS and t != 'home']
     order += [t for t in TABS if t not in order and t != 'home']
     chosen = set(initial.get('tabs') or [])
-    stats = event_stats(event)
-    from events.display import empty_tabs
-    empty = empty_tabs(stats)  # the apps leave these out automatically; chosen by hand, they'd show nothing
     resolved = resolve_display(event, stats, sections=CATALOGUE_VERSION)  # the newest apps' tabs (Home included)
     from events.display import MAX_TABS, TAB_LIMIT_NOTE, fit_tabs
-    _, cut = fit_tabs(['home'] + [t for t in order if t in chosen]) if 'tabs' in overrides else ([], [])
+    _, cut = fit_tabs(['home'] + [t for t in order if t in chosen and t not in empty]) if 'tabs' in overrides else ([], [])
     data = form_json(form, [('choices', 'preset'),
                             ('block', 'layout_reason', {'text': f"Currently using {str(resolved.get('resolved_preset', '')).capitalize()}: {resolved.get('reason', '')}."}),
                             'customize_tabs',
-                            ('block', 'tab_list', {'tabs': [{'value': t, 'label': LABELS['tabs'].get(t, t), 'checked': t in chosen,
+                            ('block', 'tab_list', {'tabs': [{'value': t, 'label': LABELS['tabs'].get(t, t),
+                                                             'checked': t in chosen and t not in empty,
+                                                             'kept': t in chosen and t in empty,
                                                              'empty': EMPTY_NOTES.get(t) if t in empty else ''}
                                                             for t in order],
-                                                   'max': MAX_TABS - 1, 'chosen': len(chosen), 'note': TAB_LIMIT_NOTE,
+                                                   'max': MAX_TABS - 1, 'chosen': len(chosen - empty), 'note': TAB_LIMIT_NOTE,
                                                    'home': LABELS['tabs'].get('home', 'Home'),
                                                    'cut': ', '.join(LABELS['tabs'].get(t, t) for t in cut)}),
                             ('grid', 'default_tab', 'secondary_pane'), ('grid', 'locations_style', 'schedule_style'),

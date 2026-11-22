@@ -1,5 +1,6 @@
 """API-024 screen layouts: the automatic layout per preset and per data present, the validation of organizer layouts,
 the catalogue version filter (X-Attnd-Sections), the ETag per catalogue version and the Home tab."""
+from unittest.mock import patch
 
 from datetime import timedelta
 
@@ -217,7 +218,8 @@ class AutomaticLayoutTests(TestCase):
         finally:
             L.CATALOGUE['place_detail']['at_this_location']['since'] = original
 
-    def test_home_tab_only_for_apps_that_draw_layouts(self):
+    @patch('events.display.empty_tabs', return_value=set())  # these rules, not batch 7 Q2's empty tabs
+    def test_home_tab_only_for_apps_that_draw_layouts(self, _empty):
         self.event.display_config = {'tabs': ['home', 'map', 'locations', 'schedule', 'flyer', 'notifications'],
                                      'default_tab': 'home'}
         old = resolve_display(self.event)
@@ -230,7 +232,8 @@ class AutomaticLayoutTests(TestCase):
         self.event.flyer = 'flyers/x.png'
         self.assertEqual(len(resolve_display(self.event, sections=1)['tabs']), 5)
 
-    def test_automatic_tabs_lead_with_home_for_apps_that_draw_it(self):
+    @patch('events.display.empty_tabs', return_value=set())  # these rules, not batch 7 Q2's empty tabs
+    def test_automatic_tabs_lead_with_home_for_apps_that_draw_it(self, _empty):
         """Batch 5 (owner, Nov 21, 2026): Home first and the default tab for apps sending X-Attnd-Sections; never
         for older apps."""
         for preset in ('intimate', 'standard', 'festival'):
@@ -311,7 +314,8 @@ class BundleLayoutTests(TestCase):
             headers['HTTP_IF_NONE_MATCH'] = etag
         return self.client.get(self.url, secure=True, **headers)
 
-    def test_older_apps_get_no_layout_and_no_home_tab(self):
+    @patch('events.display.empty_tabs', return_value=set())  # these rules, not batch 7 Q2's empty tabs
+    def test_older_apps_get_no_layout_and_no_home_tab(self, _empty):
         resp = self.get()
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -321,7 +325,8 @@ class BundleLayoutTests(TestCase):
         for junk in ('', 'abc', '-1'):
             self.assertIsNone(self.get(junk).json()['layout'])
 
-    def test_apps_with_the_header_get_the_layout(self):
+    @patch('events.display.empty_tabs', return_value=set())  # these rules, not batch 7 Q2's empty tabs
+    def test_apps_with_the_header_get_the_layout(self, _empty):
         resp = self.get('1')
         data = resp.json()
         self.assertEqual(data['layout']['catalogue'], 1)

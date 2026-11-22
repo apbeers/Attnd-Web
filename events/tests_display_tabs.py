@@ -1,4 +1,5 @@
 """At most five tabs (iOS shows five, Home counts as one; owner, Nov 21, 2026)."""
+from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from console.forms.event_forms import DisplayForm
@@ -28,7 +29,8 @@ class TabLimitTests(SimpleTestCase):
 
 
 class TabLimitNoteTests(__import__('django.test', fromlist=['TestCase']).TestCase):
-    def test_old_six_tab_list_is_cut_and_the_console_says_so(self):
+    @patch('events.display.empty_tabs', return_value=set())  # these rules, not batch 7 Q2's empty tabs
+    def test_old_six_tab_list_is_cut_and_the_console_says_so(self, _empty):
         from datetime import timedelta
 
         from django.contrib.auth.models import User

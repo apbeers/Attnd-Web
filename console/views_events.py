@@ -1113,8 +1113,10 @@ def notification_action(request, event, notification_id):
 @agent_action('app_layout_page', "An event's app layout settings and what the app resolves them to.", kind='read')
 @event_view
 def display_settings(request, event):
+    from events.display import empty_tabs
     overrides = clean_overrides(event.display_config)
-    form = DisplayForm(request.POST or None, initial=DisplayForm.initial_from(overrides))
+    form = DisplayForm(request.POST or None, initial=DisplayForm.initial_from(overrides),
+                       empty=empty_tabs(event_stats(event)))
     if request.method == 'POST' and form.is_valid():
         event.display_config = form.to_overrides()
         accent = request.POST.get('accent_color', '')

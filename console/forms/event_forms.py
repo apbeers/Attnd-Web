@@ -422,6 +422,10 @@ class DisplayForm(forms.Form):
     customize_tabs = forms.BooleanField(label='Choose tabs myself', required=False)
 
     BOOL_KEYS = ['map_clustering', 'map_fit_all', 'show_location_images', 'enable_search', 'group_by_category']
+
+    def __init__(self, *args, empty=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empty = set(empty)  # tabs with nothing to show: left out of the apps, so they don't count
     CHOICE_KEYS = ['default_tab', 'locations_style', 'schedule_style', 'secondary_pane']
 
     @classmethod
@@ -440,7 +444,8 @@ class DisplayForm(forms.Form):
     def clean(self):
         from events.display import MAX_TABS, TAB_LIMIT_NOTE
         data = super().clean()
-        if data.get('customize_tabs') and len(data.get('tabs') or []) > MAX_TABS - 1:  # + Home
+        shown = [t for t in (data.get('tabs') or []) if t not in self.empty]
+        if data.get('customize_tabs') and len(shown) > MAX_TABS - 1:  # + Home
             self.add_error('tabs', TAB_LIMIT_NOTE)
         return data
 

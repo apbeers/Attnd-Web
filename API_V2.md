@@ -539,8 +539,8 @@ Tab rules (server behaviour, Nov 21, 2026; the contract's types are unchanged):
   `locations` without a visible location, `map` without a visible location that has coordinates, `flyer` without a
   flyer, `notifications` without a sent notification. Home plus five: the flyer is left out first. An app that gets
   `home` and nothing else shows the Home tab alone; an older app that would get no tab gets `[map, notifications]`.
-- An organizer's own tab list (App layout) is sent as chosen (the console notes tabs that would be empty), except
-  `flyer` without a flyer, and **`home` is always first and `default_tab` is always `home`** for apps that send
+- An organizer's own tab list (App layout) is sent as chosen **minus the tabs with nothing to show** (the same rules
+  as automatic tabs; Nov 22, 2026, batch 7 Q2: they come back by themselves once they have content), and **`home` is always first and `default_tab` is always `home`** for apps that send
   `X-Attnd-Sections` ≥ 1 (Nov 22, 2026, batch 7: organizers can't turn Home off; it counts as one of the five).
 - Every path gives the same tabs for the same catalogue version: the published copy, the draft (preview phones) and a
   copy published before this rule. The `ETag` carries the catalogue version (`…-s2`), so an `If-None-Match` saved from

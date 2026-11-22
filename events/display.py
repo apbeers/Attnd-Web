@@ -264,9 +264,10 @@ def resolve_display(event, stats=None, sections=0):
 
     cfg.update({k: v for k, v in overrides.items() if k != 'preset'})
 
-    # Flyer tab only makes sense with a flyer
-    if not stats['has_flyer']:
-        cfg['tabs'] = [t for t in cfg['tabs'] if t != 'flyer']
+    # Tabs with nothing to show are left out, also from an organizer's own list (batch 7 Q2: "unticked
+    # automatically"); the saved list keeps them, so they come back by themselves once there is something to show.
+    empty = empty_tabs(stats)
+    cfg['tabs'] = [t for t in cfg['tabs'] if t not in empty]
     if sections and sections >= 1:
         # Home is always on for apps that draw it: first and the default tab, whatever the saved list says (owner,
         # Nov 21, 2026, batch 7 Q1; P0 #3: the same tabs from every path, so the App Clip's Home never comes and goes).

@@ -713,7 +713,7 @@
   // App layout's tabs: at most 5 (iOS shows five, Home counts as one): "5 of 5 tabs", the rest disabled with a note.
   function tabLimit(list) {
     const max = Number(list.dataset.maxTabs || 5);
-    const boxes = [...list.querySelectorAll('input[name=tabs]')];
+    const boxes = [...list.querySelectorAll('input[type=checkbox][name=tabs]:not([data-empty])')];  // empty tabs don't count
     const on = boxes.filter((b) => b.checked).length;
     boxes.forEach((b) => { b.disabled = !b.checked && on >= max; });
     const count = list.parentElement.querySelector('[data-tab-count]');
