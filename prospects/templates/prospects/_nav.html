@@ -1,8 +1,5 @@
-{% load console_tags %}
-<div class="cluster diag-head">
-  <h1 class="title-2">{% icon "target" %} Prospects</h1>
-  <span class="badge badge--muted">Staff only</span>
-</div>
+{% load console_tags platform_tags %}
+{% if tab == 'claims' %}{% platform_nav "claims" %}{% else %}{% platform_nav "prospects" %}{% endif %}
 <nav class="tabs diag-tabs" aria-label="Prospects">
   <a class="tabs__tab" href="{% url 'prospects:list' %}"{% if tab == 'prospects' %} aria-current="page"{% endif %}>Prospects</a>
   <a class="tabs__tab" href="{% url 'prospects:runs' %}"{% if tab == 'runs' %} aria-current="page"{% endif %}>Runs</a>

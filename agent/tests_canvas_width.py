@@ -38,7 +38,7 @@ class CanvasWidthTests(SimpleTestCase):
         multi = {'Notifications', 'Settings', 'Metrics', 'History', 'Website'}
         for label in canvas.ORDER:
             sections = [name for name, tab in canvas.KINDS.items() if tab == label]
-            if len(sections) > 1 and label not in {'Overview', 'Prospects'}:
+            if len(sections) > 1 and label not in {'Overview', 'Platform'}:
                 self.assertIn(label, multi, f'{label} has several sections: give it columns in agent.css')
 
     def test_the_page_fills_the_visible_height(self):

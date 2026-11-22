@@ -1,2 +1,1 @@
-{% load console_tags %}<div class="cluster"><h1 class="title-2 grow">{% icon "gauge" %} Platform</h1></div>
-<nav class="tabs" aria-label="Platform admin">{% for key, label in tabs %}<a class="tabs__tab" href="{% url 'platform:home' %}?tab={{ key }}"{% if key == tab %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+{% load platform_tags %}{% platform_nav area %}

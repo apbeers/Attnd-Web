@@ -3,7 +3,7 @@
 {% block title %}{{ event.name }} · Platform{% endblock %}
 {% block content %}
 <div class="stack">
-{% include 'platform_admin/_nav.html' %}
+{% include 'platform_admin/_nav.html' with area='overrides' %}
 <div class="panel stack">
   <div class="cluster"><h2 class="title-3 grow">{{ event.name }} <span class="mono small muted">{{ event.event_code }}</span></h2><span class="badge">{{ plan }}</span><a class="button button--outline button--small" href="{% url 'console:event' event.pk %}">Open in the console</a></div>
   <p class="small muted">Owner: {% if event.user %}<a href="{% url 'platform:customer' event.user.pk %}">{{ event.user.email }}</a>{% else %}unassigned{% endif %}</p>

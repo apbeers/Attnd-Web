@@ -17,14 +17,15 @@ KINDS = {
     'schedule_item_row': 'Schedule', 'notification_form': 'Notifications', 'notification_row': 'Notifications',
     'event_team': 'Team', 'event_metrics': 'Metrics', 'usage_answer': 'Metrics', 'app_layout': 'Settings', 'website_watching': 'Settings',
     'event_context_form': 'Settings', 'event_flyer': 'Settings', 'object_history': 'History', 'event_theme': 'Overview',
-    'event_versions': 'History', 'prospect_run_row': 'Prospects', 'prospect_row': 'Prospects',
-    'ai_spend_summary': 'AI spend', 'platform_health': 'Platform',
+    # Every admin tool is one Platform tab (owner, Nov 22, 2026: organizers and staff see the same tabs but this one).
+    'event_versions': 'History', 'prospect_run_row': 'Platform', 'prospect_row': 'Platform',
+    'ai_spend_summary': 'Platform', 'platform_health': 'Platform',
     'website_overview': 'Website', 'website_versions': 'Website', 'website_assets': 'Website', 'website_forms': 'Website',
 }
 # Tab counts that wait for the person's action are drawn as a filled alert badge (.tab-count--alert); others muted.
 ALERT_COUNTS = {'Review'}
 ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
-         'Website', 'History', 'Prospects', 'AI spend', 'Platform']
+         'Website', 'History', 'Platform']
 # The Website tab (Attnd Studio inside Ask Attnd): only for people with Studio access.
 WEBSITE_SECTIONS = ['website_overview', 'website_versions', 'website_forms', 'website_assets']
 EVENT_SECTIONS = ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'event_rollover',
@@ -35,7 +36,8 @@ EMPTY = {'location_row': 'No locations yet. Add stages, booths, food, anywhere a
          'schedule_item_row': 'No schedule items yet.', 'notification_row': 'No notifications sent or scheduled yet.',
          'event_tile': 'No events yet.', 'prospect_row': 'No open prospects. Run a discovery from its settings.',
          'prospect_run_row': 'No discovery runs yet.'}
-HEADINGS = {'prospect_run_row': 'Latest runs', 'prospect_row': 'Open prospects, best fit first'}
+HEADINGS = {'prospect_run_row': 'Prospects · latest runs', 'prospect_row': 'Open prospects, best fit first',
+            'ai_spend_summary': 'AI spend', 'platform_health': 'Health'}
 GROUPS = {'scheduled': 'Scheduled', 'sent': 'Sent', 'now': 'Happening now', 'upcoming': 'Upcoming', 'past': 'Past',
           'showcase': 'Showcase & demo'}
 # Every section starts open (owner, Nov 21, 2026); the toggle folds one by hand, never remembered. Past shows 6 first.
@@ -101,7 +103,7 @@ def build(request, event=None):
         if has_studio_access(request.user):
             for name in WEBSITE_SECTIONS:
                 add(name, {'event_id': event.pk})
-    for name in ('prospect_run_row', 'prospect_row', 'ai_spend_summary', 'platform_health'):
+    for name in ('platform_health', 'ai_spend_summary', 'prospect_run_row', 'prospect_row'):
         if C.allowed(C.get(name), request.user):  # attnd.permissions (the Staff / Platform admins roles)
             add(name, {})
     active = 'Overview' if event is not None else 'Events'

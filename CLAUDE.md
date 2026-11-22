@@ -294,7 +294,7 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   they own) → the job page (steps) → the event in the full-screen chat with its QR. New accounts (< 7 days) start at most
   `NEW_ACCOUNT_DAILY_IMPORTS` (3) AI imports a day.
 - **Signed in with no events**: the dashboard shows the same hero, composer and gallery (`console/onboarding.html`, "Try
-  one on your phone first") instead of the chat; staff get **Preview onboarding** in the top bar (`?onboarding=1`,
+  one on your phone first") instead of the chat; staff get **Preview onboarding** on the Platform page (`?onboarding=1`,
   nothing of theirs changes). **Chat as the default view**: `ConsolePreference.chat_default` is on for new accounts and
   saved preferences that never touched it (`CHAT_DEFAULT_ON`, off in tests; migration `0014`).
 - **Showcase events** (`events/showcase.py`, `manage.py load_showcase_events [--if-enabled] [--images]`): eight demo
@@ -365,7 +365,7 @@ event name the apps may log are in **`LOG_EVENTS.md`** (add a row there before a
   SETUP.md step 14) with a one-time token (2 h, SHA-256 stored); the workflow reads the frames from and posts
   symbols to `/api/diagnostics/symbolicate/<id>/` (`symbolicate.py`).
 - **Panel** (`views.py`, `templates/diagnostics/`, `static/diagnostics/diagnostics.js`): `/console/diagnostics/`
-  (`is_staff` or superuser, else 404; the console's 2FA middleware applies; topbar button "Diagnostics"). Sessions
+  (`is_staff` or superuser, else 404; the console's 2FA middleware applies; a Platform sub-tab). Sessions
   list + search, session page (summaries, canvas lanes timeline, filters, entry list, network waterfall, server lines
   joined by `req_id`, `.jsonl` export, delete), reports grouped by signature, endpoint p50/p95 table, Android mappings
   with paste-and-retrace, API-014 performance buckets. App text is untrusted: templates escape it, the JS only uses
@@ -394,7 +394,7 @@ Every AI call goes into one ledger and counts toward a monthly credit per person
 - **Warnings**: 80 % and 100 % once a month each (`AiCreditNotice`): an email and a line above the Ask Attnd composer
   (`run_json.credit_note`); the platform alert emails `ADMINS` once a month.
 - **Screens**: Account → **AI credit** (`ai_credit_meter`: used / left / renews, by feature); staff **AI spend**
-  (`/console/ai-spend/`, `credit:spend`, top bar, canvas tab "AI spend"): `ai_spend_summary` (month, by feature /
+  (`/console/ai-spend/`, `credit:spend`, the Platform sub-tab "AI spend" and the canvas Platform tab): `ai_spend_summary` (month, by feature /
   model / person / event, latest calls, CSV `credit:export`), `ai_limits_form` and `ai_limit_overrides`. Changing a
   limit or an override always asks (page `data-confirm`, Ask Attnd `save_ai_limits` / `set_ai_limit_override` /
   `remove_ai_limit_override`, confirm=True) and is a History `LogEntry`.
@@ -407,7 +407,7 @@ Every AI call goes into one ledger and counts toward a monthly credit per person
 A sales pipeline for the growth plan (offer organizers the free app first, then sell Attnd Studio): find upcoming
 events in a region that suit the app (outdoor or mostly outdoor, people walk between several stops), keep the
 organizer contacts their own pages publish, and make testing-only copies of them.
-- **Access**: `/console/prospects/` (topbar "Prospects" for staff), `is_staff` or superuser, else 404
+- **Access**: `/console/prospects/` (Platform sub-tabs "Prospects" and "Claims" for staff), `is_staff` or superuser, else 404
   (`diagnostics.views.staff_required`; the console's 2FA middleware applies). Tabs: Prospects (search, filters, sort,
   bulk actions, CSV), Runs (Run now, log, cost), Settings.
 - **Models** (`prospects/models.py`): `ProspectSettings` (singleton pk 1: region, time zone, themes one per line,
@@ -785,7 +785,7 @@ hosts the site.
   to publish · $499** (`request_upgrade`, `console:event_upgrade_request`: an `UpgradeRequest` + an email to `ADMINS`;
   "Upgrade requested · we'll email you" while it waits); the API's `website_url`, the sites host and its sitemap only
   serve sites of events that can go live. Only staff switch plans by hand. Staff: `/console/studio/reports/` (abuse
-  reports, take down/restore; topbar "Studio reports").
+  reports, take down/restore; Platform sub-tab "Studio reports").
 - **Models** (`studio/models.py`): `Site` (1:1 event, slug, `draft`/`published` → `SiteVersion`, suspended,
   preview secret), `SiteVersion` (files `{path: text}`, app look, flyer asset; every AI run, code save and restore makes
   one), `StudioAsset` (UUID, Cloudinary *raw* storage when configured), `StudioRun` (one AI turn, working copy),
@@ -829,8 +829,18 @@ hosts the site.
   `PlatformSettings` (pk 1, cached 30 s; first values 299 / 499 / `FREE_DEVICE_LIMIT`); every price label comes from
   there (`price_label`). No checkout yet (Stripe, ROADMAP): **Remove the limit** (a Standard request) and **Upgrade to
   publish** (a Studio request) make an `UpgradeRequest` (one pending per event and kind) and email `ADMINS`.
-- **Platform admin** (`/console/platform/`, `platform:home`, **superusers only**, 404 otherwise; topbar "Platform";
-  canvas tab **Platform** = the `platform_health` component, audience `superuser`): tabs **Overview** (health: AI spend
+- **One Platform entry** (owner, Nov 22, 2026; `platform_admin/areas.py`): the console's top bar shows organizers and
+  staff the same links except one **Platform** button (only with a platform permission; it opens the person's first
+  sub-tab). Every admin tool is a Platform sub-tab gated by its own permission (`{% platform_nav "<key>" %}` at the
+  top of each area page; their URLs are unchanged, so old links work): Health, Customers, Upgrade requests, Pricing,
+  Overrides (platform admins), AI spend, Diagnostics, Prospects, Claims, Studio reports (staff), App usage (platform
+  admins), plus the actions **Preview onboarding** and **Django admin** (superusers). Emails / Brand / Architecture /
+  App options join as sub-tabs when built. The full-screen canvas likewise has one **Platform** tab (Health, AI spend,
+  Prospects sections, each only with its permission; toolbar AI limits / Overrides / Discovery settings / CSV).
+  `platform_admin/tests_nav.py` asserts the top bar and the canvas tabs of an organizer and of staff / a superuser
+  differ only by Platform. A new admin tool = a row in `areas.AREAS` + the nav tag on its page, never a top-bar link.
+- **Platform admin** (`/console/platform/`, `platform:home`; the page needs `platform_admin.view_platformsettings`
+  (staff), its own tabs `change_platformsettings` (platform admins; others are sent to their first sub-tab)): tabs **Health** (health: AI spend
   vs the alert, events live now, sign-ups this week, failed AI jobs and push failures in 24 h, Google API counters),
   **Pricing** (`save_platform_pricing`), **Customers** (every account: events, plans, paid total, AI month / all vs
   limit, last active, features used: AI imports, Ask Attnd runs, Studio sites built / published, notifications sent,

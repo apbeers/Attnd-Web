@@ -1488,10 +1488,10 @@
                   event_map: 'Overview', event_lifecycle: 'Overview', sharing_kit: 'Overview', event_exports: 'Overview', event_rollover: 'Overview',
                   changeset_review: 'Review', app_layout: 'Settings', website_watching: 'Settings', event_theme: 'Overview',
                   event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
-                  prospect_row: 'Prospects', prospect_detail: 'Prospects', prospect_run_row: 'Prospects',
-                  prospect_settings_form: 'Prospects', website_overview: 'Website', website_versions: 'Website',
-                  website_assets: 'Website', website_forms: 'Website', ai_spend_summary: 'AI spend',
-                  ai_limits_form: 'AI spend', ai_limit_overrides: 'AI spend',
+                  prospect_row: 'Platform', prospect_detail: 'Platform', prospect_run_row: 'Platform',
+                  prospect_settings_form: 'Platform', website_overview: 'Website', website_versions: 'Website',
+                  website_assets: 'Website', website_forms: 'Website', ai_spend_summary: 'Platform',
+                  ai_limits_form: 'Platform', ai_limit_overrides: 'Platform',
                   platform_health: 'Platform' };
   // A count beside a tab's name (agent/canvas.py ALERT_COUNTS): a filled alert badge when it waits for the person.
   function setTabCount(label, count, alert) {
@@ -1506,7 +1506,7 @@
     button.append(' ', badge);
   }
   const ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
-                 'Website', 'History', 'Prospects', 'AI spend', 'Platform'];
+                 'Website', 'History', 'Platform'];
   const SECTION_ORDER = ['event_tile', 'event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports',
                          'notification_form', 'notification_row', 'app_layout', 'website_watching',
                          'event_context_form', 'event_flyer', 'website_overview', 'website_versions', 'website_forms',
@@ -1560,13 +1560,15 @@
     const add = (text, name, title) => ({ text, run: (b) => openComponent(name, { event_id: eventId }, title, b) });
     if (label === 'Locations' && eventId) return [add('Add location', 'location_form', 'New location')];
     if (label === 'Schedule' && eventId) return [add('Add schedule item', 'schedule_item_form', 'New schedule item')];
-    return (TOOLBARS[label] || []).filter((x) => !x.needsEvent || eventId);
+    return (TOOLBARS[label] || []).filter((x) => (!x.needsEvent || eventId)
+      && (!x.needs || document.querySelector(`[data-canvas] [data-section="${x.needs}"]`)));
   }
   const TOOLBARS = {
-    Prospects: [{ text: 'Discovery settings', plain: true, run: (b) => openComponent('prospect_settings_form', {}, 'Prospect settings', b) },
-                { text: 'Export CSV', plain: true, run: () => { location.href = '/console/prospects/export.csv'; } }],
-    'AI spend': [{ text: 'AI limits', plain: true, run: (b) => openComponent('ai_limits_form', {}, 'AI limits', b) },
-                 { text: 'Overrides', plain: true, run: (b) => openComponent('ai_limit_overrides', {}, 'AI credit overrides', b) }],
+    // One Platform tab for every admin tool (the sections there are only the ones the person may see).
+    Platform: [{ text: 'AI limits', plain: true, needs: 'ai_spend_summary', run: (b) => openComponent('ai_limits_form', {}, 'AI limits', b) },
+               { text: 'Overrides', plain: true, needs: 'ai_spend_summary', run: (b) => openComponent('ai_limit_overrides', {}, 'AI credit overrides', b) },
+               { text: 'Discovery settings', plain: true, needs: 'prospect_row', run: (b) => openComponent('prospect_settings_form', {}, 'Prospect settings', b) },
+               { text: 'Prospects CSV', plain: true, needs: 'prospect_row', run: () => { location.href = '/console/prospects/export.csv'; } }],
     Events: [{ text: 'New event', run: (b) => openComponent('event_new_form', {}, 'New event', b) }],
     Overview: [{ text: 'Edit details', icon: 'edit', needsEvent: true, run: (b) => openComponent('event_form', { event_id: eventId }, 'Details', b) },
                { text: 'History', needsEvent: true, plain: true, run: (b) => openComponent('object_history', { event_id: eventId }, 'History', b) }],

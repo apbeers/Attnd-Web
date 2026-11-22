@@ -3,7 +3,7 @@
 {% block title %}{{ customer.email }} · Platform{% endblock %}
 {% block content %}
 <div class="stack">
-{% include 'platform_admin/_nav.html' %}
+{% include 'platform_admin/_nav.html' with area='customers' %}
 <div class="panel stack">
   <h2 class="title-3">{{ customer.email }}</h2>
   <p class="small muted">Joined {{ customer.date_joined|date:"M j, Y" }} · last active {{ customer.last_login|naturaltime|default:"never" }}{% if row %} · AI ${{ row.ai_month|floatformat:2 }} this month (limit {{ row.ai_limit }}), ${{ row.ai_total|floatformat:2 }} in all · paid ${{ row.paid_usd|floatformat:0 }}{% endif %}</p>

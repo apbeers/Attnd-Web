@@ -19,7 +19,7 @@ from platform_admin import data, plans
 from platform_admin.forms import OverrideForm, PricingForm
 from platform_admin.models import EventOverride, PaymentRecord, PlatformSettings, UpgradeRequest
 
-TABS = [('overview', 'Overview'), ('pricing', 'Pricing'), ('customers', 'Customers'), ('requests', 'Upgrade requests'),
+TABS = [('overview', 'Health'), ('pricing', 'Pricing'), ('customers', 'Customers'), ('requests', 'Upgrade requests'),
         ('events', 'Event overrides'), ('ai', 'AI spend')]
 PRICING_FIELDS = ['standard_price_usd', 'studio_price_usd', 'free_device_limit']
 
@@ -42,12 +42,20 @@ def _pricing_form(post=None):
 @agent_action('platform_admin', 'The platform admin (superusers): prices, customers, upgrade requests, event '
               'overrides, AI spend and the health glance. ?tab=overview|pricing|customers|requests|events|ai, '
               '?q= searches customers or events.', kind='read')
-@superuser_required
+@requires('platform_admin.view_platformsettings')
 def home(request):
+    """The Platform page: its own tabs for platform admins, AI spend for staff; every other area is its own page
+    under the same sub-tab nav (platform_admin/areas.py)."""
     from events.models import Event
+    from platform_admin import areas
     tab = request.GET.get('tab') if request.GET.get('tab') in dict(TABS) else 'overview'
+    if not areas.allowed(request.user, areas.HOME_TABS[tab]):
+        first = areas.first_url(request.user)
+        if not first:
+            raise Http404
+        return redirect(first)  # e.g. staff opening /console/platform/ land on their first area
     q = (request.GET.get('q') or '').strip()
-    ctx = {'tabs': TABS, 'tab': tab, 'q': q}
+    ctx = {'tabs': TABS, 'tab': tab, 'q': q, 'area': areas.HOME_TABS[tab]}
     if tab == 'pricing':
         ctx['form'] = _pricing_form()
     elif tab == 'customers':
@@ -73,7 +81,8 @@ def home(request):
 def save_pricing(request):
     from credit.models import AiLimits
     if request.method != 'POST':  # the form on its own (Ask Attnd's prefill reads it here)
-        return render(request, 'platform_admin/home.html', {'tabs': TABS, 'tab': 'pricing', 'form': _pricing_form()})
+        return render(request, 'platform_admin/home.html', {'tabs': TABS, 'tab': 'pricing', 'area': 'pricing',
+                                                            'form': _pricing_form()})
     conf = PlatformSettings.load()
     if conf._state.adding:
         conf.save()

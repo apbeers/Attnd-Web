@@ -1,4 +1,4 @@
-{% load console_tags %}{% load static console_tags agent_tags %}<!DOCTYPE html>
+{% load static console_tags agent_tags platform_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -23,15 +23,8 @@
   <a class="topbar__link" href="{% url 'console:dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %}>{% icon "list" %} Your events</a>
   <div class="topbar__actions">
     <a class="button button--primary button--small" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>
-    {# Each link asks the permission its page needs (attnd/permissions.py: the Staff / Platform admins roles). #}
-    {% if perms.diagnostics.view_diagnosticsession %}<a class="button button--secondary button--small" href="{% url 'diagnostics:overview' %}">{% icon "gauge" %} Diagnostics</a>{% endif %}
-    {% if perms.prospects.view_prospect %}<a class="button button--secondary button--small" href="{% url 'prospects:list' %}">{% icon "target" %} Prospects</a>{% endif %}
-    {% if perms.credit.view_aispend %}<a class="button button--secondary button--small" href="{% url 'credit:spend' %}">{% icon "chart" %} AI spend</a>{% endif %}
-    {% if perms.studio.view_sitereport %}<a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>{% endif %}
-    {% if user.is_staff or user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'console:dashboard' %}?onboarding=1" title="What a new organizer sees (your data isn't touched)">{% icon "stars" %} Preview onboarding</a>{% endif %}
-    {% if perms.platform_admin.change_platformsettings %}<a class="button button--secondary button--small" href="{% url 'platform:home' %}">{% icon "gauge" %} Platform</a>{% endif %}
-    {% if perms.events.view_all_usage %}<a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>{% endif %}
-    {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'admin:index' %}">Admin</a>{% endif %}
+    {# One Platform entry for anyone with a platform permission; every admin tool is a sub-tab there (platform_admin/areas.py). #}
+    {% platform_entry as platform_url %}{% if platform_url %}<a class="button button--secondary button--small" href="{{ platform_url }}">{% icon "gauge" %} Platform</a>{% endif %}
     {% chat_default as chat_on %}<form method="post" action="{% url 'console:chat_default' %}" class="chat-switch-form">{% csrf_token %}
       <input type="hidden" name="on" value="{{ chat_on|yesno:'0,1' }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">
       {% if event.id %}<input type="hidden" name="event_id" value="{{ event.id }}">{% elif agent_event.id %}<input type="hidden" name="event_id" value="{{ agent_event.id }}">{% endif %}

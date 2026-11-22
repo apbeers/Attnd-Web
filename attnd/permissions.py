@@ -62,6 +62,7 @@ STAFF = frozenset({
     'studio.view_sitereport', 'studio.change_sitereport',  # Studio abuse reports, take down / restore
     'events.mark_event_paid',  # going live (no checkout yet)
     'events.view_showcase',  # the "Showcase & demo" section of Your events
+    'platform_admin.view_platformsettings',  # the Platform page (its sub-tabs ask their own permissions)
 })
 PLATFORM_ADMIN = STAFF | {
     'platform_admin.change_platformsettings',  # the Platform admin: prices, customers, upgrades, overrides

@@ -79,7 +79,11 @@ class AdminPageTests(TestCase):
         staff = User.objects.create_user('st', 'st@example.com', 'pw', is_staff=True)
         other = TwoFactorClient()
         other.force_login(staff)
-        self.assertEqual(other.get(reverse('platform:home')).status_code, 404)
+        # Staff see the Platform page's staff areas only (attnd.permissions; tests_nav): Health and the other
+        # platform-admin tabs send them to their first area, the pages themselves stay 404.
+        self.assertEqual(other.get(reverse('platform:home')).status_code, 302)
+        self.assertEqual(other.get(reverse('platform:home') + '?tab=pricing').status_code, 302)
+        self.assertEqual(other.get(reverse('platform:customer', args=[self.owner.pk])).status_code, 404)
         for tab in ('overview', 'pricing', 'customers', 'requests', 'events', 'ai'):
             self.assertEqual(self.client.get(reverse('platform:home') + f'?tab={tab}').status_code, 200, tab)
         self.assertEqual(self.client.get(reverse('platform:customer', args=[self.owner.pk])).status_code, 200)

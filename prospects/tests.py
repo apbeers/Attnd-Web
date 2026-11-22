@@ -112,8 +112,10 @@ class AccessTests(Base):
     def test_topbar_button_for_staff_only(self):
         self.client.force_login(self.organizer)
         self.assertNotContains(self.client.get('/console/', secure=True), '/console/prospects/')
-        self.client.force_login(self.staff)
-        self.assertContains(self.client.get('/console/', secure=True), '/console/prospects/')
+        self.client.force_login(self.staff)  # one Platform entry; Prospects is its sub-tab (platform_admin/areas.py)
+        from platform_admin import areas
+        self.assertNotContains(self.client.get('/console/', secure=True), '/console/prospects/')
+        self.assertContains(self.client.get(areas.first_url(self.staff), secure=True), '/console/prospects/')
 
     def test_settings_form_saves(self):
         self.client.force_login(self.staff)

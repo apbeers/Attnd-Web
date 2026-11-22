@@ -1,0 +1,2 @@
+{% load console_tags %}<div class="cluster"><h1 class="title-2 grow">{% icon "gauge" %} Platform</h1>{% for a in actions %}<a class="button button--outline button--small" href="{{ a.url }}"{% if a.title %} title="{{ a.title }}"{% endif %}>{{ a.label }}</a>{% endfor %}</div>
+<nav class="tabs platform-tabs" aria-label="Platform">{% for a in areas %}<a class="tabs__tab" href="{{ a.url }}"{% if a.key == current %} aria-current="page"{% endif %}>{{ a.label }}</a>{% endfor %}</nav>

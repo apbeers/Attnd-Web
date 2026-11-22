@@ -136,7 +136,8 @@ class AccessTests(StudioTestCase):
         self.assertEqual(client.get('/console/studio/access/').status_code, 404)
         dashboard = client.get(reverse('console:dashboard'))
         self.assertNotContains(dashboard, '/console/studio/access/')
-        self.assertContains(dashboard, reverse('studio:reports'))
+        from platform_admin import areas  # Studio reports is a Platform sub-tab (Nov 22, 2026)
+        self.assertContains(client.get(areas.first_url(staff)), reverse('studio:reports'))
 
     def test_a_new_event_goes_straight_to_the_empty_state(self):
         event = Event.objects.create(name='Market', event_code='MKT1', user=self.owner, start_time=timezone.now())
