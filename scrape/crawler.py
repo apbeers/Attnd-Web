@@ -44,7 +44,8 @@ EMBEDDED_LIMIT = 40_000
 
 LISTING_WORDS = ('schedule', 'lineup', 'line-up', 'agenda', 'program', 'programme', 'timetable', 'map', 'venue',
                  'location', 'stage', 'vendor', 'exhibitor', 'food', 'speaker', 'artist', 'performer', 'event', 'info',
-                 'faq', 'parking')
+                 'faq', 'parking', 'entertainment', 'music', 'performance', 'show', 'activities', 'things-to-do')
+OTHER_HOST_PAGES = 8  # pages for each source URL on another site (a city news page, a venue's calendar)
 DETAIL_WORDS = ('artist', 'artists', 'performer', 'performers', 'speaker', 'speakers', 'vendor', 'vendors',
                 'session', 'sessions', 'band', 'bands', 'exhibitor', 'exhibitors', 'menu', 'menus', 'lineup',
                 'line-up', 'event', 'events', 'act', 'acts', 'program', 'talk', 'talks', 'workshop', 'workshops',
@@ -210,6 +211,7 @@ class Crawl:
         self.visited, self.pages, self.attachments = set(), [], []
         self.pdfs, self.images, self.wordpress = [], [], set()
         self._queue, self._order = [], 0
+        self.budget, self.used, self.primary = {}, {}, ''
 
     def _push(self, url, depth, priority=None):
         url = _clean(url)
@@ -222,6 +224,13 @@ class Crawl:
         heapq.heappush(self._queue, (pri, self._order, url, depth))
 
     def run(self, urls, crawl=True, max_depth=2):
+        # The organizer's own site (the first URL) gets most of the pages; each other site at most OTHER_HOST_PAGES,
+        # so a big city or venue site can't starve the event's own lineup pages (2VLQITGR: arlingtontx.gov).
+        hosts = list(dict.fromkeys(_host(u) for u in urls))
+        self.primary = hosts[0] if hosts else ''
+        others = min(OTHER_HOST_PAGES, self.max_pages // max(len(hosts), 1))
+        for h in hosts:
+            self.budget[h] = others if h != self.primary else self.max_pages - others * (len(hosts) - 1)
         for url in urls:
             self._push(url, 0, PRI_START)
         if crawl:
@@ -231,9 +240,11 @@ class Crawl:
         budget = self.max_pages if crawl else len(urls)
         while self._queue and len(self.visited) < budget and time.monotonic() < self.deadline:
             pri, _, url, depth = heapq.heappop(self._queue)
-            if url in self.visited:
+            host = _host(url)
+            if url in self.visited or (crawl and pri != PRI_START and self.used.get(host, 0) >= self.budget.get(host, 0)):
                 continue
             self.visited.add(url)
+            self.used[host] = self.used.get(host, 0) + 1
             try:
                 body, ctype, final = self.fetch(url, PAGE_LIMIT)
             except Exception as exc:
@@ -258,14 +269,15 @@ class Crawl:
             for link, anchor in links:
                 lower = link.lower()
                 if lower.split('?')[0].endswith('.pdf'):
-                    if any(w in lower or w in anchor.lower() for w in PDF_WORDS):
+                    if _host(link) == self.primary and any(w in lower or w in anchor.lower() for w in PDF_WORDS):
                         self.pdfs.append(link)
                     continue
                 if depth < max_depth:
                     detail = bool(DETAIL_ANCHORS.search(anchor)) or is_detail_url(link)
                     self._push(link, depth + 1, PRI_DETAIL if detail and page_priority(link) is not None else None)
-            if pri in (PRI_START, PRI_LISTING) and any(w in url.lower() for w in ('schedule', 'lineup', 'line-up',
-                                                                                     'program', 'timetable', 'agenda')):
+            if host == self.primary and pri in (PRI_START, PRI_LISTING) and any(
+                    w in url.lower() for w in ('schedule', 'lineup', 'line-up', 'program', 'timetable', 'agenda',
+                                               'entertainment')):
                 self.images += images[:8]
         if crawl:
             self._extras()

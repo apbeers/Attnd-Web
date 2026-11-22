@@ -97,6 +97,25 @@ class CrawlerTests(TestCase):
         self.assertLessEqual(len(pages), 3)
         self.assertEqual(len(pages), len(set(pages)))
 
+    def test_a_big_other_site_never_starves_the_organizer_site(self):
+        """2VLQITGR on dev: the city's news site (pages full of "event / info / program") took the whole budget and the
+        market's /entertainment/ page with the 43 performers was never read."""
+        site = dict(SITE)
+        site['https://fest.example/'] = ('text/html', page('<a href="/entertainment/">Entertainment</a>'))
+        site['https://fest.example/entertainment/'] = ('text/html', page('<p>Swiss Longhorns · Norris Perry</p>'))
+        city = ''.join(f'<a href="/News-Events/info-{i}">Event info {i}</a>' for i in range(60))
+        site['https://city.example/news'] = ('text/html', page(city))
+        for i in range(60):
+            site[f'https://city.example/News-Events/info-{i}'] = ('text/html', page(f'<p>City program {i}</p>'
+                                                                                 '<a href="/maps.pdf">maps</a>'))
+        site['https://city.example/maps.pdf'] = ('application/pdf', b'%PDF-1.4 maps')
+        run = crawler.Crawl(fetch=fake_fetch(site), max_pages=20).run(['https://fest.example/', 'https://city.example/news'])
+        visited = [u for _, u, _ in run.pages]
+        self.assertIn('https://fest.example/entertainment/', visited)
+        self.assertLessEqual(sum(1 for u in visited if 'city.example' in u), crawler.OTHER_HOST_PAGES)
+        self.assertNotIn('maps.pdf', [a['name'] for a in run.attachments])  # PDFs only from the organizer's site
+        self.assertIn('Swiss Longhorns', run.text())
+
     def test_watch_mode_reads_only_the_pages(self):
         fetch = fake_fetch()
         run = crawler.Crawl(fetch=fetch).run(['https://fest.example/lineup/'], crawl=False)
