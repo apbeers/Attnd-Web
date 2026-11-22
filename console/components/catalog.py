@@ -628,7 +628,6 @@ def notification_form(user, event_id=None, event=None, form=None):
     event = editable_event(user, event_id, event)
     with timezone.override(_tz(event)):
         form = form or notification_form_for(event)
-        devices = Device.objects.real().filter(event=event)
         url = reverse('console:notifications', args=[event.pk])
         data = form_json(form, ['title', 'body', ('choices', 'when'),
                                 ('show_if', 'when:later', 'send-time', ['send_time']), 'urgent',
@@ -636,9 +635,7 @@ def notification_form(user, event_id=None, event=None, form=None):
                          action=url, submit=[{'label': 'Send', 'style': 'primary', 'icon': 'send'}],
                          confirm_action='send_notification')
     return {
-        'reach': devices.filter(subscribed=True).exclude(push_token='').count(),
-        'urgent_reach': devices.exclude(push_token='').count(),
-        'live_activities': devices.filter(platform='ios').exclude(live_activity_token='').count(),
+        **push.reach(event),
         'urgent_left': push.urgent_sends_left(event), 'form': data,
         'actions': [{'name': 'send_notification'}],
     }
@@ -842,8 +839,8 @@ def event_metrics(user, event_id=None, event=None, usage=None):
             {'label': 'Android', 'devices': by_platform.get('android', 0), 'activity': split['android'],
              'share': round(100 * split['android'] / total) if total else 0},
         ],
-        'push': {'reach': devices.filter(subscribed=True).exclude(push_token='').count(),
-                 'urgent_reach': devices.exclude(push_token='').count()},
+        'push': devices.aggregate(reach=Count('pk', filter=Q(subscribed=True) & ~Q(push_token='')),
+                                  urgent_reach=Count('pk', filter=~Q(push_token=''))),
         'views': {'locations': u['top_locations'][:5], 'items': u['top_items'][:5]},
         'liked': {'locations': u['hearted_locations'][:5], 'items': u['hearted_items'][:5]},
         'tabs': u['tabs'][:6],

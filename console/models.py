@@ -7,7 +7,9 @@ from events.models import Event
 class Order(models.Model):
     order_date = models.DateTimeField(auto_now_add=True)
     order_id = models.CharField(max_length=256)
-    event = models.OneToOneField(Event, on_delete=models.DO_NOTHING)
+    # Legacy v1 in-app purchase (2019 builds); kept for the record. SET_NULL: DO_NOTHING made deleting the event
+    # fail on the foreign key (docs/db_review.md §3).
+    event = models.OneToOneField(Event, on_delete=models.SET_NULL, null=True, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     refunded = models.BooleanField(default=False)
 
@@ -98,7 +100,7 @@ class UndoEntry(models.Model):
 
     operations = [{model, pk, op: create|update|delete, before: serialized row | None, after: {field: value},
     fields: [changed field names], related: {...}}], in the order they happened."""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='undo_entries')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='undo_entries', db_index=False)  # db_review §4
     event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='+')
     label = models.CharField(max_length=300)
     operations = models.JSONField(default=list)

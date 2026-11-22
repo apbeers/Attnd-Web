@@ -11,8 +11,8 @@ class QueuedTask(models.Model):
     priority = models.SmallIntegerField(default=0)
     args = models.JSONField(default=list, blank=True)
     kwargs = models.JSONField(default=dict, blank=True)
-    status = models.CharField(max_length=16, choices=TaskResultStatus.choices, default=TaskResultStatus.READY,
-                              db_index=True)
+    status = models.CharField(max_length=16, choices=TaskResultStatus.choices, default=TaskResultStatus.READY)
+    # (no db_index: queued_next starts with status)
     run_after = models.DateTimeField(null=True, blank=True)
     enqueued_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)

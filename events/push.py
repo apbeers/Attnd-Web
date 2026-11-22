@@ -291,12 +291,19 @@ URGENT_TTL = 12 * 3600  # a stale urgent alert is useless; the Live Activity sho
 
 
 def urgent_sends_left(event, now=None):
-    """How many more urgent announcements the event may send in the current hour."""
-    now = now or timezone.now()
+    """How many more urgent announcements the event may send in the current hour. Without `now`, memoised on the
+    event instance for a few seconds (the notifications page and its form component both show it)."""
+    if now is None:
+        cached = getattr(event, '_urgent_left', None)
+        if cached and time.monotonic() - cached[0] < 5:
+            return cached[1]
+    stamp, now = time.monotonic(), now or timezone.now()
     limit = getattr(settings, 'URGENT_MAX_PER_HOUR', URGENT_MAX_PER_HOUR)
     used = Notification.objects.filter(event=event, sent=True, priority=Notification.PRIORITY_URGENT,
                                        sent_at__gte=now - timedelta(hours=1)).count()
-    return max(0, limit - used)
+    left = max(0, limit - used)
+    event._urgent_left = (stamp, left)
+    return left
 
 
 def send_notification(notification):
@@ -391,6 +398,25 @@ def jitter_ms(n_devices):
     if n_devices < 1000:
         return 5000
     return 10000
+
+
+def reach(event):
+    """How many of the event's phones a notification reaches, in one query (the notifications page, its form
+    component and Metrics all show it): `reach` = opted in with a token, `urgent_reach` = any token (urgent goes
+    to everyone, API-011), `live_activities` = iOS Live Activity tokens. Memoised on the event instance for a few
+    seconds, so a page and the components it draws share one count."""
+    cached = getattr(event, '_push_reach', None)
+    if cached and time.monotonic() - cached[0] < 5:
+        return dict(cached[1])
+    from django.db.models import Count, Q
+    has_token = ~Q(push_token='')
+    counts = Device.objects.real().filter(event=event).aggregate(
+        reach=Count('pk', filter=Q(subscribed=True) & has_token),
+        urgent_reach=Count('pk', filter=has_token),
+        live_activities=Count('pk', filter=Q(platform='ios') & ~Q(live_activity_token='')),
+    )
+    event._push_reach = (time.monotonic(), counts)
+    return dict(counts)
 
 
 def _preview_devices(event):

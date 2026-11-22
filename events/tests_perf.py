@@ -217,7 +217,10 @@ class PagePerfTests(PerfBase):
                   f'/console/events/{self.event.id}/': 21,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2)
                   f'/console/events/{self.event.id}/locations/': 11,
                   f'/console/events/{self.event.id}/schedule/': 12,
-                  f'/console/events/{self.event.id}/usage/': 21}
+                  f'/console/events/{self.event.id}/usage/': 21,
+                  # db_review: one aggregate for the phones a notification reaches, shared with the form component.
+                  f'/console/events/{self.event.id}/notifications/': 12,
+                  '/console/tasks/': 5}
         for url, most in bounds.items():
             with self.subTest(url=url):
                 with self.assertMaxQueries(most):
@@ -234,3 +237,42 @@ class PagePerfTests(PerfBase):
         resp = org.get('/console/', secure=True)
         event = next(e for e in [e for s in resp.context['sections'] for e in s['events']] if e.pk == self.event.pk)
         self.assertEqual((event.n_locations, event.n_items, event.n_devices, event.n_pending), (18, 51, 30, 0))
+
+
+class DbReviewTests(PerfBase):
+    """docs/db_review.md: the counts the notifications page shows, the JSON shape checks, a legacy order that no
+    longer blocks deleting its event."""
+
+    def test_reach_in_one_query(self):
+        from events import push
+        Device.objects.create(id='quiet', event=self.event, platform='ios', subscribed=False, push_token='t',
+                              live_activity_token='la')
+        Device.objects.create(id='ci-x', event=self.event, platform='ios', subscribed=True, push_token='t')
+        event = Event.objects.get(pk=self.event.pk)
+        with self.assertNumQueries(1):
+            counts = push.reach(event)
+            self.assertEqual(push.reach(event), counts)  # memoised on the instance
+        self.assertEqual(counts, {'reach': 30, 'urgent_reach': 31, 'live_activities': 1})
+
+    def test_json_columns_keep_their_shape(self):
+        from django.db import IntegrityError, transaction
+        for model, field, bad in ((Event, 'theme', []), (Event, 'source_urls', {}), (Location, 'tags', 'food'),
+                                  (ScheduledItem, 'context', [1])):
+            with self.subTest(model=model.__name__, field=field), self.assertRaises(IntegrityError), \
+                    transaction.atomic():
+                row = model.objects.filter(event=self.event).first() if model is not Event else self.event
+                model.objects.filter(pk=row.pk).update(**{field: bad})
+
+    def test_legacy_order_does_not_block_deleting_the_event(self):
+        from console.models import Order
+        Order.objects.create(order_id='GPA.1', event=self.event, user=self.user)
+        self.event.delete()
+        self.assertIsNone(Order.objects.get().event)
+
+    def test_task_feed_still_lists_own_jobs(self):
+        from scrape.models import IngestJob
+        IngestJob.objects.create(kind=IngestJob.KIND_CHOICES[0][0], created_by=self.user, event=self.event)
+        from console.testing import TwoFactorClient
+        org = TwoFactorClient()
+        org.force_login(self.user)
+        self.assertEqual(len(org.get('/console/tasks/', secure=True).json()['tasks']), 1)

@@ -1062,13 +1062,11 @@ def notifications(request, event):
         return redirect('console:notifications', event_id=event.pk)
     scheduled = list(event.notification_set.filter(sent=False).order_by('send_time'))
     sent = list(event.notification_set.filter(sent=True).order_by('-send_time'))
-    devices = Device.objects.real().filter(event=event)
-    reach = devices.filter(subscribed=True).exclude(push_token='').count()
-    urgent_reach = devices.exclude(push_token='').count()
-    live_activities = devices.filter(platform='ios').exclude(live_activity_token='').count()
+    counts = push.reach(event)
     return render(request, 'console/notifications.html', _ctx(
-        event, 'notifications', form=form, scheduled=scheduled, sent=sent, reach=reach, urgent_reach=urgent_reach,
-        live_activities=live_activities, urgent_left=push.urgent_sends_left(event)))
+        event, 'notifications', form=form, scheduled=scheduled, sent=sent, reach=counts['reach'],
+        urgent_reach=counts['urgent_reach'], live_activities=counts['live_activities'],
+        urgent_left=push.urgent_sends_left(event)))
 
 
 @agent_action('send_scheduled_notification', 'Send a scheduled notification now.', confirm=True,

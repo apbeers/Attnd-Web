@@ -376,7 +376,7 @@ class NotificationForm(StyledFormMixin, forms.ModelForm):
         send_time = data.get('send_time')
         if data.get('urgent') and data.get('when') == self.WHEN_NOW and self.event is not None:
             from events.push import urgent_sends_left
-            if urgent_sends_left(self.event) <= 0:
+            if urgent_sends_left(self.event, now=timezone.now()) <= 0:  # exact, never the page's memoised count
                 self.add_error('urgent', 'This event has sent the most urgent updates allowed in an hour. Send it as '
                                          'a normal update, or try again later.')
         if data.get('when') == self.WHEN_LATER:

@@ -74,7 +74,7 @@ class SiteVersion(models.Model):
     SOURCE_CHOICES = [(SOURCE_START, 'Started'), (SOURCE_AI, 'AI'), (SOURCE_CODE, 'Code edit'),
                       (SOURCE_RESTORE, 'Restored'), (SOURCE_IMPORT, 'Imported')]
 
-    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='versions')
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='versions', db_index=False)  # db_review §4
     number = models.PositiveIntegerField()
     files = models.JSONField(default=dict, blank=True)       # {"index.html": "<!doctype html>…", "styles.css": …}
     app_look = models.JSONField(default=dict, blank=True)    # {"accent_color", "logo_url", "display": {…}}
@@ -119,7 +119,7 @@ class StudioAsset(models.Model):
     KIND_CHOICES = [(KIND_IMAGE, 'Image'), (KIND_SVG, 'SVG'), (KIND_PDF, 'PDF'), (KIND_FONT, 'Font')]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='studio_assets')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='studio_assets', db_index=False)  # db_review §4
     file = models.FileField(upload_to=asset_path, storage=asset_storage, max_length=512)
     name = models.CharField(max_length=128)  # safe file name used in URLs
     kind = models.CharField(max_length=8, choices=KIND_CHOICES)
@@ -223,7 +223,7 @@ class StudioUsage(models.Model):
 
 class FormSubmission(models.Model):
     """An entry from a hosted site's form (newsletter, applications, contact). No IP address or user agent kept."""
-    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='submissions')
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='submissions', db_index=False)  # db_review §4
     form = models.CharField(max_length=40)
     data = models.JSONField(default=dict)
     page = models.CharField(max_length=200, blank=True)

@@ -938,6 +938,11 @@ the `tickets/` and `door/` endpoints are gone. Restore by merging or cherry-pick
 - Usage counts are one `INSERT … ON CONFLICT` per batch (`events/usage.py`). Console lists count related rows with
   subqueries, never with joins + DISTINCT (the dashboard took 1.7 s on the DEMO event that way).
 - Query-count regression tests: `events/tests_perf.py`.
+- **Database review** (batch 7, `docs/db_review.md`): covered FK indexes off (`db_index=False` where a composite starts
+  with the column), partial indexes for live preview phones, due notifications and nearby events, the task feed's
+  `(created_by, -created_at)` / `finished_at`, JSON shape CHECKs (`events.models.json_is`), `push.reach(event)` (one
+  aggregate for the phones a notification reaches). New JSON columns get a `json_is` check; new FKs whose column
+  starts a composite index get `db_index=False`.
 
 ## Accounts
 

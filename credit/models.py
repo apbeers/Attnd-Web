@@ -22,9 +22,11 @@ def _default(name, fallback):
 
 
 class AiSpend(models.Model):
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='ai_spend')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='ai_spend',
+                             db_index=False)  # db_review §4
     visitor = models.CharField(max_length=64, blank=True, db_index=True)  # before an account: session + IP hash
-    event = models.ForeignKey('events.Event', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    event = models.ForeignKey('events.Event', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+                              db_index=False)  # db_review §4
     feature = models.CharField(max_length=32, db_index=True)
     provider = models.CharField(max_length=16, blank=True)
     model = models.CharField(max_length=64, blank=True)
@@ -112,7 +114,7 @@ class AiLimitOverride(models.Model):
 
 class AiCreditNotice(models.Model):
     """A warning sent once per month: a person at 80 % / 100 %, or the platform alert (user empty)."""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='+')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='+', db_index=False)
     month = models.CharField(max_length=7)  # YYYY-MM
     level = models.CharField(max_length=16)  # 80 / 100 / platform
     created_at = models.DateTimeField(default=timezone.now)

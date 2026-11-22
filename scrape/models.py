@@ -59,6 +59,9 @@ class IngestJob(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        # The task feed (console:tasks): a person's own jobs newest first, and the ones that finished lately.
+        indexes = [models.Index(fields=['created_by', '-created_at'], name='ingestjob_creator_recent'),
+                   models.Index(fields=['finished_at'], name='ingestjob_finished')]
 
     def __str__(self):
         return f'{self.get_kind_display()} [{self.status}] {self.event or self.urls}'
@@ -129,7 +132,7 @@ class Change(models.Model):
 class SourcePage(models.Model):
     """One web page an event's content comes from, fingerprinted so the watcher can tell cheaply
     whether it changed (scrape.watch). AI runs only when a fingerprint changes."""
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='source_pages')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='source_pages', db_index=False)  # db_review §4
     url = models.URLField(max_length=1024)
     etag = models.CharField(max_length=256, blank=True)
     last_modified = models.CharField(max_length=64, blank=True)

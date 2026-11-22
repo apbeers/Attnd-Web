@@ -6,7 +6,9 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models import CharField, F, Func, Q
 from django.db.models.functions import Upper
+from django.db.models.lookups import Exact
 from django.utils import timezone as dj_tz
 
 
@@ -53,6 +55,16 @@ def normalize_tags(values):
             out.append(tag)
     return out[:MAX_TAGS]
 
+
+
+def json_is(field, kind):
+    """A CHECK constraint that a JSON column holds `kind` ('object' / 'array'): jsonb_typeof in Postgres
+    (docs/db_review.md §5). Code always writes dicts / lists there; this keeps a bad import or a hand edit in the
+    admin from storing `null` or a string that every reader would have to guard against."""
+    model_field = field
+    return models.CheckConstraint(
+        condition=Exact(Func(F(model_field), function='jsonb_typeof', output_field=CharField()), kind),
+        name=f'%(app_label)s_%(class)s_{field}_is_{kind}')
 
 def generate_event_code(length: int = 8) -> str:
     """Return a random uppercase alphanumeric code that doesn't already exist."""
@@ -158,7 +170,6 @@ class Event(CoordinatesMixin, models.Model):
     plan_suggestions = models.JSONField(default=dict, blank=True)
     flyer = models.FileField(upload_to=get_file_path, blank=True)
     address = models.CharField(max_length=512, blank=True)
-    order_id = models.CharField(max_length=512, blank=True)
     created_at = models.DateTimeField(default=dj_tz.now, editable=False)
     # The owner. Null = unassigned (the owner's account was deleted); site admins can reassign it.
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
@@ -268,10 +279,17 @@ class Event(CoordinatesMixin, models.Model):
             ('view_showcase', 'See the showcase and demo events'),
         ]
         indexes = [
-            models.Index(fields=['user', 'name', 'event_code', 'latitude', 'longitude']),
+            # events.apis.nearby_events: listed, published events in a start-time window (then a lat/lng box).
+            models.Index(fields=['start_time', 'latitude', 'longitude'], name='event_nearby_idx',
+                         condition=Q(public=True, status='published')),
             # `event_code__iexact` / `name__iexact` (lookup, /join/, /p/, the DEMO checks) compare UPPER(…).
             models.Index(Upper('event_code'), name='event_code_upper_idx'),
             models.Index(Upper('name'), name='event_name_upper_idx'),
+        ]
+        constraints = [
+            *(json_is(f, 'object') for f in ('display_config', 'layout_config', 'live_activity', 'theme',
+                                             'plan_suggestions', 'context')),
+            *(json_is(f, 'array') for f in ('source_urls', 'locked_fields')),
         ]
 
     def __str__(self):
@@ -310,15 +328,15 @@ class Location(CoordinatesMixin, models.Model):
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, db_index=False)  # (event, sort_order) covers it
 
     CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url',
                       'address', 'latitude', 'longitude', 'category', 'tags', 'context']
 
     class Meta:
-        indexes = [
-            models.Index(fields=['event', 'user'])
-        ]
+        # Every list is one event's locations in the organizer's order.
+        indexes = [models.Index(fields=['event', 'sort_order'], name='location_event_order')]
+        constraints = [json_is('tags', 'array'), json_is('context', 'object'), json_is('locked_fields', 'array')]
         ordering = ['sort_order', 'name']
 
     def save(self, *args, **kwargs):
@@ -347,14 +365,15 @@ class ScheduledItem(models.Model):
     description = models.CharField(max_length=1024, blank=True)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
-    location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True)
+    # (location, start_time) and (event, start_time) cover the plain FK indexes.
+    location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, db_index=False)
     tags = models.JSONField(default=list, blank=True)
     context = models.JSONField(default=dict, blank=True)  # API-018, events.context
     # API-030: Apple Music links per performer, keyed by the normalised name (events/music.py; not content).
     music = models.JSONField(default=dict, blank=True)
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, db_index=False)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
 
     CONTENT_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags', 'context']
@@ -370,6 +389,8 @@ class ScheduledItem(models.Model):
             models.Index(fields=['event', 'start_time']),
             models.Index(fields=['location', 'start_time']),
         ]
+        constraints = [json_is('tags', 'array'), json_is('context', 'object'), json_is('music', 'object'),
+                       json_is('locked_fields', 'array')]
         ordering = ['start_time']
 
     def __str__(self):
@@ -410,11 +431,13 @@ class Notification(models.Model):
     failed_count = models.PositiveIntegerField(default=0, db_default=0)
     priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default=PRIORITY_NORMAL)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, db_index=False)  # (event, send_time) covers it
 
     class Meta:
         indexes = [
-            models.Index(fields=['event', 'user'])
+            models.Index(fields=['event', 'send_time'], name='notification_event_time'),
+            # run_scheduled_tasks: the scheduled ones that are due, across every event.
+            models.Index(fields=['send_time'], name='notification_due', condition=Q(sent=False)),
         ]
 
     @property
@@ -444,7 +467,7 @@ def is_ci_device(device_id):
 class EventJoin(models.Model):
     """API-025: each device that ever joined an event, once (the free limit counts these; a device that left and
     comes back is still one of them, so a rejoin is always allowed)."""
-    event = models.ForeignKey('Event', on_delete=models.CASCADE, related_name='joins')
+    event = models.ForeignKey('Event', on_delete=models.CASCADE, related_name='joins', db_index=False)
     device_id = models.CharField(max_length=128)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -495,9 +518,10 @@ class Device(models.Model):
     objects = DeviceQuerySet.as_manager()
 
     class Meta:
-        indexes = [
-            models.Index(fields=['event'])
-        ]
+        # The FK's own index serves per-event counts; preview phones are a handful, so a partial index finds the
+        # live ones (bundle/, changes/, the QR card) without reading every attendee row.
+        indexes = [models.Index(fields=['event', 'preview_until'], name='device_preview',
+                                condition=Q(preview_until__isnull=False))]
 
     def __str__(self):
         return f'{self.event} - {self.id} - {self.subscribed}'
@@ -515,7 +539,7 @@ class EventMember(models.Model):
     ROLE_CHOICES = [(ROLE_ADMIN, 'Admin'), (ROLE_CONTRIBUTOR, 'Contributor')]
     ROLE_CHOICES_DICT = dict(ROLE_CHOICES)
 
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='members')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='members', db_index=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='event_memberships')
     role = models.CharField(max_length=16, choices=ROLE_CHOICES, default=ROLE_CONTRIBUTOR)
     created_at = models.DateTimeField(default=dj_tz.now)
@@ -561,7 +585,7 @@ class PublishedBundle(models.Model):
 class EventInvite(models.Model):
     """A team invitation for an email with no account yet. It becomes an EventMember when someone
     signs up or signs in with that email (console.accounts.claim_invites)."""
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='invites')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='invites', db_index=False)
     email = models.EmailField()
     role = models.CharField(max_length=16, choices=EventMember.ROLE_CHOICES, default=EventMember.ROLE_CONTRIBUTOR)
     invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
@@ -586,7 +610,8 @@ class UsageCount(models.Model):
     IP address or anything that identifies a person is ever stored with them. `event` is null for
     app-wide counts that happen outside an event (new app installs).
     """
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='usage')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='usage',
+                              db_index=False)  # usage_bucket_unique and (event, bucket) start with it
     bucket = models.DateTimeField()  # UTC, start of the 5-minute window
     metric = models.CharField(max_length=32)
     detail = models.CharField(max_length=32, blank=True)  # a tab name, or a location / schedule item / notification id

@@ -13,7 +13,7 @@ class AgentRun(models.Model):
                       (STOPPED, 'Stopped')]
     ACTIVE = (RUNNING, WAITING_CONFIRMATION, WAITING_REPLY)
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='agent_runs')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='agent_runs', db_index=False)  # db_review §4
     event = models.ForeignKey('events.Event', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     goal = models.TextField()
     page_url = models.CharField(max_length=500, blank=True)
@@ -75,7 +75,7 @@ class AgentStep(models.Model):
     CONFIRM_CHOICES = [('', 'Not needed'), (CONFIRM_PENDING, 'Waiting'), (CONFIRM_CONFIRMED, 'Confirmed'),
                        (CONFIRM_CANCELLED, 'Cancelled'), (CONFIRM_EXECUTED, 'Done'), (CONFIRM_EXPIRED, 'Expired')]
 
-    run = models.ForeignKey(AgentRun, on_delete=models.CASCADE, related_name='steps')
+    run = models.ForeignKey(AgentRun, on_delete=models.CASCADE, related_name='steps', db_index=False)  # db_review §4
     seq = models.PositiveIntegerField()
     kind = models.CharField(max_length=12, choices=KIND_CHOICES, default=KIND_TOOL)
     tool = models.CharField(max_length=64, blank=True)
@@ -105,7 +105,7 @@ class AgentStep(models.Model):
 
 class AgentUsage(models.Model):
     """One model call and its cost (the per-person daily cap sums these)."""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='+')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='+', db_index=False)  # db_review §4
     run = models.ForeignKey(AgentRun, on_delete=models.SET_NULL, null=True, blank=True, related_name='usage')
     provider = models.CharField(max_length=16)
     model = models.CharField(max_length=64)
