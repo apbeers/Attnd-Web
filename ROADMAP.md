@@ -100,10 +100,8 @@ is the reference. Web parts:
   experience for `https://attnd.app/p/` if scanning a share QR should show the clip card (owner, App Store Connect).
 
 ### Assistant eval follow-ups (eval built Nov 22, 2026: `docs/assistant_eval/`)
-- **Run the assistant eval on Android once the rewrite lands**: a JVM router-mode test over `questions.json` +
-  `demo_bundle.json` and an instrumented model-mode test on a Gemini Nano phone, same report shape
-  (`docs/assistant_eval/README.md` → Android); first port iOS's new router rules (safety, amenities, FAQ / topics,
-  menus, updates / changes, names inside questions) with the same answers.
+- **Android model mode**: an instrumented test on a Gemini Nano phone over the same files, same report shape
+  (router mode runs since Nov 22, 2026: 245/247; `docs/assistant_eval/README.md` → Android).
 - Run iOS **model mode** on the owner's Mac or iPhone with Apple Intelligence and write its findings.
 - Router gaps left: "is the beer cold?", cheapest food from menu prices, "this morning" as a time word, two-edit typos
   (a Damerau transposition in the shared search spec).

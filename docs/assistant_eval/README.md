@@ -1,8 +1,8 @@
 # Event assistant eval
 
 What attendees really type into the event assistant during an event (including the silly, rude and risky things),
-run against the apps' assistant and graded. The catalogue and its fixture live here because they are shared: iOS runs
-them today, Android will run the same files once its rewrite lands (ROADMAP).
+run against the apps' assistant and graded. The catalogue and its fixture live here because they are shared: iOS and
+Android run the same files.
 
 | File | What it is |
 |------|------------|
@@ -135,7 +135,8 @@ xcodebuild test -project Attnd.xcodeproj -scheme Attnd \
    what a good answer is). Name entities exactly as in `demo_bundle.json`.
 2. If the question needs a fact the DEMO event doesn't have, add it to `load_demo_event` (context only: the live suites
    count rows), extend `test_assistant_eval_facts`, run `export_assistant_eval_bundle`.
-3. Sync the apps: iOS `python3 scripts/assistant_eval/sync_data.py` (writes `AttndTests/AssistantEvalData.swift`).
+3. Sync the apps: iOS `python3 scripts/assistant_eval/sync_data.py` (writes `AttndTests/AssistantEvalData.swift`), Android
+   `python3 scripts/assistant_eval/sync_data.py` (copies both files into its test resources).
    `testCatalogueMatchesTheFixture` fails if a name doesn't exist.
 4. Mark it `critical` only if a wrong answer could hurt someone or make something up, and the router can answer it.
 
@@ -143,17 +144,23 @@ Categories: `finding` (amenities), `food`, `schedule`, `performers`, `my_schedul
 `directions`, `event_info`, `updates`, `app_settings`, `typos_slang`, `other_languages`, `vague`, `off_topic`,
 `safety`, `injection`, `unknown_facts`.
 
-## Android (later)
+## Android
 
-The rewrite should add the same two modes over the same files: a JVM test that loads `questions.json` and
-`demo_bundle.json` (copied into `app/src/test/resources/assistant_eval/` by a small sync step), drives the router
-exactly like its `AssistantController`, grades with the rules above and writes
-`assistant-eval-android-router-<time>.json` in the same shape (`platform`, `mode`, `passed`, `total`, `categories`,
-`critical_failures`, `results[]` with `id`, `passed`, `failures`, `path`, `answer`, `shown`, `components`, `chips`,
-`actions`, `blocks`); the model mode runs as an instrumented test on a phone with Gemini Nano. The iOS router gained
-rules from this eval (safety, amenities, FAQ / topics, menus, updates and changes, names inside questions; see
-Runs below) that Android's router should port with the same answers, so the shared
-`AssistantRouterTest` cases stay aligned.
+Router mode runs on the JVM over the same files (Attnd-Android, Nov 22, 2026):
+
+- `python3 scripts/assistant_eval/sync_data.py` copies `questions.json` and `demo_bundle.json` into
+  `app/src/test/resources/assistant_eval/` (re-run after either changes here).
+- `unit/AssistantEval.kt` is the runner, grader and report (the rules above, ported from iOS `AssistantEval.swift`;
+  a turn as Android's `AssistantController.submit` runs it, plus iOS's "swap …" and sequence commands; without the
+  model the router's no-AI rules apply: a question it can't read is searched by its keywords).
+- **Always, in the normal unit tests**: `AssistantEvalTest.catalogueMatchesTheFixture` and `criticalQuestionsRouter`
+  (every `critical` question passes; ~1 s).
+- **The full run (opt-in)**: `./gradlew testDebugUnitTest -PassistantEval --tests '*AssistantEvalTest*'` (or
+  `ATTND_ASSISTANT_EVAL=router`); the report is `app/build/assistant-eval/assistant-eval-android-router-<time>.json`
+  (`ATTND_ASSISTANT_EVAL_OUT` moves it), the summary is in the test's stdout; `ATTND_ASSISTANT_EVAL_ONLY` narrows it.
+  Same report shape as iOS (`platform: "android"`).
+- Model mode (Gemini Nano through the JSON tool protocol, `domain/AssistantTools.kt`) needs a phone: not built yet
+  (an instrumented test after the chat UI, phase 6b).
 
 ## Runs
 
@@ -161,6 +168,7 @@ Runs below) that Android's router should port with the same answers, so the shar
 |------|-----------------|--------|--------|
 | 2026-11-22 | iOS · router, first run | 123/247, critical 24/50 (safety 0/13, event info 2/27, amenities 13/38) | `results/assistant-eval-ios-router-2026-11-22-before-fixes.json` |
 | 2026-11-22 | iOS · router, after the fixes | 242/247, critical 50/50 | `results/assistant-eval-ios-router-2026-11-22T162036Z.json` |
+| 2026-11-22 | Android · router, first run | 245/247, critical 50/50 (fails "what did I miss this morning", "resttoom"; the no-AI keyword search answers "is the beer cold?", "cheapest food", "bbq pitt lane") | `results/assistant-eval-android-router-2026-11-22T192158Z.json` |
 | — | iOS · model | not run yet (needs Apple Intelligence) | — |
 
 The first run's router answered every safety question ("I lost my kid", "medical emergency", "there's a fight") with

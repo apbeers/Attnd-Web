@@ -330,13 +330,13 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
 - **Assistant eval** (`docs/assistant_eval/`, Nov 22, 2026): `questions.json` (247 platform-neutral questions attendees
   ask, silly and risky ones included, with checks) and `demo_bundle.json` (the DEMO bundle at a fixed moment, from
   `manage.py export_assistant_eval_bundle`; nothing is saved). The apps run it (iOS: router mode in its unit tests'
-  critical gate and opt-in, model mode on a Mac / iPhone with Apple Intelligence; Android: ROADMAP). DEMO changes the
+  critical gate and opt-in, model mode on a Mac / iPhone with Apple Intelligence; Android: router mode, the same critical gate and opt-in, model mode ROADMAP). DEMO changes the
   questions rely on are pinned by `events/tests_demo_facts.py → test_assistant_eval_facts`; after a DEMO change
   re-export the bundle and sync the apps. How to run, grading, adding questions: its README.
 - **Assistant eval** (`docs/assistant_eval/`, Nov 22, 2026): `questions.json` (247 platform-neutral questions attendees
   ask, silly and risky ones included, with checks) and `demo_bundle.json` (the DEMO bundle at a fixed moment, from
   `manage.py export_assistant_eval_bundle`; nothing is saved). The apps run it (iOS: router mode in its unit tests'
-  critical gate and opt-in, model mode on a Mac / iPhone with Apple Intelligence; Android: ROADMAP). DEMO changes the
+  critical gate and opt-in, model mode on a Mac / iPhone with Apple Intelligence; Android: router mode, the same critical gate and opt-in, model mode ROADMAP). DEMO changes the
   questions rely on are pinned by `events/tests_demo_facts.py → test_assistant_eval_facts`; after a DEMO change
   re-export the bundle and sync the apps. How to run, grading, adding questions: its README.
 
