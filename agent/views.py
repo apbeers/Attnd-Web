@@ -248,9 +248,9 @@ def start(request):
         return _error('Write what you want Attnd to do.')
     if len(goal) > 4000:
         return _error('That is too long (4,000 characters at most).')
-    if AgentRun.objects.filter(user=request.user, status__in=AgentRun.ACTIVE).exists():
-        active = AgentRun.objects.filter(user=request.user, status__in=AgentRun.ACTIVE).first()
-        return JsonResponse({'error': 'Ask Attnd is still working on your last request. Stop it first, or answer it.',
+    active = AgentRun.objects.filter(user=request.user, status=AgentRun.RUNNING).first()
+    if active is not None:
+        return JsonResponse({'error': 'Ask Attnd is still working on your last request. Wait a moment, or stop it.',
                              'run': run_json(active)}, status=409)
     if loop.budget_left(request.user) <= 0:
         return _error(loop.budget_message(), status=429)
@@ -280,6 +280,12 @@ def start(request):
                       'ids': {k: int(v) for k, v in (raw.get('ids') or {}).items() if str(v).isdigit()}}
         except (ValueError, AttributeError, TypeError):
             target = {}
+    # One chat (Nov 22, 2026): a new request supersedes an earlier one that only waits (for a confirmation or an
+    # answer, maybe in another tab or a card scrolled out of view): it is stopped, its pending confirmations expire.
+    # Refusing it made the chat swap the conversation on screen for that other run ("jumps to some other session").
+    for waiting in AgentRun.objects.filter(user=request.user, status__in=(AgentRun.WAITING_CONFIRMATION,
+                                                                        AgentRun.WAITING_REPLY)):
+        loop.stop(waiting)
     run = loop.create_run(request, goal, page, event, attachments, target=target)
     return JsonResponse({'run': run_json(run), 'steps': []}, status=202)
 
@@ -313,6 +319,13 @@ def runs(request):
                            .order_by('-created_at').values_list('pk', flat=True)[:60])[::-1]
                 wanted, out['earlier'] = ids[-20:], ids[:-20]
                 out['thread'] = last.thread
+        if wanted and 'thread' not in out:
+            # The conversation's own thread (the newest run asked for), before an active run of another
+            # conversation is added below: the next request must continue this one, not that one.
+            own = (AgentRun.objects.filter(user=request.user, pk__in=wanted).exclude(thread='')
+                   .order_by('-created_at').values_list('thread', flat=True).first())
+            if own:
+                out['thread'] = own
         active = next((r.pk for r in recent if r.active), None)
         if active and active not in wanted:
             wanted.append(active)

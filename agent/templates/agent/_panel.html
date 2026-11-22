@@ -20,14 +20,16 @@
       <button type="button" class="button button--ghost button--small" data-agent-new>{% icon "plus" %}<span class="visually-hidden">New chat</span></button>
       <button type="button" class="button button--ghost button--small" data-agent-history aria-expanded="false"
               aria-controls="agent-recent">{% icon "history" %}<span class="visually-hidden">Recent requests</span></button>
-      {% if mode == 'full' %}<a class="button button--ghost button--small" href="{{ back_url }}" data-agent-exit title="Back to the floating chat">{% icon "collapse" %}<span class="visually-hidden">Exit full screen</span></a>
+      {% if mode == 'full' %}<a class="button button--ghost button--small" href="{{ back_url }}" data-agent-exit title="Back to the page">{% icon "collapse" %}<span class="visually-hidden">Exit full screen</span></a>
       {% else %}<a class="button button--ghost button--small agent__full-link" href="{% url 'console:assistant' %}" data-agent-full title="Full screen">{% icon "expand" %}<span class="visually-hidden">Full screen</span></a>
       <button type="button" class="button button--ghost button--small" data-agent-close aria-label="Close Ask Attnd">{% icon "close" %}</button>{% endif %}
+    {# Recent requests: a sheet that drops over the log (never in its flow); agent.js closes it on a pick, Esc, × or outside. #}
+      <div class="agent__recent" id="agent-recent" role="dialog" aria-label="Recent requests" hidden>
+        <div class="agent__recent-head"><div class="eyebrow">Recent requests</div>
+          <button type="button" class="button button--ghost button--small" data-agent-recent-close aria-label="Close recent requests">{% icon "close" %}</button></div>
+        <ul class="agent__recent-list" data-agent-recent></ul>
+      </div>
     </header>
-    <div class="agent__recent" id="agent-recent" hidden>
-      <div class="eyebrow">Recent requests</div>
-      <ul class="agent__recent-list" data-agent-recent></ul>
-    </div>
     <div class="agent__log" role="log" aria-live="polite" aria-relevant="additions" data-agent-log>
       <p class="agent__hello small muted" data-agent-hello>Ask me to do anything in the console: “Move Prairie Lights to 8 PM”, “Add a lunch break at noon on Saturday”, “Which locations have no schedule?”. I work as you, and ask before sending, publishing, deleting or team changes.</p>
     </div>

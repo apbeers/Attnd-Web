@@ -579,19 +579,35 @@ on Save does; there is no second copy of any business logic.
   is an always-ask step that restores those revisions through the History view. It can't unsend updates.
 - **Panel** (`agent/static/agent/agent.js`, `agent.css`): launcher "Ask Attnd", chat with live steps, confirm card,
   `ask_user` replies, Stop, file attach (`/console/agent/attach/`, PDF/images/text ≤ `AGENT_MAX_ATTACHMENT_MB`;
-  file fields take the attachment id), recent requests, Undo all. **One conversation**: new requests are added below the earlier ones (sessionStorage `attnd.agent.chat` = the run ids, `attnd.agent.scroll` = the log's scroll position), so taps, follow-ups and page loads keep the chat; "+" (New chat) starts over; a request picked from the history list starts a conversation with it. Cards have no "Open page ↗" link (removed Nov 21, 2026): tapping a card opens its detail in the chat (or the canvas). On phones the sheet takes the whole visible height. **Background** (default): when a run that changed
+  file fields take the attachment id), recent requests, Undo all. **One conversation**: new requests are added below the earlier ones (sessionStorage `attnd.agent.chat` = the run ids, `attnd.agent.scroll` = the log's scroll position), so taps, follow-ups and page loads keep the chat; "+" (New chat) starts over; a request picked from the history list starts a conversation with it. Cards have no "Open page ↗" link (removed Nov 21, 2026): tapping a card opens its detail in the chat (or the canvas). **Background** (default): when a run that changed
   the current event or page ends, the page reloads (or shows "Updated · Refresh" with unsaved input). **Watch**
-  (`localStorage` `attnd.agent.watch`, wider screens only): each changed step opens its page. On phones (≤ 600px)
-  it is a bottom sheet that always works in the background (no Watch switch; header = title, status, history,
-  close), follows `window.visualViewport` (with the keyboard open the composer sits right above it, the page behind
-  doesn't scroll; the console's viewport meta has `interactive-widget=resizes-content`) and its inputs are 16px (no
-  iOS focus zoom); the task tray stacks above the launcher. Stale runs fail / unanswered ones close in
-  `run_scheduled_tasks`.
+  (`localStorage` `attnd.agent.watch`, the floating panel only): each changed step opens its page. Stale runs fail /
+  unanswered ones close in `run_scheduled_tasks`.
+- **One chat** (owner, Nov 22, 2026): **phones use the full-screen page; don't add phone-only chat code paths.** The
+  floating panel exists only on wider screens; on phones (≤ 600px) the launcher, Ctrl/⌘+K and Add with AI go to
+  `/console/assistant/?event=…&from=…` through `window.attndOpenChat` (agent-loader.js; agent.js's `open()` calls the
+  same function; Add with AI passes its form as `?ai=`, aimed once the conversation is restored). The bottom sheet,
+  its CSS and its visual-viewport sizing are gone. The full-screen page is an opaque app shell at every width
+  (`body:has(.assistant)`: fixed, `height: var(--app-height, 100dvh)`; agent.js passes the visual viewport's height
+  for iOS Safari, whose keyboard only shrinks that), so nothing of a page shows through and the page behind never
+  scrolls; on phones it hides the top bar (Exit returns to the page), runs edge to edge with safe-area padding, puts
+  toasts at the top, 44px targets and a 16px composer, and the section chips step aside while typing. The log keeps
+  its bottom anchored when it changes height (keyboard, chips; a ResizeObserver while following) and a saved scroll
+  position is `bottom` when the person was at the bottom. **Recent requests** drop over the log as a sheet (never in
+  its flow), closed by a pick, Esc, × or a tap outside; a pick continues that run's thread. **Session jump** (the
+  owner's "jumps to some other session"): a send while an earlier run waited for a confirmation or an answer was
+  refused (409) and the chat replaced the whole log with that run; now `agent:start` stops runs that only wait
+  (their confirmations expire) and starts the request in the conversation on screen; only a run still working is
+  refused, and the chat then keeps its log (another tab's run is added below). `agent:runs?chat=` returns the
+  conversation's own `thread`, so an active run of another conversation appended to the restore no longer takes the
+  thread over. Tests: `agent/tests_phone_chat.py` (and, with `ATTND_BROWSER_CHECKS=1`, `scripts/ci/chat_check.cjs` on an
+  emulated iPhone 15 Pro and 1440 × 900: open, send, keyboard, history, close and reopen; `ATTND_CHAT_SHOTS=<dir>`
+  saves screenshots).
 - **Full screen** (`/console/assistant/`, `console:assistant` → `agent.views.assistant_page`, template
   `agent/assistant.html`; in `registry.EXCLUDED` and `OFF_LIMITS_PREFIXES`, so the floating panel isn't drawn there):
   the panel header's **Full screen** button (≥ 1024px only, `data-agent-full`) opens it with `?event=` (checked with
-  `can_edit`) and `?from=` (a console path, not off-limits; the requests are about that page); **Exit** goes back and
-  reopens the floating panel. Same conversation (sessionStorage chat ids, scroll). Layout (Layla's chat + canvas):
+  `can_edit`) and `?from=` (a console path, not off-limits; the requests are about that page); **Exit** goes back (wide screens:
+  and reopens the floating panel). Phones reach it from every opener (see One chat). Same conversation (sessionStorage chat ids, scroll). Layout (Layla's chat + canvas):
   the chat column on the left (~36%), the **canvas** on the right (`data-canvas`): what the chat `show`s appears there
   at full size, grouped into underline tabs Events · Overview · Locations · Schedule · Updates (arrow keys move
   between tabs; with `?event=` the event's overview, locations, schedule and updates are preloaded), while the chat
@@ -786,7 +802,7 @@ on Save does; there is no second copy of any business logic.
     in the pool while sleeping; never inside a transaction), the browser polls again at once after a `waited` answer.
   - **Phones chat-first**: `ConsolePreference.phone_chat` (default on; the top bar switch on a phone changes it, on a
     desktop `chat_default`); the full-screen chat on narrow screens shows the event's sections as chips above the
-    composer and a "Pages ↗" chip.
+    composer and a "Pages ↗" chip (hidden while typing on a phone).
   - **Organizer emails** (`console/organizer_mail.py`): import finished, website changes waiting for review, a
     scheduled notification went out; to the owner and event admins, each kind off in Account (`ConsolePreference.notify`).
   - **First-run walkthrough** (`first_run`): import → review → layout → publish → share as progress chips for people

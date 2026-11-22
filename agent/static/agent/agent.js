@@ -54,11 +54,11 @@
 
   // ---- open / close ----------------------------------------------------------
   function open(focus) {
+    if (window.attndOpenChat?.()) return;  // phones: the full-screen chat page (agent-loader.js), never a sheet
     panel.hidden = false;
     root.classList.add('is-open');
     launcher.setAttribute('aria-expanded', 'true');
     store.set('sessionStorage', 'attnd.agent.open', '1');
-    fitSheet();
     if (focus !== false) input.focus();
     try { if (!chatIds().length) brief(); } catch (e) { /* still starting up: the end of this file briefs */ }
   }
@@ -67,7 +67,6 @@
     root.classList.remove('is-open');
     launcher.setAttribute('aria-expanded', 'false');
     store.remove('sessionStorage', 'attnd.agent.open');
-    fitSheet();
     launcher.focus();
   }
   launcher.addEventListener('click', () => (panel.hidden ? open() : close()));
@@ -80,41 +79,33 @@
     if (eventId) url.searchParams.set('event', eventId);
     url.searchParams.set('from', location.pathname + location.search);
     e.currentTarget.href = url.pathname + url.search;
-    store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop));
+    saveScroll();
   });
   $('[data-agent-exit]')?.addEventListener('click', () => {
     store.set('sessionStorage', 'attnd.agent.open', '1');
-    store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop));
+    saveScroll();
   });
 
-  // ---- Background / Watch ------------------------------------------------------
-  // Phones (the bottom sheet) always work in the background: the Watch switch is not shown there.
-  const phone = window.matchMedia('(max-width: 600px)');
+  // ---- Background / Watch (the floating panel, wide screens only: phones use the full-screen page) ----------
   watchBox.checked = store.get('localStorage', 'attnd.agent.watch') === '1';
   watchBox.addEventListener('change', () => { store.set('localStorage', 'attnd.agent.watch', watchBox.checked ? '1' : '0'); });
-  const watching = () => !full && watchBox.checked && !phone.matches;
+  const watching = () => !full && watchBox.checked;
 
-  // ---- Phones: the sheet follows the visual viewport (keyboard open = composer right above it) ----------
+  // ---- The full-screen page is an app shell of the visible height: with the keyboard open the composer sits right
+  // above it and the page behind never scrolls. CSS does it with 100dvh where the browser resizes the layout for the
+  // keyboard (interactive-widget=resizes-content); iOS Safari only shrinks the visual viewport, so its height is
+  // passed on as --app-height (the only use of the visual viewport, every width alike).
   const vv = window.visualViewport;
-  function fitSheet() {
-    const html = document.documentElement;
-    if (!phone.matches || panel.hidden) {
-      html.classList.remove('agent-sheet-open');
-      root.style.removeProperty('--agent-sheet-top');
-      root.style.removeProperty('--agent-sheet-height');
-      return;
-    }
-    html.classList.add('agent-sheet-open');
-    const visible = vv ? vv.height : window.innerHeight;
-    const top = vv ? vv.offsetTop : 0;
-    // The whole visible height: the full screen, or everything above the keyboard when it is open.
-    const height = Math.round(visible);
-    root.style.setProperty('--agent-sheet-height', `${height}px`);
-    root.style.setProperty('--agent-sheet-top', `${Math.round(top + visible - height)}px`);
+  if (full && vv) {
+    const fit = () => {
+      const html = document.documentElement;
+      html.style.setProperty('--app-height', `${Math.round(vv.height)}px`);
+      html.style.setProperty('--app-top', `${Math.round(vv.offsetTop)}px`);
+    };
+    vv.addEventListener('resize', fit);
+    vv.addEventListener('scroll', fit);
+    fit();
   }
-  if (vv) { vv.addEventListener('resize', fitSheet); vv.addEventListener('scroll', fitSheet); }
-  window.addEventListener('resize', fitSheet);
-  phone.addEventListener?.('change', fitSheet);
 
   // One-line composer that grows to three lines as you type.
   function fitInput() {
@@ -168,6 +159,9 @@
     pinned = nearBottom();
     if (pinned) newPill.hidden = true;
   }, { passive: true });
+  // The keyboard opening or closing, a rotation, chips appearing above the composer: the log changes height, and it
+  // keeps its bottom anchored while the person was following the newest line (no jump, nothing lost under the composer).
+  if (window.ResizeObserver) new ResizeObserver(() => { if (pinned && !restoring) log.scrollTop = log.scrollHeight; }).observe(log);
   function stick(force) {
     if (restoring) return;
     if (force === true) pinned = true;
@@ -606,11 +600,14 @@
   const thread = () => store.get('sessionStorage', 'attnd.agent.thread') || '';
   const setThread = (t) => { if (t) store.set('sessionStorage', 'attnd.agent.thread', t); };
   let scrollTimer = null;
+  // At the bottom = 'bottom', so a reload or the next page shows the newest lines (a pixel offset saved before the
+  // latest answer arrived used to restore the log above it).
+  function saveScroll() { store.set('sessionStorage', 'attnd.agent.scroll', nearBottom() ? 'bottom' : String(log.scrollTop)); }
   log.addEventListener('scroll', () => {
     clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop)), 150);
+    scrollTimer = setTimeout(saveScroll, 150);
   });
-  window.addEventListener('pagehide', () => store.set('sessionStorage', 'attnd.agent.scroll', String(log.scrollTop)));
+  window.addEventListener('pagehide', saveScroll);
 
   function newChat() {
     stopPolling();
@@ -637,11 +634,15 @@
 
   // A request from the history list: shown on its own (a new conversation that starts with it).
   async function show(id, isLive) {
+    const data = await get(runUrl(id, '?after=0'));
     log.textContent = '';
     renderedSteps.clear();
     unfinished.clear();
     setChatIds([id]);
-    await appendRun(id, isLive);
+    store.remove('sessionStorage', 'attnd.agent.thread');
+    setThread(data.run.thread);  // the next request continues the conversation on screen
+    appendData(data, isLive);
+    stick(true);
   }
 
   async function appendRun(id, isLive) {
@@ -728,7 +729,11 @@
       echoedReply = null;
       if (!input.value) { input.value = text; fitInput(); }
       bubble('error', err.message);
-      if (err.data && err.data.run) { show(err.data.run.id); }
+      // Still working on an earlier request (the server stops ones that only wait for a confirmation or an answer):
+      // never swap the conversation on screen for it. Ours → keep following it; another tab's → added below.
+      const busyRun = err.data && err.data.run;
+      if (busyRun && run && busyRun.id === run.id) schedule();
+      else if (busyRun) { setChatIds(chatIds().concat([busyRun.id])); appendRun(busyRun.id, true).catch(() => {}); }
     } finally {
       send.disabled = false;
       input.focus();
@@ -1209,6 +1214,7 @@
   // While it waits for the request, the form it is about is a line in the chat (like a step, with × to cancel);
   // once sent, the run's own thinking line and steps take over (owner, Nov 21, 2026: no pill above the composer).
   let targetLine = null;
+  let pendingAim = null;  // ?ai= on the chat page: aimed once the conversation is restored (the restore redraws the log)
   function setTarget(t) {
     target = t;
     targetLine?.remove();
@@ -1230,17 +1236,33 @@
     const b = e.target.closest('[data-add-with-ai]');
     if (!b) return;
     e.preventDefault();
+    const about = window.attndAiTarget(b);
+    if (!full && window.attndOpenChat?.(about)) return;  // phones: the chat page, with this form as the target
     const form = b.closest('.ai-offer')?.nextElementSibling;
-    let ids = {};
-    try { ids = JSON.parse(b.dataset.aiIds || '{}'); } catch (err) { ids = {}; }
-    setTarget({ component: b.dataset.aiComponent, ids, form: form && form.matches('form') ? form : null,
-                label: `${b.textContent.trim().startsWith('Edit') ? 'Editing' : 'Filling in'} ${b.closest('.agent__card')?.dataset.title || document.title.split(' · ')[0]} · tell Attnd what to change` });
+    aimAt({ ...about, form: form && form.matches('form') ? form : null });
+  });
+  function aimAt(t) {
+    setTarget({ component: t.component, ids: t.ids || {}, form: t.form || null, label: t.label });
     if (!full) open(false);
     if (!input.dataset.placeholder) input.dataset.placeholder = input.placeholder;
-    input.placeholder = b.dataset.aiPrompt;
+    if (t.prompt) input.placeholder = t.prompt;
     input.focus();
     window.attndReveal?.(input.closest('form') || input, 'pulse');
-  });
+  }
+  // Add with AI from a page on a phone arrives here as ?ai= (agent-loader.js): the same target, its form opens in the
+  // chat when the agent fills it (findForm fetches the card).
+  if (full) {
+    const params = new URLSearchParams(location.search);
+    if (params.get('ai')) {
+      try {
+        const t = JSON.parse(params.get('ai'));
+        if (t && typeof t.component === 'string') pendingAim = { component: t.component.slice(0, 64), ids: t.ids || {},
+          prompt: String(t.prompt || '').slice(0, 200), label: String(t.label || '').slice(0, 120) };
+      } catch (err) { /* ignore a broken link */ }
+      params.delete('ai');
+      history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : '') + location.hash);
+    }
+  }
 
   // Only forms in Ask Attnd's own cards (chat or canvas): never a page's form, whose buttons bypass the confirm card.
   const inCard = (f) => !!(f && f.closest('.agent__card') && (log.contains(f) || (canvas && canvas.contains(f))));
@@ -2085,8 +2107,22 @@
     } catch (e) { /* offline: next minute */ }
   };
 
-  // ---- recent requests ---------------------------------------------------------------------
-  $('[data-agent-history]').addEventListener('click', async (e) => {
+  // ---- recent requests: a sheet over the log (never in its flow), closed by a pick, Esc, × or a tap outside ----------
+  const historyButton = $('[data-agent-history]');
+  function closeRecent(focusBack) {
+    if (recentBox.hidden) return;
+    recentBox.hidden = true;
+    historyButton.setAttribute('aria-expanded', 'false');
+    if (focusBack) historyButton.focus();
+  }
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !recentBox.hidden) { e.preventDefault(); e.stopPropagation(); closeRecent(true); }
+  }, true);
+  $('[data-agent-recent-close]')?.addEventListener('click', () => closeRecent(true));
+  document.addEventListener('pointerdown', (e) => {
+    if (!recentBox.hidden && !recentBox.contains(e.target) && !historyButton.contains(e.target)) closeRecent(false);
+  });
+  historyButton.addEventListener('click', async (e) => {
     const button = e.currentTarget;
     const show_ = recentBox.hidden;
     recentBox.hidden = !show_;
@@ -2103,7 +2139,7 @@
         b.type = 'button';
         b.className = 'link-button small';
         b.textContent = r.goal;
-        b.addEventListener('click', () => { recentBox.hidden = true; button.setAttribute('aria-expanded', 'false'); show(r.id, r.active); });
+        b.addEventListener('click', () => { closeRecent(false); show(r.id, r.active).catch((err) => bubble('error', err.message)); });
         const meta = document.createElement('span');
         meta.className = 'muted small';
         meta.textContent = ` · ${r.status.replace('_', ' ')}`;
@@ -2114,6 +2150,7 @@
       spend.className = 'muted small';
       spend.textContent = `Today: $${data.spent_today} of $${data.cap}`;
       list.appendChild(spend);
+      list.querySelector('button')?.focus({ preventScroll: true });
     } catch (err) { bubble('error', err.message); }
   });
 
@@ -2158,7 +2195,7 @@
         chat.forEach((c, i) => appendData(c, i === chat.length - 1 && c.run.active));
         await Promise.allSettled(restoring);
         restoring = null;
-        const saved = parseInt(store.get('sessionStorage', 'attnd.agent.scroll') || '', 10);
+        const saved = parseInt(store.get('sessionStorage', 'attnd.agent.scroll') || 'bottom', 10);
         log.scrollTop = Number.isNaN(saved) ? log.scrollHeight : saved;
         if (data.earlier?.length) earlierButton(data.earlier);
       }
@@ -2169,6 +2206,7 @@
       root.classList.remove('is-restoring');
       root.classList.add('is-restored');  // one gentle fade-in (agent.css)
     }
+    if (pendingAim) { aimAt(pendingAim); pendingAim = null; }
   })();
   if (root.dataset.openOnLoad) { delete root.dataset.openOnLoad; if (panel.hidden) open(); }  // the click that loaded us
   if (!chatIds().length && (full || !panel.hidden)) brief();

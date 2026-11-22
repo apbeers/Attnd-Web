@@ -42,7 +42,8 @@ class CanvasWidthTests(SimpleTestCase):
                 self.assertIn(label, multi, f'{label} has several sections: give it columns in agent.css')
 
     def test_the_page_fills_the_visible_height(self):
-        self.assertIn('body:has(.assistant) { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }', CSS)
+        self.assertIn('height: var(--app-height, 100dvh);', CSS)  # every width: one app shell (one chat, Nov 22)
+        self.assertIn('display: flex; flex-direction: column; overflow: hidden;', CSS)
         self.assertIn('body:has(.assistant) > .page > .assistant { flex: 1 1 auto; height: auto; min-height: 0; }', CSS)
 
 
