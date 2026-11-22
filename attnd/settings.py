@@ -453,6 +453,11 @@ TASKS = {'default': {'BACKEND': 'background.backend.DatabaseBackend' if TASKS_BA
 
 # Place images found automatically (stage D, events/place_images.py): on for new places (not in tests), checked by
 # Claude Haiku's vision, a cost cap over every look per UTC day.
+# API-030: Apple Music artist links (events/music.py). The MusicKit key; without both, nothing is looked up.
+APPLE_MUSIC_KEY_ID = os.getenv('APPLE_MUSIC_KEY_ID', '')
+APPLE_MUSIC_PRIVATE_KEY = os.getenv('APPLE_MUSIC_PRIVATE_KEY', '')
+MUSIC_LINKS_ON_SAVE = not TESTING
+
 PLACE_IMAGES_ENABLED = os.getenv('PLACE_IMAGES_ENABLED', '1') != '0'
 PLACE_IMAGES_ON_CREATE = PLACE_IMAGES_ENABLED and not TESTING
 PLACE_IMAGES_DAILY_CAP_USD = float(os.getenv('PLACE_IMAGES_DAILY_CAP_USD', '1'))

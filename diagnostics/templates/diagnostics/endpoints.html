@@ -26,5 +26,13 @@
     <td class="num">{{ n.calls }}</td><td class="num">{{ n.hits }}</td><td class="num">{{ n.errors }}</td><td class="num">{% if n.quota %}<span class="tone-danger strong">{{ n.quota }}</span>{% else %}0{% endif %}</td>
   </tr>{% endfor %}</tbody>
 </table></div></div>
+<h2 class="title-3" id="music">Apple Music links (API-030)</h2>
+<p class="muted small">Artist lookups per UTC day (events/music.py): calls to Apple, answers from our cache, confident
+  matches, nothing confident, errors, and lookups skipped while Apple asked us to slow down.
+  {% if not music.enabled %}<strong>Off</strong>: APPLE_MUSIC_KEY_ID / APPLE_MUSIC_PRIVATE_KEY aren't set.{% elif music.paused %}<span class="badge badge--danger">paused (429)</span>{% endif %}</p>
+<div class="panel panel--flush"><div class="scroll-x"><table class="data-table data-table--compact">
+  <thead><tr><th>Day</th><th class="num">Calls</th><th class="num">Cache hits</th><th class="num">Found</th><th class="num">Nothing</th><th class="num">Errors</th><th class="num">Paused</th></tr></thead>
+  <tbody>{% for n in music.days %}<tr><td>{{ n.day }}</td><td class="num">{{ n.calls }}</td><td class="num">{{ n.hits }}</td><td class="num">{{ n.found }}</td><td class="num">{{ n.none }}</td><td class="num">{{ n.errors }}</td><td class="num">{{ n.paused }}</td></tr>{% endfor %}</tbody>
+</table></div></div>
 </div>
 {% endblock %}

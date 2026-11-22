@@ -234,7 +234,18 @@ def endpoints(request):
         'section': 'diagnostics', 'rows': timing.table(since), 'window': window,
         'windows': ['1h', '24h', '7d', '30d'],
         'google': [{'day': d, 'api': api, 'over': i == 0 and google.over_quota(api), **n}
-                   for i, d in enumerate(days) for api, n in google.usage(d).items()]})
+                   for i, d in enumerate(days) for api, n in google.usage(d).items()],
+        'music': _music_rows()})
+
+
+def _music_rows():
+    """API-030 Apple Music lookups per UTC day (events.music)."""
+    from datetime import date
+
+    from events import music
+    today = date.fromisoformat(music._today())
+    return {'enabled': music.enabled(), 'paused': music.paused(),
+            'days': [{'day': d, **music.usage(d)} for d in ((today - timedelta(days=n)).isoformat() for n in range(3))]}
 
 
 @agent_action('retrace_stack', 'Retrace a pasted Android stack trace with a stored mapping.', returns_page=True,

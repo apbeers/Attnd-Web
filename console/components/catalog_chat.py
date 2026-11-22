@@ -96,6 +96,13 @@ def checks(event, now=None):
             reverse('console:event_fill_details', args=[pk]) if event.source_urls else
             reverse('console:locations', args=[pk]), 'Fill in details' if event.source_urls else 'Add them',
             post=bool(event.source_urls))
+    from events import music  # API-030
+    if music.enabled():
+        performers = sum(len(music.performers(i)) for i in items)
+        linked = sum(len(music.links(i)) for i in items)
+        if performers and linked < performers:
+            add('music', INFO, f'Apple Music links on {linked} of {performers} performers (attendees tap Listen)',
+                reverse('console:event_music_links', args=[pk]), 'Find music links', post=True)
     if not (event.context or {}).get('about'):
         add('assistant', INFO, 'Details for the assistant are empty (attendees\' phones answer questions from them)',
             reverse('console:event_edit', args=[pk]), 'Add details')

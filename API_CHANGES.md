@@ -74,6 +74,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-024 | Server-driven screens: `layout` in `bundle/` (per screen an ordered list of sections from a closed catalogue, overrides per category / tag, on-device conditions) for apps that send `X-Attnd-Sections: <catalogue version>` (ETag `-s<version>`); `home` in `display.tabs` for those apps; console App layout → Screens editor, Ask Attnd `update_screen_layout` | additive (new key, new optional request header, new `display.tabs` value only for apps that send the header) | ✅ dev (6630ce5, 3d4e0b9) · ⬜ prod | ✅ dev (8bd7bd3, 0f25083; TestFlight 2.0.161) | ⬜ (later) |
 | API-027 | Screens catalogue 2 (`X-Attnd-Sections: 2`): `my_schedule`, banners as sections (`status`, `update_banner`), new screens `schedule_tab`, `places_tab`, `updates_tab`, `onboarding`, section fields `ids` / `text` / `image`; `ask_about` out of the defaults; bundle `live_activity` (follows, buttons, urgent, stale text) | additive (new header value, new keys, new object) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: the four catalogue 2 screens, section ids / text / image, `update_banner`, `live_activity` follows / buttons / stale text; 800c978, TestFlight 2.0.171) · ⬜ prod | ⬜ (parked) |
 | API-026 | Faster live updates: the first change pushed at once (later ones grouped), `jitter_ms` in `content_updated` scaled to the event's size; organizer preview phones (`preview_token` on `join/`, `GET events/<id>/changes/` long-poll, `preview` in the join answer); `bundle/` records the version a device fetched | additive (new optional request field, new response and push keys, new endpoint) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: `preview_token` from links and QR codes, `changes/` long-poll in the foreground, `jitter_ms`; 800c978, 641a8bf, TestFlight 2.0.171) · ⬜ prod | ⬜ (parked) |
+| API-030 | Artist links: `schedule[].context.performers[].apple_music_url` (optional, `https://music.apple.com/…`; confident matches from the Apple Music catalog, or set by the organizer); console "Find music links" | additive (new optional key) | 🚧 built · ⬜ prod (needs `APPLE_MUSIC_*` on attnd-web) | ⬜ | ⬜ (paused) |
 | API-025 | Free limit: an unpaid event takes 20 different devices on `join/`; a new device beyond it gets `409 {error: "event_full_free", message, limit}` (rejoin always works; paid, DEMO, App Review sample and showcase events exempt) | additive (new error answer on an existing endpoint, for unpaid events only) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
@@ -82,6 +83,26 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-030: Apple Music artist links for performers
+**Why:** attendees want to hear a band before they walk over (owner, Nov 21, 2026; Apple Music only: Spotify's Web
+API needs a Premium account owner, so no Spotify link).
+**Server (attnd-web):** `events/music.py`: for each performer in a schedule item's context the server searches the
+Apple Music catalog (`GET https://api.music.apple.com/v1/catalog/us/search?types=artists`, developer token = ES256
+JWT from the MusicKit key `APPLE_MUSIC_KEY_ID` / `APPLE_MUSIC_PRIVATE_KEY`, team `APPLE_TEAM_ID`) once per name, in
+the background after a save (new or renamed performers) or on **Find music links** (console readiness check, Ask
+Attnd `find_music_links`). Only confident matches are kept (normalised names equal; genres overlap when both sides
+have some; several same-named artists only when the genres single one out). Stored in `ScheduledItem.music` by
+normalised name; organizer links (the performers line's last cell `| https://music.apple.com/…`, or `| no link`) are
+locked and never replaced. Cached (found 30 days, nothing 7 days), counted per UTC day (Diagnostics → Endpoints), a
+429 pauses lookups for an hour; off without the keys.
+**Bundle (additive):** `schedule[].context.performers[].apple_music_url`, only when there is a link (`API_V2.md` →
+Context). A new or changed link bumps `content_version`.
+**iOS:** decode `apple_music_url` leniently (https only; ignore anything else); on performer rows, the item detail and
+chat components show **Listen on Apple Music** (Apple's wording; the Apple Music badge per Apple's marketing
+guidelines if used) that opens the URL (`openURL`: the Music app, else Safari); no MusicKit SDK, no account. Nothing
+when the key is missing. App and App Clip alike.
+**Android:** later (Android work paused): the same button with `Intent.ACTION_VIEW`.
 
 ### API-027: Screens catalogue 2 and the Live Activity's content choices
 **Why:** the owner approved more server-driven screens (tab lists, Updates, banners, onboarding, Live Activity

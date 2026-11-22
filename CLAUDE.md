@@ -1061,6 +1061,14 @@ contributor) are object permissions from `PermissionMixin` (on the site's one au
   the ~150 KB bundle budget), used on save, in the bundle (`bundle/` only, `null` when empty), by the AI diff (one
   `context` field per entity, merged key by key, lockable) and the console's "Details for the assistant" section
   (`console/forms/assistant_context.py`: text fields + validated line formats). Contract: `API_V2.md` → Context.
+- **Apple Music links** (API-030, `events/music.py`): performers in schedule items' context get
+  `apple_music_url` in the bundle when the Apple Music catalog search (storefront `us`, ES256 developer token from the
+  MusicKit key) gives a confident match (equal normalised names, overlapping genres when known; ties only when the
+  genres decide) or the organizer set one (the performers line ends `| https://music.apple.com/…` or `| no link`;
+  locked). `ScheduledItem.music` keyed by normalised name; looked up once per name in a background thread after a
+  save, or by **Find music links** (`console:event_music_links`, Ask Attnd `find_music_links`, a readiness check);
+  cached (30 / 7 days), counted per UTC day on Diagnostics → Endpoints, a 429 pauses an hour; off without
+  `APPLE_MUSIC_KEY_ID` / `APPLE_MUSIC_PRIVATE_KEY`. No Spotify (ROADMAP). Tests: `events/tests_music.py`.
 - **Plan suggestions** (API-021, `events/plan_suggestions.py`): `Event.plan_suggestions` holds the "Plan your day"
   examples written for the event (≤ 4 `{text, kind: plan|question}`, the content version they were made for, source
   `ai` / `fallback`, cost). Claude Haiku 5.5 (`PLAN_SUGGESTIONS_MODEL`, default `claude-haiku-5-5`; official SDK,
@@ -1262,6 +1270,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `PROSPECT_RUN_MAX_MINUTES` | No | Wall clock per prospect run, default `20` (stops and keeps what it found) |
 | `AGENT_ANTHROPIC_MODEL` | No | Ask Attnd on Anthropic, default `claude-haiku-5-5` (owner, Nov 21, 2026) |
 | `AGENT_REFUSAL_MODEL` | No | The model a run continues on when Claude Haiku declines it, default `claude-sonnet-5-5` |
+| `APPLE_MUSIC_KEY_ID` / `APPLE_MUSIC_PRIVATE_KEY` | No | API-030 artist links: the MusicKit key's id and the whole `.p8` (team = `APPLE_TEAM_ID`); unset = no lookups (SETUP step 20) |
 | `PLAN_SUGGESTIONS_MODEL` | No | API-021 "Plan your day" suggestions, default `claude-haiku-5-5` (needs `ANTHROPIC_API_KEY`; without it the deterministic fallback is used) |
 | `AI_MONTHLY_CREDIT_USD` / `AI_VISITOR_CREDIT_USD` / `AI_PLATFORM_ALERT_USD` | No | First values of the staff-editable AI limits (credit/): monthly credit per person (30), visitor allowance (5), monthly platform alert (100); the database row wins once saved, as for the per-day caps below |
 | `AGENT_DAILY_SPEND_CAP_USD` | No | Ask Attnd AI spend per person per UTC day, default `2` |

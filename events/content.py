@@ -14,6 +14,7 @@ from attnd.links import join_url
 from attnd.images import event_logo_url
 
 from events import context as ctx
+from events import music
 from events.models import Event, EventRevision, Location, Notification, ScheduledItem, normalize_tags
 
 _state = threading.local()
@@ -139,7 +140,7 @@ def item_v2(item):
         'location_id': item.location_id,
         'location_name': item.location.name if item.location_id else None,
         'tags': normalize_tags(item.tags),
-        'context': ctx.for_bundle(ctx.ITEM, item.context),  # API-018
+        'context': music.with_links(ctx.for_bundle(ctx.ITEM, item.context), item),  # API-018, API-030
     }
 
 

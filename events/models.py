@@ -350,6 +350,8 @@ class ScheduledItem(models.Model):
     location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True)
     tags = models.JSONField(default=list, blank=True)
     context = models.JSONField(default=dict, blank=True)  # API-018, events.context
+    # API-030: Apple Music links per performer, keyed by the normalised name (events/music.py; not content).
+    music = models.JSONField(default=dict, blank=True)
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
     event = models.ForeignKey(Event, on_delete=models.CASCADE)

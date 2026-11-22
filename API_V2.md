@@ -475,7 +475,8 @@ location.context = null | {
 }
 schedule_item.context = null | {
   "about": str,                 // ≤ 2000
-  "performers": [{"name": str, "bio": str (≤ 600), "genres": [str] (≤ 5, lower case)}],  // ≤ 10
+  "performers": [{"name": str, "bio": str (≤ 600), "genres": [str] (≤ 5, lower case),
+                  "apple_music_url": str}],  // ≤ 10; apple_music_url: API-030, only when there is one
   "age_limit": str, "price": str, "accessibility": str,  // ≤ 300 each
   "links": [{"title": str, "url": str}]  // ≤ 5
 }
@@ -495,6 +496,12 @@ schedule_item.context = null | {
   `about` texts are dropped first (last item first), then location `about` texts, then (only if still over) whole
   item / location contexts, last first.
 - A change to any context bumps `content_version` (a `content_updated` push and a new ETag) like other content.
+- **`performers[].apple_music_url`** (API-030, optional): the performer's artist page in Apple Music
+  (`https://music.apple.com/…`, storefront `us`), present only when the server is confident it is that artist (the
+  name matches exactly, the genres overlap when known) or the organizer set it; omitted otherwise (and when the
+  organizer chose "no link"). Show **Listen on Apple Music** and open the URL (it is a universal link: the Music app,
+  else the browser); send nothing with it. Adding or changing a link bumps `content_version`. There is no Spotify
+  link.
 
 ### Tags (API-010)
 `Location.tags` and `ScheduleItem.tags` are lists of short labels for filtering and search: genre, category, audience,

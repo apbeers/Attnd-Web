@@ -1513,6 +1513,40 @@ def event_fill_details(request, event):
     return redirect('console:event', event_id=event.pk)
 
 
+@agent_action('find_music_links', "Look up \"Listen on Apple Music\" links for the event's performers (API-030: only "
+              "confident matches; links the organizer set or removed stay). Runs in the background.", json=True,
+              title='Looking up music links')
+@event_view
+@require_POST
+def event_music_links(request, event):
+    from events import music
+    if not music.enabled():
+        msg = 'Apple Music links aren\u2019t set up on this server yet.'
+        if _wants_json(request):
+            return JsonResponse({'error': msg}, status=400)
+        messages.error(request, msg)
+        return redirect('console:schedule', event_id=event.pk)
+    count = sum(len(music.performers(i)) for i in event.scheduleditem_set.all())
+    if count:
+        import threading
+        from django.db import connection
+
+        def run(checked=event):  # the event this view already checked
+            try:
+                music.refresh_event(checked, force=True)
+            except Exception:
+                logger.exception('Music links for event %s failed', checked.pk)
+            finally:
+                connection.close()
+        transaction.on_commit(lambda: threading.Thread(target=run, daemon=True, name='music-links-event').start())
+    text = (f'Looking up Apple Music links for {count} performer{"" if count == 1 else "s"}\u2026 they appear in a '
+            'minute.' if count else 'No performers yet: add them under Details for the assistant on schedule items.')
+    if _wants_json(request):
+        return JsonResponse({'saved': True, 'message': text})
+    messages.info(request, text)
+    return redirect('console:schedule', event_id=event.pk)
+
+
 def _preview_html(event, resolved):
     tz = tz_or_utc(event.timezone)
     locations = list(event.location_set.filter(hidden=False).order_by('sort_order', 'name')[:8])

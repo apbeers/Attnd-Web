@@ -79,3 +79,13 @@ def _location_created(sender, instance, created, raw=False, **kwargs):
         from events import place_images
         if place_images.wanted(instance):
             place_images.schedule(instance.pk)
+
+
+@receiver(post_save, sender=ScheduledItem)
+def _item_performers(sender, instance, raw=False, **kwargs):
+    """API-030: new or renamed performers get their Apple Music link looked up in the background."""
+    if raw:
+        return
+    from events import music
+    if music.enabled() and music.wanted(instance):
+        music.schedule(instance.pk)

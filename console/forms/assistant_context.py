@@ -7,7 +7,7 @@ one simple, validated line format each (no JavaScript needed):
                   A: Yes, low beach chairs only.      the answer may continue on more lines)
     Amenities     kind | name | location | note      (location = one of the event's locations, may be empty)
     Menu          name | price | note
-    Performers    name | genres, comma separated | short bio
+    Performers    name | genres, comma separated | short bio [| https://music.apple.com/… or "no link"]
     Links         title | https://…
 
 Saving a changed context puts ``context`` in ``changed_data``, so the view locks it against AI refreshes.
@@ -21,7 +21,8 @@ HELP = {
     'faq': 'Blocks of “Q: question” and “A: answer” lines, separated by an empty line.',
     'amenities': 'One per line: kind | name | location | note. Kinds: ' + ', '.join(ctx.AMENITY_KINDS) + '.',
     'menu': 'One per line: name | price | note, e.g. “Brisket plate | $16 | gluten-free”.',
-    'performers': 'One per line: name | genres (comma separated) | short bio.',
+    'performers': 'One per line: name | genres (comma separated) | short bio. Attnd adds Apple Music links it is sure '
+                  'about; end a line with | https://music.apple.com/… to set one yourself, or | no link for none.',
     'links': 'One per line: title | https://…',
 }
 ROWS = {'about': 5, 'faq': 6, 'amenities': 4, 'menu': 5, 'performers': 4, 'links': 2}
@@ -40,7 +41,7 @@ def _flat(value):
 # Context → text
 # ---------------------------------------------------------------------------
 
-def to_text(key, value, names=None):
+def to_text(key, value, names=None, music_links=None):
     if not value:
         return ''
     if key == 'faq':
@@ -55,8 +56,15 @@ def to_text(key, value, names=None):
         return '\n'.join(' | '.join([_flat(e['name']), _flat(e.get('price')), _flat(e.get('note'))]).rstrip(' |')
                          for e in value)
     if key == 'performers':
-        return '\n'.join(' | '.join([_flat(e['name']), ', '.join(e.get('genres') or []), _flat(e.get('bio'))])
-                         .rstrip(' |') for e in value)
+        from events import music
+        rows = []
+        for e in value:
+            row = ' | '.join([_flat(e['name']), ', '.join(e.get('genres') or []), _flat(e.get('bio'))]).rstrip(' |')
+            entry = (music_links or {}).get(music.norm(e['name']))
+            if entry is not None:  # API-030: the link (or the organizer's "no link")
+                row = f'{row} | {entry or NO_LINK}'
+            rows.append(row)
+        return '\n'.join(rows)
     if key == 'links':
         return '\n'.join(f'{_flat(e["title"])} | {e["url"]}' for e in value)
     return value
@@ -123,13 +131,34 @@ def parse_menu(text):
     return out
 
 
-def parse_performers(text):
+NO_LINK = 'no link'
+
+
+def split_music(line):
+    """(line without the music cell, url / '' for "no link" / None when the line has no music cell). API-030."""
+    from events import music
+    head, sep, last = line.rpartition('|')
+    cell = last.strip()
+    if sep and (music.valid_url(cell) or cell.lower() == NO_LINK):
+        return head.rstrip(), '' if cell.lower() == NO_LINK else cell
+    if sep and cell.lower().startswith(('https://music.apple', 'http://music.apple', 'music.apple')):
+        raise forms.ValidationError(f'“{cell}” isn’t an Apple Music link (https://music.apple.com/…).')
+    return line, None
+
+
+def parse_performers(text, music_edits=None):
     out = []
     for n, line in _lines(text):
+        try:
+            line, link = split_music(line)
+        except forms.ValidationError as exc:
+            raise forms.ValidationError(f'Line {n}: {exc.messages[0]}') from None
         name, genres, bio = _cells(line, 3)
         if not name:
             raise forms.ValidationError(f'Line {n}: start with the name (name | genres | bio).')
         out.append({'name': name, 'genres': [g.strip() for g in genres.split(',') if g.strip()], 'bio': bio})
+        if link is not None and music_edits is not None:
+            music_edits[name] = link
     return out
 
 
@@ -168,7 +197,17 @@ class AssistantContextMixin:
                 label=label, required=False, strip=True,
                 help_text=HELP.get(key, f'Up to {limit} characters.' if limit else ''),
                 widget=forms.Textarea(attrs={'rows': ROWS.get(key, 2 if (limit or 0) <= 600 else 3)}))
-            self.initial[f'ctx_{key}'] = to_text(key, current.get(key), self._location_names)
+            self.initial[f'ctx_{key}'] = to_text(key, current.get(key), self._location_names, self._music_shown())
+
+    def _music_shown(self):
+        """{normalised name: url, or '' for the organizer's "no link"} (API-030; only on schedule items)."""
+        if self.context_kind != ctx.ITEM:
+            return {}
+        out = {}
+        for key, entry in (getattr(self.instance, 'music', None) or {}).items():
+            if isinstance(entry, dict) and (entry.get('url') or entry.get('locked')):
+                out[key] = entry.get('url') or ''
+        return out
 
     @property
     def context_fields(self):
@@ -195,7 +234,8 @@ class AssistantContextMixin:
                 elif key == 'menu':
                     raw[key] = parse_menu(text)
                 elif key == 'performers':
-                    raw[key] = parse_performers(text)
+                    self.music_edits = {}
+                    raw[key] = parse_performers(text, self.music_edits)
                 elif key == 'links':
                     raw[key] = parse_links(text)
                 else:
@@ -221,3 +261,6 @@ class AssistantContextMixin:
     def _save_context(self):
         if getattr(self, 'cleaned_context', None) is not None:
             self.instance.context = self.cleaned_context
+        if self.context_kind == ctx.ITEM and getattr(self, 'music_edits', None):
+            from events import music
+            music.set_links(self.instance, self.music_edits)  # the organizer's own links (locked)
