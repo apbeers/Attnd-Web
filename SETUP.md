@@ -35,11 +35,11 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `heroku config:set -a attnd-dev STRIPE_SECRET_KEY=sk_test_… STRIPE_WEBHOOK_SECRET=whsec_…` (a webhook to
       `https://dev.attnd.app/console/billing/stripe/webhook/`, event `checkout.session.completed`; turn on the Customer
       Portal in Stripe's settings); production later with live keys and `https://attnd.app/...`.
-- [ ] Mailgun events in the Emails log (batch 7): Mailgun → Sending → Webhooks → copy the **HTTP webhook signing key**,
-      `heroku config:set -a attnd-dev MAILGUN_WEBHOOK_SIGNING_KEY=…` (then `-a attnd-web` with production's key), and add
-      webhooks for **Delivered**, **Permanent failure**, **Temporary failure**, **Spam complaints** and **Unsubscribes**
-      to `https://dev.attnd.app/email/mailgun/` (production: `https://attnd.app/email/mailgun/`). Without the key the
-      log still records sent / failed; it just never moves on to delivered / bounced.
+- [x] Mailgun events in the Emails log (batch 7; done by Claude Nov 22, 2026 through the Mailgun and Heroku APIs):
+      each app's `MAILGUN_WEBHOOK_SIGNING_KEY` is its own Mailgun account's HTTP signing key (production: the
+      `mg.attnd.app` account; dev: its sandbox account), and both domains (`mg.attnd.app`, dev's sandbox) send Delivered,
+      Permanent / Temporary failure, Spam complaints and Unsubscribes to `https://attnd.app/email/mailgun/` /
+      `https://dev.attnd.app/email/mailgun/` (an unsigned POST answers 406, so the key is active).
 - [ ] Privacy policy rewrite: read `docs/privacy_policy_draft.md` (five decisions at the top), then say publish (batch 7).
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
