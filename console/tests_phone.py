@@ -92,7 +92,7 @@ class PhoneBrowserTests(StaticLiveServerTestCase):
                  f'/console/events/{e}/team/', f'/console/events/{e}/edit/', f'/console/events/{e}/theme/',
                  f'/console/events/{e}/billing/', f'/console/events/{e}/history/', f'/console/events/{e}/usage/',
                  f'/console/assistant/?event={e}', '/console/account/', f'/console/platform/components/?event={e}',
-                 '/console/platform/emails/']
+                 '/console/platform/emails/', '/console/platform/site-styles/']
         result = subprocess.run(['node', str(ROOT / 'scripts/ci/phone_check.cjs'), self.live_server_url, session, *paths],
                                 capture_output=True, text=True, timeout=600,
                                 env={**os.environ, 'NODE_PATH': _playwright()})
