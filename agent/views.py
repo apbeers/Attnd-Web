@@ -5,6 +5,7 @@ import re
 import threading
 import time
 
+from attnd.permissions import signed_in
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -238,7 +239,7 @@ def _run(request, run_id):
     return get_object_or_404(AgentRun, pk=run_id, user=request.user)
 
 
-@login_required
+@signed_in
 @require_POST
 def start(request):
     from events.models import Event
@@ -283,7 +284,7 @@ def start(request):
     return JsonResponse({'run': run_json(run), 'steps': []}, status=202)
 
 
-@login_required
+@signed_in
 @require_GET
 def runs(request):
     recent = list(AgentRun.objects.filter(user=request.user).order_by('-created_at')[:10])
@@ -328,7 +329,7 @@ def runs(request):
     return JsonResponse(out)
 
 
-@login_required
+@signed_in
 @require_GET
 def run(request, run_id):
     r = _run(request, run_id)
@@ -372,7 +373,7 @@ def _wait_for_news(r, after, wait):
         _longpoll.release()
 
 
-@login_required
+@signed_in
 @require_POST
 def confirm(request, run_id):
     r = _run(request, run_id)
@@ -394,7 +395,7 @@ def confirm(request, run_id):
     return JsonResponse({'run': run_json(r), 'step': done})
 
 
-@login_required
+@signed_in
 @require_POST
 def cancel(request, run_id):
     r = _run(request, run_id)
@@ -406,7 +407,7 @@ def cancel(request, run_id):
     return JsonResponse({'run': run_json(r)})
 
 
-@login_required
+@signed_in
 @require_POST
 def reply(request, run_id):
     r = _run(request, run_id)
@@ -421,14 +422,14 @@ def reply(request, run_id):
     return JsonResponse({'run': run_json(r)})
 
 
-@login_required
+@signed_in
 @require_POST
 def stop(request, run_id):
     r = loop.stop(_run(request, run_id))
     return JsonResponse({'run': run_json(r)})
 
 
-@login_required
+@signed_in
 @require_POST
 def feedback(request, run_id):
     """👍 / 👎 on a finished answer (stage I): stored with the run for staff review; changing it again is fine."""
@@ -444,7 +445,7 @@ def feedback(request, run_id):
     return JsonResponse({'run': run_json(r)})
 
 
-@login_required
+@signed_in
 @require_POST
 def contact(request):
     """Stage I18: "Talk to a person". Emails the Attnd team (ADMIN_EMAILS) the person's message with the context
@@ -478,7 +479,7 @@ def contact(request):
     return JsonResponse({'sent': True, 'text': f'Sent to the Attnd team. We’ll reply to {request.user.email} by email.'})
 
 
-@login_required
+@signed_in
 @require_POST
 def undo(request, run_id):
     r = _run(request, run_id)
@@ -489,7 +490,7 @@ def undo(request, run_id):
     return JsonResponse({'run': run_json(r)})
 
 
-@login_required
+@signed_in
 @require_POST
 def attach(request):
     upload = request.FILES.get('file')
@@ -512,7 +513,7 @@ def attach(request):
                         status=201)
 
 
-@login_required
+@signed_in
 @require_GET
 def assistant_page(request):
     """Ask Attnd full screen (desktop): the chat on the left, a canvas of what it shows on the right, details as an

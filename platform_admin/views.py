@@ -4,6 +4,7 @@ is a History LogEntry (credit.history)."""
 import csv
 from functools import wraps
 
+from attnd.permissions import requires
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -23,14 +24,8 @@ TABS = [('overview', 'Overview'), ('pricing', 'Pricing'), ('customers', 'Custome
 PRICING_FIELDS = ['standard_price_usd', 'studio_price_usd', 'free_device_limit']
 
 
-def superuser_required(view):
-    @login_required
-    @wraps(view)
-    def wrapper(request, *args, **kwargs):
-        if not request.user.is_superuser:
-            raise Http404
-        return view(request, *args, **kwargs)
-    return wrapper
+# The Platform admin: the "Platform admins" role (attnd.permissions) and superusers; 404 for everyone else.
+superuser_required = requires('platform_admin.change_platformsettings')
 
 
 def _back(tab, **extra):

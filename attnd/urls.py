@@ -6,6 +6,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from attnd import views as attnd_views
+from attnd.permissions import SIGNED_IN, declare
 from attnd.public import mark, public, public_include
 from console import views_auth, views_passkeys
 from events.app_status import app_status_view, retired_api_view
@@ -69,7 +70,12 @@ urlpatterns = [
         template_name='console/password_reset_confirm.html'), name='password_reset_confirm'),
     path('accounts/reset/done/', auth_views.PasswordResetCompleteView.as_view(
         template_name='console/password_reset_complete.html'), name='password_reset_complete'),
-    path('accounts/', include('django.contrib.auth.urls')),
+    # The rest of django.contrib.auth.urls, each with its declared permission (attnd/permissions.py).
+    path('accounts/logout/', declare(SIGNED_IN)(auth_views.LogoutView.as_view()), name='logout'),
+    path('accounts/password_change/', declare(SIGNED_IN)(auth_views.PasswordChangeView.as_view()),
+         name='password_change'),
+    path('accounts/password_change/done/', declare(SIGNED_IN)(auth_views.PasswordChangeDoneView.as_view()),
+         name='password_change_done'),
     path('.well-known/apple-app-site-association', public(join_views.AppleAppSiteAssociation.as_view()), name='aasa'),
     path('.well-known/assetlinks.json', public(join_views.AndroidAssetLinks.as_view()), name='android_asset_links'),
 ] + mark(static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT))

@@ -319,7 +319,7 @@ def event_lifecycle(user, event_id=None, event=None):
         else:  # going live is invite-only (API-025): unpaid events get it disabled with the way to remove the limit
             from console.components.catalog import nearby_action
             actions.append(nearby_action(user, event, style='outline', confirm_text='List it in nearby events for everyone?'))
-    if user.is_staff or user.is_superuser:
+    if user.has_perm('events.mark_event_paid'):
         actions.append({'name': 'mark_event_paid', 'style': 'outline', 'label': 'Mark unpaid' if event.paid else 'Mark paid',
                         'params': {'paid': '' if event.paid else '1'},
                         'confirm_text': 'Mark this event unpaid?' if event.paid else 'Mark this event paid? The free limit goes.'})

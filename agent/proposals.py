@@ -10,6 +10,7 @@ views as the person (`internal.execute`) inside one undo recording, so one Undo 
 
 import json
 
+from attnd.permissions import signed_in
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import Http404, JsonResponse
@@ -163,7 +164,7 @@ def change_preview(user, event_id=None, proposal_id=None):
             'applied': sum(1 for r in proposal.results or [] if r.get('ok')), 'notification': proposal.notification}
 
 
-@login_required
+@signed_in
 @require_POST
 def apply(request, proposal_id):
     """Apply the ticked rows (POST `keep` = row indexes) or cancel (`cancel`). JSON like a component form's save."""

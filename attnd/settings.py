@@ -96,6 +96,8 @@ MIDDLEWARE = [
     'console.user_sessions.SessionTrackingMiddleware',
     # Every view needs a sign-in unless it is marked public (attnd/public.py; the list: attnd/tests_public.py).
     'django.contrib.auth.middleware.LoginRequiredMiddleware',
+    # Deny by default: a view that declares no permission is refused (attnd/permissions.py, tests_permissions.py).
+    'attnd.permissions.DeclaredPermissionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'console.middleware.TwoFactorMiddleware',
     # Ask Attnd's chat cards (console.middleware): a form with errors comes back as just that component; a saved one
@@ -285,7 +287,7 @@ WATCH_MIN_AI_GAP_MINUTES = int(os.getenv('WATCH_MIN_AI_GAP_MINUTES', '15'))
 WATCH_MAX_AI_RUNS_PER_DAY = int(os.getenv('WATCH_MAX_AI_RUNS_PER_DAY', '24'))
 
 # Organizers sign in with their email (or username), case-insensitively.
-AUTHENTICATION_BACKENDS = ['console.auth_backends.EmailOrUsernameBackend']
+AUTHENTICATION_BACKENDS = ['console.auth_backends.EmailOrUsernameBackend']  # + attnd.permissions (roles)
 
 # Google Maps in the console (address autocomplete, pin map). A *browser* key restricted to our domains
 # (HTTP referrers) for the Maps JavaScript API and Places API (New); not the server key above.

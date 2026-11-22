@@ -55,13 +55,18 @@ class Component:
     chat: bool = True  # may Ask Attnd show it
     chat_only: str = ''  # why no page draws it (e.g. a canvas cut-down of a page's component); else a page must
     kwarg_map: dict = None  # URL kwarg -> id name, for views whose URLs say pk (Prospects: {'pk': 'prospect_id'})
-    audience: str = ''  # 'staff': only staff and superusers (Prospects); 'studio': Studio access; '' everyone
+    audience: str = ''  # a label ('staff', 'studio', 'superuser'); who may load it is `permission`
+    # attnd.permissions: the permission it needs. Default: events.view_event for a component of one event (its data
+    # function checks the event), else it must be given (SIGNED_IN for the person's own things); none = refused.
+    permission: str = ''
     act_args: object = None  # (action name, POST) -> extra tool arguments for always-ask buttons with a form (review)
     ai_subject: str = ''  # Add with AI: "the location", "the notification"… (default: from the title)
     ai_prompt: str = ''  # Add with AI: the prompt the chat starts with, when the generic one doesn't fit
 
     def __post_init__(self):
         self.template = self.template or f'components/{self.name}.html'
+        if not self.permission and 'event_id' in self.ids:
+            self.permission = 'events.view_event'
 
     @property
     def all_ids(self):
@@ -161,13 +166,12 @@ def clean_parent(ids):
 
 
 def allowed(comp, user):
-    if comp.audience == 'superuser':  # the Platform admin (D2)
-        return bool(getattr(user, 'is_superuser', False))
-    if comp.audience == 'staff':
-        return bool(getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False))
-    if comp.audience == 'studio':  # Attnd Studio (studio.access: staff, superusers, STUDIO_BETA_EMAILS)
-        from studio.access import has_studio_access
-        return bool(getattr(user, 'is_authenticated', False)) and has_studio_access(user)
+    """May this person load the component at all (attnd.permissions)? Per-event checks happen in the data function."""
+    from attnd.permissions import PUBLIC, is_platform
+    if not comp.permission or comp.permission == PUBLIC or not getattr(user, 'is_authenticated', False):
+        return False
+    if is_platform(comp.permission):
+        return user.has_perm(comp.permission)
     return True
 
 

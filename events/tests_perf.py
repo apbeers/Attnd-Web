@@ -212,8 +212,9 @@ class PagePerfTests(PerfBase):
         # More events and devices must not add queries (the dashboard used to join every relation per event).
         for i in range(3):
             Event.objects.create(name=f'Other {i}', event_code=f'OTHER{i}', start_time=timezone.now(), user=self.user)
-        bounds = {'/console/': 8,
-                  f'/console/events/{self.event.id}/': 19,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2)
+        # +2 on pages with the top bar: the person's group / own permissions, once per request (attnd.permissions).
+        bounds = {'/console/': 10,
+                  f'/console/events/{self.event.id}/': 21,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2)
                   f'/console/events/{self.event.id}/locations/': 11,
                   f'/console/events/{self.event.id}/schedule/': 12,
                   f'/console/events/{self.event.id}/usage/': 21}

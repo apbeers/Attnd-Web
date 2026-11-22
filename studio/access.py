@@ -9,6 +9,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from attnd.permissions import SIGNED_IN, declare, requires
 from events.models import Event
 
 
@@ -37,7 +38,7 @@ def can_switch_plan(event, user):
 def can_publish(event, user):
     """The owner and event admins, on an event whose plan lets the site go live (Studio, or the owner's override)."""
     from platform_admin.plans import can_go_live
-    return event.can_manage_team(user) and can_go_live(event)
+    return bool(user) and user.has_perm('studio.publish_site', event) and can_go_live(event)
 
 
 def studio_required(view):
@@ -48,28 +49,22 @@ def studio_required(view):
         if not cached_access(request):
             raise Http404
         return view(request, *args, **kwargs)
-    return wrapper
+    return declare(SIGNED_IN)(wrapper)
 
 
 def studio_event_view(view):
-    """Studio access + a team member of the event (any role); runs in the event's time zone."""
+    """Studio access + studio.change_site on the event (any team role, attnd.permissions); the event's time zone."""
     @studio_required
     @wraps(view)
     def wrapper(request, event_id, *args, **kwargs):
         event = get_object_or_404(Event, pk=event_id)
-        if not event.can_edit(request.user):
+        if not request.user.has_perm('studio.change_site', event):
             raise Http404
         from console.views_events import _tz
         with timezone.override(_tz(event)):
             return view(request, event, *args, **kwargs)
-    return wrapper
+    return declare('studio.change_site', scope='event')(wrapper)
 
 
-def staff_required(view):
-    @login_required
-    @wraps(view)
-    def wrapper(request, *args, **kwargs):
-        if not is_staff(request.user):
-            raise Http404
-        return view(request, *args, **kwargs)
-    return wrapper
+# Studio's abuse reports (the Staff role: studio.view_sitereport).
+staff_required = requires('studio.view_sitereport')

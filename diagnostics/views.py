@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
+from attnd.permissions import requires
 from agent.registry import agent_action, param as P
 
 from diagnostics import records, retrace, storage, summary, symbolicate, timing
@@ -26,14 +27,8 @@ from events.models import Event, UsageCount
 from events.usage import PERF_METRICS
 
 
-def staff_required(view):
-    @login_required
-    @wraps(view)
-    def wrapper(request, *args, **kwargs):
-        if not (request.user.is_staff or request.user.is_superuser):
-            raise Http404
-        return view(request, *args, **kwargs)
-    return wrapper
+# Staff (attnd.permissions: the Staff role has diagnostics.view_diagnosticsession; 404 for everyone else).
+staff_required = requires('diagnostics.view_diagnosticsession')
 
 
 def _day(value, end=False):

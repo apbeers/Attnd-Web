@@ -14,6 +14,7 @@
 
 import json
 
+from attnd.permissions import signed_in
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -264,7 +265,7 @@ def rendered(request, name, found):
     return out
 
 
-@login_required
+@signed_in
 @require_GET
 def render(request):
     """GET ?component=…&items=[{…}]: the HTML of components (shown by the model, or refreshing a stale copy)."""
@@ -281,7 +282,7 @@ def render(request):
                          'next_offset': end if end < total else None})
 
 
-@login_required
+@signed_in
 @require_GET
 def batch(request):
     """GET ?q=[{"component": …, "items": [{…}]}, …]: several components in one request (the canvas's live numbers
@@ -327,7 +328,7 @@ def _own_run(request, create=False):
     return get_object_or_404(AgentRun, pk=int(raw), user=request.user)
 
 
-@login_required
+@signed_in
 @require_POST
 def pick(request):
     """The person tapped a component: show its detail now (no model call) and remember it in the run."""
@@ -372,7 +373,7 @@ def _tool_args(action, ids, post, alias=None):
     return args
 
 
-@login_required
+@signed_in
 @require_POST
 def act(request):
     """A component's always-ask button (or form) in the chat: a step waiting for Confirm, like the model's own.

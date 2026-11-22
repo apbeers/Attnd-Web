@@ -64,6 +64,36 @@ def generate_event_code(length: int = 8) -> str:
     raise RuntimeError('Could not generate a unique event code after 20 attempts.')
 
 
+class EventQuerySet(models.QuerySet):
+    def for_user(self, user, perm='events.change_event'):
+        """The events this person has `perm` on (attnd.permissions: their event roles; superusers every event)."""
+        from attnd.permissions import EVENT_ROLES
+        if not user or not user.is_authenticated or not user.is_active:
+            return self.none()
+        if user.is_superuser:
+            return self.all()
+        roles = [r for r, perms in EVENT_ROLES.items() if perm in perms]
+        parts = [models.Q(user=user)] if 'owner' in roles else []
+        member_roles = [r for r in roles if r != 'owner']
+        if member_roles:
+            # A subquery instead of a join + DISTINCT: no duplicate rows, so annotations (counts) stay exact.
+            parts.append(models.Q(id__in=EventMember.objects.filter(user=user, role__in=member_roles)
+                                  .values('event_id')))
+        if not parts:
+            return self.none()
+        q = parts[0]
+        for part in parts[1:]:
+            q |= part
+        return self.filter(q)
+
+
+class EventOwnedQuerySet(models.QuerySet):
+    """Rows that belong to one event (locations, schedule items, notifications)."""
+
+    def for_user(self, user, perm='events.change_event'):
+        return self.filter(event__in=Event.objects.for_user(user, perm).values('id'))
+
+
 class Event(CoordinatesMixin, models.Model):
     STATUS_DRAFT = 'draft'
     STATUS_PUBLISHED = 'published'
@@ -170,6 +200,8 @@ class Event(CoordinatesMixin, models.Model):
     # API-018: details for the apps' on-device assistant (about, FAQ, amenities, policies…), events.context
     context = models.JSONField(default=dict, blank=True)
 
+    objects = EventQuerySet.as_manager()
+
     # Fields the AI / diff engine manages
     CONTENT_FIELDS = ['name', 'description', 'address', 'latitude', 'longitude',
                       'start_time', 'end_time', 'timezone', 'context']
@@ -218,14 +250,23 @@ class Event(CoordinatesMixin, models.Model):
         return member.role if member else None
 
     def can_edit(self, user):
-        """Everyone on the team edits content."""
-        return self.role_for(user) is not None
+        """Everyone on the team edits content (attnd.permissions: events.change_event on this event)."""
+        return bool(user) and user.has_perm('events.change_event', self)
 
     def can_manage_team(self, user):
-        """The owner and event admins add and remove people, and change event-wide settings."""
-        return self.role_for(user) in ('owner', EventMember.ROLE_ADMIN)
+        """The owner and event admins add and remove people, and change event-wide settings (events.manage_event)."""
+        return bool(user) and user.has_perm('events.manage_event', self)
 
     class Meta:
+        # attnd/permissions.py: event roles answer the object ones, platform roles (Groups) the others.
+        permissions = [
+            ('manage_event', 'Manage an event: status, listing, sources, team, upgrade requests'),
+            ('transfer_event', 'Transfer an event to another owner'),
+            ('mark_event_paid', 'Mark events paid (going live)'),
+            ('assign_event_owner', 'Give an unassigned event an owner'),
+            ('view_all_usage', 'See usage across every event'),
+            ('view_showcase', 'See the showcase and demo events'),
+        ]
         indexes = [
             models.Index(fields=['user', 'name', 'event_code', 'latitude', 'longitude']),
             # `event_code__iexact` / `name__iexact` (lookup, /join/, /p/, the DEMO checks) compare UPPER(…).
@@ -238,6 +279,7 @@ class Event(CoordinatesMixin, models.Model):
 
 
 class Location(CoordinatesMixin, models.Model):
+    objects = EventOwnedQuerySet.as_manager()
     name = models.CharField(max_length=256)
     snippet = models.CharField(max_length=200, blank=True)
     description = models.CharField(max_length=1024, blank=True)
@@ -300,6 +342,7 @@ class Location(CoordinatesMixin, models.Model):
 
 
 class ScheduledItem(models.Model):
+    objects = EventOwnedQuerySet.as_manager()
     name = models.CharField(max_length=256)
     description = models.CharField(max_length=1024, blank=True)
     start_time = models.DateTimeField()
@@ -351,6 +394,7 @@ def is_send_slot(value):
 
 
 class Notification(models.Model):
+    objects = EventOwnedQuerySet.as_manager()
     PRIORITY_NORMAL = 'normal'
     PRIORITY_URGENT = 'urgent'  # API-011: to every device in the event, right away, and on Live Activities
     PRIORITY_CHOICES = [(PRIORITY_NORMAL, 'Normal'), (PRIORITY_URGENT, 'Urgent')]
@@ -529,14 +573,8 @@ class EventInvite(models.Model):
 
 
 def events_for_user(user):
-    """Events the user owns or is a member of. Superusers see everything."""
-    if not user.is_authenticated:
-        return Event.objects.none()
-    if user.is_superuser:
-        return Event.objects.all()
-    # A subquery instead of a join + DISTINCT: no duplicate rows, so annotations (counts) stay cheap and exact.
-    member_of = EventMember.objects.filter(user=user).values('event_id')
-    return Event.objects.filter(models.Q(user=user) | models.Q(id__in=member_of))
+    """Events the user owns or is a member of. Superusers see everything. (= Event.objects.for_user(user))"""
+    return Event.objects.for_user(user)
 
 
 class UsageCount(models.Model):

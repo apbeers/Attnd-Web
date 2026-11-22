@@ -142,14 +142,12 @@ def event_readiness(user, event_id=None, event=None):
 
 @component('attention', 'What needs attention', 'A briefing across the person\'s current events: AI updates '
            'waiting, scheduled notifications, places without a pin, overlapping sets, drafts starting soon. Shown '
-           'when the chat opens, and for "what should I do?".', ids=(),
+           'when the chat opens, and for "what should I do?".', ids=(), permission='signed_in',
            chat_only='The chat\'s opening briefing.')
 def attention(user):
-    from django.db.models import Q
-
-    from events.models import Event, EventMember
+    from events.models import Event
     now = timezone.now()
-    mine = Event.objects.filter(Q(user=user) | Q(id__in=EventMember.objects.filter(user=user).values('event_id')))
+    mine = Event.objects.for_user(user)
     events = [e for e in mine.exclude(status='archived').order_by('start_time')
               if not e.start_time or (e.end_time or e.start_time + timedelta(hours=12)) > now - timedelta(days=1)][:6]
     rows = []
@@ -264,11 +262,9 @@ WALK_STEPS = [
 
 def walkthrough_state(user):
     """(event or None, {step: done}) for the person's newest event."""
-    from django.db.models import Q
-
-    from events.models import Event, EventMember, UsageCount
+    from events.models import Event, UsageCount
     from scrape.models import ChangeSet
-    event = (Event.objects.filter(Q(user=user) | Q(id__in=EventMember.objects.filter(user=user).values('event_id')))
+    event = (Event.objects.for_user(user)
              .order_by('-created_at').first())
     done = {key: False for key, _, _ in WALK_STEPS}
     if event is None:
@@ -284,18 +280,17 @@ def walkthrough_state(user):
 
 def show_walkthrough(user):
     """Open the chat on the walkthrough? Only until it is finished or skipped, and for people with ≤ 2 events."""
-    from django.db.models import Q
-
     from console.models import ConsolePreference
-    from events.models import Event, EventMember
+    from events.models import Event
     if ConsolePreference.objects.filter(user=user, walkthrough_done=True).exists():
         return False
-    count = Event.objects.filter(Q(user=user) | Q(id__in=EventMember.objects.filter(user=user).values('event_id'))).count()
+    count = Event.objects.for_user(user).count()
     return count <= 2
 
 
 @component('first_run', 'Get started', 'The first-run walkthrough for a new organizer: import → review → layout → '
            'publish → share as progress chips, the current step with its action; skippable, shown once.', ids=(),
+           permission='signed_in',
            chat_only='The chat\'s opening card for new organizers.')
 def first_run(user):
     from console.models import ConsolePreference

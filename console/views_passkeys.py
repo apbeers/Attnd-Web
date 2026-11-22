@@ -14,6 +14,7 @@ All are POST with a JSON body and the CSRF token in X-CSRFToken; they answer JSO
 import json
 import logging
 
+from attnd.permissions import signed_in
 from django.contrib import messages
 from django.contrib.auth import login
 from django.http import JsonResponse
@@ -159,6 +160,7 @@ def register_verify(request):
     return JsonResponse({'redirect': next_url})
 
 
+@signed_in
 @require_POST
 def prompt_dismiss(request):
     """"Not now" on the "Sign in faster with a passkey" prompt: never shown to this account again."""

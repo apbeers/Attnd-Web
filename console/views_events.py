@@ -25,6 +25,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from attnd.links import join_url, qr_png
+from attnd.permissions import SIGNED_IN, declare, requires, signed_in
 from console.recent_auth import recent_auth_required, require as require_recent_auth
 from agent import summaries as S
 from agent.registry import agent_action, param as P
@@ -55,17 +56,22 @@ def _tz(event):
     return tz_or_utc(event.timezone)
 
 
-def event_view(view):
-    """login_required + load the event (404 unless the user can edit it) + activate its time zone."""
+def event_view(view=None, perm='events.change_event'):
+    """login_required + load the event (404 unless the person has `perm` on it, attnd.permissions) + activate its
+    time zone. `@event_view` = any team member (events.change_event); `@event_view(perm='events.manage_event')` =
+    the owner and event admins."""
+    if view is None:
+        return lambda v: event_view(v, perm=perm)
+
     @login_required
     @wraps(view)
     def wrapper(request, event_id, *args, **kwargs):
         event = get_object_or_404(Event, pk=event_id)
-        if not event.can_edit(request.user):
+        if not request.user.has_perm(perm, event):
             raise Http404
         with timezone.override(_tz(event)):
             return view(request, event, *args, **kwargs)
-    return wrapper
+    return declare(perm, scope='event')(wrapper)
 
 
 def _ctx(event, section, **extra):
@@ -106,7 +112,7 @@ def _chat_landing(request, event=None):
 
 
 @require_POST
-@login_required
+@signed_in
 def walkthrough_skip(request):
     """Stage I17: hide the first-run walkthrough for good (the chat's "Skip" button)."""
     from console.models import ConsolePreference
@@ -120,7 +126,7 @@ def walkthrough_skip(request):
               'an event (or turn that off).', params={'on': P('boolean', 'true = chat first, false = the pages')},
               title='Changed the default view')
 @require_POST
-@login_required
+@signed_in
 def chat_default(request):
     from console.models import ConsolePreference
     on = request.POST.get('on') in ('1', 'true', 'on', 'True')
@@ -166,7 +172,7 @@ def leave_chat_target(request, back, event_id=''):
 
 
 @agent_action('events_list', 'Your events (upcoming and past) with their codes and counts.', kind='read')
-@login_required
+@signed_in
 def dashboard(request):
     # Onboarding (Nov 21, 2026): what someone typed into the home page's composer before signing up becomes their AI
     # import now (a demo event they own); the job page shows its steps, then the event in the full-screen chat.
@@ -200,7 +206,7 @@ def dashboard(request):
 @agent_action('create_blank_event', 'Create a new, empty draft event.', form=BlankEventForm, prefix='blank',
               fixed={'mode': 'blank'}, title='Created an event')
 @agent_action('new_event_page', 'The page for creating an event.', kind='read')
-@login_required
+@signed_in
 def event_new(request):
     ai_form = AIImportForm(prefix='ai')
     blank_form = BlankEventForm(prefix='blank')
@@ -240,7 +246,7 @@ def event_new(request):
 
 
 @agent_action('import_job', 'An AI import or update job and its progress.', kind='read')
-@login_required
+@signed_in
 def job_detail(request, job_id):
     job = get_object_or_404(IngestJob, pk=job_id)
     if not (job.created_by_id == request.user.id or (job.event and job.event.can_edit(request.user))):
@@ -352,7 +358,7 @@ def _retryable(job):
 @agent_action('retry_background_task', 'Run a failed background task (an AI import, a check for updates, picking '
               'colours) again with the same sources.', params={'job_id': P('string', 'the task id')}, json=True,
               title='Started it again')
-@login_required
+@signed_in
 @require_POST
 def task_retry(request, job_id):
     job = get_object_or_404(IngestJob, pk=job_id, created_by=request.user, status=IngestJob.FAILED)
@@ -369,7 +375,7 @@ def task_retry(request, job_id):
 
 
 @agent_action('background_tasks', 'Running and recent background tasks (AI imports and updates).', kind='read')
-@login_required
+@signed_in
 def tasks_feed(request):
     """Running background tasks for this person, plus ones that finished in the last 10 minutes; `?ids=` adds
     those tasks of theirs whatever their age (Ask Attnd's task cards in an older chat)."""
@@ -395,6 +401,7 @@ def tasks_feed(request):
     return JsonResponse({'tasks': tasks, 'active': sum(t['status'] in ('queued', 'running') for t in tasks)})
 
 
+@declare(SIGNED_IN)  # static script for signed-in pages
 def service_worker(request):
     """The console's service worker, served from /console/ so it can control every console page."""
     from django.contrib.staticfiles import finders
@@ -406,6 +413,7 @@ def service_worker(request):
     return response
 
 
+@declare(SIGNED_IN)
 def manifest(request):
     from django.templatetags.static import static
     return JsonResponse({
@@ -509,7 +517,7 @@ def event_status(request, event):
         messages.info(request, 'Archived. Attendees see it as ended.')
     elif action == 'list':
         # Going live is invite-only (owner, Nov 21, 2026): only paid events are listed in nearby search.
-        if not (event.paid or request.user.is_staff or request.user.is_superuser):
+        if not (event.paid or request.user.has_perm('events.mark_event_paid')):
             messages.error(request, 'Listing in nearby events comes with going live. Ask us to remove the limit first.')
             return redirect('console:event', event_id=event.pk)
         event.public = True
@@ -596,7 +604,7 @@ def event_limit_request(request, event):
 @event_view
 @require_POST
 def event_paid(request, event):
-    if not (request.user.is_staff or request.user.is_superuser):
+    if not request.user.has_perm('events.mark_event_paid'):
         raise Http404
     paid = str(request.POST.get('paid', '')).lower() in ('1', 'true', 'on', 'yes')
     event.paid = paid
@@ -1539,7 +1547,7 @@ def changesets(request, event):
 @agent_action('discard_ai_changes', 'Discard every pending AI suggestion of a review.', confirm=True,
               summary=S.discard_changes, fixed={'action': 'discard'}, title='Discarded AI suggestions')
 @agent_action('ai_changes_review', 'One AI review: the suggested changes with their ids.', kind='read')
-@login_required
+@signed_in
 def changeset_detail(request, changeset_id):
     cs = get_object_or_404(ChangeSet.objects.select_related('event'), pk=changeset_id)
     event = cs.event
@@ -1672,6 +1680,7 @@ def history(request, event):
               title='Left the event')
 @agent_action('assign_event_owner', 'Assign an owner to an event by email (site admins only).', confirm=True,
               summary=S.assign_owner, fixed={'action': 'assign_owner'}, audience='superuser',
+              permission='events.assign_event_owner',
               params={'email': P('string', 'the new owner\'s email')}, title='Assigned an owner')
 @agent_action('team_page', "An event's team, roles and pending invitations, with ids.", kind='read')
 @event_view
@@ -1698,7 +1707,7 @@ def team(request, event):
             messages.info(request, f'You left {event.name}.')
             return redirect('console:dashboard')
 
-        if action == 'assign_owner' and request.user.is_superuser:
+        if action == 'assign_owner' and request.user.has_perm('events.assign_event_owner'):
             email = normalize_email(request.POST.get('email'))
             new_owner = User.objects.filter(email__iexact=email).first()
             if new_owner is None:
@@ -1719,8 +1728,13 @@ def team(request, event):
             if user is not None and user.id == event.user_id:
                 messages.info(request, 'They already own this event.')
             elif user is not None:
-                EventMember.objects.update_or_create(event=event, user=user, defaults={'role': new_role})
+                if is_owner:
+                    EventMember.objects.update_or_create(event=event, user=user, defaults={'role': new_role})
+                else:  # an admin's invite never changes the role of someone already on the team (no demoting admins)
+                    EventMember.objects.get_or_create(event=event, user=user, defaults={'role': new_role})
                 messages.success(request, f'{email} can now help run this event.')
+            elif not is_owner and EventInvite.objects.filter(event=event, email=email).exists():
+                messages.info(request, f'{email} is already invited.')
             else:
                 EventInvite.objects.update_or_create(event=event, email=email,
                                                      defaults={'role': new_role, 'invited_by': request.user})
@@ -1793,11 +1807,9 @@ def usage(request, event):
 
 
 @agent_action('app_usage_page', 'App-wide usage and the support-code lookup (site admins).', kind='read')
-@login_required
+@requires('events.view_all_usage')
 def admin_usage(request):
     """App-wide usage and support lookup, for site admins only."""
-    if not request.user.is_superuser:
-        raise Http404
     from console.usage import app_usage, find_devices
     tz = timezone.get_current_timezone()
     code = request.GET.get('code', '').strip()

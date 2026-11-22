@@ -3,6 +3,7 @@ Passkey (WebAuthn) endpoints are in views_passkeys.py."""
 
 from urllib.parse import urlencode
 
+from attnd.permissions import signed_in
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import views as auth_views
@@ -110,7 +111,7 @@ def _with_next(name: str, next_url: str) -> str:
     return reverse(name) + '?' + urlencode({'next': next_url})
 
 
-@login_required
+@signed_in
 def two_factor_verify(request):
     """Second sign-in step after the password: a passkey (JavaScript, views_passkeys), or a code from the
     authenticator app, an emailed code, or a recovery code (this form)."""
@@ -167,7 +168,7 @@ def _qr_svg(text: str) -> str:
     return qr_svg(text, box_size=8)
 
 
-@login_required
+@signed_in
 def two_factor_setup(request):
     """Add a strong sign-in method. Staff without one are sent here until they've done it: a passkey first
     (JavaScript, views_passkeys), or an authenticator app (open the setup link, scan the QR code or type
@@ -271,7 +272,7 @@ def account_two_factor_action(request):
     return None, back
 
 
-@login_required
+@signed_in
 def confirm_identity(request):
     """Confirm it's you (console/recent_auth.py): a passkey (JavaScript, mode "reauth"), or the password plus the
     second step's code where the account has one. Rate limited like sign-in (per email and IP) and the codes like

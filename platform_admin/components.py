@@ -8,9 +8,9 @@ from console.components import component
 
 @component('platform_health', 'Platform health', 'Superusers only: AI spend this month against the alert, events live '
            'now, sign-ups this week, failed AI jobs and push failures in the last day, Google API calls today.', ids=(),
-           audience='superuser', page=lambda ids: reverse('platform:home'))
+           audience='superuser', permission='platform_admin.change_platformsettings', page=lambda ids: reverse('platform:home'))
 def platform_health(user):
-    if not getattr(user, 'is_superuser', False):
+    if not (getattr(user, 'is_authenticated', False) and user.has_perm('platform_admin.change_platformsettings')):
         raise Http404
     from platform_admin import data
     h = data.health()

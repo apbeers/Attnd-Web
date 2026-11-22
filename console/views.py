@@ -1,6 +1,7 @@
 import datetime
 import logging
 
+from attnd.permissions import signed_in
 from django.contrib import messages
 from django.contrib.auth import login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -74,7 +75,7 @@ RISKY_ACCOUNT_ACTIONS = ('email', 'password', '2fa_disable', '2fa_codes', 'email
                          'passkey_remove')
 
 
-@login_required
+@signed_in
 def account(request):
     """Change the email you sign in with, or your password. The account (and its events) stays the same."""
     email_form = EmailChangeForm(request.user, prefix='email')

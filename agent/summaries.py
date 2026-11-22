@@ -158,17 +158,28 @@ def restore_version(ctx):
             f'(“{r.summary}”). The current content is snapshotted first.')
 
 
+def _changeset(user, changeset_id, missing_ok=False):
+    """An AI review on one of the person's events only (a confirm card never names another event's review)."""
+    from events.models import Event
+    from scrape.models import ChangeSet
+    found = ChangeSet.objects.filter(pk=changeset_id, event__in=Event.objects.for_user(user)).first() \
+        if str(changeset_id or '').isdigit() else None
+    if found is None and not missing_ok:
+        raise ChangeSet.DoesNotExist
+    return found
+
+
 @safe
 def discard_changes(ctx):
     from scrape.models import Change, ChangeSet
-    cs = ChangeSet.objects.get(pk=ctx.args['changeset_id'])
+    cs = _changeset(ctx.user, ctx.args['changeset_id'])
     n = cs.changes.filter(status=Change.PENDING).count()
     return f'Discard all {_count(n, "AI suggestion")} for “{cs.event.name}”.'
 
 
 def build_apply_changes(args, ctx):
     from scrape.models import Change, ChangeSet
-    cs = ChangeSet.objects.filter(pk=args.get('changeset_id')).first()
+    cs = _changeset(ctx.user, args.get('changeset_id'), missing_ok=True)
     data = {}
     if cs is None:
         return data
@@ -198,7 +209,7 @@ def build_apply_changes(args, ctx):
 @safe
 def apply_changes(ctx):
     from scrape.models import ChangeSet
-    cs = ChangeSet.objects.get(pk=ctx.args['changeset_id'])
+    cs = _changeset(ctx.user, ctx.args['changeset_id'])
     n = len(ctx.args.get('accept_change_ids') or [])
     extra = ' and tell attendees their app was updated' if ctx.args.get('notify_attendees') else ''
     return f'Apply {_count(n, "AI suggestion")} to “{cs.event.name}”{extra}.'

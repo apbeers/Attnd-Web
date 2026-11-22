@@ -452,9 +452,10 @@ on Save does; there is no second copy of any business logic.
   prefill=True|'url:name', json=True, file_params=, returns_page=, audience=)` stacked on the view (outermost). A
   write is a tool: its strict schema = URL kwargs + the form's fields (from an unbound instance, so fields added in
   `__init__` count; types, choices ≤ 40 as enums, help text; null = keep / leave empty) + hand-written `params`.
-  A read is a page `read_page` may open (and `list_pages` lists). Audience comes from the namespace (prospects,
-  diagnostics, Studio reports → staff; studio → Studio access; `admin_usage`, `assign_event_owner` → superuser):
-  those tools aren't even in the tool list for anyone else.
+  A read is a page `read_page` may open (and `list_pages` lists). Who sees a tool is its view's declared permission
+  (`Action.permission`, see Declaring permissions; `audience` is only a label): platform tools (Prospects,
+  Diagnostics, AI spend, Studio reports, the Platform admin, `admin_usage`, `assign_event_owner`) aren't even in the
+  tool list for anyone without that permission.
 - **The rule: every new console URL must be registered (read and/or write) or listed in `registry.EXCLUDED` with a
   reason, and every view that handles POST needs a write action (or `POST_EXCLUDED`)**, else
   `agent.tests.RegistryTests.test_every_console_url_is_registered_or_excluded` fails CI. A new `data-confirm` button
@@ -940,6 +941,33 @@ to the console (`console/tests_signin_flow.py`). People only ever see and sign i
   20 different phones (API-025, `events/free_limit.py`, `FREE_DEVICE_LIMIT`; the event's status card shows "14 of 20
   free spots used" and **Remove the limit**, which emails the admins). `SIGNUPS_OPEN=0` goes back to invited emails only
   (the old invite-only page and 403s).
+
+## Declaring permissions for new views
+
+Deny by default (owner, Nov 22, 2026; `attnd/permissions.py`, review: `docs/security_review_permissions.md`). Every
+decision is `user.has_perm(...)`: platform roles are Django Groups (**Staff**, **Platform admins**; `ROLES`, synced
+after every migrate; `is_staff` accounts have the Staff role, superusers everything), event roles (owner / admin /
+contributor) are object permissions from `PermissionMixin` (on the site's one auth backend) (`user.has_perm('events.change_location', event)`).
+- **Every view declares its permission**, or `DeclaredPermissionMiddleware` refuses it (404 when the URL names an
+  object, 403 otherwise) and `attnd/tests_permissions.py` fails CI:
+  - one event's page: `@event_view` (any team role, `events.change_event`) or `@event_view(perm='events.manage_event')`
+    (owner + event admins; `events.delete_event` / `transfer_event` = owner); Studio: `@studio_event_view`;
+  - a platform area: `@requires('<app>.<codename>')` (404 for everyone without it); add a new permission to the
+    model's `Meta.permissions` and to `ROLES` (`STAFF` or `PLATFORM_ADMIN`);
+  - the person's own things: `@signed_in` (never read or write another person's rows: filter by `request.user`);
+  - public pages: `attnd.public.public` (listed in `attnd/tests_public.py`); anything else: `@declare(perm)`.
+- **Querysets** of events and their rows: `Event.objects.for_user(user, perm)`, `Location / ScheduledItem /
+  Notification.objects.for_user(user, perm)`, or filter by the event the view already checked. A raw
+  `get_object_or_404(Model, pk=…)` / `Model.objects.get|filter(pk=…)` of an event-owned model in a view fails
+  `RawLookupLintTests` unless it is in `LINT_ALLOWED` with its reason.
+- **Components** declare `permission=` (event components get `events.view_event` and their data function checks the
+  event with `editable_event`; platform ones the area's permission; the person's own cards `'signed_in'`). **Ask
+  Attnd** tools take their view's permission (`agent_action(..., permission=)` when a view's action needs more, e.g.
+  `assign_event_owner`). **Templates** ask `perms.<app>.<codename>`, never `user.is_staff` for access.
+- Inline checks inside a view use the same permissions (`event.can_edit` / `can_manage_team` are
+  `has_perm('events.change_event' / 'events.manage_event', event)`; `studio.access.can_publish` =
+  `studio.publish_site` + the Studio plan). `is_staff` / `is_superuser` stay only for role facts that aren't access
+  (strong second factor, once-a-day sign-in, no monthly AI limit).
 
 ## Security
 

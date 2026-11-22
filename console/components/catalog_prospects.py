@@ -1,5 +1,5 @@
 """Prospects as console components (staff only, A19): drawn once for the Prospects pages' rows and the full-screen
-canvas / chat. Access is unchanged: `audience='staff'` keeps every one of them (and their tools) away from everyone
+canvas / chat. Access is unchanged: `audience='staff', permission='prospects.view_prospect'` keeps every one of them (and their tools) away from everyone
 else (Http404, absent from the show tool and the canvas). Contact rules are kept: every contact shows its source
 page, do-not-contact contacts never show an email or phone here, Attnd never emails prospects.
 """
@@ -15,7 +15,7 @@ PK = {'pk': 'prospect_id'}
 
 
 def _staff(user):
-    if not (getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False)):
+    if not (getattr(user, 'is_authenticated', False) and user.has_perm('prospects.view_prospect')):
         raise Http404
 
 
@@ -39,7 +39,7 @@ def _dates(p):
 @component('prospect_row', 'Prospect', 'A prospect (an upcoming event that suits the app, staff only): name, dates, '
            'city, fit score, pipeline status, contacts; Create test event (asks to confirm). With no ids: the open '
            'prospects by fit.', ids=('prospect_id',), expand=_expand_prospects, detail='prospect_detail',
-           audience='staff', kwarg_map=PK, actions=(('create_test_event', 'Create test event'),),
+           audience='staff', permission='prospects.view_prospect', kwarg_map=PK, actions=(('create_test_event', 'Create test event'),),
            page=lambda ids: reverse('prospects:detail', args=[ids['prospect_id']]),
            chat_only='The Prospects page is a bulk-select table; the canvas lists rows.')
 def prospect_row(user, prospect_id=None, prospect=None):
@@ -57,7 +57,7 @@ def prospect_row(user, prospect_id=None, prospect=None):
 
 @component('prospect_detail', 'Prospect detail', 'One prospect (staff only): summary, why it fits, links, contacts '
            '(each with the page it came from; do-not-contact honoured), activity, status and notes, Create test event.',
-           ids=('prospect_id',), audience='staff', kwarg_map=PK,
+           ids=('prospect_id',), audience='staff', permission='prospects.view_prospect', kwarg_map=PK,
            actions=(('save_prospect', 'Save'), ('create_test_event', 'Create test event'),
                     ('toggle_prospect_contact_dnc', 'Do not contact'), ('delete_prospect_contact', 'Remove')),
            page=lambda ids: reverse('prospects:detail', args=[ids['prospect_id']]))
@@ -118,7 +118,7 @@ def _expand_runs(user, **_):
 
 @component('prospect_run_row', 'Discovery run', 'A prospect discovery run (staff only): when, status, found / new / '
            'updated, cost. With no ids: the latest runs.', ids=('prospect_run_id',), expand=_expand_runs,
-           audience='staff', page=lambda ids: reverse('prospects:run', args=[ids['prospect_run_id']]),
+           audience='staff', permission='prospects.view_prospect', page=lambda ids: reverse('prospects:run', args=[ids['prospect_run_id']]),
            chat_only='The Runs page is a table with more columns; the canvas lists rows.')
 def prospect_run_row(user, prospect_run_id=None, run=None):
     from prospects.models import ProspectRun
@@ -133,7 +133,7 @@ def prospect_run_row(user, prospect_run_id=None, run=None):
 
 
 @component('prospect_settings_form', 'Prospect settings', 'Prospect discovery settings (staff only): region, time '
-           'zone, themes, how far ahead, events per run, the schedule; Run now.', ids=(), audience='staff',
+           'zone, themes, how far ahead, events per run, the schedule; Run now.', ids=(), audience='staff', permission='prospects.view_prospect',
            actions=(('run_prospect_discovery', 'Run now'),), page=lambda ids: reverse('prospects:settings'))
 def prospect_settings_form(user, form=None):
     from django.conf import settings

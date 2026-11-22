@@ -44,7 +44,7 @@ def _start_form(action, label, style, busy):
            'chat (design_website). Publishing needs the Studio plan: without it, Upgrade to publish (a request to Attnd).',
            actions=(('publish_website', 'Publish the draft'), ('unpublish_website', 'Take the site offline'),
                     ('request_upgrade', 'Upgrade to publish')),
-           audience='studio', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
+           audience='studio', permission='studio.change_site', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
 def website_overview(user, event_id=None, event=None):
     from studio import hosting
     from platform_admin import plans
@@ -104,7 +104,7 @@ def website_source(event):
 @component('website_versions', 'Website versions', "Every version of the event's website (newest first, which one is "
            'live and the draft), each with Preview, Restore as the draft and Publish (both always ask).',
            actions=(('restore_website_version', 'Restore as the draft'), ('publish_website_version', 'Publish this one')),
-           audience='studio', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
+           audience='studio', permission='studio.change_site', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
 def website_versions(user, event_id=None, event=None):
     from studio.access import can_publish
     event = _event(user, event_id, event)
@@ -133,7 +133,7 @@ def website_versions(user, event_id=None, event=None):
 
 @component('website_assets', 'Website files', "The website's asset library (images, PDFs, fonts the designer uses): "
            'name, kind, size, with Delete (always asks).', actions=(('delete_studio_asset', 'Delete'),),
-           audience='studio', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
+           audience='studio', permission='studio.change_site', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]))
 def website_assets(user, event_id=None, event=None):
     from studio import hosting
     from studio.models import StudioAsset
@@ -157,7 +157,7 @@ def website_assets(user, event_id=None, event=None):
 @component('website_forms', 'Website form entries', "What visitors sent through the website's forms (sign-ups, "
            'vendor applications…): the latest entries per form, CSV download, Delete an entry (always asks).',
            actions=(('delete_studio_form_entry', 'Delete'),),
-           audience='studio', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]) + '#website-forms')
+           audience='studio', permission='studio.change_site', page=lambda ids: reverse('studio:editor', args=[ids['event_id']]) + '#website-forms')
 def website_forms(user, event_id=None, event=None):
     from studio.views import _forms_summary
     event = _event(user, event_id, event)

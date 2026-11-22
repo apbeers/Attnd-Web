@@ -49,6 +49,9 @@ class Site(models.Model):
     notify_on_forms = models.BooleanField(default=True, help_text='Email the owner and admins on each form entry')
     created_at = models.DateTimeField(default=dj_tz.now)
 
+    class Meta:
+        permissions = [('publish_site', 'Publish an event website (also needs the Studio plan)')]
+
     def __str__(self):
         return f'{self.slug} ({self.event})'
 

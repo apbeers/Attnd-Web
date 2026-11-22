@@ -18,7 +18,9 @@ from django.utils.dateparse import parse_date
 from agent import summaries as S
 from agent.registry import agent_action, param as P
 
-from diagnostics.views import staff_required
+from attnd.permissions import requires
+
+staff_required = requires('prospects.view_prospect')  # the Staff role (attnd.permissions)
 from prospects import discover, testing
 from prospects.models import Prospect, ProspectActivity, ProspectContact, ProspectRun, ProspectSettings
 

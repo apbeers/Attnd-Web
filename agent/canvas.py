@@ -101,11 +101,9 @@ def build(request, event=None):
         if has_studio_access(request.user):
             for name in WEBSITE_SECTIONS:
                 add(name, {'event_id': event.pk})
-    if request.user.is_staff or request.user.is_superuser:
-        for name in ('prospect_run_row', 'prospect_row', 'ai_spend_summary'):
+    for name in ('prospect_run_row', 'prospect_row', 'ai_spend_summary', 'platform_health'):
+        if C.allowed(C.get(name), request.user):  # attnd.permissions (the Staff / Platform admins roles)
             add(name, {})
-    if request.user.is_superuser:
-        add('platform_health', {})
     active = 'Overview' if event is not None else 'Events'
     wanted = (request.GET.get('tab') or '').capitalize()
     if wanted in tabs:  # ?tab=website (the Website page's "Change it with Ask Attnd")

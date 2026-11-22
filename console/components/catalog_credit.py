@@ -12,7 +12,7 @@ from console.components.catalog import fmt
 
 
 def _staff(user):
-    if not (getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False)):
+    if not (getattr(user, 'is_authenticated', False) and user.has_perm('credit.view_aispend')):
         raise Http404
 
 
@@ -27,7 +27,7 @@ def _labels():
 
 
 @component('ai_credit_meter', 'AI credit', "The person's own AI credit this month: used, left, when it renews, and "
-           'what used it (Ask Attnd, imports, Studio…).', ids=(), page=lambda ids: reverse('console:account') + '#ai-credit')
+           'what used it (Ask Attnd, imports, Studio…).', ids=(), permission='signed_in', page=lambda ids: reverse('console:account') + '#ai-credit')
 def ai_credit_meter(user):
     from credit import ledger
     from credit.models import AiSpend
@@ -45,7 +45,7 @@ def ai_credit_meter(user):
 
 @component('ai_spend_summary', 'AI spend', "This month's AI spend across Attnd (staff only): total, against the alert "
            'amount, by feature, by model, the people and events that used most, the latest calls.', ids=(),
-           audience='staff', page=lambda ids: reverse('credit:spend'))
+           audience='staff', permission='credit.view_aispend', page=lambda ids: reverse('credit:spend'))
 def ai_spend_summary(user, month=None):
     from credit import ledger
     from credit.models import AiSpend
@@ -97,7 +97,7 @@ def _limits_bind(user, ids, data):
 
 @component('ai_limits_form', 'AI limits', 'The live AI limits (staff only): the monthly credit per person, the '
            'allowance before signing up, the platform alert, and the safety caps per day. Saving always asks.',
-           ids=(), audience='staff', actions=(('save_ai_limits', 'Save limits'),), form=_limits_bind,
+           ids=(), audience='staff', permission='credit.change_ailimits', actions=(('save_ai_limits', 'Save limits'),), form=_limits_bind,
            page=lambda ids: reverse('credit:spend') + '#limits')
 def ai_limits_form(user, form=None):
     from credit.forms import AiLimitsForm
@@ -120,7 +120,7 @@ def ai_limits_form(user, form=None):
 
 @component('ai_limit_overrides', 'AI credit overrides', 'People with their own monthly AI credit or no limit (staff '
            'only), what they used this month; set one or go back to the default. Both always ask.', ids=(),
-           audience='staff', actions=(('set_ai_limit_override', 'Save override'), ('remove_ai_limit_override', 'Remove')),
+           audience='staff', permission='credit.change_ailimits', actions=(('set_ai_limit_override', 'Save override'), ('remove_ai_limit_override', 'Remove')),
            page=lambda ids: reverse('credit:spend') + '#overrides')
 def ai_limit_overrides(user, form=None):
     from credit import ledger

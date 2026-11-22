@@ -97,6 +97,8 @@ POST_EXCLUDED = {
 NAMESPACE_AUDIENCE = {'diagnostics': 'staff', 'prospects': 'staff', 'studio': 'studio', 'credit': 'staff',
                       'platform': 'superuser'}
 URL_AUDIENCE = {'studio:reports': 'staff', 'console:admin_usage': 'superuser', 'console:event_paid': 'staff'}
+# Event pages that also need a platform permission (the view checks it too).
+URL_PERMISSION = {'console:admin_usage': 'events.view_all_usage', 'console:event_paid': 'events.mark_event_paid'}
 
 TOOL_NAME_RE = re.compile(r'^[a-z][a-z0-9_]{2,63}$')
 MAX_ENUM = 40
@@ -119,7 +121,8 @@ class Action:
     prefill: object = False
     json: bool = False
     returns_page: bool = False  # a 200 page (not a redirect) is the answer (e.g. a retrace)
-    audience: str = ''
+    audience: str = ''  # a label for tests and areas; who may see it is `permission`
+    permission: str = ''  # the permission it needs (default: what its view declares, attnd.permissions)
     exclude_fields: tuple = ()
     title: str = ''  # what the step list says ("Edited a location")
     # Filled in by the registry:
@@ -213,6 +216,8 @@ def registry():
             action.url_name, action.route, action.view = name, route, pattern.callback
             action.kwargs = _kwargs(route)
             action.audience = _audience(spec, name)
+            from attnd.permissions import declared
+            action.permission = spec.permission or URL_PERMISSION.get(name) or declared(pattern.callback) or ''
             if action.kind == 'read':
                 reads.setdefault(name, action)
             else:
@@ -230,17 +235,15 @@ RESERVED_TOOLS = {'search_everything', 'remember', 'propose_changes', 'read_page
 
 def allowed(action, user):
     """May this user see this tool or page at all? (The view still decides what they may do.)"""
+    from attnd.permissions import PUBLIC, is_platform
     if not user or not user.is_authenticated:
         return False
-    audience = action.audience
-    if audience == 'superuser':
-        return user.is_superuser
-    if audience == 'staff':
-        return user.is_staff or user.is_superuser
-    if audience == 'studio':
-        from studio.access import has_studio_access
-        return has_studio_access(user)
-    return True
+    perm = action.permission
+    if not perm or perm == PUBLIC:
+        return False  # deny by default (a view without a declared permission is refused anyway)
+    if is_platform(perm):
+        return user.has_perm(perm)
+    return True  # signed-in or per-event: the view checks the event (attnd.permissions)
 
 
 def writes_for(user):

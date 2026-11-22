@@ -1,6 +1,7 @@
 """Undo / Redo for one recorded change (console/undo.py): the message's Undo button, the chat's Undo next to a step,
 and Ask Attnd's "undo the last change"."""
 
+from attnd.permissions import signed_in
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, JsonResponse
@@ -44,7 +45,7 @@ def _answer(request, entry):
 @agent_action('undo_change', 'Undo one recorded change by its undo id (from a step or a page message). Refuses '
               'when it was sent to attendees already or someone changed the same thing again since.',
               title='Undid a change')
-@login_required
+@signed_in
 @require_POST
 def undo_change(request, undo_id):
     return _answer(request, UndoEntry.objects.filter(pk=undo_id).first())
@@ -52,7 +53,7 @@ def undo_change(request, undo_id):
 
 @agent_action('undo_last_change', 'Undo the person\'s most recent change in the console (theirs only; within 24 '
               'hours). Use it for "undo that" / "undo the last change".', title='Undid the last change')
-@login_required
+@signed_in
 @require_POST
 def undo_last(request):
     entry = U.latest_for(request.user)

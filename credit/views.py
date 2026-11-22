@@ -14,7 +14,10 @@ from agent.registry import agent_action, param as P
 from credit import history, ledger
 from credit.forms import AiLimitsForm, OverrideForm
 from credit.models import AiLimitOverride, AiLimits, AiSpend
-from diagnostics.views import staff_required
+from attnd.permissions import requires
+
+staff_required = requires('credit.view_aispend')  # the Staff role (attnd.permissions)
+limits_required = requires('credit.change_ailimits')
 
 LIMIT_FIELDS = AiLimitsForm._meta.fields
 
@@ -57,7 +60,7 @@ def spend_page(request):
 @agent_action('save_ai_limits', 'Change the live AI limits (staff): the monthly credit per person, the visitor '
               'allowance, the platform alert and the safety caps per day.', confirm=True, summary=_limits_summary,
               form=AiLimitsForm, prefill='credit:spend', title='Changed the AI limits')
-@staff_required
+@limits_required
 @require_POST
 def save_limits(request):
     conf = AiLimits.load()
@@ -79,7 +82,7 @@ def save_limits(request):
 
 @agent_action('set_ai_limit_override', "Give one person their own monthly AI credit, or no limit (staff).",
               confirm=True, summary=_override_summary, form=OverrideForm, title='Set an AI credit override')
-@staff_required
+@limits_required
 @require_POST
 def save_override(request):
     form = OverrideForm(request.POST)
@@ -101,7 +104,7 @@ def save_override(request):
 @agent_action('remove_ai_limit_override', "Remove a person's own AI credit: they go back to the default (staff).",
               confirm=True, params={'override': P('integer', 'The override\'s id (from the AI spend page).')},
               title='Removed an AI credit override')
-@staff_required
+@limits_required
 @require_POST
 def remove_override(request):
     override = get_object_or_404(AiLimitOverride, pk=request.POST.get('override'))

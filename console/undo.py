@@ -331,6 +331,9 @@ def _check(entry, op, user):
     return current
 
 
+TEAM_MODELS = {'events.eventmember', 'events.eventinvite'}
+
+
 def undo(entry, user):
     """Reverse one entry. Returns (message, redo entry or None). Raises CannotUndo."""
     from console.models import UndoEntry
@@ -343,6 +346,9 @@ def undo(entry, user):
             event = Event.objects.filter(pk=entry.event_id).first()
             if event is None or not event.can_edit(user):
                 raise CannotUndo('You no longer have access to this event.')
+            # Team changes need the role that made them (someone demoted since can't undo an invite or a removal).
+            if any(op['model'] in TEAM_MODELS for op in entry.operations) and not event.can_manage_team(user):
+                raise CannotUndo('Only the owner and event admins can undo team changes.')
         ops = list(reversed(entry.operations))
         currents = [_check(entry, op, user) for op in ops]
         said = []

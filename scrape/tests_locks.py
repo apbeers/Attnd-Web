@@ -4,6 +4,7 @@ without per-field ticks. The dev event IFICCK70: the organizer moved the event f
 website still says the 19th."""
 import json
 from datetime import datetime, timedelta, timezone as dt_timezone
+from types import SimpleNamespace
 
 from django.contrib.auth.models import User
 from django.test import Client, TestCase
@@ -110,6 +111,7 @@ class HandEditsStayTests(TestCase):
         cs = self.website_says_the_19th()
         from agent import summaries
         data = summaries.build_apply_changes({'changeset_id': cs.pk, 'replace_my_edits': True,
-                                              'accept_change_ids': list(cs.changes.values_list('pk', flat=True))}, None)
+                                              'accept_change_ids': list(cs.changes.values_list('pk', flat=True))},
+                                             SimpleNamespace(user=self.owner))
         ev = cs.changes.get(entity=Change.ENTITY_EVENT)
         self.assertIn(f'field_{ev.pk}_start_time', data)

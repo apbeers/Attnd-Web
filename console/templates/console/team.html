@@ -9,13 +9,13 @@
 {% if not event.user %}
 <div class="panel panel--warning">
   <strong>This event is unassigned.</strong> Its owner's account was deleted. It's still live for attendees.
-  {% if user.is_superuser %}Assign it to someone below.{% endif %}
+  {% if perms.events.assign_event_owner %}Assign it to someone below.{% endif %}
 </div>
 {% endif %}
 
 <div class="panel panel--roomy">{% component "event_team" event=event form=form %}</div>
 
-{% if user.is_superuser %}
+{% if perms.events.assign_event_owner %}
 <div class="panel stack stack--tight">
   <h2 class="title-4">Site admin: {% if event.user %}reassign the owner{% else %}assign an owner{% endif %}</h2>
   <form method="post" class="cluster cluster--nowrap inline-form">{% csrf_token %}<input type="hidden" name="action" value="assign_owner">

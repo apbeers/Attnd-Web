@@ -116,7 +116,7 @@ def is_showcase(event):
 
 def event_section(event, user=None):
     """'now', 'upcoming', 'past' or (staff only) 'showcase', by the event's own start and end."""
-    if user is not None and (user.is_staff or user.is_superuser) and is_showcase(event):
+    if user is not None and is_showcase(event) and user.has_perm('events.view_showcase'):
         return 'showcase'
     if not event.start_time:
         return 'upcoming'
@@ -204,7 +204,7 @@ def event_header(user, event_id=None, event=None):
 def nearby_action(user, event, **extra):
     """List in nearby events: only for paid events (API-025: going live is invite-only); an unpaid event shows the
     button disabled with "Paid events only · Remove the limit", never a button that can't be acted on."""
-    if event.paid or user.is_staff or user.is_superuser:
+    if event.paid or user.has_perm('events.mark_event_paid'):
         return {'name': 'list_event_nearby', **extra}
     return {'name': 'list_event_nearby', **extra, 'disabled': True, 'note': 'Paid events only',
             'note_link': {'label': 'Remove the limit', 'url': reverse('console:event', args=[event.pk]) + '#free-limit'}}
@@ -722,6 +722,7 @@ def _new_event_forms(user, ai_form=None, blank_form=None):
 
 @component('event_new_form', 'New event', 'Create an event: from its website(s), pasted text or a flyer with the AI '
            'import (runs in the background, the task tray shows each step), or an empty draft.', ids=(),
+           permission='signed_in',
            page=lambda ids: reverse('console:event_new'))
 def event_new_form(user, ai_form=None, blank_form=None):
     ai, blank = _new_event_forms(user, ai_form, blank_form)
