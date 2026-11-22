@@ -1522,7 +1522,11 @@
   let overlayStack = [];   // [{title, items, el}]
   let overlayOpener = null;
 
+  // The canvas tab survives re-renders and reloads (P0 #5: after a confirm it stayed put, not back to Overview).
+  const tabStoreKey = () => `attnd.agent.canvasTab.${eventId || 'none'}`;
+  function rememberedTab() { return store.get('sessionStorage', tabStoreKey()); }
   function selectTab(label) {
+    if (tabs.has(label)) store.set('sessionStorage', tabStoreKey(), label);
     const before = [...tabs.values()].find((t) => !t.pane.hidden);
     tabs.forEach((t, key) => {
       const on = key === label;
@@ -2014,11 +2018,23 @@
 
   async function preloadCanvas() {
     if (!canvasOn()) return;
-    if (adoptCanvas()) return;
+    if (adoptCanvas()) {
+      const kept = rememberedTab();
+      const active = [...tabs.values()].find((t) => !t.pane.hidden);
+      if (!new URLSearchParams(location.search).get('tab') && tabs.has(kept) && (!active || active.label !== kept)) {
+        tabs.forEach((t, key) => {  // no slide on a reload: the remembered tab is simply there
+          const on = key === kept;
+          t.button.setAttribute('aria-selected', String(on));
+          t.button.tabIndex = on ? 0 : -1;
+          t.pane.hidden = !on;
+        });
+      }
+      return;
+    }
     preloadProspects();
     if (!eventId) {
       try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
-      selectTab('Events');
+      selectTab(tabs.has(rememberedTab()) ? rememberedTab() : 'Events');
       return;
     }
     // Every event and "New event" too, so the whole console is reachable from here.
@@ -2034,7 +2050,7 @@
       toCanvas(name, items, parent, true);
       if (name === 'changeset_review') setTabCount('Review', items.length, true);
     }
-    selectTab('Overview');
+    selectTab(tabs.has(rememberedTab()) ? rememberedTab() : 'Overview');
   }
 
   // Live numbers on cards (Overview numbers, Metrics): console.js's one live-numbers timer (60 s while visible,

@@ -128,15 +128,32 @@
 
   // Tabs: <div data-tabs> holds <button data-tab-target="#panel"> buttons. Clicking one selects it
   // (aria-selected) and shows its panel; the other buttons' panels get [hidden].
-  document.addEventListener('click', e => {
-    const button = e.target.closest('[data-tab-target]');
-    if (!button) return;
-    button.closest('[data-tabs]').querySelectorAll('[data-tab-target]').forEach(b => {
+  // The choice survives a reload (P0 #5: confirming an action reloads the page; the tab stays where it was).
+  const tabKey = (list) => `attnd.tabs.${location.pathname}.${[...document.querySelectorAll('[data-tabs]')].indexOf(list)}`;
+  function selectPageTab(button, remember) {
+    const list = button.closest('[data-tabs]');
+    list.querySelectorAll('[data-tab-target]').forEach(b => {
       b.setAttribute('aria-selected', b === button ? 'true' : 'false');
       const panel = document.querySelector(b.dataset.tabTarget);
       if (panel) panel.hidden = b !== button;
     });
+    if (remember) { try { sessionStorage.setItem(tabKey(list), button.dataset.tabTarget); } catch (err) { /* private mode */ } }
+  }
+  document.addEventListener('click', e => {
+    const button = e.target.closest('[data-tab-target]');
+    if (!button) return;
+    selectPageTab(button, true);
   });
+  window.attndRestoreTabs = (scope) => {
+    (scope || document).querySelectorAll('[data-tabs]').forEach(list => {
+      let target = null;
+      try { target = sessionStorage.getItem(tabKey(list)); } catch (err) { /* private mode */ }
+      const button = target && [...list.querySelectorAll('[data-tab-target]')].find(b => b.dataset.tabTarget === target);
+      if (button && document.querySelector(target)) selectPageTab(button, false);
+    });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.attndRestoreTabs());
+  else window.attndRestoreTabs();
 
   // Drag-to-reorder for lists: makeSortable(list, {handle: '.drag-handle', onEnd})
   window.makeSortable = function (list, opts) {
@@ -700,7 +717,7 @@
     const on = boxes.filter((b) => b.checked).length;
     boxes.forEach((b) => { b.disabled = !b.checked && on >= max; });
     const count = list.parentElement.querySelector('[data-tab-count]');
-    if (count) count.textContent = `${on} of ${max} tabs${on >= max ? ` · ${count.dataset.note}` : ''}`;
+    if (count) count.textContent = `${on} of ${max} tabs besides Home${on >= max ? ` · ${count.dataset.note}` : ''}`;
   }
   const tabLimits = (scope) => (scope || document).querySelectorAll('[data-max-tabs]').forEach(tabLimit);
   document.addEventListener('change', (e) => {
