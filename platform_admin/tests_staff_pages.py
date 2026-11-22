@@ -106,6 +106,8 @@ class StaffPageTests(TestCase):
             for url in urls:
                 html = re.sub(r'<template\b.*?</template>', '', self.get(url, client), flags=re.S)
                 self.assertNotRegex(html, r'<th\b[^>]*>\s*</th>', url)
+                for tag in re.findall(r'<[a-z]+\b[^>]*\baria-selected=[^>]*>', html):
+                    self.assertRegex(tag, r'role="(tab|option|gridcell|row)"', url)  # aria-selected needs a role
                 previous = 0
                 for level in (int(m) for m in re.findall(r'<h([1-6])\b', html)):
                     self.assertLessEqual(level, previous + 1 if previous else level, f'{url}: h{previous} → h{level}')
