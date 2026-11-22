@@ -35,7 +35,7 @@ TIMEOUT = 8
 COORDS_TTL = 30 * 24 * 3600   # latitude / longitude (+ place id): ≤ 30 consecutive calendar days
 CONTENT_TTL = 24 * 3600       # other Places content (labels, addresses, websites): a day
 NEGATIVE_TTL = 30 * 24 * 3600  # "nothing found"
-APIS = ('places_text', 'places_details', 'geocode')
+APIS = ('places_text', 'places_details', 'geocode', 'places_photos')
 _MISS = object()
 
 
@@ -185,6 +185,43 @@ def place_website(place_id):
     site = data.get('websiteUri') or ''
     cache.set(key, site, CONTENT_TTL if site else NEGATIVE_TTL)
     return site
+
+
+PHOTO_URL = 'https://places.googleapis.com/v1/{name}/media'
+
+
+def photo_loads_left():
+    """Live Google photo loads left today (Pacific day, like the quotas): GOOGLE_PHOTOS_DAILY_MAX in all."""
+    return max(0, getattr(settings, 'GOOGLE_PHOTOS_DAILY_MAX', 2000) - usage()['places_photos']['calls'] // 2)  # 2 calls a load
+
+
+def place_photo(place_id, max_width=1200):
+    """{url, attributions: [{name, uri}]} for the place's first Google photo, or None. Never cached or stored:
+    Google's terms don't allow keeping Places photos or their names, so every call asks again (Place Details with the
+    `photos` field, then the photo's media URL without the redirect). Billed per call; the caller only uses it after
+    Attnd's free sources found nothing, and the browser / app keeps the image in its own HTTP cache."""
+    if not place_id or not key_configured() or photo_loads_left() <= 0:
+        return None
+    headers = {'X-Goog-Api-Key': settings.GOOGLE_PLACES_API_KEY}
+    data = _request('places_photos', 'GET', DETAILS_URL.format(id=place_id),
+                    headers={**headers, 'X-Goog-FieldMask': 'photos'})
+    photos = (data or {}).get('photos') or []
+    if not photos or not photos[0].get('name'):
+        return None
+    first = photos[0]
+    media = _request('places_photos', 'GET', PHOTO_URL.format(name=first['name']), headers=headers,
+                     params={'maxWidthPx': max(1, min(int(max_width), 4800)), 'skipHttpRedirect': 'true'})
+    url = (media or {}).get('photoUri') or ''
+    if not url.startswith('https://'):
+        return None
+    people = [{'name': a.get('displayName', '')[:120], 'uri': a.get('uri', '') if str(a.get('uri', '')).startswith('https://') else ''}
+              for a in first.get('authorAttributions') or [] if a.get('displayName')]
+    return {'url': url, 'attributions': people[:3]}
+
+
+def photo_credit(attributions):
+    names = ', '.join(a['name'] for a in attributions if a.get('name'))
+    return f'Photo: {names} · Google Maps' if names else 'Photo: Google Maps'
 
 
 def geocode(address):

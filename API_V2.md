@@ -432,7 +432,8 @@ a value that isn't `#RRGGBB`, means use your defaults for it. A change bumps `co
 ### Location
 ```json
 { "id": 5, "name": "…", "snippet": "…", "description": "…", "category": "Food" | null,
-  "website": "https://…" | null, "image_url": "https://…" | null, "image_credit": "…" | null, "address": "…",
+  "website": "https://…" | null, "image_url": "https://…" | null, "image_credit": "…" | null,
+  "image_attribution_url": "https://…" | null, "address": "…",
   "latitude": 32.74 | null, "longitude": -97.36 | null, "sort_order": 0,
   "tags": ["food", "bbq", "kid-friendly"] }
 ```
@@ -442,6 +443,14 @@ a value that isn't `#RRGGBB`, means use your defaults for it. A change bumps `co
   image is shown large (location detail). Missing (older servers) = `null`.
 - `tags` (API-010): see Tags below. Missing in responses from servers before API-010: default `[]`.
 - `context` (API-018): see Context. Missing = `null`.
+- **Live Google photos** (API-031): when no free source had a photo, `image_url` may be
+  `https://<host>/img/places/<id>/`, a redirect to the place's Google Places photo fetched at that moment (never stored
+  by Attnd; Google's terms). Load and cache it like any image (follow the redirect; the HTTP cache is fine, don't
+  persist the file beyond your normal image cache). `image_credit` is then `"Photo: Google Maps"` and
+  `image_attribution_url` (else `null`; missing on older servers = `null`) answers `{"url", "attributions": [{"name",
+  "uri"}], "credit": "Photo: Ana Ruiz · Google Maps"}`: show that `credit` (the authors' names, linking `uri` where
+  there is room) wherever the image is shown large; until it loads, or if it fails, show `image_credit`. A `404` from
+  either URL = no photo right now (show the placeholder).
 
 ### ScheduleItem
 ```json

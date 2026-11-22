@@ -354,6 +354,9 @@ def _find_for(location, pages=None, force=False):
         return 'skipped'
     if not force and PlaceImageAttempt.objects.filter(location=location, result__in=('none', 'found'),
                                                       created_at__gte=timezone.now() - timedelta(days=30)).exists():
+        if PlaceImageAttempt.objects.filter(location=location).order_by('-created_at').values_list(
+                'result', flat=True).first() == 'none':
+            use_google_photo(location)  # looked before API-031 and found nothing: the live Google photo now
         return 'skipped'  # looked already: backfills and retries never repeat the searches (a person's Find a photo does)
     if not enabled() or budget_left() <= 0:
         PlaceImageAttempt.objects.create(location=location, event=location.event, result='skipped',
@@ -384,10 +387,25 @@ def _find_for(location, pages=None, force=False):
             return 'found'
     PlaceImageAttempt.objects.create(location=location, event=location.event, result='none', cost_usd=cost,
                                      detail='; '.join(tried)[:500])
+    use_google_photo(location)
     if _expiring(location.image_url):  # a Google Places photo link from an older import: never kept
         location.image_url = None
         location.save(update_fields=['image_url'])
     return 'none'
+
+
+def use_google_photo(location):
+    """Every free source failed: show the place's Google photo live (API-031; never stored). Needs its place id
+    (looked up once, like the venue website) and GOOGLE_PLACE_PHOTOS on; sets only a flag."""
+    from django.conf import settings
+    if not getattr(settings, 'GOOGLE_PLACE_PHOTOS', False) or location.google_photo or not wanted(location):
+        return False
+    venue_website(location)  # makes sure the place id is known (one Text Search the first time)
+    if not location.google_place_id:
+        return False
+    location.google_photo = True
+    location.save(update_fields=['google_photo'])  # attendee-visible: the content version moves
+    return True
 
 
 def find_for_event(event, limit=None, force=False):

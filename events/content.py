@@ -111,6 +111,21 @@ def _website_url(event):
     return website_url(event)
 
 
+def _photo_abs(request, path):
+    from django.conf import settings
+    return request.build_absolute_uri(path) if request is not None else settings.SITE_URL.rstrip('/') + path
+
+
+def _is_google_photo(location):
+    return bool(location.google_photo and location.google_place_id and not location.image and not location.image_url)
+
+
+def _image_credit(location):
+    if _is_google_photo(location):
+        return 'Photo: Google Maps'  # the authors' names come live from image_attribution_url (API-031)
+    return (location.image_credit or None) if location.image_auto else None
+
+
 def location_v2(location, request=None):
     return {
         'id': location.id,
@@ -119,8 +134,12 @@ def location_v2(location, request=None):
         'description': location.description,
         'category': location.category or None,
         'website': location.website or None,
-        'image_url': app_image_url(_abs(request, location.resolved_image_url), 'location'),
-        'image_credit': (location.image_credit or None) if location.image_auto else None,  # API-022
+        'image_url': (_photo_abs(request, location.resolved_image_url) if _is_google_photo(location)
+                      else app_image_url(_abs(request, location.resolved_image_url), 'location')),
+        'image_credit': _image_credit(location),  # API-022
+        # API-031: a live Google photo's authors ({name, uri} list, fetched per view: never in the bundle itself)
+        'image_attribution_url': (_photo_abs(request, location.resolved_image_url) + '?format=json'
+                                  if _is_google_photo(location) else None),
         'address': location.address,
         'latitude': _coord(location.latitude),
         'longitude': _coord(location.longitude),

@@ -258,7 +258,8 @@ RATE_LIMITS = {
     'agent_start_user': _rate('agent_start_user', '30/600'),
     'limit_request_user': _rate('limit_request_user', '3/86400'),  # "Remove the limit" requests per person, a day
     'home_metric_ip': _rate('home_metric_ip', '120/600'),  # the home page's anonymous counts per IP, 10 minutes
-    'home_near_ip': _rate('home_near_ip', '30/600'),  # the home page's approximate "near you" lookups per IP, 10 minutes
+    'home_near_ip': _rate('home_near_ip', '30/600'),
+    'place_photo_ip': _rate('place_photo_ip', '300/600'),  # live Google place photos per IP, 10 minutes (API-031)  # the home page's approximate "near you" lookups per IP, 10 minutes
     'pending_import_ip': _rate('pending_import_ip', '10/3600'),  # home composer submissions per IP, an hour
     'claim_user': _rate('claim_user', '5/86400'),  # "Claim this event" requests per person, a day
     'agent_contact_user': _rate('agent_contact_user', '3/3600'),  # "Talk to a person" messages per person, an hour  # Ask Attnd requests started per person, 10 minutes
@@ -628,6 +629,9 @@ if TESTING:
     LOGGING["loggers"]["attnd.agent"]["level"] = "WARNING"
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
+# API-031 (owner: OK): live Google Places photos for places no free source had a photo for; never stored.
+GOOGLE_PLACE_PHOTOS = os.getenv('GOOGLE_PLACE_PHOTOS', '1') not in ('0', 'false', '')
+GOOGLE_PHOTOS_DAILY_MAX = int(os.getenv('GOOGLE_PHOTOS_DAILY_MAX', '2000'))  # loads per Pacific day (2 calls each)
 
 # ---------------------------------------------------------------------------
 # Apple App Attest

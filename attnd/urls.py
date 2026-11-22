@@ -6,6 +6,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from attnd import views as attnd_views
+from events import views_photos
 from attnd.permissions import SIGNED_IN, declare
 from attnd.public import mark, public, public_include
 from console import views_auth, views_passkeys
@@ -20,6 +21,7 @@ sitemaps = {
 
 urlpatterns = [
     path('health/', public(attnd_views.health), name='health'),
+    path('img/places/<int:location_id>/', public(views_photos.place_photo), name='place_photo'),  # API-031
     path('sitemap.xml', public(sitemap), {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
     path('', public_include('home.urls'), name='home'),
     # The admin lives at ADMIN_URL_PATH (/admin/ is a 404). Its login page goes to the site's sign-in,

@@ -1097,7 +1097,12 @@ contributor) are object permissions from `PermissionMixin` (on the site's one au
   location form shows "Found automatically · credit" with **Replace photo** / **Remove photo** (`image_never_refetch`)
   / **Find a photo** (agent actions `find_location_image`, `remove_location_image`; undoable). Every look is a
   `PlaceImageAttempt` (cost); `PLACE_IMAGES_DAILY_CAP_USD` (default 1) caps all of them per UTC day.
-  `manage.py find_place_images [--event CODE]` backfills and drops old Google Places photo links.
+  `manage.py find_place_images [--event CODE]` backfills and drops old Google Places photo links. **Live Google
+  photos** (API-031, owner: OK): when nothing free is found, `Location.google_photo` is set (only the flag and the
+  place id are kept) and `resolved_image_url` becomes `/img/places/<id>/` (`events/views_photos.py`: Place Details
+  `photos` + the media URL on every request, never cached server-side; a `302` with `max-age=3600` for the
+  browser / app cache; `?format=json` = the authors for the credit; `GOOGLE_PLACE_PHOTOS`, `GOOGLE_PHOTOS_DAILY_MAX`,
+  `place_photo_ip`). Tests: `events/tests_place_photos.py`.
 - **Colour themes** (API-023, `events/theme.py`, `events/theme_ai.py`): `Event.theme` = `{light, dark}` × `primary`
   (fills, links) / `secondary` (soft tints) / `tertiary` (highlights) as `#RRGGBB`, plus `source` (ai / site / manual /
   default), `reason`, `page_colors`; `{}` = Attnd's purple. `normalize` validates it (a missing mode derived from the
@@ -1228,6 +1233,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `DATABASE_URL` | Prod | PostgreSQL connection string |
 | `CLOUDINARY_URL` | Prod | Cloudinary connection string |
 | `GOOGLE_PLACES_API_KEY` | No | Location image fetching during scrape |
+| `GOOGLE_PLACE_PHOTOS` / `GOOGLE_PHOTOS_DAILY_MAX` | No | API-031 live Google place photos (default on with the key; `0` = off) / loads per Pacific day (2000; each load is 2 billed calls) |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | Email | Mailgun SMTP credentials for the sending domain (`postmaster@mg.attnd.app` on prod; dev uses its sandbox). No password = mail goes to the log. They feed Django 6.1's `MAILERS` (settings `EMAIL_ENABLED`, `EMAIL_SMTP_OPTIONS`); the deprecated `EMAIL_*` Django settings aren't used |
 | `DEFAULT_FROM_EMAIL` | No | Default `Attnd <noreply@mg.attnd.app>` |
 | `SITE_URL` | No | Base URL for links in emails, default `https://attnd.app` (dev: `https://dev.attnd.app`) |

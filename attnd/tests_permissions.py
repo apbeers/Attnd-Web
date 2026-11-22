@@ -452,6 +452,7 @@ SCOPED_BY = {'event', 'event_id', 'site', 'site__event', 'event__in', 'event_id_
 # (file, function): why a lookup without an event / owner filter is safe there. Anything new must use
 # Model.objects.for_user(user, perm) or filter by the already-checked event, or be added here with its reason.
 LINT_ALLOWED = {
+    ('events/views_photos.py', 'place_photo'): 'public photo of a published event, team only for drafts, checked right after',
     ('console/views.py', 'account'): 'names of the events in the person\'s own remembered notes',
     ('console/views_events.py', 'wrapper'): 'event_view: has_perm on the event right after',
     ('console/views_events.py', 'event_view'): 'event_view: has_perm on the event right after',

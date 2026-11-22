@@ -317,6 +317,9 @@ class Location(CoordinatesMixin, models.Model):
     image_license = models.CharField(max_length=120, blank=True)
     image_fetched_at = models.DateTimeField(null=True, blank=True)
     image_never_refetch = models.BooleanField(default=False)
+    # Batch 7 (owner: OK): no free photo found → show the place's first Google Places photo, fetched live per view
+    # through /img/places/<id>/ (never stored here; Google's terms). Only the flag and the place id are kept.
+    google_photo = models.BooleanField(default=False)
     latitude = models.DecimalField(max_digits=24, decimal_places=20, null=True, blank=True)
     longitude = models.DecimalField(max_digits=24, decimal_places=20, null=True, blank=True)
     address = models.CharField(max_length=512, blank=True)
@@ -330,7 +333,7 @@ class Location(CoordinatesMixin, models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
     event = models.ForeignKey(Event, on_delete=models.CASCADE, db_index=False)  # (event, sort_order) covers it
 
-    CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url',
+    CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url', 'google_photo',
                       'address', 'latitude', 'longitude', 'category', 'tags', 'context']
 
     class Meta:
@@ -353,7 +356,12 @@ class Location(CoordinatesMixin, models.Model):
     def resolved_image_url(self):
         if self.image:
             return self.image.url
-        return self.image_url or None
+        if self.image_url:
+            return self.image_url
+        if self.google_photo and self.google_place_id:
+            from django.urls import reverse
+            return reverse('place_photo', args=[self.pk])  # a live Google photo (events/views_photos.py)
+        return None
 
     def __str__(self):
         return self.name

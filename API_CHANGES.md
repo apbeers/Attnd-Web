@@ -74,7 +74,8 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-024 | Server-driven screens: `layout` in `bundle/` (per screen an ordered list of sections from a closed catalogue, overrides per category / tag, on-device conditions) for apps that send `X-Attnd-Sections: <catalogue version>` (ETag `-s<version>`); `home` in `display.tabs` for those apps; console App layout → Screens editor, Ask Attnd `update_screen_layout` | additive (new key, new optional request header, new `display.tabs` value only for apps that send the header) | ✅ dev (6630ce5, 3d4e0b9) · ⬜ prod | ✅ dev (8bd7bd3, 0f25083; TestFlight 2.0.161) | ⬜ (later) |
 | API-027 | Screens catalogue 2 (`X-Attnd-Sections: 2`): `my_schedule`, banners as sections (`status`, `update_banner`), new screens `schedule_tab`, `places_tab`, `updates_tab`, `onboarding`, section fields `ids` / `text` / `image`; `ask_about` out of the defaults; bundle `live_activity` (follows, buttons, urgent, stale text) | additive (new header value, new keys, new object) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: the four catalogue 2 screens, section ids / text / image, `update_banner`, `live_activity` follows / buttons / stale text; 800c978, TestFlight 2.0.171) · ⬜ prod | ⬜ (parked) |
 | API-026 | Faster live updates: the first change pushed at once (later ones grouped), `jitter_ms` in `content_updated` scaled to the event's size; organizer preview phones (`preview_token` on `join/`, `GET events/<id>/changes/` long-poll, `preview` in the join answer); `bundle/` records the version a device fetched | additive (new optional request field, new response and push keys, new endpoint) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: `preview_token` from links and QR codes, `changes/` long-poll in the foreground, `jitter_ms`; 800c978, 641a8bf, TestFlight 2.0.171) · ⬜ prod | ⬜ (parked) |
-| API-030 | Artist links: `schedule[].context.performers[].apple_music_url` (optional, `https://music.apple.com/…`; confident matches from the Apple Music catalog, or set by the organizer); console "Find music links" | additive (new optional key) | 🚧 built · ⬜ prod (needs `APPLE_MUSIC_*` on attnd-web) | ⬜ | ⬜ (paused) |
+| API-031 | Live Google Places photos for places without a free one: `locations[].image_url` may be our `/img/places/<id>/` redirect (fetched per view, never stored), `image_credit` `"Photo: Google Maps"`, new `locations[].image_attribution_url` (the authors' names, JSON) | additive (new optional key; a new kind of image URL) | 🚧 built · ⬜ prod | ⬜ | ⬜ (paused) |
+| API-030 | Artist links: `schedule[].context.performers[].apple_music_url` (optional, `https://music.apple.com/…`; confident matches from the Apple Music catalog, or set by the organizer); console "Find music links" | additive (new optional key) | 🚧 built · ⬜ prod (needs `APPLE_MUSIC_*` on attnd-web) | ✅ dev (TestFlight 2.0.180: "Listen on Apple Music", https://music.apple.com links only) · ⬜ prod | ⬜ (paused) |
 | API-025 | Free limit: an unpaid event takes 20 different devices on `join/`; a new device beyond it gets `409 {error: "event_full_free", message, limit}` (rejoin always works; paid, DEMO, App Review sample and showcase events exempt) | additive (new error answer on an existing endpoint, for unpaid events only) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
@@ -83,6 +84,23 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-031: Live Google Places photos (fallback)
+**Why:** many places have no photo on the event's pages, their website or Wikimedia; Google Places usually has one.
+Google's terms forbid storing Places photos (owner, Nov 21, 2026: OK to show them live, attributed, client cache only).
+**Server (attnd-web):** when `events/place_images.py` finds no free photo, it sets `Location.google_photo` (and keeps
+only the place id, which the terms allow). `GET /img/places/<id>/` (public; published events, or the team for drafts;
+`place_photo_ip` 300 / 10 min per IP; `GOOGLE_PHOTOS_DAILY_MAX` loads a Pacific day, 2,000 by default) asks Google
+every time (Place Details `photos`, then the photo media URL with `skipHttpRedirect`) and answers a `302` to the photo
+(`Cache-Control: public, max-age=3600`), or `?format=json` with the authors. Counted on Diagnostics → Endpoints
+(`places_photos`). Off with `GOOGLE_PLACE_PHOTOS=0`. The console and Studio sites use the same URL.
+**Bundle (additive):** `locations[].image_url` = that URL, `image_credit` = `"Photo: Google Maps"`, new
+`locations[].image_attribution_url` (else `null`). See `API_V2.md` → Location.
+**iOS:** nothing to change for the image itself (it's a normal https URL that redirects; `CachedImage` keeps it like
+any other, which is within the terms as a client cache). Decode `image_attribution_url` leniently; on the place detail
+(and wherever the photo is large) fetch it and show its `credit` under the photo (authors linked when there's room),
+`image_credit` until then. Don't prefetch these photos for offline use beyond the normal image cache.
+**Android:** later (paused): the same.
 
 ### API-030: Apple Music artist links for performers
 **Why:** attendees want to hear a band before they walk over (owner, Nov 21, 2026; Apple Music only: Spotify's Web
