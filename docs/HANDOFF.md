@@ -80,6 +80,29 @@ resume note is under "Running when paused" below.
     Attnd proposal card for "Plan my Saturday", the Duo planning board and the Live Activity. The UI files
     (AppState, AssistantController, PlanStore, views) weren't compiled here; check the CI archive.
 
+## Second session (Nov 22, 2026, evening)
+
+- **Web:** `411d0b2` fixes the Architecture page's "missing 259 things" on dev (the drift check scanned Heroku's
+  installed packages under `/app/.heroku/python`; now only our own code, with a test) and makes the Platform sub-tabs
+  one sideways-scrolling row on phones. Its first CI run hung (three parallel test workers lost their DB connections
+  ~40 s in; the suite passes locally in ~100 s) and was cancelled at 20 min; a re-run was started. **Next:** check the
+  re-run of run 45061880316 passed and dev deployed, then open Platform → Architecture on dev.attnd.app: the
+  warning should be gone. If CI hangs again, find the test that kills the workers.
+- **Android develop, done this session** (none run on a device or emulator yet):
+  - 5b `a4e3429`: one renderer, Home / details / event info from layouts, `X-Attnd-Sections: 2`, context, Apple
+    Music, photo credit (API-018/024/030/031 ticked).
+  - 5c `f7667a7`: Schedule / Places / Updates tabs and onboarding from layouts (API-027 ticked).
+  - One-list `1bdd57c`: My schedule is the only stored list; planner proposals; one Undo history; "Ask Attnd".
+  - 10a `3c19cd5`: one map across postures, Home / details on the hinge, tabletop glance, toast pane.
+  - 3b `729703e`: the heart (add + Undo, menu: time / reminder / remove), Schedule tab My Schedule sections with
+    organizer changes, My Schedule chip, saved places, no "like" wording.
+- **Android stopped mid-phase** (each pushed to its `wip/…` branch; read its last commit and the phase in
+  `docs/ios_parity_plan.md`):
+  - 6b `wip/android-p6b`: Ask Attnd chat UI + Gemini Nano JSON tool loop + download prompt + eval model mode.
+  - 11 `wip/android-p11`: performance off the main thread, hang detector, UPLOAD_LOGS, dev server switch, map polish.
+- **Android left after those:** 10b (needs 6b), the schedule Share (QR) button (needs 6b's share sheet), the Map's
+  empty My Schedule message, 12 (tracker), then the assistant eval on Android in model mode on a device.
+
 ## Next after those
 
 1. **Android one-list update: done** (Attnd-Android `1bdd57c`, spec `docs/specs/one_list_spec.md`).
