@@ -31,6 +31,10 @@ Do these steps once, in order. Each step says which values go where. For any sin
       **Maps Static API**, then add it to the **browser key**'s API restrictions (the key behind
       `GOOGLE_MAPS_BROWSER_KEY`). The event map now starts as a static image; without the API the image fails and the
       interactive map loads at once (as before).
+- [ ] Stripe (when taking card payments; billing is built and off): create the account in the LLC's name, then
+      `heroku config:set -a attnd-dev STRIPE_SECRET_KEY=sk_test_… STRIPE_WEBHOOK_SECRET=whsec_…` (a webhook to
+      `https://dev.attnd.app/console/billing/stripe/webhook/`, event `checkout.session.completed`; turn on the Customer
+      Portal in Stripe's settings); production later with live keys and `https://attnd.app/...`.
 - [ ] Privacy policy rewrite: read `docs/privacy_policy_draft.md` (five decisions at the top), then say publish (batch 7).
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.

@@ -144,6 +144,11 @@ Legal/policy surface (to re-issue in the LLC's name):
 - Privacy policy (`/privacy/`; the rewrite waiting for approval: `docs/privacy_policy_draft.md` + `home/templates/home/privacy_draft.html`, batch 7), Terms of Service (to write), Terms of Sale + Organizer Agreement (tickets), App Store
   privacy labels, Play data safety, support email, App Review contact.
 
+- Stripe for plan billing (batch 7, Nov 22, 2026; built, off): `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` on the
+  Heroku apps, the webhook endpoint `https://attnd.app/console/billing/stripe/webhook/` (event
+  `checkout.session.completed`), Customer Portal settings. Create the account in the LLC's name; invoices say "Attnd"
+  (`platform_admin/billing.py SELLER`): add the LLC's legal name and address there once it exists.
+
 ## 5. Order of operations (when it's time)
 1. Form the LLC, EIN, bank account, D-U-N-S, insurance (§1).
 2. Workspace + password vault; re-point every account's email (§2).

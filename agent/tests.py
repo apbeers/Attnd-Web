@@ -214,6 +214,7 @@ class RegistryTests(AgentTestCase):
             ('platform_admin/home.html', 'platform:approve'): 'approve_upgrade_request',
             ('platform_admin/home.html', 'platform:decline'): 'decline_upgrade_request',
             ('platform_admin/event.html', 'platform:event_save'): 'save_event_overrides',
+            ('platform_admin/event.html', 'platform:record_payment'): 'record_payment',
         }
         root = Path(settings.BASE_DIR)
         found = []

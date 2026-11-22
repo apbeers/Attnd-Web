@@ -54,6 +54,7 @@ EXCLUDED = {
     'console:service_worker': 'A static script for the browser, no content.',
     'console:walkthrough_skip': 'The chat\'s own "Skip" on the first-run walkthrough (a person\'s choice, no content).',
     'console:manifest': 'The web app manifest, no content.',
+    'console:stripe_webhook': "Stripe's own server calls it (signed); never a person or the agent.",
     'console:event_qr': 'A PNG image of the join QR code (the overview has the join link).',
     'console:event_poster': 'A printable poster; the overview has the same join link and code.',
     'studio:version_preview': 'Redirects to a signed preview link on the sites host (outside the console).',
@@ -92,6 +93,7 @@ POST_EXCLUDED = {
     'console:account': EXCLUDED['console:account'],
     'console:location_fill': EXCLUDED['console:location_fill'],
     'console:walkthrough_skip': EXCLUDED['console:walkthrough_skip'],
+    'console:stripe_webhook': EXCLUDED['console:stripe_webhook'],
 }
 
 NAMESPACE_AUDIENCE = {'diagnostics': 'staff', 'prospects': 'staff', 'studio': 'studio', 'credit': 'staff',

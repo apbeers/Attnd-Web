@@ -55,16 +55,10 @@ def request_upgrade(event, user, kind, message=''):
 
 
 def approve(req, user):
-    """Sets the plan and paid, records the payment at the request's price."""
-    from events.models import Event
-    from platform_admin.models import PaymentRecord, UpgradeRequest
-    event = req.event
-    event.paid = True
-    if req.kind == UpgradeRequest.STUDIO:
-        event.plan = Event.PLAN_STUDIO
-    event.save(update_fields=['paid', 'plan'])
-    PaymentRecord.objects.create(event=event, plan=req.kind, amount_usd=req.price_usd, recorded_by=user,
-                                 note=f'Approved upgrade request {req.pk}')
+    """Sets the plan and paid, records the payment at the request's price (as a paid invoice, batch 7 billing)."""
+    from platform_admin import billing
+    from platform_admin.models import UpgradeRequest
+    billing.record_manual(req.event, req.kind, req.price_usd, user, note=f'Approved upgrade request {req.pk}')
     req.status, req.decided_by, req.decided_at = UpgradeRequest.APPROVED, user, timezone.now()
     req.save(update_fields=['status', 'decided_by', 'decided_at'])
     return req

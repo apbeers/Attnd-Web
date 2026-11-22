@@ -77,6 +77,7 @@ dependencies = [
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pyjwt" },
     { name = "qrcode", extra = ["pil"] },
+    { name = "stripe" },
     { name = "whitenoise" },
 ]
 
@@ -98,6 +99,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary", "pool"], specifier = "==3.3.9" },
     { name = "pyjwt", specifier = "==2.15.1" },
     { name = "qrcode", extras = ["pil"], specifier = "==8.2" },
+    { name = "stripe", specifier = ">=17.1.0" },
     { name = "whitenoise", specifier = "==6.12.0" },
 ]
 
@@ -1189,6 +1191,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7e/e0/361c764ea58cc1a75f7b4b424a74b08449db8bfa5e9199c7275999fdd1b9/sqlparse-0.6.1.tar.gz", hash = "sha256:ca722573f848ff2d30e40ea30f53a104b7dea7635ea9285891263eb2c58fb6e7", size = 182236, upload-time = "2026-11-01T18:06:45.951Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/df/ff/2fee788e82e75be8f210c65c5d103bf44c880e3769c884652a4cd911b8ba/sqlparse-0.6.1-py3-none-any.whl", hash = "sha256:3be5a72d04c873d690d7c6dedd33d6fae2ef82759881ceec02fc2efd0cba564f", size = 51200, upload-time = "2026-11-01T18:06:47.434Z" },
+]
+
+[[package]]
+name = "stripe"
+version = "17.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/ec/09fcf4d5a21aa23974470ab7a0f58e1011dec23effce4b6eaf3b103be1b3/stripe-17.1.0.tar.gz", hash = "sha256:767b8e0f350b2b00fae7f8fbe7e28d4c215aac23529c833f0e77ec20c5f3bb48", size = 1670474, upload-time = "2026-11-19T03:49:33.134Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/96/ee86b1748e0ff130474ac042cbeb683ea15ef210948a86bdbd5e73dbf8df/stripe-17.1.0-py3-none-any.whl", hash = "sha256:c8089bacd9f7d95b62e3f4c0fc6cb5dc719eb09b9d09c6ff330800d36bf8b6eb", size = 2690745, upload-time = "2026-11-19T03:49:30.546Z" },
 ]
 
 [[package]]

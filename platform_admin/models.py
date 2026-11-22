@@ -102,3 +102,33 @@ class EventOverride(models.Model):
         if not hasattr(event, '_override_cache'):
             event._override_cache = cls.objects.filter(event_id=event.pk).first() if event.pk else None
         return event._override_cache
+
+
+class Invoice(models.Model):
+    """One bill for an event (batch 7 billing): made when an upgrade is approved, a payment is recorded by hand, or
+    Pay now starts a Stripe Checkout. Numbers are sequential per year (ATT-2026-0001) and never reused."""
+    OPEN, PAID, VOID = 'open', 'paid', 'void'
+    STATUSES = [(OPEN, 'Open'), (PAID, 'Paid'), (VOID, 'Void')]
+    MANUAL, STRIPE = 'manual', 'stripe'
+    METHODS = [(MANUAL, 'Recorded by Attnd'), (STRIPE, 'Card (Stripe)')]
+    number = models.CharField(max_length=20, unique=True)
+    event = models.ForeignKey('events.Event', on_delete=models.CASCADE, related_name='invoices')
+    plan = models.CharField(max_length=10, choices=UpgradeRequest.KINDS)
+    description = models.CharField(max_length=200)
+    amount_usd = models.DecimalField(max_digits=8, decimal_places=2)
+    status = models.CharField(max_length=6, choices=STATUSES, default=OPEN)
+    method = models.CharField(max_length=6, choices=METHODS, default=MANUAL)
+    billed_to = models.CharField(max_length=254, blank=True)  # the owner's email when issued
+    issued_at = models.DateTimeField(default=timezone.now)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    payment = models.OneToOneField(PaymentRecord, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoice')
+    stripe_session = models.CharField(max_length=255, blank=True)
+    stripe_customer = models.CharField(max_length=255, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['-issued_at', '-pk']
+
+    def __str__(self):
+        return f'{self.number} · {self.event} · ${self.amount_usd}'

@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
 from agent import views as agent_views
-from console import views, views_events as v, views_undo
+from console import views, views_billing, views_events as v, views_undo
 
 app_name = 'console'
 urlpatterns = [
@@ -65,6 +65,13 @@ urlpatterns = [
     path('events/<int:event_id>/screens/', v.event_screens, name='event_screens'),  # API-024
     path('events/<int:event_id>/limit/', v.event_limit_request, name='event_limit_request'),  # API-025
     path('events/<int:event_id>/paid/', v.event_paid, name='event_paid'),  # staff
+    path('events/<int:event_id>/billing/', views_billing.event_billing, name='event_billing'),
+    path('events/<int:event_id>/billing/pay/', views_billing.pay_now, name='event_pay'),
+    path('events/<int:event_id>/billing/receipt/', views_billing.send_receipt, name='event_send_receipt'),
+    path('events/<int:event_id>/billing/portal/', views_billing.portal, name='event_billing_portal'),
+    path('events/<int:event_id>/billing/invoices.csv', views_billing.invoices_csv, name='event_invoices_csv'),
+    path('events/<int:event_id>/billing/<str:number>.pdf', views_billing.invoice_pdf, name='event_invoice_pdf'),
+    path('billing/stripe/webhook/', views_billing.stripe_webhook, name='stripe_webhook'),
     path('events/<int:event_id>/theme/', v.event_theme, name='event_theme'),
     path('events/<int:event_id>/theme/css/', v.event_theme_css, name='event_theme_css'),
     path('events/<int:event_id>/theme/switches/', v.event_theme_switches, name='event_theme_switches'),

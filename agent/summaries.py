@@ -330,3 +330,8 @@ def studio_review(ctx):
     if ctx.args.get('action') == 'approve':
         return f'Approve the held website {name}: its version goes live now.'
     return f'Reject the held website {name}: it stays offline and its owner is emailed.'
+
+
+@safe
+def send_receipt(ctx):
+    return f'Email {ctx.args.get("invoice") or "the receipt"} of {_name(ctx)} (with its PDF) to {ctx.args.get("email") or "that address"}.'

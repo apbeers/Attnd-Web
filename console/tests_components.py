@@ -68,6 +68,7 @@ class ComponentTestCase(TestCase):
             'live_activity_settings': {'event_id': self.event.pk},
             'unpublished_changes': {'event_id': self.event.pk},
             'event_status_line': {'event_id': self.event.pk},
+            'event_billing': {'event_id': self.event.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -88,6 +89,7 @@ class ComponentTestCase(TestCase):
             'live_activity_settings': 'Urgent announcements always show',
             'unpublished_changes': "attendees can't open it yet",
             'event_status_line': 'free phones',
+            'event_billing': 'No invoices yet',
         }
 
     def request(self, user=None):

@@ -225,3 +225,28 @@ def customers_csv(request):
                     r['paid_usd'], f'{r["ai_month"]:.2f}', f'{r["ai_total"]:.2f}', r['ai_limit'],
                     *[r['features'][f] for f in features]])
     return response
+
+
+@agent_action('record_payment', "Record a payment for an event by hand (cheque, bank transfer): a paid invoice, the plan "
+              'applied (superusers).', confirm=True, title='Recorded a payment',
+              params={'plan': P('string', 'standard or studio'), 'amount': P('number', 'USD'),
+                      'note': P('string', 'how it was paid', nullable=True)})
+@superuser_required
+@require_POST
+def record_payment(request, event_id):
+    from decimal import Decimal, InvalidOperation
+
+    from events.models import Event
+    from platform_admin import billing
+    event = get_object_or_404(Event, pk=event_id)
+    kind = request.POST.get('plan')
+    try:
+        amount = Decimal(request.POST.get('amount') or '')
+    except InvalidOperation:
+        amount = None
+    if kind not in (plans.STANDARD, plans.STUDIO) or amount is None or amount < 0:
+        messages.error(request, 'Pick a plan and an amount.')
+    else:
+        invoice = billing.record_manual(event, kind, amount, request.user, note=request.POST.get('note', ''))
+        messages.success(request, f'Recorded {invoice.number}: ${amount:,.2f} for {plans.LABELS[kind]}.')
+    return redirect('platform:event', event_id=event.pk)

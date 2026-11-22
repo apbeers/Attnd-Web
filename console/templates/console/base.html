@@ -86,6 +86,7 @@
           {% if pending_changes %}<span class="badge badge--primary badge--pill">{{ pending_changes }}</span>{% endif %}</a>
         <a class="sidenav__link" {% if section == 'usage' %}aria-current="page"{% endif %} href="{% url 'console:usage' event.id %}">{% icon "chart" %}Usage</a>
         <a class="sidenav__link" {% if section == 'history' %}aria-current="page"{% endif %} href="{% url 'console:history' event.id %}">{% icon "history" %}History</a>
+        {% if can_manage or event.user_id == user.id %}<a class="sidenav__link" {% if section == 'billing' %}aria-current="page"{% endif %} href="{% url 'console:event_billing' event.id %}">{% icon "chart" %}Billing</a>{% endif %}
         <a class="sidenav__link" {% if section == 'team' %}aria-current="page"{% endif %} href="{% url 'console:team' event.id %}">{% icon "people" %}Team</a>
       </nav>
       <div>{% block event_content %}{% endblock %}</div>

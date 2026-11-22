@@ -72,7 +72,7 @@ its own small design system (`console/static/console/console.css`, see Console U
 (`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. Existing server dependencies are kept where the standard
 library has no equivalent (Postgres driver, Pillow, the official Anthropic SDK `anthropic` (every AI call, stage C),
 the OpenAI SDK (Studio's images only), Google auth, HTTP/2 for APNs via
-`httpx[http2]`, CBOR for App Attest and passkeys; `cryptography`, installed with google-auth, verifies App Attest and passkey signatures). Stripe would be the exception if ticketing comes back (parked, see Tickets). The public site (`home/`, `join/`) uses one hand-written
+`httpx[http2]`, CBOR for App Attest and passkeys; `cryptography`, installed with google-auth, verifies App Attest and passkey signatures). The Stripe SDK `stripe` is the one addition (batch 7 billing, off until its keys exist). The public site (`home/`, `join/`) uses one hand-written
 stylesheet (`home/static/home/site.css`) — no vendored frameworks, icon fonts or web fonts.
 Upgrade Python packages with `uv run python scripts/upgrade_deps.py` (also runs weekly in CI).
 
@@ -869,6 +869,14 @@ hosts the site.
   Prospects sections, each only with its permission; toolbar AI limits / Overrides / Discovery settings / CSV).
   `platform_admin/tests_nav.py` asserts the top bar and the canvas tabs of an organizer and of staff / a superuser
   differ only by Platform. A new admin tool = a row in `areas.AREAS` + the nav tag on its page, never a top-bar link.
+- **Billing** (batch 7, `platform_admin/billing.py`, `Invoice`, `console/views_billing.py`, component `event_billing`,
+  sidenav **Billing**, owner + event admins): plan, total paid, invoices (sequential `ATT-2026-0001`, date, amount,
+  Paid / Due, a hand-written PDF), **Send a receipt** (always asks; the PDF attached), CSV export. **Pay now** = Stripe
+  Checkout for an open invoice; the webhook (`console:stripe_webhook`, public, Stripe's signature) marks it paid;
+  Customer Portal for card customers. Without `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`: "Payments aren't set up
+  yet" and the upgrade requests as before. Every payment lands in `billing.mark_paid` (a `PaymentRecord`, the plan
+  applied, the invoice paid; idempotent): Stripe, approved upgrade requests and the Platform's **Record a payment**
+  (`record_payment`, always asks). Tests: `platform_admin/tests_billing.py`.
 - **Platform admin** (`/console/platform/`, `platform:home`; the page needs `platform_admin.view_platformsettings`
   (staff), its own tabs `change_platformsettings` (platform admins; others are sent to their first sub-tab)): tabs **Health** (health: AI spend
   vs the alert, events live now, sign-ups this week, failed AI jobs and push failures in 24 h, Google API counters),
@@ -1326,6 +1334,7 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `AGENT_ANTHROPIC_MODEL` | No | Ask Attnd on Anthropic, default `claude-haiku-5-5` (owner, Nov 21, 2026) |
 | `AGENT_REFUSAL_MODEL` | No | The model a run continues on when Claude Haiku declines it, default `claude-sonnet-5-5` |
 | `APPLE_MUSIC_KEY_ID` / `APPLE_MUSIC_PRIVATE_KEY` | No | API-030 artist links: the MusicKit key's id and the whole `.p8` (team = `APPLE_TEAM_ID`); unset = no lookups (SETUP step 20) |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | No | Billing (batch 7): Stripe Checkout, Customer Portal and the signed webhook; unset = "Payments aren't set up yet" (SETUP open tasks) |
 | `PLAN_SUGGESTIONS_MODEL` | No | API-021 "Plan your day" suggestions, default `claude-haiku-5-5` (needs `ANTHROPIC_API_KEY`; without it the deterministic fallback is used) |
 | `AI_MONTHLY_CREDIT_USD` / `AI_VISITOR_CREDIT_USD` / `AI_PLATFORM_ALERT_USD` | No | First values of the staff-editable AI limits (credit/): monthly credit per person (30), visitor allowance (5), monthly platform alert (100); the database row wins once saved, as for the per-day caps below |
 | `AGENT_DAILY_SPEND_CAP_USD` | No | Ask Attnd AI spend per person per UTC day, default `2` |
