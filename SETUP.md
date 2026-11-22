@@ -26,7 +26,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
-- [ ] IndexNow on production (step 22): `heroku config:set -a attnd-web INDEXNOW_KEY=$(openssl rand -hex 16)` (batch 7).
+- [x] IndexNow on production (step 22): `INDEXNOW_KEY` set on attnd-web by Claude (Nov 22, 2026, release v122; `/<key>.txt` answers 200).
 - [ ] Maps Static API on the browser key (Lighthouse, Nov 22, 2026): Google Cloud console → APIs & Services → enable
       **Maps Static API**, then add it to the **browser key**'s API restrictions (the key behind
       `GOOGLE_MAPS_BROWSER_KEY`). The event map now starts as a static image; without the API the image fails and the
@@ -1089,7 +1089,7 @@ Done (owner, Nov 21, 2026):
 - `APPLE_MUSIC_KEY_ID` and `APPLE_MUSIC_PRIVATE_KEY` (the whole `.p8`, header lines included) on **attnd-dev**
   (verified).
 
-To do (production, when releasing API-030):
+Done on production (Nov 22, 2026): Claude copied both from attnd-dev to attnd-web through the Heroku API (no value printed). For reference, the commands were:
 ```
 heroku config:set APPLE_MUSIC_KEY_ID=2X6W6X6PLA -a attnd-web
 heroku config:set APPLE_MUSIC_PRIVATE_KEY="$(cat /Users/andrewbeers/Documents/Attnd/ios-signing/AuthKey_2X6W6X6PLA.p8)" -a attnd-web
