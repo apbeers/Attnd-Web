@@ -1,0 +1,12 @@
+{% load console_tags %}{# event_status_line: status, the free limit with its next step, the one next thing to do. #}<div class="component component--event_status_line" role="region" aria-label="Status"><div class="status-line">
+  <div class="status-line__main">
+    <span class="badge {% if d.draft %}badge--neutral{% else %}badge--success{% endif %}">{{ d.status }}</span>
+    <span class="badge badge--neutral">{{ d.plan }}</span>
+    {% if d.limit.limited %}<span class="status-line__limit{% if d.limit.full %} tone-danger{% endif %}"><strong>{{ d.limit.used }} of {{ d.limit.limit }} free phones</strong>{% if d.limit.full %} · new phones can’t join{% endif %}</span>
+      {% if d.manage %}{% if d.limit_asked %}<span class="small muted">Limit removal requested · we’ll email you</span>{% else %}<a class="button button--primary button--small" href="{{ d.limit_url }}">Remove the limit ({{ d.limit_price }})</a>{% endif %}{% endif %}{% endif %}
+  </div>
+  {% if d.next or d.actions %}<div class="status-line__next">
+    {% if d.next %}<span class="small"><span class="status-mark status-mark--warning" aria-hidden="true">!</span> Next: {{ d.next.text }}</span>{% if d.next.url %} <a class="button button--outline button--small" href="{{ d.next.url }}">{{ d.next.link|default:"Fix it" }}</a>{% endif %}{% endif %}
+    {% if d.actions %}{% include 'components/_actions.html' with actions=d.actions %}{% endif %}
+  </div>{% endif %}
+</div></div>

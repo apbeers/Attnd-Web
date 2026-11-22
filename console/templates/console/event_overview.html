@@ -3,13 +3,9 @@
 {% block title %}{{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="stack stack--loose">
-{% if event.status == 'draft' %}
-<div class="panel panel--warning cluster cluster--loose">
-  <div class="grow"><strong>This event is a draft.</strong> Review the details, locations and schedule, then publish it so attendees can join.</div>
-  <form method="post" action="{% url 'console:event_status' event.id %}">{% csrf_token %}
-    <button name="action" value="publish" class="button button--success">{% icon "broadcast" %} Publish</button></form>
-</div>
-{% endif %}
+{% comment %}Batch 7: by importance. Status + free limit + the next step first, then the phone, what needs you, the numbers,
+the map, colours, visibility and sharing; settings and history folded at the end.{% endcomment %}
+{% component "event_status_line" event=event %}
 {% if studio_import %}{% with r=studio_import %}
 {% if r.status == 'queued' or r.status == 'running' %}
 <div class="panel panel--accent cluster" data-studio-import="running">
@@ -27,25 +23,34 @@
   <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Open the website</a>
 </div>
 {% endif %}{% endwith %}{% endif %}
-{% component "needs_review" event=event %}
-
 <div class="split">
   <div class="split__main stack stack--loose">
+    {% component "live_on_phone" event=event %}
+    {% component "needs_review" event=event %}
     {% component "event_stats" event=event part="timing" %}
     {% component "event_stats" event=event part="numbers" %}
     <div class="panel">{% component "event_map" event=event %}</div>
-
     <div class="panel" id="theme">{% component "event_theme" event=event %}</div>
-
     <div class="panel stack">
-      <h2 id="sync-settings">{% icon "stars" "tone-brand" %} Keep it in sync with your website</h2>
-      {% component "website_watching" event=event %}
+      <h2 class="eyebrow">Visibility</h2>
+      {% component "event_lifecycle" event=event %}
     </div>
+  </div>
 
+  <div class="split__aside stack stack--loose">
+    <div class="panel stack"><h2 class="eyebrow">Share it</h2>{% component "sharing_kit" event=event %}</div>
+  </div>
+</div>
+
+<details class="panel overview-more"><summary class="strong">Settings and recent activity</summary>
+  <div class="details-body stack stack--loose">
+    <section class="stack">
+      <h2 class="title-4" id="sync-settings">{% icon "stars" "tone-brand" %} Keep it in sync with your website</h2>
+      {% component "website_watching" event=event %}
+    </section>
     {% component "event_stats" event=event part="most_liked" %}
-
     {% if changesets %}
-    <div class="panel">
+    <section>
       <h2 class="eyebrow">Recent AI updates</h2>
       <ul class="list list--inset">
       {% for cs in changesets %}
@@ -56,28 +61,16 @@
         </li>
       {% endfor %}
       </ul>
-    </div>
+    </section>
     {% endif %}
-  </div>
-
-  <div class="split__aside stack stack--loose">
-    {% component "live_on_phone" event=event %}
-
-    <div class="panel stack">
-      <h2 class="eyebrow">Visibility</h2>
-      {% component "event_lifecycle" event=event %}
-      {% if not event.paid %}<p class="small muted">{% icon "info" %} Attendees see a “Demo event” banner until the event is upgraded.</p>{% endif %}
-    </div>
-    <details class="panel"><summary class="strong">More ways to share</summary><div class="details-body">{% component "sharing_kit" event=event %}</div></details>
-
-    <div class="panel stack stack--tight">
+    <section class="stack stack--tight">
       <h2 class="eyebrow">App layout</h2>
       <p class="title-4"><strong>{{ display.resolved_preset|capfirst }}</strong>{% if display.preset == 'auto' %} <span class="muted">(automatic)</span>{% endif %}</p>
       <p class="small muted">{{ display.reason }}</p>
       <div><a class="button button--secondary button--small" href="{% url 'console:display' event.id %}">Customize</a></div>
-    </div>
+    </section>
   </div>
-</div>
+</details>
 </div>
 {% if event.refresh_schedule == 'watch' %}
 <dialog id="sync-notice" class="dialog" data-event="{{ event.id }}">
@@ -105,7 +98,7 @@
     if (!action) return;
     try { localStorage.setItem(key, '1'); } catch (err) {}
     dialog.close();
-    if (action === 'settings') document.getElementById('sync-settings')?.scrollIntoView({ behavior: 'smooth' });
+    if (action === 'settings') { const more = document.querySelector('.overview-more'); if (more) more.open = true; document.getElementById('sync-settings')?.scrollIntoView({ behavior: 'smooth' }); }
   });
 })();
 </script>

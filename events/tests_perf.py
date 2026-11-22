@@ -214,7 +214,7 @@ class PagePerfTests(PerfBase):
             Event.objects.create(name=f'Other {i}', event_code=f'OTHER{i}', start_time=timezone.now(), user=self.user)
         # +2 on pages with the top bar: the person's group / own permissions, once per request (attnd.permissions).
         bounds = {'/console/': 10,
-                  f'/console/events/{self.event.id}/': 21,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2)
+                  f'/console/events/{self.event.id}/': 25,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2), +4 the status line's next step (readiness checks, batch 7)
                   f'/console/events/{self.event.id}/locations/': 11,
                   f'/console/events/{self.event.id}/schedule/': 12,
                   f'/console/events/{self.event.id}/usage/': 21,

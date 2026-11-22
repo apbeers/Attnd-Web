@@ -320,3 +320,31 @@ def first_run(user):
     now = next((s for s in steps if s['current']), None)
     return {'show': True, 'steps': steps, 'current': now, 'link_url': links.get(current, ''), 'event': event.name if event else '',
             'done_count': sum(1 for s in steps if s['done']), 'skip_url': reverse('console:walkthrough_skip')}
+
+
+@component('event_status_line', 'Status', "The top of an event's Overview (batch 7): its status, the free limit "
+           '("14 of 20 free phones · Remove the limit ($299)") and the one next thing to do (the first problem of '
+           'the readiness check, or Publish for a ready draft).', actions=(('publish_event', 'Publish'),),
+           page=lambda ids: reverse('console:event', args=[ids['event_id']]))
+def event_status_line(user, event_id=None, event=None):
+    from events import free_limit
+    from platform_admin import plans
+    event = editable_event(user, event_id, event)
+    limit = free_limit.status(event)
+    found = checks(event)
+    problem = next((c for c in found if c['state'] == PROBLEM), None)
+    manage = event.can_manage_team(user)
+    actions = []
+    if event.status == 'draft' and manage and not (problem and problem['key'] in ('locations', 'schedule')):
+        actions.append({'name': 'publish_event', 'style': 'primary'})
+    asked = False
+    if limit.get('limited'):
+        from platform_admin.models import UpgradeRequest
+        asked = UpgradeRequest.objects.filter(event=event, kind='standard', status='pending').exists()
+    with timezone.override(_tz(event)):
+        when = fmt(event.start_time, 'D M j') if event.start_time else ''
+    return {'event_id': event.pk, 'name': event.name, 'status': event.get_status_display(), 'draft': event.status == 'draft',
+            'when': when, 'plan': plans.LABELS[plans.plan_of(event)],
+            'limit': limit, 'limit_price': plans.price_label('standard') if limit.get('limited') else '',
+            'limit_url': reverse('console:event', args=[event.pk]) + '#free-limit', 'limit_asked': asked,
+            'manage': manage, 'next': problem, 'actions': actions}

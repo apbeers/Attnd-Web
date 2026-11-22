@@ -67,6 +67,7 @@ class ComponentTestCase(TestCase):
             'ai_credit_meter': {},  # credit/
             'live_activity_settings': {'event_id': self.event.pk},
             'unpublished_changes': {'event_id': self.event.pk},
+            'event_status_line': {'event_id': self.event.pk},
         }
         self.key_text = {
             'event_tile': 'Prairie Fest', 'event_header': 'PRAIRIE', 'event_stats': 'Attendees joined',
@@ -86,6 +87,7 @@ class ComponentTestCase(TestCase):
             'ai_credit_meter': 'used this month',
             'live_activity_settings': 'Urgent announcements always show',
             'unpublished_changes': "attendees can't open it yet",
+            'event_status_line': 'free phones',
         }
 
     def request(self, user=None):

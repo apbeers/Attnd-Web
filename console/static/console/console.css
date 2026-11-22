@@ -1027,3 +1027,10 @@ h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
 .toast.is-leaving { opacity: 0; transform: translateY(-6px); transition: opacity .25s ease, transform .25s ease; }
 @media (max-width: 600px) { .toasts { top: auto; bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); left: var(--space-4); right: var(--space-4); width: auto; } }
 @media (prefers-reduced-motion: reduce) { .toast.is-leaving { transition: none; } }
+
+/* The Overview's status line (batch 7): status, free limit, the next step; one row on wide, stacked on narrow */
+.status-line { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg);
+  background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.status-line__main, .status-line__next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.status-line__limit { font-size: var(--text-sm); }
+@container component (min-width: 48rem) { .status-line { grid-template-columns: 1fr auto; align-items: center; } }

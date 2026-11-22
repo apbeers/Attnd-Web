@@ -56,11 +56,21 @@ def used(event):
 
 
 def status(event):
-    """For the console: {limited, used, limit, left, full}."""
+    """For the console: {limited, used, limit, left, full}. Kept on the event object for the request (the Overview
+    draws it twice: the status line and Visibility)."""
+    memo = getattr(event, '_free_limit_status', None)
+    if memo is not None:
+        return memo
     if exempt(event):
-        return {'limited': False}
-    n, cap = used(event), limit(event)
-    return {'limited': True, 'used': n, 'limit': cap, 'left': max(cap - n, 0), 'full': n >= cap}
+        result = {'limited': False}
+    else:
+        n, cap = used(event), limit(event)
+        result = {'limited': True, 'used': n, 'limit': cap, 'left': max(cap - n, 0), 'full': n >= cap}
+    try:
+        event._free_limit_status = result
+    except AttributeError:
+        pass
+    return result
 
 
 def admit(event, device_id):
