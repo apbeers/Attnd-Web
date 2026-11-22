@@ -197,7 +197,10 @@ def event_header(user, event_id=None, event=None):
             else:
                 actions.append(nearby_action(user, event))
             actions.append({'name': 'unpublish_event', 'style': 'ghost'})
-    return {'id': event.pk, 'name': event.name, 'code': event.event_code, 'badges': status_badges(event),
+    from platform_admin.plans import header_badges
+    badges = [b for b in status_badges(event) if b['label'] != 'Paid']  # the plan badge says it
+    return {'id': event.pk, 'name': event.name, 'code': event.event_code, 'badges': badges,
+            'plan_badges': header_badges(event, user),
             'public': event.public, 'url': reverse('console:event', args=[event.pk]), 'actions': actions}
 
 

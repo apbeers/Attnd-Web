@@ -876,6 +876,11 @@ hosts the site.
 
 ## Plans and the Platform admin (D1 + D2, owner Nov 21, 2026; `platform_admin/`)
 
+- **Plan and override badges** (batch 7): the `event_header` component (every event page and the chat) shows the plan
+  (`plans.header_badges`: Free / Standard / Studio; the old Paid badge is dropped there) and **Override** when an
+  `EventOverride` or the owner's `AiLimitOverride` changes something (`plans.override_details`; a notes-only row doesn't
+  count). Staff see what it changes in its title, platform admins get a link to the event's Platform page; organizers
+  only see that one applies.
 - **Plans** (`platform_admin/plans.py`): **Free** (unpaid demo, the free phone limit, API-025), **Standard** ($299:
   paid, no phone limit, nearby listing), **Studio** ($499: Standard + publishing the Studio website). `plan_of(event)`
   from `Event.plan` / `paid`. Prices, the free phone limit and new accounts' daily AI imports live in
