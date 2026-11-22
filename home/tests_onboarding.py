@@ -50,6 +50,19 @@ class HomePageTests(TestCase):
         self.assertIn('data-kind-filter="Market"', html)
         self.assertIn('attnd://join/SHOWFEST', html)
 
+    def test_map_view_has_a_pin_for_every_card(self):
+        """P0 #6: the Map view drew nothing useful. Every card carries its code and numeric coordinates (home.js puts a
+        pin per card on OpenStreetMap tiles fitted to them) and the map credits OpenStreetMap."""
+        with override_settings(SHOWCASE_EVENTS=True):
+            showcase.load_all()
+        html = self.client.get('/home/', secure=True).content.decode()
+        cards = re.findall(r'<li class="event-card" data-code="([^"]+)" data-kind="[^"]*" data-lat="([^"]*)" data-lng="([^"]*)"', html)
+        self.assertEqual(len(cards), Event.objects.filter(showcase=True).count())
+        for code, lat, lng in cards:
+            self.assertTrue(-90 <= float(lat) <= 90 and -180 <= float(lng) <= 180, code)
+        self.assertIn('data-gallery-map', html)
+        self.assertIn('openstreetmap.org/copyright', html)
+
     def test_composer_keeps_it_until_sign_up_then_imports(self):
         resp = self.client.post(reverse('home:start'), {'text': 'A market in the park on Saturday', 'time_zone': 'America/Chicago'},
                                 secure=True)

@@ -31,7 +31,7 @@ showcase events and DEMO. Category pills and Grid | Map; works without JS (every
       </div>
     </div>
     {% if showcase %}<ul class="event-grid" data-showcase-list>{% for c in showcase %}{% include 'home/_card.html' %}{% endfor %}</ul>
-    <div class="gallery__map" data-gallery-map hidden><svg viewBox="0 0 1000 560" role="img" aria-label="Where the events are"><rect width="1000" height="560" rx="24" class="gallery__map-bg"/></svg></div>
+    <div class="gallery__map" data-gallery-map hidden><svg viewBox="0 0 1000 560" role="img" aria-label="Where the events are"><defs><clipPath id="gallery-map-clip"><rect width="1000" height="560" rx="24"/></clipPath></defs><g clip-path="url(#gallery-map-clip)"><rect width="1000" height="560" class="gallery__map-bg"/></g></svg><p class="gallery__map-credit small muted">Map © <a href="https://www.openstreetmap.org/copyright" rel="noopener nofollow">OpenStreetMap</a> contributors</p></div>
     {% else %}<p class="muted">Showcase events appear here soon. Meanwhile, try yours: it takes about a minute.</p>{% endif %}
   </div>
 </section>

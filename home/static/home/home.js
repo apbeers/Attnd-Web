@@ -129,40 +129,84 @@
     list?.querySelectorAll('.event-card').forEach((c) => { c.hidden = !!kind && !c.dataset.kind.startsWith(kind); });
     drawMap();
   }));
+  // The Map view: OpenStreetMap tiles (Web Mercator, the zoom that fits every pin) under the pins, labels that
+  // would collide hidden (the name is still the pin's accessible name and tooltip). P0 #6: the old view drew pins on
+  // an empty grey box, which read as blank.
+  const TILE = 256, W = 1000, H = 560;
+  const merc = (lng, lat, z) => {
+    const s = TILE * 2 ** z, r = Math.PI / 180;
+    return [(lng + 180) / 360 * s, (1 - Math.log(Math.tan(lat * r) + 1 / Math.cos(lat * r)) / Math.PI) / 2 * s];
+  };
   function drawMap() {
     if (!mapBox || mapBox.hidden) return;
     const svg = mapBox.querySelector('svg');
-    svg.querySelectorAll('.gallery__map-pin').forEach((p) => p.remove());
-    const cards = [...(list?.querySelectorAll('.event-card') || [])].filter((c) => !c.hidden && c.dataset.lat);
-    if (!cards.length) return;
-    const pts = cards.map((c) => [parseFloat(c.dataset.lng), parseFloat(c.dataset.lat), c]);
-    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-    const [x0, x1, y0, y1] = [Math.min(...xs) - 2, Math.max(...xs) + 2, Math.min(...ys) - 2, Math.max(...ys) + 2];
+    svg.querySelectorAll('.gallery__map-pin, .gallery__map-tiles').forEach((p) => p.remove());
+    const cards = [...gallery.querySelectorAll('.event-card')]
+      .filter((c) => !c.hidden && c.dataset.lat && c.dataset.lng);
+    const seen = new Set();
+    const pts = cards.map((c) => [parseFloat(c.dataset.lng), parseFloat(c.dataset.lat), c])
+      .filter(([lng, lat, c]) => Number.isFinite(lng) && Number.isFinite(lat) && !seen.has(c.dataset.code) && seen.add(c.dataset.code));
+    if (!pts.length) return;
+    let z = 12;
+    for (; z > 1; z--) {  // the largest zoom where every pin fits with a margin
+      const xy = pts.map(([lng, lat]) => merc(lng, lat, z));
+      const w = Math.max(...xy.map((p) => p[0])) - Math.min(...xy.map((p) => p[0]));
+      const h = Math.max(...xy.map((p) => p[1])) - Math.min(...xy.map((p) => p[1]));
+      if (w <= W - 240 && h <= H - 120) break;
+    }
+    const xy = pts.map(([lng, lat]) => merc(lng, lat, z));
+    const cx = (Math.max(...xy.map((p) => p[0])) + Math.min(...xy.map((p) => p[0]))) / 2;
+    const cy = (Math.max(...xy.map((p) => p[1])) + Math.min(...xy.map((p) => p[1]))) / 2;
+    const ox = cx - W / 2, oy = cy - H / 2;
     const ns = 'http://www.w3.org/2000/svg';
-    pts.forEach(([lng, lat, card]) => {
+    const tiles = document.createElementNS(ns, 'g');
+    tiles.setAttribute('class', 'gallery__map-tiles');
+    const n = 2 ** z;
+    for (let tx = Math.floor(ox / TILE); tx <= Math.floor((ox + W) / TILE); tx++) {
+      for (let ty = Math.max(0, Math.floor(oy / TILE)); ty <= Math.min(n - 1, Math.floor((oy + H) / TILE)); ty++) {
+        const img = document.createElementNS(ns, 'image');
+        img.setAttribute('href', `https://tile.openstreetmap.org/${z}/${((tx % n) + n) % n}/${ty}.png`);
+        img.setAttribute('x', tx * TILE - ox); img.setAttribute('y', ty * TILE - oy);
+        img.setAttribute('width', TILE); img.setAttribute('height', TILE);
+        img.addEventListener('error', () => img.remove());  // offline / blocked: the plain background stays
+        tiles.appendChild(img);
+      }
+    }
+    svg.querySelector('.gallery__map-bg').after(tiles);
+    const dots = xy.map(([px, py]) => [px - ox - 12, py - oy - 12, px - ox + 12, py - oy + 12]);
+    const boxes = [];
+    const hits = (box, own) => [...boxes, ...dots.filter((d, j) => j !== own)]
+      .some((b) => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3]);
+    pts.forEach(([, , card], i) => {
+      const x = xy[i][0] - ox, y = xy[i][1] - oy;
       const g = document.createElementNS(ns, 'g');
       g.setAttribute('class', 'gallery__map-pin');
       g.setAttribute('tabindex', '0');
       g.setAttribute('role', 'button');
-      const name = card.querySelector('.event-card__name').textContent;
+      const name = card.querySelector('.event-card__name').textContent.trim();
       g.setAttribute('aria-label', name);
-      const x = 60 + (lng - x0) / (x1 - x0 || 1) * 880, y = 520 - (lat - y0) / (y1 - y0 || 1) * 480;
+      const title = document.createElementNS(ns, 'title');
+      title.textContent = name;
       const dot = document.createElementNS(ns, 'circle');
       dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', 11);
-      dot.setAttribute('fill', getComputedStyle(card).getPropertyValue('--c1') || '#431f86');
+      dot.setAttribute('fill', getComputedStyle(card).getPropertyValue('--c1').trim() || '#431f86');
+      g.append(title, dot);
+      svg.appendChild(g);
       const label = document.createElementNS(ns, 'text');
       label.setAttribute('x', x + 16); label.setAttribute('y', y + 5); label.textContent = name;
-      g.append(dot, label);
+      g.append(label);
+      const box = [x + 14, y - 11, x + 18 + label.getComputedTextLength(), y + 9];  // the label's real extent
+      if (box[2] > W || hits(box, i)) label.remove(); else boxes.push(box);
       const open = () => { setView('grid'); card.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' }); card.querySelector('a, img')?.focus?.(); };
       g.addEventListener('click', open);
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-      svg.appendChild(g);
     });
   }
   function setView(view) {
     const button = gallery.querySelector(`[data-view="${view}"]`);
     if (button) press(button.parentElement, button);
     if (list) list.hidden = view === 'map';
+    gallery.querySelector('[data-near-list]')?.toggleAttribute('hidden', view === 'map');
     if (mapBox) mapBox.hidden = view !== 'map';
     drawMap();
   }

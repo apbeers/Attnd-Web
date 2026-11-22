@@ -119,7 +119,10 @@
 .gallery__map-bg { fill: var(--color-subtle, var(--color-surface-2)); }
 .gallery__map-pin { cursor: pointer; }
 .gallery__map-pin circle { stroke: #fff; stroke-width: 3; }
-.gallery__map-pin text { font: 700 14px var(--font, sans-serif); fill: var(--color-text); }
+.gallery__map-pin text { font: 700 14px var(--font, sans-serif); fill: #1b1530; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+.gallery__map-pin:focus-visible circle { stroke: var(--color-brand); stroke-width: 4; }
+.gallery__map-credit { margin: var(--space-1, 4px) 0 0; text-align: end; }
+@media (prefers-color-scheme: dark) { :root:not([data-scheme="light"]) .gallery__map-tiles { filter: brightness(.72) contrast(1.1); } }
 
 /* Below the fold: skipped by layout and paint until near the viewport (smooth scrolling on long pages). */
 #features, #how, .onb-again, #download { content-visibility: auto; contain-intrinsic-size: auto 900px; }
