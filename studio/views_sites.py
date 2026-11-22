@@ -12,7 +12,6 @@ from functools import lru_cache
 from pathlib import Path
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.http import (Http404, HttpResponse, HttpResponseNotAllowed, HttpResponseRedirect, JsonResponse)
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -51,7 +50,8 @@ def _target(slug, token, asset=False):
     if site is None:
         raise Http404
     if token is None:
-        if asset and not site.suspended and site.event.plan == Event.PLAN_STUDIO:
+        from platform_admin.plans import can_go_live
+        if asset and not site.suspended and can_go_live(site.event):
             # Assets stay reachable while the site is unpublished: the app's logo and flyer may point at them.
             files = site.published.files if site.published else {}
             return Target(site, files, site.published, f'/{site.slug}/', preview=False)
@@ -76,8 +76,18 @@ def _target(slug, token, asset=False):
     return Target(site, version.files if version else {}, version, base, preview=True)
 
 
-def _page_response(target, text, status=200):
-    body = hosting.render_page(text, target.base, preview=target.preview, bridge=target.preview)
+def _page_response(target, text, status=200, path=''):
+    from studio import seo
+    canonical = '' if target.preview or status != 200 else hosting.sites_origin() + target.base + getattr(target, 'path', '')
+    origin_base = hosting.sites_origin() + target.base
+    site = target.site
+    head = seo.head_tags(site, target.files, path, canonical or origin_base, origin_base) if status == 200 else ''
+    body_start = seo.demo_ribbon() if not site.event.paid and not target.preview else ''
+    body_end = seo.app_banner(site, target.base)
+    if not target.preview and status == 200:
+        body_end += seo.beacon(getattr(target, 'path', '') or '/')
+    body = hosting.render_page(text, target.base, preview=target.preview, bridge=target.preview, canonical=canonical,
+                               head=head, body_start=body_start, body_end=body_end)
     response = HttpResponse(body, content_type=CONTENT_TYPES['html'], status=status)
     response['Cache-Control'] = 'no-store' if target.preview else 'public, max-age=60'
     if target.preview:
@@ -108,13 +118,19 @@ def serve(request, slug, rest=None):
     if request.method not in ('GET', 'HEAD'):
         return HttpResponseNotAllowed(['GET', 'HEAD'])
     files = target.files
+    from studio import seo
+    if path == 'sitemap.xml' and path not in files:
+        return HttpResponse(seo.site_sitemap(target.site, files), content_type='application/xml')
+    if path == 'robots.txt' and path not in files:
+        return HttpResponse(seo.site_robots(target.site), content_type=CONTENT_TYPES['txt'])
     candidates = ['index.html'] if path in ('', 'index') else (
         [path + 'index.html'] if path.endswith('/') else [path, path + '.html', path + '/index.html'])
     for candidate in candidates:
         if candidate in files:
             ext = candidate.rsplit('.', 1)[-1]
             if ext == 'html':
-                return _page_response(target, files[candidate])
+                target.path = '' if candidate == 'index.html' else (path if not path.endswith('.html') else path)
+                return _page_response(target, files[candidate], path=candidate)
             response = HttpResponse(files[candidate], content_type=CONTENT_TYPES.get(ext, 'text/plain'))
             response['Cache-Control'] = 'no-store' if target.preview else 'public, max-age=60'
             return response
@@ -141,6 +157,8 @@ def _internal(request, target, path):
         return _form(request, target, path[len('forms/'):].strip('/'))
     if path in ('report', 'report/'):
         return _report(request, target)
+    if path == 'hit':
+        return _hit(request, target)
     raise Http404
 
 
@@ -258,11 +276,12 @@ def _notify(site, submission):
                   .exclude(user__email='').values_list('user__email', flat=True))
     if not emails:
         return
-    lines = '\n'.join(f'{k}: {v}' for k, v in submission.data.items())
+    from console import mail
     try:
-        send_mail(f'New “{submission.form}” entry on {event.name}',
-                  f'{lines}\n\nAll entries: {site_url(f"/console/events/{event.pk}/studio/")}#forms\n',
-                  from_email=None, recipient_list=sorted(emails))
+        mail.send('site_form_entry', sorted(emails), f'New “{submission.form}” entry on {event.name}',
+                  details=[(k, str(v)) for k, v in submission.data.items()],
+                  button={'label': 'All entries', 'url': f'{site_url(f"/console/events/{event.pk}/studio/")}#forms'},
+                  fail_silently=False)
     except Exception:
         logger.exception('Could not email the form entry for site %s', site.pk)
 
@@ -288,12 +307,55 @@ def _report(request, target):
             SiteReport.objects.create(site=site, reason=reason, details=request.POST.get('details', '')[:2000],
                                       email=request.POST.get('email', '')[:254] if '@' in request.POST.get('email', '')
                                       else '', page=request.POST.get('page', '')[:200])
+            from studio import safety
+            safety.report_filed(site)
         return render(request, 'studio/site_report.html', {'site': site, 'base': target.base, 'done': True})
     return render(request, 'studio/site_report.html', {
         'site': site, 'base': target.base, 'reasons': SiteReport.REASONS,
         'page': request.GET.get('page', '')[:200]})
 
 
+HIT_KINDS = {'view', 'open_app', 'get_app'}
+
+
+def _hit(request, target):
+    """Cookie-free analytics (batch 7 §6): one count per beacon; nothing about the visitor is kept (the IP only
+    feeds the rate limit, in the cache)."""
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if target.preview:
+        return HttpResponse(status=204)
+    limit = RateLimit('studio_hit_ip')
+    key = f'{target.site.pk}:{client_ip(request)}'
+    if limit.exceeded(key):
+        return HttpResponse(status=204)
+    limit.hit(key)
+    try:
+        data = json.loads(request.body[:2000] or b'{}')
+    except ValueError:
+        return HttpResponse(status=204)
+    kind = data.get('k') if isinstance(data, dict) else None
+    if kind not in HIT_KINDS:
+        return HttpResponse(status=204)
+    from studio import analytics
+    analytics.count(target.site, kind, str(data.get('p') or '/'), str(data.get('r') or ''))
+    return HttpResponse(status=204)
+
+
 def not_found(request, exception=None):
     return HttpResponse('Not found', status=404, content_type='text/plain')
 
+
+
+def sitemap(request):
+    """The sites host's sitemap: every published site that is up (not taken down, Studio plan)."""
+    from xml.sax.saxutils import escape
+    from platform_admin.plans import can_go_live
+    sites = [s for s in Site.objects.filter(published__isnull=False, suspended=False).select_related('event')
+             .order_by('pk') if can_go_live(s.event)]
+    rows = ''.join(f'<url><loc>{escape(hosting.sites_origin() + "/" + s.slug + "/")}</loc>'
+                   f'{"<lastmod>" + s.published_at.date().isoformat() + "</lastmod>" if s.published_at else ""}</url>'
+                   for s in sites)
+    return HttpResponse('<?xml version="1.0" encoding="UTF-8"?>'
+                        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{rows}</urlset>',
+                        content_type='application/xml')

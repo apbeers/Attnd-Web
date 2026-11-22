@@ -6,7 +6,9 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models import CharField, F, Func, Q
 from django.db.models.functions import Upper
+from django.db.models.lookups import Exact
 from django.utils import timezone as dj_tz
 
 
@@ -54,6 +56,16 @@ def normalize_tags(values):
     return out[:MAX_TAGS]
 
 
+
+def json_is(field, kind):
+    """A CHECK constraint that a JSON column holds `kind` ('object' / 'array'): jsonb_typeof in Postgres
+    (docs/db_review.md §5). Code always writes dicts / lists there; this keeps a bad import or a hand edit in the
+    admin from storing `null` or a string that every reader would have to guard against."""
+    model_field = field
+    return models.CheckConstraint(
+        condition=Exact(Func(F(model_field), function='jsonb_typeof', output_field=CharField()), kind),
+        name=f'%(app_label)s_%(class)s_{field}_is_{kind}')
+
 def generate_event_code(length: int = 8) -> str:
     """Return a random uppercase alphanumeric code that doesn't already exist."""
     alphabet = string.ascii_uppercase + string.digits
@@ -62,6 +74,36 @@ def generate_event_code(length: int = 8) -> str:
         if not Event.objects.filter(event_code=code).exists():
             return code
     raise RuntimeError('Could not generate a unique event code after 20 attempts.')
+
+
+class EventQuerySet(models.QuerySet):
+    def for_user(self, user, perm='events.change_event'):
+        """The events this person has `perm` on (attnd.permissions: their event roles; superusers every event)."""
+        from attnd.permissions import EVENT_ROLES
+        if not user or not user.is_authenticated or not user.is_active:
+            return self.none()
+        if user.is_superuser:
+            return self.all()
+        roles = [r for r, perms in EVENT_ROLES.items() if perm in perms]
+        parts = [models.Q(user=user)] if 'owner' in roles else []
+        member_roles = [r for r in roles if r != 'owner']
+        if member_roles:
+            # A subquery instead of a join + DISTINCT: no duplicate rows, so annotations (counts) stay exact.
+            parts.append(models.Q(id__in=EventMember.objects.filter(user=user, role__in=member_roles)
+                                  .values('event_id')))
+        if not parts:
+            return self.none()
+        q = parts[0]
+        for part in parts[1:]:
+            q |= part
+        return self.filter(q)
+
+
+class EventOwnedQuerySet(models.QuerySet):
+    """Rows that belong to one event (locations, schedule items, notifications)."""
+
+    def for_user(self, user, perm='events.change_event'):
+        return self.filter(event__in=Event.objects.for_user(user, perm).values('id'))
 
 
 class Event(CoordinatesMixin, models.Model):
@@ -108,20 +150,52 @@ class Event(CoordinatesMixin, models.Model):
     PLAN_CHOICES = [(PLAN_STANDARD, 'Standard'), (PLAN_STUDIO, 'Studio')]
     plan = models.CharField(max_length=16, choices=PLAN_CHOICES, default=PLAN_STANDARD)
     public = models.BooleanField(default=False, help_text='Listed in nearby search')
+    # Staff test copies of prospects' events (prospects/): published (joinable by code / QR) but never listed in
+    # nearby search, never website-watched, never brought into Studio automatically. Not part of the API.
+    testing_only = models.BooleanField(default=False, help_text='Staff test copy: never listed or watched')
+    # Showcase events (manage.py load_showcase_events, dev only for now): the home page's "See it live" gallery. Kept
+    # happening now like DEMO; exempt from the free limit (API-025), never in nearby search, no usage counts.
+    showcase = models.BooleanField(default=False, help_text='Home page showcase event (gallery, kept happening now)')
+    # The home page gallery's card cover (events/covers.py), only for events with no flyer or place photo of their own:
+    # a licensed Wikimedia Commons photo near the venue (credit shown on the card) or an AI-made picture. Never copied
+    # from the organizer's website. Not part of the API.
+    cover = models.FileField(upload_to=get_file_path, blank=True)
+    cover_credit = models.CharField(max_length=300, blank=True)
+    cover_source = models.CharField(max_length=16, blank=True)  # wikimedia / ai
+    cover_checked_at = models.DateTimeField(null=True, blank=True)
+    cover_cost_usd = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+    # API-021: "Plan your day" examples written for this event (events/plan_suggestions.py): {items: [{text, kind}],
+    # version: the content_version they were made for, source: ai | fallback, at, cost_usd}. Kept up to date in the
+    # background after content changes; the bundle falls back to the deterministic ones when empty or stale.
+    plan_suggestions = models.JSONField(default=dict, blank=True)
     flyer = models.FileField(upload_to=get_file_path, blank=True)
     address = models.CharField(max_length=512, blank=True)
-    order_id = models.CharField(max_length=512, blank=True)
     created_at = models.DateTimeField(default=dj_tz.now, editable=False)
     # The owner. Null = unassigned (the owner's account was deleted); site admins can reassign it.
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
 
     # Presentation — organizer overrides only; resolved by events.display
     display_config = models.JSONField(default=dict, blank=True)
+    # API-024: the organizer's screen layouts (events/layout.py `clean_config`: {"screens": {screen: {sections,
+    # overrides?}}}); screens not listed use the automatic layout.
+    layout_config = models.JSONField(default=dict, blank=True)
+    # The Live Activity's content choices (events/live_activity.py `clean`; {} = the defaults).
+    live_activity = models.JSONField(default=dict, blank=True)
     accent_color = models.CharField(max_length=7, blank=True, help_text='#RRGGBB')
     logo_url = models.URLField(max_length=1024, blank=True)
+    # Our own copy of an outside logo_url (attnd/images.py: self-hosted, re-encoded); logo_source_url = the logo_url it
+    # was made from, so a changed logo_url is copied again. The API and pages show the copy (images.event_logo_url).
+    logo_image = models.FileField(upload_to=get_file_path, blank=True)
+    logo_source_url = models.URLField(max_length=1024, blank=True)
+    # API-023: the event's colour theme (events/theme.py): {light: {primary, secondary, tertiary}, dark: {…}, source:
+    # ai | site | manual | default, made_at, reason}. {} = Attnd's purple. Made by the AI import (events/theme_ai.py),
+    # edited in the console (an edit locks it); theme_web / theme_apps switch it on for the website and the apps.
+    theme = models.JSONField(default=dict, blank=True)
+    theme_web = models.BooleanField(default=True, db_default=True, help_text='Use the custom theme on the website')
+    theme_apps = models.BooleanField(default=True, db_default=True, help_text='Use the custom theme in the apps')
 
     # Sync — bumped on every content change so clients can cheaply detect updates
-    content_version = models.PositiveIntegerField(default=1)
+    content_version = models.PositiveIntegerField(default=1, db_default=1)
     content_updated_at = models.DateTimeField(default=dj_tz.now)
 
     # AI sources & refresh
@@ -136,6 +210,8 @@ class Event(CoordinatesMixin, models.Model):
                                      help_text='Fields edited by a person; AI refreshes will not overwrite them')
     # API-018: details for the apps' on-device assistant (about, FAQ, amenities, policies…), events.context
     context = models.JSONField(default=dict, blank=True)
+
+    objects = EventQuerySet.as_manager()
 
     # Fields the AI / diff engine manages
     CONTENT_FIELDS = ['name', 'description', 'address', 'latitude', 'longitude',
@@ -185,19 +261,35 @@ class Event(CoordinatesMixin, models.Model):
         return member.role if member else None
 
     def can_edit(self, user):
-        """Everyone on the team edits content."""
-        return self.role_for(user) is not None
+        """Everyone on the team edits content (attnd.permissions: events.change_event on this event)."""
+        return bool(user) and user.has_perm('events.change_event', self)
 
     def can_manage_team(self, user):
-        """The owner and event admins add and remove people, and change event-wide settings."""
-        return self.role_for(user) in ('owner', EventMember.ROLE_ADMIN)
+        """The owner and event admins add and remove people, and change event-wide settings (events.manage_event)."""
+        return bool(user) and user.has_perm('events.manage_event', self)
 
     class Meta:
+        # attnd/permissions.py: event roles answer the object ones, platform roles (Groups) the others.
+        permissions = [
+            ('manage_event', 'Manage an event: status, listing, sources, team, upgrade requests'),
+            ('transfer_event', 'Transfer an event to another owner'),
+            ('mark_event_paid', 'Mark events paid (going live)'),
+            ('assign_event_owner', 'Give an unassigned event an owner'),
+            ('view_all_usage', 'See usage across every event'),
+            ('view_showcase', 'See the showcase and demo events'),
+        ]
         indexes = [
-            models.Index(fields=['user', 'name', 'event_code', 'latitude', 'longitude']),
+            # events.apis.nearby_events: listed, published events in a start-time window (then a lat/lng box).
+            models.Index(fields=['start_time', 'latitude', 'longitude'], name='event_nearby_idx',
+                         condition=Q(public=True, status='published')),
             # `event_code__iexact` / `name__iexact` (lookup, /join/, /p/, the DEMO checks) compare UPPER(…).
             models.Index(Upper('event_code'), name='event_code_upper_idx'),
             models.Index(Upper('name'), name='event_name_upper_idx'),
+        ]
+        constraints = [
+            *(json_is(f, 'object') for f in ('display_config', 'layout_config', 'live_activity', 'theme',
+                                             'plan_suggestions', 'context')),
+            *(json_is(f, 'array') for f in ('source_urls', 'locked_fields')),
         ]
 
     def __str__(self):
@@ -205,12 +297,29 @@ class Event(CoordinatesMixin, models.Model):
 
 
 class Location(CoordinatesMixin, models.Model):
+    objects = EventOwnedQuerySet.as_manager()
     name = models.CharField(max_length=256)
     snippet = models.CharField(max_length=200, blank=True)
     description = models.CharField(max_length=1024, blank=True)
     website = models.URLField(max_length=1024, null=True, blank=True)
     image = models.ImageField(upload_to=get_file_path, blank=True, null=True)
     image_url = models.URLField(max_length=1024, blank=True, null=True)
+    # Place images found automatically (stage D, events/place_images.py): where it came from, the credit and licence
+    # (Wikimedia), when. `image_auto` = the current image was found by Attnd (an organizer's image never is);
+    # `image_never_refetch` = the organizer removed a found one (never look again).
+    image_auto = models.BooleanField(default=False)
+    image_source_url = models.URLField(max_length=1024, blank=True)
+    # Google's place id for this location (attnd/google.py; their terms allow keeping place ids indefinitely), '' =
+    # looked up and nothing found; google_place_key = the name + address it was looked up for (changed → look again).
+    google_place_id = models.CharField(max_length=300, blank=True)
+    google_place_key = models.CharField(max_length=32, blank=True)
+    image_credit = models.CharField(max_length=300, blank=True)  # API-022: in the bundle
+    image_license = models.CharField(max_length=120, blank=True)
+    image_fetched_at = models.DateTimeField(null=True, blank=True)
+    image_never_refetch = models.BooleanField(default=False)
+    # Batch 7 (owner: OK): no free photo found → show the place's first Google Places photo, fetched live per view
+    # through /img/places/<id>/ (never stored here; Google's terms). Only the flag and the place id are kept.
+    google_photo = models.BooleanField(default=False)
     latitude = models.DecimalField(max_digits=24, decimal_places=20, null=True, blank=True)
     longitude = models.DecimalField(max_digits=24, decimal_places=20, null=True, blank=True)
     address = models.CharField(max_length=512, blank=True)
@@ -222,15 +331,15 @@ class Location(CoordinatesMixin, models.Model):
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, db_index=False)  # (event, sort_order) covers it
 
-    CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url',
+    CONTENT_FIELDS = ['name', 'snippet', 'description', 'website', 'image_url', 'google_photo',
                       'address', 'latitude', 'longitude', 'category', 'tags', 'context']
 
     class Meta:
-        indexes = [
-            models.Index(fields=['event', 'user'])
-        ]
+        # Every list is one event's locations in the organizer's order.
+        indexes = [models.Index(fields=['event', 'sort_order'], name='location_event_order')]
+        constraints = [json_is('tags', 'array'), json_is('context', 'object'), json_is('locked_fields', 'array')]
         ordering = ['sort_order', 'name']
 
     def save(self, *args, **kwargs):
@@ -247,23 +356,32 @@ class Location(CoordinatesMixin, models.Model):
     def resolved_image_url(self):
         if self.image:
             return self.image.url
-        return self.image_url or None
+        if self.image_url:
+            return self.image_url
+        if self.google_photo and self.google_place_id:
+            from django.urls import reverse
+            return reverse('place_photo', args=[self.pk])  # a live Google photo (events/views_photos.py)
+        return None
 
     def __str__(self):
         return self.name
 
 
 class ScheduledItem(models.Model):
+    objects = EventOwnedQuerySet.as_manager()
     name = models.CharField(max_length=256)
     description = models.CharField(max_length=1024, blank=True)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
-    location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True)
+    # (location, start_time) and (event, start_time) cover the plain FK indexes.
+    location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, db_index=False)
     tags = models.JSONField(default=list, blank=True)
     context = models.JSONField(default=dict, blank=True)  # API-018, events.context
+    # API-030: Apple Music links per performer, keyed by the normalised name (events/music.py; not content).
+    music = models.JSONField(default=dict, blank=True)
     hidden = models.BooleanField(default=False)
     locked_fields = models.JSONField(default=list, blank=True)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, db_index=False)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
 
     CONTENT_FIELDS = ['name', 'description', 'start_time', 'end_time', 'location', 'tags', 'context']
@@ -279,6 +397,8 @@ class ScheduledItem(models.Model):
             models.Index(fields=['event', 'start_time']),
             models.Index(fields=['location', 'start_time']),
         ]
+        constraints = [json_is('tags', 'array'), json_is('context', 'object'), json_is('music', 'object'),
+                       json_is('locked_fields', 'array')]
         ordering = ['start_time']
 
     def __str__(self):
@@ -305,6 +425,7 @@ def is_send_slot(value):
 
 
 class Notification(models.Model):
+    objects = EventOwnedQuerySet.as_manager()
     PRIORITY_NORMAL = 'normal'
     PRIORITY_URGENT = 'urgent'  # API-011: to every device in the event, right away, and on Live Activities
     PRIORITY_CHOICES = [(PRIORITY_NORMAL, 'Normal'), (PRIORITY_URGENT, 'Urgent')]
@@ -314,15 +435,17 @@ class Notification(models.Model):
     send_time = models.DateTimeField()
     sent = models.BooleanField(default=False)
     sent_at = models.DateTimeField(null=True, blank=True)
-    delivered_count = models.PositiveIntegerField(default=0)
-    failed_count = models.PositiveIntegerField(default=0)
+    delivered_count = models.PositiveIntegerField(default=0, db_default=0)
+    failed_count = models.PositiveIntegerField(default=0, db_default=0)
     priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default=PRIORITY_NORMAL)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  # who created it
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, db_index=False)  # (event, send_time) covers it
 
     class Meta:
         indexes = [
-            models.Index(fields=['event', 'user'])
+            models.Index(fields=['event', 'send_time'], name='notification_event_time'),
+            # run_scheduled_tasks: the scheduled ones that are due, across every event.
+            models.Index(fields=['send_time'], name='notification_due', condition=Q(sent=False)),
         ]
 
     @property
@@ -349,10 +472,30 @@ def is_ci_device(device_id):
     return str(device_id or '').startswith(CI_DEVICE_PREFIX)
 
 
+class EventJoin(models.Model):
+    """API-025: each device that ever joined an event, once (the free limit counts these; a device that left and
+    comes back is still one of them, so a rejoin is always allowed)."""
+    event = models.ForeignKey('Event', on_delete=models.CASCADE, related_name='joins', db_index=False)
+    device_id = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['event', 'device_id'], name='event_join_once')]
+
+
 class DeviceQuerySet(models.QuerySet):
     def real(self):
         """Devices of real people: without the automated test devices (``ci-…`` ids)."""
         return self.exclude(id__startswith=CI_DEVICE_PREFIX)
+
+    def attendees(self):
+        """Real devices of attendees: without CI devices and the organizers' preview phones (API-026)."""
+        return self.real().filter(preview_by__isnull=True, preview_until__isnull=True)
+
+    def previews(self, now=None):
+        """Preview phones whose preview hasn't expired (API-026)."""
+        from django.utils import timezone
+        return self.filter(preview_until__gt=now or timezone.now())
 
 
 class Device(models.Model):
@@ -373,13 +516,20 @@ class Device(models.Model):
     # API version can be retired: see API_CHANGES.md and `manage.py api_usage`.
     api_version = models.PositiveSmallIntegerField(null=True, blank=True)
     joined_at = models.DateTimeField(null=True, blank=True)
+    # API-026: the organizer's preview phone (joined with a preview_token from the console). Not an attendee: not
+    # counted, no free spot, no random wait; may hold the changes long-poll until preview_until.
+    preview_until = models.DateTimeField(null=True, blank=True)
+    preview_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    # The content_version of the last bundle this device fetched ("Updated on 31 of 37 phones").
+    last_version = models.PositiveIntegerField(null=True, blank=True)
 
     objects = DeviceQuerySet.as_manager()
 
     class Meta:
-        indexes = [
-            models.Index(fields=['event'])
-        ]
+        # The FK's own index serves per-event counts; preview phones are a handful, so a partial index finds the
+        # live ones (bundle/, changes/, the QR card) without reading every attendee row.
+        indexes = [models.Index(fields=['event', 'preview_until'], name='device_preview',
+                                condition=Q(preview_until__isnull=False))]
 
     def __str__(self):
         return f'{self.event} - {self.id} - {self.subscribed}'
@@ -397,7 +547,7 @@ class EventMember(models.Model):
     ROLE_CHOICES = [(ROLE_ADMIN, 'Admin'), (ROLE_CONTRIBUTOR, 'Contributor')]
     ROLE_CHOICES_DICT = dict(ROLE_CHOICES)
 
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='members')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='members', db_index=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='event_memberships')
     role = models.CharField(max_length=16, choices=ROLE_CHOICES, default=ROLE_CONTRIBUTOR)
     created_at = models.DateTimeField(default=dj_tz.now)
@@ -425,10 +575,25 @@ class EventRevision(models.Model):
         return f'{self.event} v{self.content_version}: {self.summary}'
 
 
+class PublishedBundle(models.Model):
+    """What attendees see (batch 6 §4): the event's content as of its last Publish. The database rows are the draft
+    the console edits (preview phones see it live); `events/drafts.py` publishes, diffs and discards."""
+    event = models.OneToOneField(Event, on_delete=models.CASCADE, related_name='published')
+    # The content_version attendees get (publish, and changes that bypass the draft: notifications, status).
+    version = models.PositiveIntegerField()
+    source = models.JSONField()  # content.snapshot + the app look, for the diff and Discard
+    bundles = models.JSONField()  # {"<X-Attnd-Sections>": bundle} built at publish time
+    published_at = models.DateTimeField(default=dj_tz.now)
+    published_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def __str__(self):
+        return f'{self.event} published v{self.version}'
+
+
 class EventInvite(models.Model):
     """A team invitation for an email with no account yet. It becomes an EventMember when someone
     signs up or signs in with that email (console.accounts.claim_invites)."""
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='invites')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='invites', db_index=False)
     email = models.EmailField()
     role = models.CharField(max_length=16, choices=EventMember.ROLE_CHOICES, default=EventMember.ROLE_CONTRIBUTOR)
     invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
@@ -442,14 +607,8 @@ class EventInvite(models.Model):
 
 
 def events_for_user(user):
-    """Events the user owns or is a member of. Superusers see everything."""
-    if not user.is_authenticated:
-        return Event.objects.none()
-    if user.is_superuser:
-        return Event.objects.all()
-    # A subquery instead of a join + DISTINCT: no duplicate rows, so annotations (counts) stay cheap and exact.
-    member_of = EventMember.objects.filter(user=user).values('event_id')
-    return Event.objects.filter(models.Q(user=user) | models.Q(id__in=member_of))
+    """Events the user owns or is a member of. Superusers see everything. (= Event.objects.for_user(user))"""
+    return Event.objects.for_user(user)
 
 
 class UsageCount(models.Model):
@@ -459,7 +618,8 @@ class UsageCount(models.Model):
     IP address or anything that identifies a person is ever stored with them. `event` is null for
     app-wide counts that happen outside an event (new app installs).
     """
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='usage')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='usage',
+                              db_index=False)  # usage_bucket_unique and (event, bucket) start with it
     bucket = models.DateTimeField()  # UTC, start of the 5-minute window
     metric = models.CharField(max_length=32)
     detail = models.CharField(max_length=32, blank=True)  # a tab name, or a location / schedule item / notification id
@@ -475,3 +635,18 @@ class UsageCount(models.Model):
 
     def __str__(self):
         return f'{self.event_id} {self.bucket:%Y-%m-%d %H:%M} {self.metric}:{self.detail} {self.platform} = {self.count}'
+
+
+class PlaceImageAttempt(models.Model):
+    """One look for a place image (stage D, events/place_images.py): what was tried, what came of it, what it cost
+    (the daily cap sums these)."""
+    location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    source = models.CharField(max_length=24, blank=True)  # event_page / venue / wikimedia
+    result = models.CharField(max_length=16)  # found / none / error / skipped
+    cost_usd = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+    detail = models.CharField(max_length=500, blank=True)
+
+    def __str__(self):
+        return f'{self.location_id}: {self.result} ({self.source})'

@@ -1,0 +1,40 @@
+{% extends 'console/base.html' %}
+{% load console_tags humanize %}
+{% block title %}Platform{% endblock %}
+{% block content %}
+<div class="stack">
+{% include 'platform_admin/_nav.html' %}
+{% if tab == 'overview' %}
+  {% component "platform_health" %}
+{% elif tab == 'pricing' %}
+  <div class="panel stack"><h2 class="title-4">Prices and limits</h2>
+    <p class="small muted">Used everywhere a price shows (Remove the limit, Upgrade to publish). No checkout yet: upgrades are requests you approve.</p>
+    <form method="post" action="{% url 'platform:pricing' %}" class="stack">{% csrf_token %}
+      {% for f in form %}<div class="field"><label class="field__label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% for e in f.errors %}<p class="field__error">{{ e }}</p>{% endfor %}</div>{% endfor %}
+      <div class="action-bar"><button class="button button--primary" data-confirm="Change the prices and limits for everyone?">Save</button></div>
+    </form></div>
+{% elif tab == 'customers' %}
+  <form class="cluster" method="get"><input type="hidden" name="tab" value="customers"><input type="search" name="q" value="{{ q }}" placeholder="Email, event name or code" aria-label="Search customers">
+    <select name="sort" aria-label="Sort" data-autosubmit><option value="-date_joined"{% if sort == '-date_joined' %} selected{% endif %}>Newest</option><option value="-n_events"{% if sort == '-n_events' %} selected{% endif %}>Most events</option><option value="-n_phones"{% if sort == '-n_phones' %} selected{% endif %}>Most phones</option><option value="-last_login"{% if sort == '-last_login' %} selected{% endif %}>Last active</option><option value="email"{% if sort == 'email' %} selected{% endif %}>Email</option></select>
+    <button class="button button--secondary button--small">Search</button>
+    <a class="button button--outline button--small" href="{% url 'platform:customers_csv' %}?q={{ q|urlencode }}">{% icon "download" %} CSV</a></form>
+  <div class="panel panel--flush"><table class="data-table data-table--compact small"><thead><tr><th>Customer</th><th>Joined</th><th>Last active</th><th>Events</th><th>Plans</th><th>Paid</th><th>AI month / all</th><th>Limit</th><th>Used</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><a href="{% url 'platform:customer' r.id %}">{{ r.email }}</a></td><td>{{ r.joined|date:"M j, Y" }}</td><td>{{ r.last_active|naturaltime|default:"—" }}</td><td>{{ r.events }}</td><td>{{ r.plans }}</td><td>${{ r.paid_usd|floatformat:0 }}</td><td>${{ r.ai_month|floatformat:2 }} / ${{ r.ai_total|floatformat:2 }}</td><td>{{ r.ai_limit }}</td>
+    <td class="muted">{% for k, v in r.features.items %}{% if v %}{{ k }} {{ v }}{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}</td></tr>
+  {% empty %}<tr><td colspan="9" class="muted">No customers match.</td></tr>{% endfor %}</tbody></table></div>
+{% elif tab == 'requests' %}
+  <div class="panel stack stack--tight"><h2 class="title-4">Waiting · {{ pending|length }}</h2>
+  {% for r in pending %}<div class="cluster"><span class="grow"><strong>{{ r.event.name }}</strong> ({{ r.event.event_code }}) → {{ r.get_kind_display }} · ${{ r.price_usd|floatformat:0 }}<br><span class="small muted">{{ r.requested_by.email|default:"—" }} · {{ r.created_at|naturaltime }}{% if r.message %} · {{ r.message|truncatechars:160 }}{% endif %}</span></span>
+    <form method="post" action="{% url 'platform:approve' %}">{% csrf_token %}<input type="hidden" name="request_id" value="{{ r.pk }}"><button class="button button--primary button--small" data-confirm="Approve {{ r.get_kind_display }} for {{ r.event.name }} (${{ r.price_usd|floatformat:0 }})? It sets the plan and records the payment.">Approve</button></form>
+    <form method="post" action="{% url 'platform:decline' %}">{% csrf_token %}<input type="hidden" name="request_id" value="{{ r.pk }}"><button class="button button--ghost button--small" data-confirm="Decline this request?">Decline</button></form></div>
+  {% empty %}<p class="small muted">Nothing waiting.</p>{% endfor %}</div>
+  {% if decided %}<div class="panel stack stack--tight"><h2 class="title-4">Decided</h2><ul class="list list--inset small">{% for r in decided %}<li class="cluster"><span class="grow">{{ r.event.name }} → {{ r.get_kind_display }}</span><span class="badge">{{ r.get_status_display }}</span><span class="muted">{{ r.decided_by.email|default:"" }} {{ r.decided_at|naturaltime }}</span></li>{% endfor %}</ul></div>{% endif %}
+{% elif tab == 'events' %}
+  <form class="cluster" method="get"><input type="hidden" name="tab" value="events"><input type="search" name="q" value="{{ q }}" placeholder="Event name or code" aria-label="Search events"><button class="button button--secondary button--small">Search</button></form>
+  <div class="panel panel--flush"><ul class="list list--boxed">{% for row in events %}<li class="cluster"><a class="grow" href="{% url 'platform:event' row.event.pk %}"><strong>{{ row.event.name }}</strong> <span class="mono small muted">{{ row.event.event_code }}</span></a><span class="badge">{{ row.plan }}</span>{% if row.override %}<span class="badge badge--warning">Overrides</span>{% endif %}<span class="small muted">{{ row.event.user.email|default:"unassigned" }}</span></li>{% endfor %}</ul></div>
+{% elif tab == 'ai' %}
+  <div class="panel">{% component "ai_spend_summary" %}</div>
+  <div class="grid grid--2"><div class="panel">{% component "ai_limits_form" %}</div><div class="panel">{% component "ai_limit_overrides" %}</div></div>
+{% endif %}
+</div>
+{% endblock %}

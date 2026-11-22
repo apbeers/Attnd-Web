@@ -1,0 +1,13 @@
+{% extends 'console/base.html' %}
+{% load console_tags platform_tags %}
+{% block title %}AI spend{% endblock %}
+{% block content %}
+<div class="stack stack--loose">
+  {% platform_nav "ai" %}
+  <div class="panel">{% component "ai_spend_summary" month=month %}</div>
+  <div class="grid grid--2">
+    <div class="panel" id="limits">{% component "ai_limits_form" form=limits_form %}</div>
+    <div class="panel" id="overrides">{% component "ai_limit_overrides" %}</div>
+  </div>
+</div>
+{% endblock %}

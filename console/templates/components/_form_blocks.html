@@ -1,0 +1,55 @@
+{% load console_tags attnd_images %}{# Named 'block' rows of the console's forms (the pin map and Fill from this website: console.js attndEnhance wires them, on pages and in the chat). #}{% if r.name == 'datalist' %}<datalist id="{{ uid }}{{ r.id }}">{% for c in r.options %}<option value="{{ c }}">{% endfor %}</datalist>
+{% elif r.name == 'pin_map' %}<div class="pin-map-block" data-pin-block>
+      {% if not r.has_pin %}<p class="form-note" data-pin-empty>{% icon "pin" %} No map pin yet · Set it: search the address above or tap the map.</p>{% endif %}
+      <div class="pin-map" data-pin-map data-center="{{ r.center }}" data-zoom="{{ r.zoom }}" data-others="{{ r.others }}" data-places-url="{{ r.places_url }}" data-pin-svg="{% filter force_escape %}{% icon 'pin-fill' %}{% endfilter %}" role="application" aria-label="Map: tap to place this location’s pin"></div>
+      <p class="form-note">Tap the map to place the pin{% if r.others != '[]' %}; the event’s other locations are the small pins{% endif %}.</p>
+    </div>
+{% elif r.name == 'fill_site' %}<div class="fill-site" data-fill-site data-url="{{ r.url }}" hidden>
+      <button type="button" class="button button--outline button--small" data-fill-go>{% icon "stars" %} Fill from this website?</button>
+      <span class="small muted" data-fill-status role="status" aria-live="polite"></span>
+    </div>
+{% elif r.name == 'lock_preview' %}<div class="lock-preview" data-lock-preview aria-hidden="true">
+      <span class="eyebrow">On attendees’ lock screens</span>
+      <div class="lock-preview__card"><span class="lock-preview__icon">A</span>
+        <div class="lock-preview__text"><span class="lock-preview__app">ATTND · {{ r.event }}<span class="lock-preview__now">now</span></span>
+          <strong data-lock-title>Title</strong><span data-lock-body>Your message to attendees</span></div></div>
+      <span class="small muted">Title <span data-count-title>0/60</span> · Text <span data-count-body>0/256</span></span>
+    </div>
+{% elif r.name == 'found_image' %}<div class="found-image field">
+      {% img r.raw|default:r.src 96 64 crop=True %}
+      <p class="small"><span class="badge badge--info badge--pill">{% icon "stars" %} Found automatically</span>
+        {% if r.credit %}<span class="muted">{{ r.credit }}</span>{% endif %}
+        {% if r.source %}· <a href="{{ r.source }}" target="_blank" rel="noopener noreferrer">Source</a>{% endif %}<br>
+        <span class="muted">Replace it, remove it, or upload your own below.</span></p>
+    </div>
+{% elif r.name == 'studio_import' %}<label class="check field" for="{{ uid }}studio_import"><input type="checkbox" id="{{ uid }}studio_import" name="studio_import" value="1" checked>
+        Also rebuild the website in Attnd Studio <span class="badge badge--neutral badge--pill">Beta</span>
+        <span class="field__help">Studio copies every page, image, font and PDF of the website and the AI builds a matching site.</span></label>
+{% elif r.name == 'layout_reason' %}<div class="notice notice--neutral small" data-layout-reason>{{ r.text }}</div>
+{% elif r.name == 'tab_list' %}<p class="small muted" data-tab-count data-max="{{ r.max }}" data-note="{{ r.note }}">{{ r.chosen }} of {{ r.max }} tabs besides Home{% if r.chosen >= r.max %} · {{ r.note }}{% endif %}</p>
+      {% if r.cut %}<p class="small tone-warning">Not shown in the apps: {{ r.cut }} (5-tab limit)</p>{% endif %}
+      {% if r.home %}<p class="small muted tab-list__fixed">{% icon "lock" %} <strong>{{ r.home }}</strong> is always first and the default tab in the apps (it counts as one of the five).</p>{% endif %}
+      <ul class="list list--boxed field tab-list" data-tab-sortable data-max-tabs="{{ r.max }}">{% for t in r.tabs %}
+        <li class="cluster{% if t.empty %} tab-list__empty{% endif %}" data-tab="{{ t.value }}">{% icon "grip" "drag-handle" %}<label class="check" for="{{ uid }}tab-{{ t.value }}"><input type="checkbox" name="tabs" value="{{ t.value }}" id="{{ uid }}tab-{{ t.value }}"{% if t.checked %} checked{% endif %}{% if t.empty %} disabled data-empty{% endif %}> {{ t.label }}</label>{% if t.kept %}<input type="hidden" name="tabs" value="{{ t.value }}">{% endif %}{% if t.empty %}<span class="small muted">{{ t.empty }} · left out automatically{% if t.kept %}, shown again once there is something in it{% endif %}</span>{% endif %}</li>{% endfor %}
+      </ul>
+{% elif r.name == 'accent' %}<div class="field"><span class="field__label">Accent colour</span>
+        <div class="cluster"><input type="color" name="accent_color" value="{{ r.value }}" aria-label="Accent colour">
+          <label class="check small"><input type="checkbox" name="accent_default"{% if r.default %} checked{% endif %}> Use Attnd’s default</label></div></div>
+{% elif r.name == 'theme_preview' %}<div class="theme-preview" data-theme-preview aria-label="Preview">{% for m in r.modes %}
+      <div class="theme-preview__mode theme-preview__mode--{{ m.mode }}" data-preview-mode="{{ m.mode }}" style="{{ m.style }}">
+        <span class="theme-preview__label">{{ m.label }}</span>
+        <span class="theme-preview__button">Button</span>
+        <span class="theme-preview__chip">Chip</span>
+        <span class="theme-preview__badge">Now</span>
+        <span class="theme-preview__link">A link</span>
+        <span class="theme-preview__tab">Tab</span>
+      </div>{% endfor %}
+    </div>
+{% elif r.name == 'urgent_warning' %}<div class="notice notice--error small" id="{{ uid }}urgent-warning" role="alert" data-show-if="urgent">
+        {% icon "warning" %} <strong>Urgent goes to everyone in the event, right away:</strong>
+        {{ d.urgent_reach }} device{{ d.urgent_reach|pluralize }}, including people who turned notifications off. It arrives
+        as a time-sensitive alert that can break through Focus, and appears on Lock Screen Live Activities
+        ({{ d.live_activities }} running). Use it only for cancellations, safety and big changes.
+        {{ d.urgent_left }} more urgent notification{{ d.urgent_left|pluralize }} allowed this hour.
+      </div>
+{% endif %}

@@ -1,0 +1,2232 @@
+/* Ask Attnd: the console's AI agent panel (vanilla JS, no inline handlers). Text goes in via textContent; the only
+   HTML inserted is console components rendered by the server from our own templates for this person
+   (agent/components.py), never anything the model wrote. */
+(function () {
+  const root = document.querySelector('[data-agent]');
+  if (!root) return;
+  const $ = (sel) => root.querySelector(sel);
+  const launcher = $('[data-agent-open]');
+  const panel = $('#agent-panel');
+  const log = $('[data-agent-log]');
+  const form = $('[data-agent-form]');
+  const input = $('[data-agent-input]');
+  const statusLine = $('[data-agent-status]');
+  const confirmBox = $('[data-agent-confirm]');
+  const confirmText = $('[data-agent-confirm-text]');
+  const stopButton = $('[data-agent-stop]');
+  const undoButton = $('[data-agent-undo]');
+  const refreshButton = $('[data-agent-refresh]');
+  const watchBox = $('[data-agent-watch]');
+  const sendButton = $('[data-agent-send]');
+  const linksRow = $('[data-agent-links]');
+  const filesList = $('[data-agent-files]');
+  const recentBox = $('#agent-recent');
+  const busy = $('.agent__busy');
+  const thinking = $('[data-agent-thinking]');
+  const stageLine = $('[data-agent-stage]');
+  const suggestBox = $('[data-agent-suggest]');
+  // Full screen (/console/assistant/): the chat on the left, the canvas on the right (assistant.html).
+  const full = root.dataset.mode === 'full';
+  const canvas = full ? document.querySelector('[data-canvas]') : null;
+  const fromPage = root.dataset.from || '';
+  // Where cards and details go is decided in one place: `placement()` below (the canvas on the wide full-screen page,
+  // inline in the chat everywhere else; the cards themselves are drawn the same way, makeCard).
+  const onCanvas = () => full && !!canvas && window.attndScreen.is('wide');
+  const csrf = form.querySelector('input[name=csrfmiddlewaretoken]').value;
+  const runUrl = (id, tail) => root.dataset.runUrl.replace(/\/0\/$/, `/${id}/`) + (tail || '');
+  const eventId = root.dataset.eventId ? parseInt(root.dataset.eventId, 10) : null;
+
+  // Per-viewer conveniences only; every read and write may throw (private mode, blocked storage).
+  const store = {
+    get(area, key) { try { return window[area].getItem(key); } catch (e) { return null; } },
+    set(area, key, value) { try { window[area].setItem(key, value); } catch (e) { /* ignore */ } },
+    remove(area, key) { try { window[area].removeItem(key); } catch (e) { /* ignore */ } },
+  };
+
+  let run = null;          // the run shown
+  let lastSeq = 0;
+  let timer = null;
+  let live = false;        // steps arriving now (not history loaded with the page)
+  let wasActive = false;
+  let attachments = [];
+  let dirty = false;
+  const renderedSteps = new Set();  // step ids in the log (taps add steps the poll would bring again)
+  const unfinished = new Map();     // step id -> {spot, seq}: steps still running, drawn when done
+
+  // ---- open / close ----------------------------------------------------------
+  function open(focus) {
+    if (window.attndOpenChat?.()) return;  // phones: the full-screen chat page (agent-loader.js), never a sheet
+    panel.hidden = false;
+    root.classList.add('is-open');
+    launcher.setAttribute('aria-expanded', 'true');
+    store.set('sessionStorage', 'attnd.agent.open', '1');
+    if (focus !== false) input.focus();
+    try { if (!chatIds().length) brief(); } catch (e) { /* still starting up: the end of this file briefs */ }
+  }
+  function close() {
+    panel.hidden = true;
+    root.classList.remove('is-open');
+    launcher.setAttribute('aria-expanded', 'false');
+    store.remove('sessionStorage', 'attnd.agent.open');
+    launcher.focus();
+  }
+  launcher.addEventListener('click', () => (panel.hidden ? open() : close()));
+  $('[data-agent-close]')?.addEventListener('click', close);
+  if (!full) panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+
+  // ---- Full screen and back: the same conversation (sessionStorage), the same scroll position ----------------
+  $('[data-agent-full]')?.addEventListener('click', (e) => {
+    const url = new URL(root.dataset.assistantUrl, location.origin);
+    if (eventId) url.searchParams.set('event', eventId);
+    url.searchParams.set('from', location.pathname + location.search);
+    e.currentTarget.href = url.pathname + url.search;
+    saveScroll();
+  });
+  $('[data-agent-exit]')?.addEventListener('click', () => {
+    store.set('sessionStorage', 'attnd.agent.open', '1');
+    saveScroll();
+  });
+
+  // ---- Background / Watch (the floating panel, wide screens only: phones use the full-screen page) ----------
+  watchBox.checked = store.get('localStorage', 'attnd.agent.watch') === '1';
+  watchBox.addEventListener('change', () => { store.set('localStorage', 'attnd.agent.watch', watchBox.checked ? '1' : '0'); });
+  const watching = () => !full && watchBox.checked;
+
+  // ---- The full-screen page is an app shell of the visible height: with the keyboard open the composer sits right
+  // above it and the page behind never scrolls. CSS does it with 100dvh where the browser resizes the layout for the
+  // keyboard (interactive-widget=resizes-content); iOS Safari only shrinks the visual viewport, so its height is
+  // passed on as --app-height (the only use of the visual viewport, every width alike).
+  const vv = window.visualViewport;
+  if (full && vv) {
+    const fit = () => {
+      const html = document.documentElement;
+      html.style.setProperty('--app-height', `${Math.round(vv.height)}px`);
+      html.style.setProperty('--app-top', `${Math.round(vv.offsetTop)}px`);
+    };
+    vv.addEventListener('resize', fit);
+    vv.addEventListener('scroll', fit);
+    fit();
+  }
+
+  // One-line composer that grows to three lines as you type.
+  function fitInput() {
+    input.style.height = 'auto';
+    input.style.height = (input.scrollHeight + input.offsetHeight - input.clientHeight) + 'px';
+  }
+  input.addEventListener('input', fitInput);
+  function syncLinks() { linksRow.hidden = undoButton.hidden && refreshButton.hidden; }
+
+  // Unsaved input on the page: never reload over it.
+  document.addEventListener('input', (e) => {
+    if (e.target.closest('form') && !root.contains(e.target)) dirty = true;
+  });
+  document.addEventListener('submit', (e) => { if (!root.contains(e.target)) dirty = false; });
+
+  // ---- talking to the server -----------------------------------------------------
+  async function post(url, data) {
+    const body = data instanceof FormData ? data : new FormData();
+    if (!(data instanceof FormData)) Object.entries(data || {}).forEach(([k, v]) => body.append(k, v));
+    const response = await fetch(url, { method: 'POST', body, credentials: 'same-origin',
+                                        headers: { 'X-CSRFToken': csrf, Accept: 'application/json' } });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(json.error || 'Something went wrong. Please try again.'), { data: json });
+    return json;
+  }
+  async function get(url) {
+    const response = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error('Could not reach Attnd.');
+    return response.json();
+  }
+
+  // ---- rendering ---------------------------------------------------------------------
+  // While the conversation is restored on load (A21) nothing scrolls: the log is hidden, filled in one go, then its
+  // scroll position is set once and it fades in.
+  let restoring = null;  // promises of cards still loading, while restoring
+  // Follow the newest line only while the person is at the bottom (within ~80px); scrolled up, nothing moves and a
+  // "New updates ↓" pill offers the way down. Smooth, instant with reduced motion. Their own send always follows.
+  const calmScroll = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let pinned = true;
+  let autoScrolling = 0;
+  const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight <= 80;
+  const newPill = document.createElement('button');
+  newPill.type = 'button';
+  newPill.className = 'agent__newpill button button--secondary button--small';
+  newPill.textContent = 'New updates ↓';
+  newPill.hidden = true;
+  newPill.addEventListener('click', () => { pinned = true; stick(true); });
+  log.after(newPill);
+  log.addEventListener('scroll', () => {
+    if (Date.now() < autoScrolling) return;  // our own smooth scroll is still moving
+    pinned = nearBottom();
+    if (pinned) newPill.hidden = true;
+  }, { passive: true });
+  // The keyboard opening or closing, a rotation, chips appearing above the composer: the log changes height, and it
+  // keeps its bottom anchored while the person was following the newest line (no jump, nothing lost under the composer).
+  if (window.ResizeObserver) new ResizeObserver(() => { if (pinned && !restoring) log.scrollTop = log.scrollHeight; }).observe(log);
+  function stick(force) {
+    if (restoring) return;
+    if (force === true) pinned = true;
+    if (!pinned) { newPill.hidden = false; return; }
+    newPill.hidden = true;
+    if (log.scrollHeight - log.scrollTop - log.clientHeight < 2) return;
+    const smooth = !calmScroll.matches && live;
+    autoScrolling = Date.now() + (smooth ? 700 : 0);
+    log.scrollTo({ top: log.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  }
+  // Console links in the assistant's words become real links ("Change your password → [Account](/console/account/)"):
+  // only same-site paths, built with the DOM (never HTML from the model).
+  const LINK_RE = /\[([^\]\n]{1,80})\]\((\/(?!\/)[^)\s]{0,200})\)/g;
+  function richText(el, text) {
+    let at = 0;
+    for (const m of text.matchAll(LINK_RE)) {
+      el.append(text.slice(at, m.index));
+      const a = document.createElement('a');
+      a.href = m[2];
+      a.textContent = m[1];
+      a.className = 'agent__link';
+      a.addEventListener('click', (e) => { if (openUrl(m[2], a)) e.preventDefault(); });
+      el.append(a);
+      at = m.index + m[0].length;
+    }
+    el.append(text.slice(at));
+  }
+  function bubble(kind, text) {
+    $('[data-agent-hello]')?.remove();
+    const el = document.createElement('div');
+    el.className = `agent__msg agent__msg--${kind}`;
+    if (kind === 'assistant') richText(el, text); else el.textContent = text;
+    log.appendChild(el);
+    if (live && kind !== 'user') window.attndReveal?.(el, 'in');
+    if (!thinking.hidden) log.appendChild(thinking);
+    stick();
+    return el;
+  }
+  // A step line: a small status mark in a tinted circle (✓ changed, + added, × failed, • looked), then the text.
+  // (No coloured left-border brackets: owner, Nov 21, 2026.)
+  function stepLine(text, state) {
+    $('[data-agent-hello]')?.remove();
+    const el = document.createElement('div');
+    el.className = 'agent__msg agent__msg--step';
+    const kind = state === 'failed' ? 'danger' : state === 'changed' ? (/^(Added|Created|Saved new|Scheduled|Sent)\b/.test(text) ? 'added' : 'success') : '';
+    const mark = document.createElement('span');
+    mark.className = `status-mark${kind ? ` status-mark--${kind}` : ''}`;
+    mark.setAttribute('aria-hidden', 'true');
+    mark.textContent = { danger: '×', added: '+', success: '✓' }[kind] || '•';
+    const label = document.createElement('span');
+    label.className = 'agent__step-text';
+    label.textContent = text;
+    el.append(mark, label);
+    if (state === 'failed') el.classList.add('is-failed');
+    if (state === 'changed') el.classList.add('is-changed');
+    log.appendChild(el);
+    if (live) window.attndReveal?.(el, 'in');
+    if (!thinking.hidden) log.appendChild(thinking);
+    stick();
+    return el;
+  }
+  function renderStep(step) {
+    if (step.kind === 'component') return showComponents(step);
+    if (step.kind === 'note') return bubble('assistant', step.text);
+    if (step.kind === 'question') return question(step);
+    if (step.kind === 'reply') {
+      if (echoedReply !== null && step.text === echoedReply) { echoedReply = null; return document.createComment('reply'); }
+      return bubble('user', step.text);
+    }
+    if (step.task) return taskCard(step);
+    const el = stepLine(step.text, !step.ok ? 'failed' : step.changed ? 'changed' : '');
+    if (step.url && step.changed) {
+      const link = document.createElement('a');
+      link.href = step.url;
+      link.textContent = 'Open';
+      link.className = 'agent__open';
+      link.addEventListener('click', (e) => { if (openUrl(step.url)) e.preventDefault(); });
+      el.append(link);
+    }
+    if (step.undo) addUndo(el, step.undo.id, step.undo.state, step.event_id);
+    return el;
+  }
+
+  // ---- Background tasks started in the conversation: a live card at that step (batch 5) ---------------------
+  // Title, spinner, each friendly step as it happens (✓ / running / ×), the current step as a hint; when done the
+  // result link ("Review 4 changes"), when it fails the reason in plain words and Retry. Polls the console's task
+  // feed (?ids=) while one is running; nothing moves with reduced motion (CSS).
+  const TASKS_FEED = '/console/tasks/';
+  const taskEsc = (t) => String(t || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let taskTimer = null;
+  function taskCard(step) {
+    const card = document.createElement('section');
+    card.className = 'agent__taskcard is-running';
+    card.dataset.taskCard = step.task;
+    card.setAttribute('aria-live', 'polite');
+    card.innerHTML = `<header class="agent__taskcard-head"><span class="agent__thinking-spinner" aria-hidden="true"></span>
+      <strong class="agent__taskcard-title">${taskEsc(step.text)}</strong></header>
+      <ol class="agent__taskcard-steps"></ol><p class="agent__taskcard-hint small muted"></p><div class="agent__taskcard-foot"></div>`;
+    log.appendChild(card);
+    if (live) window.attndReveal?.(card, 'in');
+    if (!thinking.hidden) log.appendChild(thinking);
+    stick();
+    pollTasks();
+    return card;
+  }
+  function drawTask(card, t) {
+    const running = t.status === 'queued' || t.status === 'running';
+    card.classList.toggle('is-running', running);
+    card.classList.toggle('is-done', t.status === 'done');
+    card.classList.toggle('is-failed', t.status === 'failed');
+    const head = card.querySelector('.agent__taskcard-head');
+    const mark = running ? '<span class="agent__thinking-spinner" aria-hidden="true"></span>'
+      : t.status === 'failed' ? '<span class="status-mark status-mark--danger" aria-hidden="true">×</span>'
+      : '<span class="status-mark status-mark--success" aria-hidden="true">✓</span>';
+    const headHtml = `${mark}<strong class="agent__taskcard-title">${taskEsc(t.title)}</strong>`;
+    if (head.innerHTML !== headHtml) head.innerHTML = headHtml;
+    const steps = (t.steps || []).map((st) => {
+      const m = st.state === 'running' ? '<span class="spinner" aria-hidden="true"></span>'
+        : `<span class="status-mark status-mark--${{ done: 'success', failed: 'danger', waiting: 'warning' }[st.state] || 'info'}" aria-hidden="true">${{ done: '✓', failed: '×', waiting: '!' }[st.state] || '•'}</span>`;
+      return `<li class="task-step task-step--${taskEsc(st.state)}">${m}<span>${taskEsc(st.text)}</span></li>`;
+    }).join('');
+    const list = card.querySelector('.agent__taskcard-steps');
+    const before = card.textContent;
+    const done = (t.steps || []).filter((st) => st.state === 'done').length;
+    card.querySelector('.agent__taskcard-hint').textContent = running
+      ? (t.progress || (done ? `${done} step${done === 1 ? '' : 's'} done…` : 'Starting…')) : (t.summary || '');
+    const foot = card.querySelector('.agent__taskcard-foot');
+    let footHtml = '';
+    if (t.status === 'done' && t.url) footHtml = `<a class="button button--primary button--small" href="${taskEsc(t.url)}" data-task-result>${taskEsc(t.result_label || 'Open')}</a>`;
+    if (t.status === 'failed') {
+      footHtml = `<p class="small tone-danger">${taskEsc(t.error || 'That didn’t work.')}</p>`
+        + (t.retry_url ? `<button type="button" class="button button--outline button--small" data-task-retry="${taskEsc(t.retry_url)}">Retry</button>` : '');
+    }
+    if (foot.innerHTML !== footHtml) foot.innerHTML = footHtml;
+    if (list.innerHTML !== steps) list.innerHTML = steps;
+    if (card.textContent !== before) stick();  // it grew or changed: keep the newest line in view (only when at the bottom)
+  }
+  async function pollTasks() {
+    clearTimeout(taskTimer);
+    const cards = [...log.querySelectorAll('[data-task-card]')];
+    const ids = [...new Set(cards.filter((c) => !c.dataset.final).map((c) => c.dataset.taskCard))];
+    if (!ids.length) return;
+    try {
+      const response = await fetch(`${TASKS_FEED}?ids=${encodeURIComponent(ids.join(','))}`, { credentials: 'same-origin' });
+      const data = await response.json();
+      const byId = Object.fromEntries((data.tasks || []).map((t) => [t.id, t]));
+      cards.forEach((card) => {
+        const t = byId[card.dataset.taskCard];
+        if (!t) return;
+        const was = card.dataset.status;
+        drawTask(card, t);
+        card.dataset.status = t.status;
+        if (t.status === 'done' || t.status === 'failed') {
+          card.dataset.final = '1';
+          if (was && was !== t.status) window.attndReveal?.(card, 'pulse');
+          if (t.status === 'done' && t.event_id) refreshKeys?.([`event:${t.event_id}`]);
+        }
+      });
+    } catch (e) { /* try again on the next tick */ }
+    if (cards.some((c) => !c.dataset.final)) taskTimer = setTimeout(pollTasks, document.hidden ? 8000 : 2000);
+  }
+  // A background form in a card (the Website tab's Build buttons…) started a task: its live card in the chat.
+  document.addEventListener('attnd:task-started', (e) => {
+    if (!e.detail?.inChat || !e.detail.task) return;
+    const card = taskCard({ task: e.detail.task.id, text: e.detail.task.title });
+    drawTask(card, e.detail.task);
+  });
+  log.addEventListener('click', async (e) => {
+    const retry = e.target.closest('[data-task-retry]');
+    if (retry) {
+      retry.disabled = true;
+      try {
+        const data = await post(retry.dataset.taskRetry, {});
+        const card = retry.closest('[data-task-card]');
+        card.dataset.taskCard = data.task.id;
+        delete card.dataset.final;
+        drawTask(card, data.task);
+        pollTasks();
+      } catch (err) { retry.disabled = false; bubble('error', err.message); }
+      return;
+    }
+    const link = e.target.closest('[data-task-result]');
+    if (link && openUrl(link.getAttribute('href'))) e.preventDefault();
+  });
+
+  // ---- Undo next to every change (console/undo.py: one recorded change, 24 h, then Redo) ----------------
+  const undoUrl = (id) => root.dataset.undoUrl.replace(/\/0\/$/, `/${id}/`);
+  function addUndo(el, id, state, changedEventId, redo) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'agent__undo';
+    button.textContent = redo ? 'Redo' : 'Undo';
+    button.dataset.undoId = id;
+    if (state && state !== 'available') {
+      button.disabled = true;
+      button.textContent = state === 'used' ? 'Undone' : 'Undo expired';
+    }
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const data = await post(undoUrl(id), {});
+        const said = stepLine(data.message, 'changed');
+        button.textContent = redo ? 'Redone' : 'Undone';
+        if (data.redo) addUndo(said, data.redo, 'available', data.event_id, !redo);
+        const eid = data.event_id || changedEventId;
+        if (eid) { refreshKeys([`event:${eid}`]); pageChanged(eid); }
+      } catch (err) {
+        bubble('error', err.message);
+        button.disabled = false;
+      }
+    });
+    el.append(' ', button);
+    return button;
+  }
+
+  // ask_user with options: tappable chips that send the answer (only while that question waits).
+  function question(step) {
+    const el = bubble('assistant', step.text);
+    if (!(step.options || []).length) return el;
+    const row = document.createElement('div');
+    row.className = 'agent__chips';
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Answers');
+    step.options.forEach((option) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'agent__chip';
+      chip.textContent = option;
+      chip.dataset.questionStep = step.id;
+      chip.addEventListener('click', () => answer(option, row));
+      row.appendChild(chip);
+    });
+    log.appendChild(row);
+    stick();
+    return el;
+  }
+  async function answer(text, row) {
+    if (!run || run.status !== 'waiting_reply') return;
+    row.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try { renderRun(await post(runUrl(run.id, 'reply/'), { text })); live = true; poll(); }
+    catch (err) { bubble('error', err.message); row.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+  }
+  function syncChips() {
+    log.querySelectorAll('[data-question-step]').forEach((chip) => {
+      chip.disabled = !(run && run.status === 'waiting_reply');
+    });
+  }
+
+  function renderRun(data) {
+    run = data.run;
+    (data.steps || []).forEach((step) => {
+      // A step still running ("Opening …") is the thinking line's stage, not a log line yet: it keeps a place in
+      // the log and is drawn there once it is done (polls ask again from the oldest unfinished step).
+      const running = step.kind === 'tool' && /…$/.test(step.text || '') && step.confirm !== 'pending'
+                      && data.run.status === 'running';
+      if (step.seq <= lastSeq && !unfinished.has(step.id)) return;
+      lastSeq = Math.max(lastSeq, step.seq);
+      if (renderedSteps.has(step.id) && !unfinished.has(step.id)) return;
+      if (running) {
+        if (!unfinished.has(step.id)) {
+          const spot = document.createComment(`step ${step.id}`);
+          log.appendChild(spot);
+          unfinished.set(step.id, { spot, seq: step.seq });
+          renderedSteps.add(step.id);
+        }
+        return;
+      }
+      renderedSteps.add(step.id);
+      const waiting = unfinished.get(step.id);
+      const el = renderStep(step);
+      if (restoring && el instanceof Promise) restoring.push(el);
+      if (waiting) { waiting.spot.replaceWith(el); unfinished.delete(step.id); }
+      if (live && step.changed && step.event_id) refreshKeys([`event:${step.event_id}`]);
+      if (live && watching() && step.changed && step.url) watchNavigate(step.url);
+    });
+    if (!data.run.active) unfinished.clear();
+    const pending = run.pending;
+    confirmBox.hidden = !pending;
+    if (pending) {
+      if (confirmBox.dataset.step !== String(pending.step)) {
+        confirmBox.dataset.step = pending.step;
+        confirmBox.dataset.hash = pending.hash;
+        confirmText.textContent = pending.summary;
+        if (!panel.hidden) {
+          // The card appears with a short pulse and focus on its primary button (batch 7: one confirm look).
+          const yes = confirmBox.querySelector('[data-agent-confirm-yes]');
+          const danger = /\b(delete|remove|discard|take .* down|unpublish|leave|transfer|reject|offline)\b/i.test(pending.summary || '');
+          yes.className = 'button button--small ' + (danger ? 'button--danger' : 'button--primary');
+          confirmBox.scrollIntoView({ block: 'nearest' });
+          yes.focus({ preventScroll: true });
+          if (window.attndReveal) window.attndReveal(confirmBox, 'pulse');
+        }
+        if (panel.hidden) launcher.classList.add('needs-you');
+      }
+    } else {
+      delete confirmBox.dataset.step;
+    }
+    setThinking(run.status === 'running', data.steps || []);
+    showSuggestions(run.active ? [] : (run.suggestions || []));
+    showCreditNote(run.credit_note || '');
+    const waiting = run.status === 'waiting_confirmation' || run.status === 'waiting_reply';
+    launcher.classList.toggle('needs-you', waiting);
+    busy.hidden = run.status !== 'running';
+    // agent-loader.js loads this file at once on the next page while a run is active (it reloads the page or needs
+    // a reply); otherwise only when Ask Attnd is opened.
+    store.set('sessionStorage', 'attnd.agent.active', run.active ? '1' : '');
+    stopButton.hidden = !run.active;
+    sendButton.hidden = run.active && run.status === 'running';
+    undoButton.hidden = !run.undo || (pending && pending.kind === 'undo');
+    syncLinks();
+    input.placeholder = run.status === 'waiting_reply' ? 'Your answer…' : 'What should Attnd do?';
+    syncChips();
+    statusLine.textContent = statusText(run);
+    if (!run.active && wasActive) finished();
+    wasActive = run.active;
+    if (run.active) schedule(); else stopPolling();
+  }
+
+  // ---- The thinking line: one line, a spinner and the current stage, cross-fading as stages change ----------
+  let stageTimer = null;
+  let lastStage = '';
+  function setStage(text) {
+    if (text === lastStage) return;
+    lastStage = text;
+    clearTimeout(stageTimer);
+    stageLine.classList.add('is-leaving');
+    stageTimer = setTimeout(() => { stageLine.textContent = text; stageLine.classList.remove('is-leaving'); }, 160);
+  }
+  function setThinking(on, steps) {
+    thinking.hidden = !on;
+    if (!on) { lastStage = ''; return; }
+    log.appendChild(thinking);  // always the chat's last line
+    const last = steps.length ? steps[steps.length - 1] : null;
+    if (last) setStage(last.text && !/…$/.test(last.text) && last.kind !== 'component' ? 'Thinking…' : (last.stage || 'Working…'));
+    else if (!lastStage) setStage('Thinking…');
+    stick();
+  }
+  // Follow-ups after an answer: tapping one sends it.
+  // Past 80 % of this month's AI credit: one quiet line above the composer (credit/, agent.views.credit_note).
+  function showCreditNote(text) {
+    let line = suggestBox.parentNode.querySelector('[data-agent-credit]');
+    if (!text) { if (line) line.remove(); return; }
+    if (!line) {
+      line = document.createElement('p');
+      line.className = 'agent__credit small muted';
+      line.dataset.agentCredit = '';
+      line.setAttribute('role', 'status');
+      suggestBox.parentNode.insertBefore(line, suggestBox);
+    }
+    line.textContent = text;
+  }
+  function showSuggestions(list) {
+    suggestBox.textContent = '';
+    suggestBox.hidden = !list.length;
+    // "Talk to a person" is never a standing chip: only when the answer offers it (someone asked how to reach a
+    // person; platform help), and then it opens the contact form at once. /contact works any time.
+    list.forEach((text) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'agent__chip';
+      chip.textContent = text;
+      chip.addEventListener('click', () => {
+        if (/^talk to a person$/i.test(text.trim())) { talkToPerson(''); return; }
+        input.value = text; fitInput(); form.requestSubmit();
+      });
+      suggestBox.appendChild(chip);
+    });
+  }
+
+  function statusText(r) {
+    const cost = parseFloat(r.cost_usd || '0');
+    const spend = cost >= 0.005 ? ` · $${cost.toFixed(2)}` : '';
+    return ({ running: 'Working…', waiting_confirmation: 'Waiting for you to confirm', waiting_reply: 'Waiting for your answer',
+              done: 'Done', failed: 'Didn’t finish', stopped: 'Stopped' }[r.status] || r.status) + spend;
+  }
+
+  // A finished run's answer is drawn once (a note with the same words isn't repeated as the summary).
+  const sameText = (a, b) => (a || '').replace(/\s+/g, ' ').trim() === (b || '').replace(/\s+/g, ' ').trim();
+  function answerOnce(text) {
+    const last = [...log.children].filter((e) => e !== thinking && e.nodeType === 1).pop();
+    if (last && last.classList.contains('agent__msg--assistant') && sameText(last.textContent, text.replace(LINK_RE, '$1'))) return last;
+    return bubble('assistant', text);
+  }
+  // No 👍 / 👎 under answers (owner, Nov 21, 2026: clutter). agent:feedback and AgentRun.feedback stay, unused here.
+  function addFeedback() {}
+  function finished() {
+    if (run.summary) addFeedback(answerOnce(run.summary), run);
+    if (run.error && run.status !== 'done') errorBubble(run);
+    if (full) {  // full screen: fresh copies on the canvas instead of a reload
+      run.changed_events.forEach((id) => refreshKeys([`event:${id}`]));
+      return;
+    }
+    const here = location.pathname;
+    const touched = (eventId && run.changed_events.includes(eventId)) || run.changed_urls.includes(here);
+    if (!touched || watching()) return;
+    if (dirty) { refreshButton.hidden = false; syncLinks(); return; }
+    store.set('sessionStorage', 'attnd.agent.open', panel.hidden ? '' : '1');
+    location.reload();
+  }
+
+  function watchNavigate(url) {
+    if (dirty) { refreshButton.hidden = false; syncLinks(); return; }
+    store.set('sessionStorage', 'attnd.agent.open', '1');
+    if (url === location.pathname) location.reload(); else location.assign(url);
+  }
+  refreshButton.addEventListener('click', () => { store.set('sessionStorage', 'attnd.agent.open', '1'); location.reload(); });
+
+  // ---- polling ---------------------------------------------------------------------------
+  // Backoff (stage H): 1.5 s while steps arrive, doubling to 6 s while nothing changes, 15 s in a hidden tab.
+  let quietPolls = 0;
+  const pollDelay = () => (document.hidden ? 15000 : quietPolls < 0 ? 100 : Math.min(1500 * 2 ** quietPolls, 6000));
+  function schedule() { if (!timer) timer = setTimeout(poll, pollDelay()); }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && timer) { clearTimeout(timer); timer = null; quietPolls = 0; poll(); }
+  });
+  function stopPolling() { clearTimeout(timer); timer = null; }
+  async function poll() {
+    timer = null;
+    if (!run) return;
+    const oldest = Math.min(...[...unfinished.values()].map((u) => u.seq - 1), lastSeq);
+    const seqBefore = lastSeq;
+    try {
+      // Stage I14: the server holds the request until something happens (≤ 10 s), so the next poll can follow at once.
+      const data = await get(runUrl(run.id, `?after=${oldest}${document.hidden ? '' : '&wait=10'}`));
+      renderRun(data);
+      live = true;
+      quietPolls = data.waited ? -1 : (lastSeq === seqBefore ? Math.min(quietPolls + 1, 2) : 0);
+    }
+    catch (e) { statusLine.textContent = 'Reconnecting…'; schedule(); }
+  }
+
+  // ---- the conversation: every request of this chat stays in the log (and across page loads) ----
+  const chatIds = () => { try { return JSON.parse(store.get('sessionStorage', 'attnd.agent.chat') || '[]'); } catch (e) { return []; } };
+  const setChatIds = (ids) => store.set('sessionStorage', 'attnd.agent.chat', JSON.stringify(ids.slice(-60)));
+  // The conversation id on the server (stage I4): the same chat on every device and after signing in again.
+  const thread = () => store.get('sessionStorage', 'attnd.agent.thread') || '';
+  const setThread = (t) => { if (t) store.set('sessionStorage', 'attnd.agent.thread', t); };
+  let scrollTimer = null;
+  // At the bottom = 'bottom', so a reload or the next page shows the newest lines (a pixel offset saved before the
+  // latest answer arrived used to restore the log above it).
+  function saveScroll() { store.set('sessionStorage', 'attnd.agent.scroll', nearBottom() ? 'bottom' : String(log.scrollTop)); }
+  log.addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(saveScroll, 150);
+  });
+  window.addEventListener('pagehide', saveScroll);
+
+  function newChat() {
+    stopPolling();
+    log.textContent = '';
+    lastSeq = 0;
+    renderedSteps.clear();
+    unfinished.clear();
+    run = null;
+    wasActive = false;
+    setChatIds([]);
+    store.remove('sessionStorage', 'attnd.agent.thread');
+    store.set('sessionStorage', 'attnd.agent.fresh', '1');  // "+": this tab starts empty, not the latest chat
+    store.remove('sessionStorage', 'attnd.agent.scroll');
+    statusLine.textContent = '';
+    confirmBox.hidden = true;
+    stopButton.hidden = true;
+    sendButton.hidden = false;
+    input.placeholder = 'What should Attnd do?';
+    showSuggestions([]);
+    thinking.hidden = true;
+    input.focus();
+  }
+  $('[data-agent-new]').addEventListener('click', newChat);
+
+  // A request from the history list: shown on its own (a new conversation that starts with it).
+  async function show(id, isLive) {
+    const data = await get(runUrl(id, '?after=0'));
+    log.textContent = '';
+    renderedSteps.clear();
+    unfinished.clear();
+    setChatIds([id]);
+    store.remove('sessionStorage', 'attnd.agent.thread');
+    setThread(data.run.thread);  // the next request continues the conversation on screen
+    appendData(data, isLive);
+    stick(true);
+  }
+
+  async function appendRun(id, isLive) {
+    appendData(await get(runUrl(id, '?after=0')), isLive);
+  }
+  function appendData(data, isLive) {
+    lastSeq = 0;
+    live = false;
+    if (!data.run.buttons) bubble('user', data.run.goal);
+    wasActive = data.run.active;
+    renderRun(data);
+    if (!data.run.active && data.run.summary) answerOnce(data.run.summary);
+    if (!data.run.active && data.run.error && data.run.status !== 'done') errorBubble(data.run);
+    live = isLive !== false;
+  }
+
+  // ---- sending -------------------------------------------------------------------------------
+  // Sending: the typed text morphs into the new message bubble and moves from the composer up to its place in the
+  // log (FLIP: the bubble is created at its final spot, then animated from where the text was), while the composer
+  // clears at the same time. Reduced motion: a plain fade.
+  let echoedReply = null;  // a reply already drawn by flyUp (its step from the server isn't drawn again)
+  function flyUp(text) {
+    const from = input.getBoundingClientRect();
+    const inStyle = getComputedStyle(input);
+    const el = bubble('user', text);
+    const to = el.getBoundingClientRect();
+    if (reduceMotionSend.matches || !el.animate || !from.width) {
+      el.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+      return el;
+    }
+    const elStyle = getComputedStyle(el);
+    const dx = (from.left + parseFloat(inStyle.paddingLeft)) - (to.left + parseFloat(elStyle.paddingLeft));
+    const dy = (from.top + parseFloat(inStyle.paddingTop)) - (to.top + parseFloat(elStyle.paddingTop));
+    const sx = Math.min(1.25, Math.max(.6, from.width / Math.max(to.width, 1)));
+    el.style.transformOrigin = 'left top';
+    el.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(${sx}, 1)`, backgroundColor: 'transparent', color: inStyle.color,
+        borderRadius: '1.4rem', boxShadow: 'none' },
+      { transform: 'none', backgroundColor: elStyle.backgroundColor, color: elStyle.color,
+        borderRadius: elStyle.borderRadius },
+    ], { duration: 320, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    return el;
+  }
+  const reduceMotionSend = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  form.addEventListener('submit', async (e) => {
+    pinned = true;  // the person's own message: always follow it
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) { input.focus(); return; }
+    const send = sendButton;
+    send.disabled = true;
+    const replying = run && run.status === 'waiting_reply';
+    if (replying) echoedReply = text;
+    const sent = flyUp(text);
+    input.value = '';  // the composer clears while the bubble flies up
+    fitInput();
+    try {
+      if (replying) {
+        renderRun(await post(runUrl(run.id, 'reply/'), { text }));
+        live = true;
+      } else {
+        if (!run || !run.active) { lastSeq = 0; }
+        showSuggestions([]);
+        const data = await post(root.dataset.startUrl, { goal: text, page: full ? fromPage : location.pathname + location.search,
+                                                          event_id: eventId || '', attachments: attachments.map((a) => a.id).join(','),
+                                                          target: target ? JSON.stringify({ component: target.component, ids: target.ids }) : '',
+                                                          thread: thread() });
+        setThread(data.run?.thread);
+        targetLine?.remove();  // the run's own thinking line and steps take over (the form stays the target)
+        targetLine = null;
+        store.remove('sessionStorage', 'attnd.agent.fresh');
+        if (data.run && data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
+        attachments = [];
+        filesList.textContent = '';
+        refreshButton.hidden = true;
+        syncLinks();
+        wasActive = true;
+        live = true;
+        renderRun(data);
+      }
+    } catch (err) {
+      sent.remove();  // not sent: the text goes back into the composer
+      echoedReply = null;
+      if (!input.value) { input.value = text; fitInput(); }
+      bubble('error', err.message);
+      // Still working on an earlier request (the server stops ones that only wait for a confirmation or an answer):
+      // never swap the conversation on screen for it. Ours → keep following it; another tab's → added below.
+      const busyRun = err.data && err.data.run;
+      if (busyRun && run && busyRun.id === run.id) schedule();
+      else if (busyRun) { setChatIds(chatIds().concat([busyRun.id])); appendRun(busyRun.id, true).catch(() => {}); }
+    } finally {
+      send.disabled = false;
+      input.focus();
+    }
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
+  });
+
+  $('[data-agent-confirm-yes]').addEventListener('click', async () => {
+    if (!run || !confirmBox.dataset.step) return;
+    try {
+      const data = await post(runUrl(run.id, 'confirm/'), { step: confirmBox.dataset.step, hash: confirmBox.dataset.hash });
+      renderRun(data);
+      live = true;
+      if (data.step) {  // a chat button (or Undo all) ran right away: its outcome, and fresh copies of what it touched
+        const line = stepLine(data.step.text, !data.step.ok ? 'failed' : data.step.changed ? 'changed' : '');
+        if (data.step.undo) addUndo(line, data.step.undo.id, data.step.undo.state, data.step.event_id);
+        if (data.step.changed && data.step.event_id) { refreshKeys([`event:${data.step.event_id}`]); pageChanged(data.step.event_id); }
+      }
+      poll();
+    } catch (err) {
+      if (err.data && err.data.reauth) reauthCard(err.data.reauth, err.message);  // console/recent_auth.py
+      else bubble('error', err.message);
+    }
+  });
+  // A failed run: the friendly line, plus (staff only) a folded "Details" with the status, type and request id.
+  function errorBubble(r) {
+    const el = bubble('error', r.error);
+    if (!r.error_details || !el) return;
+    const more = document.createElement('details');
+    more.className = 'agent__error-details';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Details';
+    const code = document.createElement('code');
+    code.textContent = r.error_details;
+    more.append(summary, code);
+    el.append(more);
+  }
+  // "Confirm it's you": a risky action needs a recent sign-in first. The card opens the check, which comes back
+  // here; the action is still waiting for Confirm.
+  function reauthCard(url, text) {
+    const card = document.createElement('div');
+    card.className = 'agent__reauth';
+    card.setAttribute('role', 'alert');
+    const p = document.createElement('p');
+    p.textContent = text || 'Confirm it’s you first.';
+    const a = document.createElement('a');
+    a.className = 'button button--primary button--small';
+    a.href = url;
+    a.textContent = 'Confirm it’s you';
+    card.append(p, a);
+    log.append(card);
+    card.scrollIntoView({ block: 'nearest' });
+  }
+  $('[data-agent-confirm-no]').addEventListener('click', async () => {
+    if (!run || !confirmBox.dataset.step) return;
+    try { renderRun(await post(runUrl(run.id, 'cancel/'), { step: confirmBox.dataset.step })); live = true; poll(); }
+    catch (err) { bubble('error', err.message); }
+  });
+  stopButton.addEventListener('click', async () => {
+    if (!run) return;
+    try { renderRun(await post(runUrl(run.id, 'stop/'), {})); } catch (err) { bubble('error', err.message); }
+  });
+  undoButton.addEventListener('click', async () => {
+    if (!run) return;
+    try { renderRun(await post(runUrl(run.id, 'undo/'), {})); poll(); } catch (err) { bubble('error', err.message); }
+  });
+
+  $('[data-agent-file]').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) attachFile(file);
+  });
+  // Stage I10: the command bar. Ctrl/⌘+K anywhere opens and focuses the chat; "/" at the start lists quick actions
+  // that show their card at once (no model call).
+  const COMMANDS = [
+    { key: 'attention', label: 'What needs attention', component: 'attention', ids: () => ({}) },
+    { key: 'ready', label: 'Is it ready to publish? (and Publish)', component: 'event_readiness', event: true },
+    { key: 'location', label: 'Add a location', component: 'location_form', event: true },
+    { key: 'item', label: 'Add a schedule item', component: 'schedule_item_form', event: true },
+    { key: 'notify', label: 'Send a notification', component: 'notification_form', event: true },
+    { key: 'numbers', label: 'Numbers (likes, busiest hour)', component: 'usage_answer', event: true },
+    { key: 'new', label: 'New event', component: 'event_new_form', ids: () => ({}) },
+    { key: 'contact', label: 'Talk to a person', person: true },
+  ];
+  const menu = document.createElement('ul');
+  menu.className = 'agent__commands';
+  menu.id = 'agent-commands';
+  menu.setAttribute('role', 'listbox');
+  menu.hidden = true;
+  form.before(menu);
+  input.setAttribute('aria-controls', 'agent-commands');
+  let choices = [];
+  let chosen = 0;
+  function drawMenu() {
+    const q = input.value.startsWith('/') ? input.value.slice(1).trim().toLowerCase() : null;
+    choices = q === null ? [] : COMMANDS.filter((c) => (!c.event || eventId)
+      && (c.key.startsWith(q) || c.label.toLowerCase().includes(q)));
+    menu.textContent = '';
+    menu.hidden = !choices.length;
+    input.setAttribute('aria-expanded', String(!menu.hidden));
+    chosen = Math.min(chosen, Math.max(choices.length - 1, 0));
+    choices.forEach((c, i) => {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.id = `agent-cmd-${c.key}`;
+      li.setAttribute('aria-selected', String(i === chosen));
+      li.innerHTML = '<span class="mono"></span> <span></span>';
+      li.children[0].textContent = `/${c.key}`;
+      li.children[1].textContent = c.label;
+      li.addEventListener('mousedown', (e) => { e.preventDefault(); runCommand(c); });
+      menu.appendChild(li);
+    });
+    if (choices[chosen]) input.setAttribute('aria-activedescendant', `agent-cmd-${choices[chosen].key}`);
+    else input.removeAttribute('aria-activedescendant');
+  }
+  async function runCommand(c) {
+    input.value = '';
+    fitInput();
+    drawMenu();
+    if (c.person) { talkToPerson(); return; }
+    try {
+      const ids = c.event ? { event_id: eventId } : c.ids();
+      const [item] = await fetchCards(c.component, [ids]);
+      if (!item) return;
+      const box = cardBox();
+      box.appendChild(makeCard(item));
+      box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      box.querySelector('input:not([type=hidden]), textarea')?.focus();
+    } catch (err) { bubble('error', err.message); }
+  }
+  input.addEventListener('input', () => { chosen = 0; drawMenu(); });
+  input.addEventListener('keydown', (e) => {
+    if (menu.hidden) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      chosen = (chosen + (e.key === 'ArrowDown' ? 1 : choices.length - 1)) % choices.length;
+      drawMenu();
+    } else if (e.key === 'Enter' && !e.shiftKey && choices[chosen]) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      runCommand(choices[chosen]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      input.value = '';
+      drawMenu();
+    }
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (!full && panel.hidden) open();
+      input.focus();
+      input.select();
+    }
+  });
+
+  // Stage I15: on a phone, the full-screen chat shows the event's sections as chips above the composer; each shows
+  // its cards in the chat, and the pages stay one tap away.
+  (function phoneTabs() {
+    if (!full || !eventId || window.attndScreen.is('wide')) return;
+    const row = document.createElement('div');
+    row.className = 'agent__tabs-chips';
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Event sections');
+    [['Overview', 'event_overview'], ['Ready?', 'event_readiness'], ['Locations', 'location_row'],
+     ['Schedule', 'schedule_item_row'], ['Notifications', 'notification_row'], ['Numbers', 'usage_answer']]
+      .forEach(([label, name]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip';
+        b.textContent = label;
+        b.addEventListener('click', async () => {
+          try {
+            const items = await fetchCards(name, [{ event_id: eventId }]);
+            const box = cardBox();
+            if (items.length) appendGrouped(box, items);
+            else { const p = document.createElement('p'); p.className = 'small muted'; p.textContent = `No ${label.toLowerCase()} yet.`; box.appendChild(p); }
+            box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+          } catch (err) { bubble('error', err.message); }
+        });
+        row.appendChild(b);
+      });
+    const pages = document.createElement('a');
+    pages.className = 'chip';
+    pages.href = `/console/events/${eventId}/?page=1`;
+    pages.textContent = 'Pages ↗';
+    row.appendChild(pages);
+    suggestBox.before(row);
+  })();
+
+  // Stage I18: "Talk to a person": a short form in the chat; the message goes to the Attnd team by email with this
+  // chat's run id and page (never anything secret), and the reply comes by email.
+  function talkToPerson(prefill) {
+    if (log.querySelector('.agent__contact')) { log.querySelector('.agent__contact textarea').focus(); return; }
+    const box = document.createElement('form');
+    box.className = 'agent__contact stack stack--tight';
+    box.innerHTML = '<label class="small strong" for="agent-contact-text">Write to the Attnd team</label>'
+      + '<textarea id="agent-contact-text" rows="3" maxlength="4000" required></textarea>'
+      + '<div class="cluster"><button class="button button--primary button--small">Send</button>'
+      + '<button type="button" class="button button--ghost button--small" data-cancel>Cancel</button></div>';
+    const text = box.querySelector('textarea');
+    if (typeof prefill === 'string') text.value = prefill;
+    text.placeholder = run?.error || run?.summary ? 'What went wrong, or what you need…' : 'What do you need help with?';
+    box.querySelector('[data-cancel]').addEventListener('click', () => box.remove());
+    box.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const data = await post(root.dataset.contactUrl, { message: text.value, run: run ? run.id : '',
+                                                           page: full ? fromPage : location.pathname });
+        box.remove();
+        stepLine(data.text, 'changed');
+      } catch (err) { bubble('error', err.message); }
+    });
+    log.appendChild(box);
+    window.attndReveal?.(box, 'in');
+    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    text.focus();
+  }
+
+  // Stage I8: speak instead of typing (the browser's own Web Speech API; hidden where it isn't available).
+  (function voice() {
+    const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const mic = $('[data-agent-mic]');
+    if (!Rec || !mic) return;
+    mic.hidden = false;
+    let rec = null;
+    let base = '';
+    const stop = () => { rec?.stop(); };
+    mic.addEventListener('click', () => {
+      if (rec) { stop(); return; }
+      rec = new Rec();
+      rec.lang = document.documentElement.lang || navigator.language || 'en-US';
+      rec.interimResults = true;
+      rec.continuous = false;
+      base = input.value ? input.value.replace(/\s*$/, ' ') : '';
+      rec.onresult = (e) => {
+        input.value = base + [...e.results].map((r) => r[0].transcript).join('');
+        fitInput();
+      };
+      rec.onend = () => { rec = null; mic.setAttribute('aria-pressed', 'false'); mic.classList.remove('is-listening'); input.focus(); };
+      rec.onerror = (e) => { if (e.error === 'not-allowed') bubble('error', 'Allow the microphone for this site to speak to Ask Attnd.'); };
+      mic.setAttribute('aria-pressed', 'true');
+      mic.classList.add('is-listening');
+      try { rec.start(); } catch (e) { rec = null; }
+    });
+  })();
+
+  // Stage I3: drop a file anywhere on the panel / full-screen chat, or paste one (a screenshot, a copied file).
+  panel.addEventListener('dragover', (e) => {
+    if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); panel.classList.add('is-dropping'); }
+  });
+  panel.addEventListener('dragleave', (e) => { if (!panel.contains(e.relatedTarget)) panel.classList.remove('is-dropping'); });
+  panel.addEventListener('drop', (e) => {
+    panel.classList.remove('is-dropping');
+    const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    files.slice(0, 5).forEach(attachFile);
+    input.focus();
+  });
+  input.addEventListener('paste', (e) => {
+    const files = [...(e.clipboardData?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    files.slice(0, 5).forEach(attachFile);
+  });
+  async function attachFile(file) {
+    const body = new FormData();
+    body.append('file', file);
+    try {
+      const data = await post(root.dataset.attachUrl, body);
+      attachments.push(data.attachment);
+      const item = document.createElement('li');
+      item.textContent = `Attached: ${data.attachment.name}`;
+      filesList.appendChild(item);
+      if (!input.value.trim()) input.placeholder = 'What should Attnd do with it? (e.g. “Add this to my event”)';
+    } catch (err) { bubble('error', err.message); }
+  }
+
+  // ---- console components in the chat (console/components, agent/components.py) ----------------------------------
+  // Each card holds one component: HTML rendered by the server as this person, with its ids and the entities it
+  // shows (data-keys "event:3 location:12"). Tapping the body shows its detail (no model call); buttons and forms
+  // post to the same views as the page; always-ask ones wait for Confirm (agent:component_act → agent:confirm).
+  const LIVE_CARDS = 10;
+  const itemsParam = (items) => encodeURIComponent(JSON.stringify(items));
+
+  async function fetchCards(name, items) {
+    const response = await fetch(`${root.dataset.componentsUrl}?component=${encodeURIComponent(name)}&items=${itemsParam(items)}`,
+                                 { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data.error || 'Could not show this.'), { status: response.status });
+    lastNext = data.next_offset ?? null;  // more after these (the canvas's "Show more")
+    return data.items;
+  }
+  let lastNext = null;
+
+  function setBody(card, html) {
+    const body = document.createElement('div');
+    body.className = 'agent__card-body';
+    body.innerHTML = html;  // server-rendered component (our templates), see the note at the top
+    card.querySelector('.agent__card-body')?.remove();
+    card.prepend(body);
+    window.attndShowIf?.(body);
+    window.attndOpenApp?.(body);
+    window.attndEnhance?.(body);  // address search, the location map, Fill from this website
+  }
+
+  function makeCard(item) {
+    const card = document.createElement('div');
+    card.className = 'agent__card';
+    card.dataset.component = item.component;
+    card.dataset.ids = JSON.stringify(item.ids);
+    card.dataset.keys = (item.keys || []).join(' ');
+    card.dataset.title = item.label || item.title;
+    if (item.detail) card.dataset.detail = item.detail;
+    if (item.detail_ids) card.dataset.detailIds = JSON.stringify(item.detail_ids);
+    setBody(card, item.html);
+    return card;
+  }
+
+  // Lists with groups get one block per group: its heading (a toggle that folds it) and its own cards (notifications:
+  // "Scheduled · 2", then "Sent · 5"; Your events: Happening now / Upcoming / Past / Showcase & demo; agent/canvas.py
+  // draws the same). Every group starts open (owner, Nov 21, 2026; folding by hand isn't remembered); Past shows 6
+  // with "Show all past events" on the canvas.
+  const GROUPS = { scheduled: 'Scheduled', sent: 'Sent', now: 'Happening now', upcoming: 'Upcoming', past: 'Past',
+                   showcase: 'Showcase & demo' };
+  const PAST_SHOWN = 6;
+  function appendGrouped(into, items) {
+    const counts = {};
+    items.forEach((i) => { if (i.group) counts[i.group] = (counts[i.group] || 0) + 1; });
+    const onCanvas = !!into.closest('[data-canvas]');
+    let block = null;
+    let seen = 0;
+    const morePast = () => {
+      if (!block || block.dataset.groupSection !== 'past' || !onCanvas || seen <= PAST_SHOWN) return;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'button button--ghost button--small agent__group-more';
+      b.dataset.showAllPast = '';
+      b.textContent = `Show all past events (${seen})`;
+      block.appendChild(b);
+    };
+    items.forEach((item) => {
+      if (item.group && GROUPS[item.group] && (!block || block.dataset.groupSection !== item.group)) {
+        morePast();
+        seen = 0;
+        block = document.createElement('section');
+        block.className = 'agent__groupsec';
+        block.dataset.groupSection = item.group;
+        const h = document.createElement('h4');
+        h.className = 'eyebrow agent__group';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'agent__group-toggle';
+        b.dataset.groupToggle = item.group;
+        b.setAttribute('aria-expanded', 'true');
+        b.textContent = `${GROUPS[item.group]} · ${counts[item.group]}`;
+        h.appendChild(b);
+        block.appendChild(h);
+        into.appendChild(block);
+      }
+      seen += 1;
+      const card = makeCard(item);
+      if (item.group) card.dataset.group = item.group;
+      if (onCanvas && item.group === 'past' && seen > PAST_SHOWN) card.dataset.more = '';
+      (item.group && block ? block : into).appendChild(card);
+    });
+    morePast();
+  }
+  document.addEventListener('click', (e) => {
+    const toggle = e.target.closest('[data-group-toggle]');
+    if (toggle) {
+      const block = toggle.closest('[data-group-section]');
+      if (!block) return;
+      const open = toggle.getAttribute('aria-expanded') !== 'false';
+      block.toggleAttribute('data-folded', open);
+      toggle.setAttribute('aria-expanded', String(!open));
+      return;
+    }
+    const more = e.target.closest('[data-show-all-past]');
+    if (more) {
+      more.closest('[data-group-section]')?.setAttribute('data-all-past', '');
+      more.remove();
+    }
+  });
+
+  // Stage I: an empty chat opens with the "What needs attention" briefing under the greeting (not a run).
+  var briefed = false;  // (var: open() may run before this line during start-up)
+  async function brief() {
+    const hello = $('[data-agent-hello]');
+    if (briefed || !hello || log.querySelector('.agent__brief')) return;
+    briefed = true;
+    try {
+      // Stage I17: new organizers get the tour (the card says show: false otherwise), everyone else the briefing.
+      let [item] = root.dataset.firstRun ? await fetchCards('first_run', [{}]) : [null];
+      if (!item || item.html.includes('data-tour-hidden')) [item] = await fetchCards('attention', [{}]);
+      if (!item || !$('[data-agent-hello]')) return;
+      const box = document.createElement('div');
+      box.className = 'agent__component agent__brief';
+      box.appendChild(makeCard(item));
+      hello.after(box);
+      window.attndReveal?.(box, 'in');
+    } catch (e) { briefed = false; }
+  }
+  function cardBox() {
+    $('[data-agent-hello]')?.remove();
+    log.querySelector('.agent__brief')?.remove();
+    const box = document.createElement('div');
+    box.className = 'agent__component';
+    log.appendChild(box);
+    if (live) window.attndReveal?.(box, 'in');
+    return box;
+  }
+
+  // Full screen: what the canvas can show goes to the canvas (a list → its tab, one item → the overlay) and the chat
+  // keeps one line ("Showing 18 locations →", tap to show it again); no column of tiles, nothing for a tap's detail.
+  const NOUNS = { location_row: ['location', 'locations'], schedule_item_row: ['schedule item', 'schedule items'],
+                  notification_row: ['notification', 'notifications'], event_tile: ['event', 'events'] };
+  const OVERLAY = new Set(['location_form', 'schedule_item_form', 'event_form', 'object_history', 'event_new_form']);
+  function canvasNote(step, items) {
+    const name = step.component.name;
+    const n = (items || step.component.items).length;
+    const noun = NOUNS[name];
+    const what = noun ? `${n} ${noun[n === 1 ? 0 : 1]}` : (items && items[0] ? (items[0].label || items[0].title) : step.text);
+    const line = document.createElement('button');
+    line.type = 'button';
+    line.className = 'agent__shown link-button small';
+    line.textContent = `Showing ${what} →`;
+    line.addEventListener('click', () => showOnCanvas(step, line));
+    return line;
+  }
+  async function showOnCanvas(step, opener, items) {
+    const name = step.component.name;
+    items = items || await fetchCards(name, step.component.items);
+    if (OVERLAY.has(name) && items.length === 1) {
+      overlayOpener = opener || null;
+      showOverlay(items[0].label || items[0].title, await withHistory(name, items[0].ids, items));
+    } else {
+      toCanvas(name, items);
+    }
+    return items;
+  }
+
+  async function showComponents(step) {
+    if (step.component.fill) return fillStep(step);
+    return placement().step(step);
+  }
+
+  // ---- Placement: the one place that decides where a card, a detail or a form goes (one chat, Nov 22, 2026) -----
+  // The cards are the same in both (makeCard: the server's chat rendering of the component); only where they land
+  // differs. Canvas = the wide full-screen page (the chat keeps one line, "Showing 18 locations →"); chat = inline,
+  // on every other screen (the floating panel, the full-screen page below wide).
+  const PLACES = {
+    canvas: {
+      async step(step) {
+        if (step.component.picked) return document.createComment('picked');  // its detail is already on the canvas
+        const box = cardBox();
+        box.classList.add('agent__note');
+        try {
+          const items = live ? await showOnCanvas(step) : null;
+          box.appendChild(canvasNote(step, items));
+        } catch (err) {
+          box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
+        }
+        stick();
+        return box;
+      },
+      detail(card) { return openDetail(card); },
+      form(name, ids) { return openComponent(name, ids, null); },
+    },
+    chat: {
+      async step(step) {
+        const box = cardBox();
+        try {
+          appendGrouped(box, await fetchCards(step.component.name, step.component.items));
+        } catch (err) {
+          box.replaceWith(stepLine(err.status === 404 ? 'This is no longer there.' : err.message, 'failed'));
+        }
+        foldOld();
+        stick();
+        return box;
+      },
+      async detail(card) {
+        if (!run) return;
+        card.classList.add('is-busy');
+        try {
+          const data = await post(root.dataset.pickUrl, { run: run.id, component: card.dataset.component, ids: card.dataset.ids });
+          renderedSteps.add(data.step.id);
+          const box = cardBox();
+          data.items.forEach((item) => box.appendChild(makeCard(item)));
+          foldOld();
+          box.scrollIntoView({ block: 'nearest' });
+        } catch (err) { bubble('error', err.message); }
+        finally { card.classList.remove('is-busy'); }
+      },
+      async form(name, ids) {
+        const box = cardBox();
+        (await fetchCards(name, [ids])).forEach((item) => box.appendChild(makeCard(item)));
+      },
+    },
+  };
+  const placement = () => PLACES[onCanvas() ? 'canvas' : 'chat'];
+
+  // ---- Add with AI (every form component) and fill_form ------------------------------------------------------
+  // The sparkle button above a form opens the chat with a prompt for that thing and remembers the form; what the
+  // person then says is sent with it, and the agent's fill_form puts values into that same form in front of them
+  // (highlighted, in sequence). Nothing is saved until they press Save (or say "save it": submit).
+  let target = null;  // {component, ids, form, label}
+  // While it waits for the request, the form it is about is a line in the chat (like a step, with × to cancel);
+  // once sent, the run's own thinking line and steps take over (owner, Nov 21, 2026: no pill above the composer).
+  let targetLine = null;
+  let pendingAim = null;  // ?ai= on the chat page: aimed once the conversation is restored (the restore redraws the log)
+  function setTarget(t) {
+    target = t;
+    targetLine?.remove();
+    targetLine = null;
+    if (!t) { input.placeholder = input.dataset.placeholder || input.placeholder; return; }
+    targetLine = document.createElement('div');
+    targetLine.className = 'agent__step agent__target-line';
+    targetLine.setAttribute('role', 'status');
+    targetLine.innerHTML = '<span class="status-mark status-mark--info" aria-hidden="true">✎</span><span class="grow"></span>'
+      + '<button type="button" class="link-button small" aria-label="Don\u2019t fill this form">×</button>';
+    targetLine.querySelector('.grow').textContent = t.label;
+    targetLine.querySelector('button').addEventListener('click', () => { setTarget(null); input.focus(); });
+    log.appendChild(targetLine);
+    if (!thinking.hidden) log.appendChild(thinking);
+    stick(true);
+    window.attndReveal?.(targetLine, 'in');
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-add-with-ai]');
+    if (!b) return;
+    e.preventDefault();
+    const about = window.attndAiTarget(b);
+    if (!full && window.attndOpenChat?.(about)) return;  // phones: the chat page, with this form as the target
+    const form = b.closest('.ai-offer')?.nextElementSibling;
+    aimAt({ ...about, form: form && form.matches('form') ? form : null });
+  });
+  function aimAt(t) {
+    setTarget({ component: t.component, ids: t.ids || {}, form: t.form || null, label: t.label });
+    if (!full) open(false);
+    if (!input.dataset.placeholder) input.dataset.placeholder = input.placeholder;
+    if (t.prompt) input.placeholder = t.prompt;
+    input.focus();
+    window.attndReveal?.(input.closest('form') || input, 'pulse');
+  }
+  // Add with AI from a page on a phone arrives here as ?ai= (agent-loader.js): the same target, its form opens in the
+  // chat when the agent fills it (findForm fetches the card).
+  if (full) {
+    const params = new URLSearchParams(location.search);
+    if (params.get('ai')) {
+      try {
+        const t = JSON.parse(params.get('ai'));
+        if (t && typeof t.component === 'string') pendingAim = { component: t.component.slice(0, 64), ids: t.ids || {},
+          prompt: String(t.prompt || '').slice(0, 200), label: String(t.label || '').slice(0, 120) };
+      } catch (err) { /* ignore a broken link */ }
+      params.delete('ai');
+      history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : '') + location.hash);
+    }
+  }
+
+  // Only forms in Ask Attnd's own cards (chat or canvas): never a page's form, whose buttons bypass the confirm card.
+  const inCard = (f) => !!(f && f.closest('.agent__card') && (log.contains(f) || (canvas && canvas.contains(f))));
+  function findForm(name, ids) {
+    const want = JSON.stringify(Object.fromEntries(Object.entries(ids || {}).sort()));
+    if (target && inCard(target.form) && document.contains(target.form) && target.component === name
+        && target.form.dataset.formIds === want) return target.form;
+    const all = [...document.querySelectorAll(`form[data-form-component="${name}"]`)]
+      .filter((f) => f.dataset.formIds === want && inCard(f));
+    return all.find((f) => f.offsetParent !== null) || all[0] || null;
+  }
+  function applyFill(form, values, submit) {
+    let n = 0;
+    Object.entries(values).forEach(([name, value]) => {
+      const fields = form.querySelectorAll(`[name="${CSS.escape(name)}"]`);
+      if (!fields.length) return;
+      fields.forEach((el) => {
+        if (el.type === 'checkbox') el.checked = /^(true|1|yes|on)$/i.test(value);
+        else if (el.type === 'radio') el.checked = el.value === value;
+        else el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      const el = fields[0];
+      el.closest('details')?.setAttribute('open', '');  // Details for the assistant: open where it filled
+      const box = el.closest('.field') || el;
+      box.classList.add('is-ai-filled');
+      window.attndReveal?.(box, 'glow', { delay: n * 90 });
+      if (n === 0) box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      n += 1;
+    });
+    window.attndShowIf?.(form);
+    // Never submit a form that always asks (its Send goes through the confirm card when the person presses it).
+    if (submit && inCard(form) && !form.dataset.confirmAction) {
+      const save = form.querySelector('button:not([type=button]):not([name])') || form.querySelector('button:not([type=button])');
+      setTimeout(() => (save ? form.requestSubmit(save) : form.requestSubmit()), 300);
+    }
+    return n;
+  }
+  async function fillStep(step) {
+    const { name, items, fill, submit } = step.component;
+    const ids = items[0] || {};
+    const line = stepLine(step.text, submit ? 'changed' : '');
+    if (!live) return line;  // history: just the line
+    let form = findForm(name, ids);
+    try {
+      if (!form) {  // not on screen yet: the canvas overlay (full screen) or a card in the chat
+        await placement().form(name, ids);
+        form = findForm(name, ids);
+      }
+      if (form) applyFill(form, fill, submit);
+    } catch (err) { bubble('error', err.message); }
+    return line;
+  }
+
+  function liveCards() {
+    const scopes = [log, canvas].filter(Boolean);
+    return scopes.flatMap((scope) => [...scope.querySelectorAll('.agent__card:not(.is-folded):not(.is-gone)')]);
+  }
+
+  // Long chats: the latest cards stay live; older ones fold into one line that re-fetches when tapped.
+  function foldOld() {
+    const cards = [...log.querySelectorAll('.agent__card:not(.is-folded):not(.is-gone)')];
+    cards.slice(0, Math.max(0, cards.length - LIVE_CARDS)).forEach((card) => {
+      card.classList.add('is-folded');
+      card.querySelector('.agent__card-body')?.remove();
+      const line = document.createElement('button');
+      line.type = 'button';
+      line.className = 'link-button small agent__folded';
+      line.textContent = `▸ ${card.dataset.title}`;
+      line.addEventListener('click', async () => {
+        line.remove();
+        card.classList.remove('is-folded');
+        await refresh(card);
+        foldOld();
+      });
+      card.prepend(line);
+    });
+  }
+
+  async function refresh(card) {
+    card.classList.add('is-busy');
+    try {
+      const [item] = await fetchCards(card.dataset.component, [JSON.parse(card.dataset.ids)]);
+      const old = card.querySelector(".agent__card-body")?.innerHTML;
+      setBody(card, item.html);
+      if (old !== undefined && !sameHtml(old, item.html)) reveal(card, 'pulse');  // it changed: draw the eye
+      card.dataset.keys = (item.keys || []).join(' ');
+    } catch (err) {
+      if (err.status === 404) {
+        card.classList.add('is-gone');
+        const note = document.createElement('p');
+        note.className = 'small muted';
+        note.textContent = `${card.dataset.title}: no longer there (deleted, or no access).`;
+        card.querySelector('.agent__card-body')?.replaceChildren(note);
+      }
+    } finally { card.classList.remove('is-busy'); }
+  }
+
+  // Copies of something that changed (a chat button, the agent, a run) are fetched again.
+  function refreshKeys(keys, except) {
+    // Canvas list sections of a changed event reload whole (new rows appear, deleted ones go)…
+    const sections = canvas ? [...canvas.querySelectorAll('.canvas__section[data-parent]')].filter((sec) => {
+      const parent = JSON.parse(sec.dataset.parent || '{}');
+      return sec.dataset.component.endsWith('_row') || sec.dataset.component === 'event_tile'
+        ? keys.some((k) => k === `event:${parent.event_id}` || (!parent.event_id && k.startsWith('event:'))) : false;
+    }) : [];
+    sections.forEach(reloadSection);
+    // …and every other copy is fetched again on its own.
+    liveCards().forEach((card) => {
+      if (card === except || sections.some((sec) => sec.contains(card))) return;
+      const mine = card.dataset.keys.split(' ');
+      if (keys.some((k) => mine.includes(k))) refresh(card);
+    });
+  }
+
+  function pageChanged(changedEventId) {
+    if (eventId && changedEventId === eventId) { refreshButton.hidden = false; syncLinks(); }
+  }
+
+  function pick(card) { return placement().detail(card); }
+
+  async function act(card, action, form, fields) {
+    const body = form ? new FormData(form) : new FormData();
+    if (fields) body.set('fields', fields);  // this button's own values (which member, which role)
+    body.set('run', run ? run.id : '');  // none yet: the server starts a quiet one for the buttons
+    body.set('component', card.dataset.component);
+    body.set('ids', card.dataset.ids);
+    body.set('action', action);
+    body.set('thread', thread());
+    try {
+      const data = await post(root.dataset.actUrl, body);
+      setThread(data.run?.thread);
+      if (data.invalid) { setBody(card, data.items[0].html); return; }
+      renderedSteps.add(data.step.id);
+      if (!run || run.id !== data.run.id) setChatIds(chatIds().filter((x) => x !== data.run.id).concat([data.run.id]));
+      stepLine(data.step.text, '');
+      live = true;
+      renderRun({ run: data.run, steps: [] });
+    } catch (err) { bubble('error', err.message); }
+  }
+
+  async function submitForm(card, form, submitter) {
+    const body = new FormData(form, submitter || undefined);
+    card.classList.add('is-busy');
+    try {
+      // (getAttribute: an <input name="action"> shadows form.action)
+      const response = await fetch(form.getAttribute('action'), { method: 'POST', body, credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrf, 'X-Attnd-Component': card.dataset.component } });
+      // The server answers JSON (console.middleware): errors → the component again; saved → what happened, the
+      // Undo id and where the page would go. No HTML scraping.
+      if (!(response.headers.get('Content-Type') || '').includes('json')) {
+        throw new Error(response.status === 404 ? 'Not found, or you don’t have access to it.'
+                                                : 'That didn’t work. Please try again.');
+      }
+      const data = await response.json();
+      if (data.html) { setBody(card, data.html); return; }  // errors, in place
+      if (!data.saved) throw new Error(data.error || 'Not saved. Open the page to see why.');
+      if (/\/theme\//.test(form.getAttribute('action') || '')) window.attndRefreshTheme?.();  // colours apply at once
+      const savedLine = stepLine((data.messages || []).join(' ') || 'Saved', 'changed');
+      const ids0 = JSON.parse(card.dataset.ids);
+      if (data.undo) addUndo(savedLine, data.undo, 'available', ids0.event_id);
+      if (data.next) showNext(data.next);  // live ops: the drafted notification, prefilled (sending still asks)
+      const keys = card.dataset.keys.split(' ');
+      const made = (data.location || '').match(/\/console\/events\/(\d+)\/$/);
+      if (card.dataset.component === 'event_new_form' && made) {  // an empty event was created: work on it here
+        if (full) { location.assign(`${root.dataset.assistantUrl}?event=${made[1]}&from=${encodeURIComponent(`/console/events/${made[1]}/`)}`); return; }
+      }
+      const level = overlayStack.length ? overlayStack[overlayStack.length - 1] : null;
+      const created = /_form$/.test(card.dataset.component) && !/"(location_id|item_id)"/.test(card.dataset.ids)
+                      && !(submitter && submitter.name === 'save_add');
+      if (level && level.el.contains(card) && created) {  // a new location / item: back to the list, which shows it
+        refreshKeys(keys.length ? keys : [`event:${ids0.event_id}`], card);
+        popOverlay();
+        return;
+      }
+      await refresh(card);
+      refreshKeys(keys, card);
+      const ids = JSON.parse(card.dataset.ids);
+      if (ids.event_id) pageChanged(ids.event_id);
+    } catch (err) { bubble('error', err.message); }
+    finally { card.classList.remove('is-busy'); }
+  }
+
+  async function showNext(next) {
+    try {
+      const [item] = await fetchCards(next.component, [next.ids]);
+      if (!item) return;
+      const box = cardBox();
+      const card = makeCard(item);
+      box.appendChild(card);
+      const form = card.querySelector('form');
+      if (form && next.fill) applyFill(form, Object.fromEntries(Object.entries(next.fill).map(([k, v]) => [k, String(v)])), false);
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } catch (e) { /* the notifications page still has it */ }
+  }
+
+  function onCardClick(e) {
+    const card = e.target.closest('.agent__card');
+    if (!card || card.classList.contains('is-folded') || card.classList.contains('is-gone')) return;
+    const button = e.target.closest('[data-component-act]');
+    if (button) { e.preventDefault(); act(card, button.dataset.componentAct, null, button.dataset.componentFields); return; }
+    const title = e.target.closest('.title-link');
+    if (title && card.dataset.detail) { e.preventDefault(); pick(card); return; }
+    // Full screen: links to events, locations, the schedule and notifications open on the canvas, not as pages.
+    const link = e.target.closest('a[href]');
+    if (link && !link.target && !link.hasAttribute('download') && openUrl(link.getAttribute('href'), link)) {
+      e.preventDefault();
+      return;
+    }
+    if (e.target.closest('a, button, input, select, textarea, label, summary, details, form, [data-copy], .drag-handle')) return;
+    if (card.dataset.detail && e.target.closest('.agent__card-body')) pick(card);
+  }
+  function onCardSubmit(e) {
+    const form = e.target.closest('form[data-component-form]');
+    const card = form && form.closest('.agent__card');
+    if (!card) return;
+    e.preventDefault();
+    if (form.dataset.confirmAction) act(card, form.dataset.confirmAction, form);
+    else submitForm(card, form, e.submitter);
+  }
+  [log, canvas].filter(Boolean).forEach((scope) => {
+    scope.addEventListener('click', onCardClick);
+    scope.addEventListener('submit', onCardSubmit);
+  });
+
+  // ---- Full screen: the canvas (tabs of what the chat showed) and the detail overlay ---------------------------
+  // Each tab holds sections, one per component (Notifications: the compose form, then every notification). A list section
+  // remembers its parent ids ({event_id}) and reloads as a whole when something of that event changes, so new
+  // rows appear and deleted ones go. Toolbars add things (Add location, Add schedule item…) in the overlay.
+  const KINDS = { event_tile: 'Events', event_new_form: 'Events', event_overview: 'Overview', event_stats: 'Overview',
+                  live_on_phone: 'Overview', needs_review: 'Overview', event_readiness: 'Overview', event_header: 'Overview', event_form: 'Overview',
+                  object_history: 'History', location_row: 'Locations', location_form: 'Locations',
+                  schedule_item_row: 'Schedule', schedule_item_form: 'Schedule', notification_row: 'Notifications',
+                  notification_form: 'Notifications', event_team: 'Team', event_metrics: 'Metrics', usage_answer: 'Metrics', website_analytics: 'Metrics',
+                  event_map: 'Overview', event_lifecycle: 'Overview', sharing_kit: 'Overview', event_exports: 'Overview', event_rollover: 'Overview',
+                  changeset_review: 'Review', app_layout: 'Settings', website_watching: 'Settings', event_theme: 'Overview',
+                  event_context_form: 'Settings', event_flyer: 'Settings', event_versions: 'History',
+                  prospect_row: 'Platform', prospect_detail: 'Platform', prospect_run_row: 'Platform',
+                  prospect_settings_form: 'Platform', website_overview: 'Website', website_versions: 'Website',
+                  website_assets: 'Website', website_forms: 'Website', ai_spend_summary: 'Platform',
+                  ai_limits_form: 'Platform', ai_limit_overrides: 'Platform',
+                  platform_health: 'Platform' };
+  // A count beside a tab's name (agent/canvas.py ALERT_COUNTS): a filled alert badge when it waits for the person.
+  function setTabCount(label, count, alert) {
+    const tab = tabs.get(label);
+    if (!tab) return;
+    const button = tab.button;
+    button.textContent = label;
+    const badge = document.createElement('span');
+    badge.className = 'tab-count' + (alert ? ' tab-count--alert' : '');
+    badge.setAttribute('aria-label', `${count} waiting`);
+    badge.textContent = String(count);
+    button.append(' ', badge);
+  }
+  const ORDER = ['Events', 'Overview', 'Review', 'Locations', 'Schedule', 'Notifications', 'Team', 'Metrics', 'Settings',
+                 'Website', 'History', 'Platform'];
+  const SECTION_ORDER = ['event_tile', 'event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports',
+                         'notification_form', 'notification_row', 'app_layout', 'website_watching',
+                         'event_context_form', 'event_flyer', 'website_overview', 'website_versions', 'website_forms',
+                         'website_assets', 'object_history', 'event_versions',
+                         'prospect_run_row', 'prospect_row', 'ai_spend_summary', 'platform_health'];
+  const EMPTY = { location_row: 'No locations yet. Add stages, booths, food, anywhere attendees go.',
+                  schedule_item_row: 'No schedule items yet.', notification_row: 'No notifications sent or scheduled yet.',
+                  event_tile: 'No events yet.', prospect_row: 'No open prospects. Run a discovery from its settings.',
+                  prospect_run_row: 'No discovery runs yet.' };
+  const HEADINGS = { prospect_run_row: 'Latest runs', prospect_row: 'Open prospects, best fit first' };  // (notifications: the groups' own headings, Scheduled · N and Sent · N)
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const tabs = new Map();  // label -> {button, pane, label}
+  let overlayStack = [];   // [{title, items, el}]
+  let overlayOpener = null;
+
+  // The canvas tab survives re-renders and reloads (P0 #5: after a confirm it stayed put, not back to Overview).
+  const tabStoreKey = () => `attnd.agent.canvasTab.${eventId || 'none'}`;
+  function rememberedTab() { return store.get('sessionStorage', tabStoreKey()); }
+  function selectTab(label) {
+    if (tabs.has(label)) store.set('sessionStorage', tabStoreKey(), label);
+    const before = [...tabs.values()].find((t) => !t.pane.hidden);
+    tabs.forEach((t, key) => {
+      const on = key === label;
+      t.button.setAttribute('aria-selected', String(on));
+      t.button.tabIndex = on ? 0 : -1;
+      t.pane.hidden = !on;
+    });
+    if (overlayStack.length) closeOverlay(false, true);
+    // The new panel arrives from its side of the tab order (never an instant cut), the tab itself pulses faintly.
+    const now = tabs.get(label);
+    if (now && before && before !== now) {
+      const from = ORDER.indexOf(label) > ORDER.indexOf(before.label) ? 'right' : 'left';
+      reveal(now.pane, 'slide', { from });
+      reveal(now.button, 'pulse');
+    }
+  }
+  const reveal = (el, kind, opts) => (window.attndReveal ? window.attndReveal(el, kind, opts) : Promise.resolve());
+
+  // A toolbar button's label: "+" only for adding things; Edit gets a pencil (owner, Nov 21, 2026).
+  const TOOL_ICONS = { plus: '<path d="M12 5v14M5 12h14"/>', edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>' };
+  function toolLabel(b, tool) {
+    const icon = tool.icon || (tool.plain ? '' : 'plus');
+    b.textContent = '';
+    if (icon) {
+      b.insertAdjacentHTML('beforeend', `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TOOL_ICONS[icon]}</svg>`);
+      b.append(' ');
+    }
+    b.append(tool.text);
+  }
+  function toolbarFor(label) {
+    const add = (text, name, title) => ({ text, run: (b) => openComponent(name, { event_id: eventId }, title, b) });
+    if (label === 'Locations' && eventId) return [add('Add location', 'location_form', 'New location')];
+    if (label === 'Schedule' && eventId) return [add('Add schedule item', 'schedule_item_form', 'New schedule item')];
+    return (TOOLBARS[label] || []).filter((x) => (!x.needsEvent || eventId)
+      && (!x.needs || document.querySelector(`[data-canvas] [data-section="${x.needs}"]`)));
+  }
+  const TOOLBARS = {
+    // One Platform tab for every admin tool (the sections there are only the ones the person may see).
+    Platform: [{ text: 'AI limits', plain: true, needs: 'ai_spend_summary', run: (b) => openComponent('ai_limits_form', {}, 'AI limits', b) },
+               { text: 'Overrides', plain: true, needs: 'ai_spend_summary', run: (b) => openComponent('ai_limit_overrides', {}, 'AI credit overrides', b) },
+               { text: 'Discovery settings', plain: true, needs: 'prospect_row', run: (b) => openComponent('prospect_settings_form', {}, 'Prospect settings', b) },
+               { text: 'Prospects CSV', plain: true, needs: 'prospect_row', run: () => { location.href = '/console/prospects/export.csv'; } }],
+    Events: [{ text: 'New event', run: (b) => openComponent('event_new_form', {}, 'New event', b) }],
+    Overview: [{ text: 'Edit details', icon: 'edit', needsEvent: true, run: (b) => openComponent('event_form', { event_id: eventId }, 'Details', b) },
+               { text: 'History', needsEvent: true, plain: true, run: (b) => openComponent('object_history', { event_id: eventId }, 'History', b) }],
+  };
+
+  function ensureTab(label) {
+    if (tabs.has(label)) return tabs.get(label);
+    const bar = canvas.querySelector('[data-canvas-tabs]');
+    const body = canvas.querySelector('[data-canvas-body]');
+    canvas.querySelector('[data-canvas-empty]')?.remove();
+    const id = `canvas-${label.toLowerCase().replace(/ /g, "-")}`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tabs__tab';
+    button.id = `${id}-tab`;
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-controls', id);
+    button.textContent = label;
+    button.addEventListener('click', () => selectTab(label));
+    const pane = document.createElement('div');
+    pane.className = 'canvas__pane';
+    pane.id = id;
+    pane.setAttribute('role', 'tabpanel');
+    pane.setAttribute('aria-labelledby', button.id);
+    pane.hidden = true;
+    const tools = toolbarFor(label);
+    if (tools.length) {
+      const row = document.createElement('div');
+      row.className = 'canvas__toolbar';
+      tools.forEach((tool) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `button button--${tool.plain ? 'outline' : 'primary'} button--small`;
+        toolLabel(b, tool);
+        b.addEventListener('click', () => tool.run(b));
+        row.appendChild(b);
+      });
+      pane.appendChild(row);
+    }
+    pane.dataset.tab = label;
+    const grid = document.createElement('div');
+    grid.className = 'canvas__grid';
+    pane.appendChild(grid);
+    const t = { button, pane, label, grid };
+    tabs.set(label, t);
+    const sorted = [...tabs.values()].sort((a, b) => ORDER.indexOf(a.label) - ORDER.indexOf(b.label));
+    sorted.forEach((x) => { bar.appendChild(x.button); body.appendChild(x.pane); });
+    bar.hidden = false;
+    return t;
+  }
+  // The tab bar scrolls sideways only: a fade and a chevron on each side that has more tabs, the active tab kept in
+  // view (owner, Nov 21, 2026). Vertical wheel turns into sideways scrolling; ResizeObserver keeps the edges right.
+  (function tabEdges() {
+    const bar = canvas?.querySelector('[data-canvas-tabs]');
+    if (!bar) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'canvas__tabs-wrap';
+    bar.before(wrap);
+    wrap.appendChild(bar);
+    const chevron = (side) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `canvas__tabs-more canvas__tabs-more--${side}`;
+      b.setAttribute('aria-label', side === 'left' ? 'Earlier tabs' : 'More tabs');
+      b.tabIndex = -1;  // keyboard users move with the arrow keys
+      b.innerHTML = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${side === 'left' ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'}"/></svg>`;
+      b.hidden = true;
+      b.addEventListener('click', () => bar.scrollBy({ left: (side === 'left' ? -1 : 1) * bar.clientWidth * 0.8, behavior: reduceMotion.matches ? 'auto' : 'smooth' }));
+      wrap.appendChild(b);
+      return b;
+    };
+    const left = chevron('left'), right = chevron('right');
+    const update = () => {
+      const more = bar.scrollWidth - bar.clientWidth;
+      const l = more > 1 && bar.scrollLeft > 1;
+      const r = more > 1 && bar.scrollLeft < more - 1;
+      wrap.classList.toggle('has-left', l);
+      wrap.classList.toggle('has-right', r);
+      left.hidden = !l;
+      right.hidden = !r;
+    };
+    bar.addEventListener('scroll', update, { passive: true });
+    bar.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && bar.scrollWidth > bar.clientWidth) {
+        e.preventDefault();
+        bar.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
+    if ('ResizeObserver' in window) new ResizeObserver(update).observe(bar);
+    new MutationObserver(update).observe(bar, { childList: true });
+    const keepActive = () => {
+      const active = bar.querySelector('[aria-selected="true"]');
+      active?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+      update();
+    };
+    new MutationObserver(keepActive).observe(bar, { subtree: true, attributes: true, attributeFilter: ['aria-selected'] });
+    requestAnimationFrame(keepActive);
+  })();
+  canvas?.querySelector('[data-canvas-tabs]').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const list = [...tabs.values()].sort((a, b) => ORDER.indexOf(a.label) - ORDER.indexOf(b.label));
+    const at = list.findIndex((t) => t.button === document.activeElement);
+    const next = list[(at + (e.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length];
+    if (next) { selectTab(next.label); next.button.focus(); }
+  });
+
+  function section(t, name) {
+    let el = t.grid.querySelector(`:scope > [data-section="${name}"]`);
+    if (el) return el;
+    el = document.createElement('section');
+    el.className = 'canvas__section';
+    el.dataset.section = name;
+    const rank = (n) => { const i = SECTION_ORDER.indexOf(n); return i < 0 ? 50 : i; };
+    const after = [...t.grid.querySelectorAll(':scope > [data-section]')].find((s) => rank(s.dataset.section) > rank(name));
+    t.grid.insertBefore(el, after || null);
+    return el;
+  }
+
+  // "Show more" under a long list (the server sends 60 at a time).
+  function moreButton(sec, next) {
+    sec.querySelector(':scope > .canvas__more')?.remove();
+    if (next == null) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'button button--outline button--small canvas__more';
+    b.dataset.moreOffset = next;
+    b.textContent = 'Show more';
+    sec.appendChild(b);
+  }
+  canvas?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-more-offset]');
+    if (!b) return;
+    const sec = b.closest('.canvas__section');
+    b.disabled = true;
+    try {
+      const response = await fetch(`${root.dataset.componentsUrl}?component=${encodeURIComponent(sec.dataset.component)}`
+        + `&items=${itemsParam([JSON.parse(sec.dataset.parent || '{}')])}&offset=${b.dataset.moreOffset}`,
+        { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      const wrap = sec.querySelector('.canvas__cards');
+      const before = wrap.children.length;
+      appendGrouped(wrap, data.items || []);
+      [...wrap.children].slice(before).forEach((c) => reveal(c, 'in'));
+      moreButton(sec, data.next_offset ?? null);
+    } catch (err) { b.disabled = false; }
+  });
+
+  function fillSection(sec, name, items) {
+    const next = lastNext;
+    sec.textContent = '';
+    if (HEADINGS[name]) {
+      const h = document.createElement('h3');
+      h.className = 'title-4 canvas__heading';
+      h.textContent = HEADINGS[name];
+      sec.appendChild(h);
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'canvas__cards' + (name.endsWith('_row') ? ' canvas__cards--rows' : '');
+    appendGrouped(wrap, items);
+    if (!items.length) {
+      const p = document.createElement('p');
+      p.className = 'canvas__none muted';
+      p.textContent = EMPTY[name] || 'Nothing here yet.';
+      wrap.appendChild(p);
+    }
+    sec.appendChild(wrap);
+    moreButton(sec, next);
+    if (name === 'location_row' && items.length > 1 && window.makeSortable) sortable(wrap, sec);
+    return wrap;
+  }
+
+  // Locations on the canvas can be dragged into the order attendees see (the same endpoint as the page).
+  function sortable(wrap, sec) {
+    wrap.dataset.sortable = '';
+    window.makeSortable(wrap, {
+      handle: '.drag-handle',
+      async onEnd() {
+        const parent = JSON.parse(sec.dataset.parent || '{}');
+        const order = [...wrap.querySelectorAll(':scope > .agent__card')].map((c) => JSON.parse(c.dataset.ids).location_id);
+        try {
+          await post(root.dataset.reorderUrl.replace(/\/0\//, `/${parent.event_id}/`), { order: order.join(',') });
+          stepLine('Saved the new order of the locations', 'changed');
+        } catch (err) { bubble('error', err.message); }
+      },
+    });
+  }
+
+  function toCanvas(name, items, parent, quiet) {
+    const t = ensureTab(KINDS[name] || 'More');
+    const sec = section(t, name);
+    if (parent) sec.dataset.parent = JSON.stringify(parent);
+    else if (name.endsWith('_row') && items[0] && items[0].ids.event_id) sec.dataset.parent = JSON.stringify({ event_id: items[0].ids.event_id });
+    else if (name === 'event_tile') sec.dataset.parent = '{}';
+    sec.dataset.component = name;
+    fillSection(sec, name, items);
+    if (!quiet) selectTab(t.label);
+    return sec;
+  }
+
+  // A whole list section again (new rows appear, deleted ones go): one request instead of one per card.
+  // Reloading a list: rows glide to their new place (FLIP: moved, e.g. Scheduled → Sent), new rows fade in and pulse,
+  // changed ones pulse, deleted ones collapse out first.
+  const sameHtml = (a, b) => a.replace(/c[0-9a-f]{6}-/g, '') === b.replace(/c[0-9a-f]{6}-/g, '');
+  async function reloadSection(sec) {
+    const name = sec.dataset.component;
+    let items;
+    try { items = await fetchCards(name, [JSON.parse(sec.dataset.parent || '{}')]); }
+    catch (err) { if (err.status === 404 || /none found/.test(err.message)) items = []; else return; }
+    const wrap = sec.querySelector('.canvas__cards');
+    const old = new Map([...(wrap ? wrap.querySelectorAll(':scope > .agent__card, :scope > .agent__groupsec > .agent__card') : [])].map((c) => [c.dataset.ids, c]));
+    const keep = new Set(items.map((i) => JSON.stringify(i.ids)));
+    await Promise.all([...old].filter(([ids]) => !keep.has(ids)).map(([, c]) => reveal(c, 'collapse')));
+    const html = new Map([...old].map(([ids, c]) => [ids, c.querySelector('.agent__card-body')?.innerHTML || '']));
+    const rects = new Map([...old].filter(([ids]) => keep.has(ids)).map(([ids, c]) => [ids, c.getBoundingClientRect()]));
+    fillSection(sec, name, items);
+    const fresh = sec.querySelector('.canvas__cards');
+    fresh?.querySelectorAll(':scope > .agent__card, :scope > .agent__groupsec > .agent__card').forEach((c) => {
+      const before = html.get(c.dataset.ids);
+      const was = rects.get(c.dataset.ids);
+      if (was) { const now = c.getBoundingClientRect(); reveal(c, 'flip', { dx: was.left - now.left, dy: was.top - now.top }); }
+      if (before === undefined && old.size) { reveal(c, 'in'); reveal(c, 'pulse', { delay: 120 }); }
+      else if (before !== undefined && !sameHtml(before, c.querySelector('.agent__card-body')?.innerHTML || '')) reveal(c, 'pulse');
+    });
+  }
+
+  async function openDetail(card, opener) {
+    const ids = JSON.parse(card.dataset.ids);
+    if (card.dataset.component === 'event_tile' && ids.event_id !== eventId) {  // another event: full screen for it
+      location.assign(`${root.dataset.assistantUrl}?event=${ids.event_id}&from=${encodeURIComponent(`/console/events/${ids.event_id}/`)}`);
+      return;
+    }
+    const keep = card.dataset.detailIds ? JSON.parse(card.dataset.detailIds) : Object.keys(ids);
+    const detailIds = Object.fromEntries(Object.entries(ids).filter(([k]) => keep.includes(k)));
+    card.classList.add('is-busy');
+    try {
+      let items;
+      if (run) {  // remembered in the run (told to the model with the next message)
+        const data = await post(root.dataset.pickUrl, { run: run.id, component: card.dataset.component, ids: card.dataset.ids });
+        renderedSteps.add(data.step.id);
+        items = data.items;
+      } else {
+        items = await fetchCards(card.dataset.detail, [detailIds]);
+      }
+      if (!overlayStack.length) overlayOpener = opener || card;
+      showOverlay(card.dataset.title, await withHistory(card.dataset.detail, detailIds, items), true);
+    } catch (err) { bubble('error', err.message); }
+    finally { card.classList.remove('is-busy'); }
+  }
+
+  // An item's detail also shows its history when there is one (object_history), under the form.
+  async function withHistory(name, ids, items) {
+    if (!HISTORY_OF[name] || !ids[HISTORY_OF[name]]) return items;
+    try { return items.concat(await fetchCards('object_history', [ids])); } catch (e) { return items; }
+  }
+  const HISTORY_OF = { location_form: 'location_id', schedule_item_form: 'item_id' };  // details with a history card
+
+  // Open any component in the overlay (toolbar buttons, links inside cards, finished background tasks).
+  async function openComponent(name, ids, title, opener) {
+    try {
+      const items = await withHistory(name, ids, await fetchCards(name, [ids]));
+      if (!overlayStack.length) overlayOpener = opener || document.activeElement;
+      showOverlay(title || items[0].label || items[0].title, items, overlayStack.length > 0);
+      return true;
+    } catch (err) { bubble('error', err.message); return false; }
+  }
+
+  // Console pages the canvas can show itself (links in cards, step links, the task tray): everything for events,
+  // locations, the schedule and notifications stays in full screen. Anything else (Studio, the AI review, diagnostics…)
+  // opens as a page.
+  // The routes come from the server (agent/canvas.py ROUTES): path → component, ids and the canvas tab that lists it.
+  const ROUTES = (() => {
+    try { return JSON.parse(canvas?.dataset.routes || '[]').map(([p, name, tab]) => [new RegExp(p), name, tab]); }
+    catch (e) { return []; }
+  })();
+  function openUrl(href, opener) {
+    if (!onCanvas() || !href) return false;
+    let url;
+    try { url = new URL(href, location.origin); } catch (e) { return false; }
+    if (url.origin !== location.origin || url.search) return false;
+    for (const [pattern, name, tab] of ROUTES) {
+      const m = url.pathname.match(pattern);
+      if (!m) continue;
+      const ids = Object.fromEntries(Object.entries(m.groups || {}).map(([k, v]) => [k, +v]));
+      const sameEvent = !ids.event_id || ids.event_id === eventId;
+      if (tab && sameEvent && tabs.has(tab) && !ids.location_id && !ids.item_id) { selectTab(tab); return true; }
+      if (tab && !['event_overview', 'object_history', 'event_form'].includes(name)) return false;  // another event's list
+      openComponent(name, ids, null, opener);
+      return true;
+    }
+    return false;
+  }
+  window.attndCanvasOpen = openUrl;  // console.js: links in the task tray open here in full screen
+  // The console's own links around the full-screen chat (top bar: Your events, New event) open on the canvas too.
+  if (full) {
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('a[href]');
+      if (!link || e.defaultPrevented || root.contains(link) || canvas?.contains(link) || link.closest('#task-tray, .task-toast')) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || link.target) return;
+      if (openUrl(link.getAttribute('href'), link)) e.preventDefault();
+    });
+  }
+
+  function showOverlay(title, items, push) {
+    const overlay = canvas.querySelector('[data-canvas-overlay]');
+    const body = overlay.querySelector('[data-overlay-body]');
+    if (!push) { overlayStack = []; body.textContent = ''; }
+    const level = document.createElement('div');
+    level.className = 'canvas__level';
+    items.forEach((item) => level.appendChild(makeCard(item)));
+    const below = overlayStack[overlayStack.length - 1];
+    overlayStack.push({ title, items, el: level });
+    if (below) below.el.hidden = true;
+    body.appendChild(level);
+    const opening = overlay.hidden;
+    overlay.classList.remove('is-leaving');
+    overlay.hidden = false;
+    if (!reduceMotion.matches) animate(opening ? overlay : level, opening ? 'is-entering' : 'is-entering');
+    renderCrumbs();
+    body.scrollTop = 0;
+    overlay.querySelector('[data-overlay-title]').focus();
+  }
+
+  // The overlay's animations go through the console's one helper (console.js attndReveal): open slides in from the
+  // right, Back slides out to the right, the level below comes back from the left.
+  function animate(el, cls) {
+    const kind = { 'is-entering': ['slide', { from: 'right' }], 'is-leaving': ['out', {}],
+                   'is-returning': ['slide', { from: 'left' }] }[cls];
+    return kind ? reveal(el, kind[0], kind[1]) : Promise.resolve();
+  }
+
+  function renderCrumbs() {
+    const overlay = canvas.querySelector('[data-overlay-crumbs]').closest('[data-canvas-overlay]');
+    const crumbs = overlay.querySelector('[data-overlay-crumbs]');
+    crumbs.textContent = '';
+    const current = [...tabs.values()].find((t) => !t.pane.hidden);
+    const trail = [current ? current.label : 'Canvas', ...overlayStack.map((l) => l.title)];
+    trail.forEach((text, i) => {
+      const li = document.createElement('li');
+      if (i === trail.length - 1) {
+        const span = document.createElement('span');
+        span.setAttribute('aria-current', 'page');
+        span.textContent = text;
+        li.appendChild(span);
+      } else {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'link-button';
+        b.textContent = text;
+        b.addEventListener('click', () => popTo(i));
+        li.appendChild(b);
+      }
+      crumbs.appendChild(li);
+    });
+    overlay.querySelector('[data-overlay-title]').textContent = trail[trail.length - 1];
+  }
+
+  // Back: the current level slides out to the right with a fade (the open animation in reverse); the level below
+  // comes back. From the first level the whole overlay leaves the same way.
+  let popping = false;
+  async function popTo(depth) {
+    if (popping || !overlayStack.length) return;
+    if (depth <= 0) { await closeOverlay(true); return; }
+    popping = true;
+    const top = overlayStack[overlayStack.length - 1];
+    await animate(top.el, 'is-leaving');
+    overlayStack.splice(depth).forEach((l) => l.el.remove());
+    const back = overlayStack[overlayStack.length - 1];
+    back.el.hidden = false;
+    animate(back.el, 'is-returning');
+    renderCrumbs();
+    canvas.querySelector('[data-overlay-title]').focus();
+    popping = false;
+  }
+  function popOverlay() { popTo(overlayStack.length - 1); }
+
+  async function closeOverlay(returnFocus, instant) {
+    const overlay = canvas.querySelector('[data-canvas-overlay]');
+    if (overlay.hidden) return;
+    if (!instant) { popping = true; await animate(overlay, 'is-leaving'); popping = false; }
+    overlayStack = [];
+    overlay.hidden = true;
+    overlay.classList.remove('is-leaving');
+    overlay.querySelector('[data-overlay-body]').textContent = '';
+    if (returnFocus && overlayOpener && document.contains(overlayOpener)) overlayOpener.focus();
+    overlayOpener = null;
+  }
+  if (canvas) {
+    const overlay = canvas.querySelector('[data-canvas-overlay]');
+    overlay.querySelector('[data-overlay-back]').addEventListener('click', popOverlay);
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); popOverlay(); return; }
+      if (e.key !== 'Tab') return;  // keep focus inside the overlay while it is open
+      const focusable = [...overlay.querySelectorAll('a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])')]
+        .filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === overlay.querySelector('[data-overlay-title]'))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+  }
+
+  // The event the page is about: its overview, locations, schedule and notifications (the compose form and every notification)
+  // are on the canvas from the start; empty lists say so, and the toolbars add to them.
+  // Staff: the Prospects tab (runs, then the open prospects by fit); absent for everyone else.
+  async function preloadProspects() {
+    if (!('staff' in root.dataset)) return;
+    const names = ['prospect_run_row', 'prospect_row', 'ai_spend_summary'];
+    if ('superuser' in root.dataset) names.push('platform_health');
+    for (const name of names) {
+      let items = [];
+      try { items = await fetchCards(name, [{}]); } catch (e) { /* none yet */ }
+      toCanvas(name, items, {}, true);
+    }
+  }
+  // The server drew the canvas (agent/canvas.py, A21): adopt its tabs, panes and cards as if toCanvas had made them.
+  function adoptCanvas() {
+    const bar = canvas.querySelector('[data-canvas-tabs]');
+    if (!bar || !('ssr' in bar.dataset)) return false;
+    bar.querySelectorAll('[role=tab]').forEach((button) => {
+      const label = button.dataset.tabLabel;
+      const pane = canvas.querySelector(`#${button.getAttribute('aria-controls')}`);
+      const grid = pane.querySelector('.canvas__grid');
+      const tools = toolbarFor(label);
+      if (tools.length) {
+        const row = document.createElement('div');
+        row.className = 'canvas__toolbar';
+        tools.forEach((tool) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = `button button--${tool.plain ? 'outline' : 'primary'} button--small`;
+          toolLabel(b, tool);
+          b.addEventListener('click', () => tool.run(b));
+          row.appendChild(b);
+        });
+        pane.prepend(row);
+      }
+      button.addEventListener('click', () => selectTab(label));
+      tabs.set(label, { button, pane, label, grid });
+      pane.querySelectorAll('.canvas__section[data-component="location_row"]').forEach((sec) => {
+        const wrap = sec.querySelector('.canvas__cards');
+        if (wrap && wrap.querySelectorAll('.agent__card').length > 1 && window.makeSortable) sortable(wrap, sec);
+      });
+    });
+    window.attndShowIf?.(canvas);
+    window.attndOpenApp?.(canvas);
+    window.attndEnhance?.(canvas);
+    return true;
+  }
+
+  async function preloadCanvas() {
+    if (!onCanvas()) return;
+    if (adoptCanvas()) {
+      const kept = rememberedTab();
+      const active = [...tabs.values()].find((t) => !t.pane.hidden);
+      if (!new URLSearchParams(location.search).get('tab') && tabs.has(kept) && (!active || active.label !== kept)) {
+        tabs.forEach((t, key) => {  // no slide on a reload: the remembered tab is simply there
+          const on = key === kept;
+          t.button.setAttribute('aria-selected', String(on));
+          t.button.tabIndex = on ? 0 : -1;
+          t.pane.hidden = !on;
+        });
+      }
+      return;
+    }
+    preloadProspects();
+    if (!eventId) {
+      try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
+      selectTab(tabs.has(rememberedTab()) ? rememberedTab() : 'Events');
+      return;
+    }
+    // Every event and "New event" too, so the whole console is reachable from here.
+    try { toCanvas('event_tile', await fetchCards('event_tile', [{}]), {}, true); } catch (e) { toCanvas('event_tile', [], {}, true); }
+    const parent = { event_id: eventId };
+    for (const name of ['event_overview', 'event_readiness', 'event_lifecycle', 'sharing_kit', 'event_exports', 'event_rollover', 'changeset_review',
+                        'location_row', 'schedule_item_row', 'notification_form', 'notification_row',
+                        'event_team', 'event_metrics', 'usage_answer', 'website_analytics', 'app_layout', 'website_watching', 'event_context_form',
+                        'event_flyer', 'object_history', 'event_versions']) {
+      let items = [];
+      try { items = await fetchCards(name, [parent]); } catch (e) { /* none yet: the section says so */ }
+      if (name === 'changeset_review' && !items.length) continue;  // the Review tab only while something waits
+      toCanvas(name, items, parent, true);
+      if (name === 'changeset_review') setTabCount('Review', items.length, true);
+    }
+    selectTab(tabs.has(rememberedTab()) ? rememberedTab() : 'Overview');
+  }
+
+  // Live numbers on cards (Overview numbers, Metrics): console.js's one live-numbers timer (60 s while visible,
+  // paused when hidden) calls this; every visible live card comes back in one batch request.
+  window.attndLiveCards = async () => {
+    const cards = liveCards().filter((c) => c.offsetParent !== null && c.querySelector('[data-live]'));
+    if (!cards.length) return;
+    const q = cards.map((c) => ({ component: c.dataset.component, items: [JSON.parse(c.dataset.ids)] }));
+    try {
+      const response = await fetch(`${root.dataset.batchUrl}?q=${encodeURIComponent(JSON.stringify(q))}`,
+                                   { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      (data.results || []).forEach((r, i) => {
+        const item = r.items && r.items[0];
+        const body = cards[i].querySelector('.agent__card-body');
+        if (!item || !body) return;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = item.html;  // server-rendered component (our templates)
+        const fresh = [...tmp.querySelectorAll('[data-live]')];
+        body.querySelectorAll('[data-live]').forEach((el, j) => { if (fresh[j]) window.attndLiveSwap(el, fresh[j]); });
+      });
+    } catch (e) { /* offline: next minute */ }
+  };
+
+  // ---- recent requests: a sheet over the log (never in its flow), closed by a pick, Esc, × or a tap outside ----------
+  const historyButton = $('[data-agent-history]');
+  function closeRecent(focusBack) {
+    if (recentBox.hidden) return;
+    recentBox.hidden = true;
+    historyButton.setAttribute('aria-expanded', 'false');
+    if (focusBack) historyButton.focus();
+  }
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !recentBox.hidden) { e.preventDefault(); e.stopPropagation(); closeRecent(true); }
+  }, true);
+  $('[data-agent-recent-close]')?.addEventListener('click', () => closeRecent(true));
+  document.addEventListener('pointerdown', (e) => {
+    if (!recentBox.hidden && !recentBox.contains(e.target) && !historyButton.contains(e.target)) closeRecent(false);
+  });
+  historyButton.addEventListener('click', async (e) => {
+    const button = e.currentTarget;
+    const show_ = recentBox.hidden;
+    recentBox.hidden = !show_;
+    button.setAttribute('aria-expanded', String(show_));
+    if (!show_) return;
+    const list = $('[data-agent-recent]');
+    list.textContent = '';
+    try {
+      const data = await get(root.dataset.runsUrl);
+      if (!data.runs.length) { const li = document.createElement('li'); li.className = 'muted small'; li.textContent = 'Nothing yet.'; list.appendChild(li); }
+      data.runs.forEach((r) => {
+        const li = document.createElement('li');
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'link-button small';
+        b.textContent = r.goal;
+        b.addEventListener('click', () => { closeRecent(false); show(r.id, r.active).catch((err) => bubble('error', err.message)); });
+        const meta = document.createElement('span');
+        meta.className = 'muted small';
+        meta.textContent = ` · ${r.status.replace('_', ' ')}`;
+        li.append(b, meta);
+        list.appendChild(li);
+      });
+      const spend = document.createElement('li');
+      spend.className = 'muted small';
+      spend.textContent = `Today: $${data.spent_today} of $${data.cap}`;
+      list.appendChild(spend);
+      list.querySelector('button')?.focus({ preventScroll: true });
+    } catch (err) { bubble('error', err.message); }
+  });
+
+  // "Earlier · 12": older requests of a long conversation, loaded on demand above the first one.
+  function earlierButton(older) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'link-button small agent__earlier';
+    b.textContent = `Earlier · ${older.length}`;
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        const data = await get(`${root.dataset.runsUrl}?chat=${older.join(',')}`);
+        const keep = [...log.childNodes];
+        log.textContent = '';
+        (data.chat || []).forEach((c) => appendData(c, false));
+        keep.forEach((n) => { if (n !== b) log.appendChild(n); });
+        setChatIds([...(data.chat || []).map((c) => c.run.id), ...chatIds()]);
+      } catch (e) { b.disabled = false; }
+    });
+    log.prepend(b);
+  }
+
+  // ---- on load: pick up a run that is still going -------------------------------------------
+  (async () => {
+    if (full) { root.classList.add('is-open'); preloadCanvas(); }
+    else if (store.get('sessionStorage', 'attnd.agent.open') === '1') open(false);
+    // One request for the whole conversation (its runs with their steps), drawn hidden, scrolled once, faded in.
+    const ids = chatIds();
+    if (ids.length) root.classList.add('is-restoring');
+    try {
+      // No ids in this tab (another device, signed in again): the latest conversation on the server (stage I4).
+      const latest = ids.length || store.get('sessionStorage', 'attnd.agent.fresh') ? '' : `&latest=1&event=${eventId || ''}`;
+      const data = await get(`${root.dataset.runsUrl}?chat=${ids.join(',')}${latest}`);
+      const active = data.runs.find((r) => r.active);
+      const chat = data.chat || [];
+      setChatIds(chat.map((c) => c.run.id));
+      setThread(data.thread || chat[chat.length - 1]?.run.thread);
+      if (chat.length) {
+        log.textContent = '';
+        restoring = [];
+        chat.forEach((c, i) => appendData(c, i === chat.length - 1 && c.run.active));
+        await Promise.allSettled(restoring);
+        restoring = null;
+        const saved = parseInt(store.get('sessionStorage', 'attnd.agent.scroll') || 'bottom', 10);
+        log.scrollTop = Number.isNaN(saved) ? log.scrollHeight : saved;
+        if (data.earlier?.length) earlierButton(data.earlier);
+      }
+      if (active && active.status !== 'running') open(false);
+    } catch (e) { /* offline: the panel still opens */ }
+    restoring = null;
+    if (root.classList.contains('is-restoring')) {
+      root.classList.remove('is-restoring');
+      root.classList.add('is-restored');  // one gentle fade-in (agent.css)
+    }
+    if (pendingAim) { aimAt(pendingAim); pendingAim = null; }
+  })();
+  if (root.dataset.openOnLoad) { delete root.dataset.openOnLoad; if (panel.hidden) open(); }  // the click that loaded us
+  if (!chatIds().length && (full || !panel.hidden)) brief();
+  window.attndAgentReady = true;  // agent-loader.js: later clicks reach the handlers above directly
+  if (window.attndAgentPending) { const b = window.attndAgentPending; window.attndAgentPending = null; b.click(); }
+})();

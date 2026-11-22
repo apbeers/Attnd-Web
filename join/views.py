@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.views import View
 from attnd.links import join_url, qr_svg, shared_plan_url
 
+from events import theme as event_theme
 from events.models import Event
 
 
@@ -69,15 +70,32 @@ def _landing(request, event, kind, extra=None):
         context = {
             'event': event, 'kind': kind,
             'join_url': join_url(event),  # exactly what the QR code encodes
+            'theme_css': event_theme.site_css(event),  # API-023
             'qr_url': reverse('join:join_qr', args=[event.event_code]),
             'ios_url': settings.IOS_APP_STORE_URL, 'android_url': play_url(event.event_code),
             'app_store_id': _app_store_id(),
             'clip_bundle_id': f"{os.getenv('APPLE_APP_BUNDLE_ID', 'com.arcu.Attnd')}.clip",
         }
+        from home.sitemaps import indexable_event
+        site = getattr(settings, 'SITE_URL', 'https://attnd.app').rstrip('/')
+        context['canonical'] = site + request.path.split('?')[0]
+        context['noindex'] = not indexable_event(event) or bool(extra)  # shared plans: personal, never indexed
         context.update(extra or {})
         response = render(request, 'join/landing.html', context)
     response['Cache-Control'] = 'no-cache'
     return response
+
+
+def download(request):
+    """/download/, /app/, /get/ (old links): iPhone → the App Store, Android → Google Play, anything else → the
+    home page's app section. 302: it depends on the device."""
+    from django.http import HttpResponseRedirect
+    kind = client_kind(request.headers.get('User-Agent') or '')
+    if kind == 'ios':
+        return HttpResponseRedirect(settings.IOS_APP_STORE_URL)
+    if kind == 'android':
+        return HttpResponseRedirect(settings.ANDROID_PLAY_STORE_URL)
+    return HttpResponseRedirect(reverse('home:homepage') + '#download')
 
 
 class JoinEventRedirect(View):
@@ -194,13 +212,17 @@ class SharedPlanRedirect(View):
         })
 
 
+# A code's QR never changes (the link is fixed per code): a day fresh, then served stale while it revalidates.
+QR_CACHE = 'public, max-age=86400, stale-while-revalidate=604800'
+
+
 def join_qr(request, event_code):
     """SVG QR code for the join link (the desktop page shows it)."""
     event = Event.objects.filter(event_code__iexact=event_code).exclude(status=Event.STATUS_DRAFT).first()
     if event is None:
         raise Http404
     response = HttpResponse(qr_svg(join_url(event), box_size=12), content_type='image/svg+xml')
-    response['Cache-Control'] = 'public, max-age=3600'
+    response['Cache-Control'] = QR_CACHE
     return response
 
 
@@ -212,7 +234,7 @@ def shared_plan_qr(request, event_code, payload):
         raise Http404
     response = HttpResponse(qr_svg(shared_plan_url(event.event_code, payload), box_size=12,
                                    error_correction=qrcode.constants.ERROR_CORRECT_L), content_type='image/svg+xml')
-    response['Cache-Control'] = 'public, max-age=3600'
+    response['Cache-Control'] = QR_CACHE
     return response
 
 

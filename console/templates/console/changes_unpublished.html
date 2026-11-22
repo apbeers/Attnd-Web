@@ -1,0 +1,6 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Unpublished changes · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="panel panel--roomy">{% component "unpublished_changes" event=event %}</div>
+{% endblock %}

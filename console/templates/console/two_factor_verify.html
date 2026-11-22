@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   {% include 'home/_icons.html' %}
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex, nofollow"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Two-factor sign-in — Attnd</title>
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
 </head>
@@ -51,6 +52,7 @@
     </div>
   </div>
 </main>
+<script src="{% static 'console/tz.js' %}"></script>
 <script src="{% static 'console/passkeys.js' %}"></script>
 </body>
 </html>

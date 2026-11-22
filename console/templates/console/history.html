@@ -1,21 +1,9 @@
 {% extends 'console/base.html' %}
+{% load console_tags %}
 {% block title %}History · {{ event.name }}{% endblock %}
 {% block event_content %}
-<div class="cluster cluster--loose toolbar">
-  <p class="muted grow">A snapshot is saved before every AI update and every restore. Restoring brings back locations, schedule and event details exactly as they were.</p>
-  <form method="post" class="cluster">{% csrf_token %}<input type="hidden" name="action" value="snapshot">
-    <input name="summary" class="small" placeholder="Label (optional)" aria-label="Snapshot label">
-    <button class="button button--outline button--small">Save snapshot</button></form>
-</div>
-<div class="panel panel--flush"><ul class="list list--roomy">
-{% for r in revisions %}
-  <li class="cluster">
-    <div class="grow"><div class="strong">{{ r.summary|default:"Snapshot" }}</div>
-      <div class="small muted">{{ r.created_at|date:"M j, Y g:i A" }}{% if r.created_by %} · {{ r.created_by.email }}{% endif %} ·
-        {{ r.snapshot.locations|length }} locations, {{ r.snapshot.schedule|length }} items</div></div>
-    <form method="post">{% csrf_token %}<input type="hidden" name="revision" value="{{ r.id }}">
-      <button class="button button--secondary button--small" data-confirm="Restore this version? Your current content is snapshotted first.">Restore</button></form>
-  </li>
-{% empty %}<li class="list__empty">No snapshots yet.</li>{% endfor %}
-</ul></div>
+<div class="panel stack">{% component "object_history" event=event %}</div>
+<h2 class="title-3 history-snapshots">Snapshots</h2>
+<p class="muted">A snapshot is saved before every AI update and every restore. Restoring brings back locations, schedule and event details exactly as they were.</p>
+<div class="panel">{% component "event_versions" event=event %}</div>
 {% endblock %}

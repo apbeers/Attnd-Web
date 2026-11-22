@@ -1,0 +1,12 @@
+{% load console_tags %}{# attention (stage I): the chat's opening briefing across the person's current events. #}<div class="stack stack--tight component component--attention">
+  <h3 class="title-4">{% icon "stars" %} {% if d.rows %}What needs attention{% else %}All caught up{% endif %}</h3>
+  {% if d.rows %}<ul class="list readiness__list">{% for r in d.rows %}
+    <li class="readiness__row readiness__row--{{ r.state }}">
+      <span class="status-mark status-mark--{% if r.state == 'problem' %}warning{% else %}info{% endif %}" aria-hidden="true">{% if r.state == 'problem' %}!{% else %}•{% endif %}</span>
+      <span class="grow small">{% if d.events > 1 %}<strong>{{ r.event }}</strong> · {% endif %}{{ r.text }}</span>
+      {% if r.url and r.post %}<form method="post" action="{{ r.url }}" data-background>{% csrf_token %}<button class="button button--ghost button--small">{{ r.link }}</button></form>
+      {% elif r.url %}<a class="button button--ghost button--small" href="{{ r.url }}">{{ r.link|default:"Open" }}</a>{% endif %}
+    </li>{% endfor %}</ul>
+  {% if d.more %}<p class="small muted">And {{ d.more }} more. Ask “Is my event ready?” for one event’s full check.</p>{% endif %}
+  {% else %}<p class="small muted">{% if d.events %}Nothing waiting on your events right now.{% else %}No current events. Paste your event’s website or drop a flyer to start one.{% endif %}</p>{% endif %}
+</div>

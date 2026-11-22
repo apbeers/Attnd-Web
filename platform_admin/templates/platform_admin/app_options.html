@@ -1,0 +1,36 @@
+{% extends 'console/base.html' %}
+{% load console_tags platform_tags %}
+{% block title %}App options{% endblock %}
+{% block content %}
+<div class="column stack stack--loose">
+  {% platform_nav "app_options" %}
+  <p class="muted">Every option the server sends the apps, with its values and defaults. Organizers change them per event under App layout; the catalogue version is what apps send as <span class="mono">X-Attnd-Sections</span>.</p>
+  <div class="grid grid--2">
+    <section class="panel stack stack--tight"><h2 class="title-4">Display config (schema {{ o.display.schema }})</h2>
+      <dl class="small"><dt>Tabs</dt><dd class="mono">{{ o.display.tabs|join:", " }} (at most {{ o.display.max_tabs }}, Home always first)</dd>
+        <dt>Presets</dt><dd class="mono">{{ o.display.presets|join:", " }}</dd>
+        <dt>Places style</dt><dd class="mono">{{ o.display.locations_styles|join:", " }}</dd>
+        <dt>Schedule style</dt><dd class="mono">{{ o.display.schedule_styles|join:", " }}</dd>
+        <dt>Secondary pane</dt><dd class="mono">{{ o.display.secondary_panes|join:", " }}</dd>
+        <dt>Switches</dt><dd class="mono">{{ o.display.bools|join:", " }}</dd>
+        <dt>Organizers can set</dt><dd class="mono">{{ o.display.overridable|join:", " }}</dd></dl>
+      <details class="small"><summary>Defaults per preset</summary>{% for preset, values in o.display.preset_defaults.items %}<h3 class="eyebrow">{{ preset }}</h3><ul class="mono">{% for k, v in values.items %}<li>{{ k }}: {{ v }}</li>{% endfor %}</ul>{% endfor %}</details>
+    </section>
+    <section class="panel stack stack--tight"><h2 class="title-4">Live Activity</h2>
+      <dl class="small"><dt>Follows</dt><dd>{% for k, v in o.live_activity.follows.items %}<span class="mono">{{ k }}</span> = {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}</dd>
+        <dt>Buttons</dt><dd>{% for k, v in o.live_activity.buttons.items %}<span class="mono">{{ k }}</span> {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}</dd>
+        <dt>Default</dt><dd class="mono">{{ o.live_activity.default }}</dd><dt>Stale text</dt><dd>≤ {{ o.live_activity.max_stale }} characters; urgent is always on</dd></dl>
+      <h2 class="title-4">Colour theme</h2>
+      <p class="small">Roles <span class="mono">{{ o.theme_roles|join:", " }}</span> × light / dark; Attnd's default:</p>
+      <div class="cluster">{% for mode, roles in o.theme_default.items %}{% for role, hex in roles.items %}<span class="chip"><span class="swatch" style="display:inline-block;width:1em;height:1em;border-radius:50%;background:{{ hex }}"></span> {{ mode }} {{ role }} <span class="mono">{{ hex }}</span></span>{% endfor %}{% endfor %}</div>
+    </section>
+  </div>
+  <section class="stack"><h2 class="title-3">Screen layouts · catalogue {{ o.catalogue_version }}</h2>
+    <div class="grid grid--2">{% for s in o.screens %}<article class="panel stack stack--tight"><h3 class="title-4">{{ s.label }} <span class="mono small muted">{{ s.key }}</span></h3>
+      {% if s.defaults %}<p class="small">Built-in order: <span class="mono">{{ s.defaults|join:" · " }}</span></p>{% else %}<p class="small muted">No built-in layout (the app's own screen).</p>{% endif %}
+      <table class="data-table data-table--compact small"><thead><tr><th>Section</th><th>Since</th><th>Needs</th><th>Parts</th></tr></thead><tbody>
+      {% for x in s.sections %}<tr><td><span class="mono">{{ x.type }}</span><br>{{ x.label }}</td><td>{{ x.since }}</td><td class="mono">{{ x.needs|join:", " }}</td><td class="mono">{{ x.parts|join:", " }}</td></tr>{% endfor %}</tbody></table></article>{% endfor %}</div>
+    <details class="small"><summary>Conditions (<span class="mono">when</span>)</summary><ul>{% for k, v in o.conditions.items %}<li><span class="mono">{{ k }}</span>: {{ v }}</li>{% endfor %}</ul></details>
+  </section>
+</div>
+{% endblock %}

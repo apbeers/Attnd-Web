@@ -1,0 +1,15 @@
+{% load console_tags %}{# sharing_kit: join link and code, QR downloads, printable poster and table tent. #}<div class="stack component component--sharing_kit">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "link" %} {{ d.name }}</h3>{% endif %}
+  <div class="sharing-kit">
+    <img class="sharing-kit__qr" src="{{ d.qr_url }}" alt="QR code to join {{ d.code }}" width="160" height="160" loading="lazy">
+    <div class="stack stack--tight">
+      <div><span class="eyebrow">Code</span><div class="cluster"><strong class="mono title-3">{{ d.code }}</strong>
+        <button type="button" class="button button--outline button--small" data-copy="{{ d.code }}">Copy</button></div></div>
+      <div><span class="eyebrow">Join link</span><div class="cluster"><span class="small mono">{{ d.join_url }}</span>
+        <button type="button" class="button button--outline button--small" data-copy="{{ d.join_url }}">{% icon "link" %} Copy link</button></div></div>
+      <div class="cluster"><a class="button button--outline button--small" href="{{ d.qr_png }}" download>{% icon "download" %} QR (PNG)</a>
+        <a class="button button--outline button--small" href="{{ d.qr_svg }}" download>{% icon "download" %} QR (SVG)</a></div>
+    </div>
+  </div>
+  <div class="cluster">{% for p in d.prints %}<a class="button button--secondary button--small" href="{{ p.url }}" target="_blank" rel="noopener">{% icon "printer" %} {{ p.label }}</a>{% endfor %}</div>
+</div>

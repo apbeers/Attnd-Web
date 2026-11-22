@@ -55,6 +55,34 @@ def check_files(files):
         total += size
     if total > MAX_TOTAL_BYTES:
         raise ToolError('The site is over 2 MB of code. Make it smaller (images belong in the asset library).')
+    check_safety(files)
+
+
+SAVE_ERRORS = ('form_origin', 'password_field', 'card_field', 'outside_script')
+
+
+def check_safety(files):
+    """Batch 7 §6, at save: forms only to Attnd's handler, no password / card fields, no outside scripts (the same
+    rules are applied again when pages are served)."""
+    from studio import quality
+    for path, text in files.items():
+        if not path.endswith('.html'):
+            continue
+        page = quality.parse(text)
+        for form in page.forms:
+            action = form.get('action', '')
+            if action and not quality._local(action) and not action.startswith('#'):
+                raise ToolError(f'{path}: forms may only post to Attnd\'s form handler (data-attnd-form, '
+                                f'action "_attnd/forms/<name>"), not {action[:80]}.')
+        for field in page.inputs:
+            words = ' '.join(field.get(k, '') for k in ('name', 'id', 'autocomplete', 'placeholder'))
+            if field.get('type', '').lower() == 'password' or 'password' in words.lower():
+                raise ToolError(f'{path}: sites can\'t ask for passwords.')
+            if quality.CARD_WORDS.search(words) or field.get('autocomplete', '').startswith('cc-'):
+                raise ToolError(f'{path}: sites can\'t ask for card or bank details.')
+        outside = [s.get('src') for s in page.scripts if s.get('src') and not quality._local(s['src'])]
+        if outside:
+            raise ToolError(f'{path}: scripts from other sites aren\'t allowed ({outside[0][:80]}).')
 
 
 TOOLS = [
@@ -193,8 +221,21 @@ class Workspace:
         run.steps = [*run.steps, {'at': timezone.now().isoformat(), 'text': step}][-80:]
         run.save(update_fields=['working_files', 'working_look', 'working_flyer', 'files_rev', 'steps'])
 
-    def step(self, text):
-        self.run.steps = [*self.run.steps, {'at': timezone.now().isoformat(), 'text': text}][-80:]
+    def step(self, text, key=None, done=None):
+        """A friendly step for the task card. With `key`, a step with the same key just before it is updated in
+        place (progress counts: "Copied 25 of 52…" → "Copied 29 of 52…" is one row; `done` is its text once the next
+        step starts)."""
+        entry = {'at': timezone.now().isoformat(), 'text': text}
+        if key:
+            entry['key'] = key
+        if done:
+            entry['done'] = done
+        steps = list(self.run.steps or [])
+        if key and steps and steps[-1].get('key') == key:
+            steps[-1] = entry
+        else:
+            steps.append(entry)
+        self.run.steps = steps[-80:]
         self.run.save(update_fields=['steps'])
 
     def asset(self, asset_id, kinds=None):

@@ -1,0 +1,18 @@
+{% load console_tags %}{# unpublished_changes: the draft vs what attendees see (§4); part "bar" is the sticky bar. #}
+{% partialdef bar %}<div class="publish-bar" role="region" aria-label="Unpublished changes">
+  <span class="publish-bar__summary"><span class="status-mark status-mark--warning" aria-hidden="true">•</span> <strong>{{ d.summary }}</strong> <span class="muted small">· your preview phone shows them; attendees see them after Publish</span></span>
+  <a class="button button--ghost button--small" href="{{ d.review_url }}">Review</a>
+  {% include 'components/_actions.html' with actions=d.actions %}
+</div>{% endpartialdef %}
+<div class="stack component component--unpublished_changes">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "history" %} {{ d.name }}</h3>{% endif %}
+  {% if d.draft_event %}<p class="muted">This event is a draft: attendees can't open it yet. Publish the event (Overview) to let them join; your preview phone already shows everything.</p>
+  {% elif not d.count %}<p class="muted">No unpublished changes: attendees see exactly what you see.</p>
+  {% else %}
+  <p>{{ d.summary }} · {{ d.phones }} phone{{ d.phones|pluralize }} get them when you publish. Notifications and the event's status don't wait for this.</p>
+  <div class="table-scroll"><table class="data-table data-table--compact small"><thead><tr><th>What</th><th>Change</th><th>Attendees see</th><th>After Publish</th></tr></thead><tbody>
+  {% for r in d.rows %}<tr><td><span class="muted">{{ r.kind }}</span> {{ r.name }}</td><td>{% if r.change == 'changed' %}{{ r.field }}{% else %}<span class="badge">{{ r.change }}</span>{% endif %}</td><td>{{ r.old }}</td><td>{{ r.new }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="cluster">{% include 'components/_actions.html' with actions=d.actions %}</div>
+  {% endif %}
+</div>

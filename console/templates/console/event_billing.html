@@ -1,0 +1,9 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Billing · {{ event.name }}{% endblock %}
+{% block event_content %}
+<div class="stack stack--loose">
+  <h1 class="title-2">Billing</h1>
+  {% component "event_billing" event=event %}
+</div>
+{% endblock %}

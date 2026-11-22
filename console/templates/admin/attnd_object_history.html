@@ -1,0 +1,33 @@
+{% extends "admin/object_history.html" %}
+{% load i18n console_tags %}
+{% comment %} The admin's History page with the Action column from console/history.py (Django's own change message, plus
+"(Ask Attnd)" when the change came through the agent and the values before → after). {% endcomment %}
+{% block content %}
+<div id="content-main">
+<div id="change-history" class="module">
+{% if action_list %}
+    <table>
+        <thead>
+        <tr>
+            <th scope="col">{% translate 'Date/time' %}</th>
+            <th scope="col">{% translate 'User' %}</th>
+            <th scope="col">{% translate 'Action' %}</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for action in action_list %}
+        <tr>
+            <th scope="row">{{ action.action_time|date:"DATETIME_FORMAT" }}</th>
+            <td>{{ action.user.email|default:action.user.get_username }}</td>
+            <td>{{ action|history_message }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <p class="paginator">{{ action_list.paginator.count }} {% blocktranslate count counter=action_list.paginator.count %}entry{% plural %}entries{% endblocktranslate %}{% if pagination_required %} · {% for i in page_range %}{% if i == action_list.paginator.ELLIPSIS %} {{ action_list.paginator.ELLIPSIS }}{% elif i == action_list.number %} <strong>{{ i }}</strong>{% else %} <a href="?{{ page_var }}={{ i }}">{{ i }}</a>{% endif %}{% endfor %}{% endif %}</p>
+{% else %}
+    <p>{% translate 'This object doesn’t have a change history. It probably wasn’t added via this admin site.' %}</p>
+{% endif %}
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,5 @@
+{% load console_tags %}{# prospect_run_row: one discovery run (staff only). #}<li class="cluster component component--prospect_run_row" data-id="{{ d.id }}">
+  <a class="grow" href="{{ d.url }}"><strong>{{ d.name }}</strong></a>
+  <span class="small muted">{{ d.when }} · {{ d.found }} found, {{ d.new }} new, {{ d.updated }} updated · ${{ d.cost }}</span>
+  <span class="badge badge--{% if d.running %}info{% elif d.error %}danger{% else %}neutral{% endif %}">{{ d.status }}</span>
+</li>

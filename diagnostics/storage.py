@@ -6,7 +6,9 @@ every request. Rows deleted by the purge leave free space that new rows reuse; t
 after trimming for the cap, so the number drops again.
 """
 from django.conf import settings
-from django.core.cache import cache
+from django.core.cache import caches
+
+cache = caches['local']  # per process, 60 s: no database round trip
 from django.db import connection
 
 TABLES = ('diagnostics_diagnosticentry', 'diagnostics_diagnosticsession', 'diagnostics_diagnosticreport')

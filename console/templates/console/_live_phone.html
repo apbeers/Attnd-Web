@@ -1,12 +1,1 @@
-{% load console_tags %}{# "See it live on your phone": QR to join + how live editing works. Expects `event`. #}
-<div class="panel live-panel">
-  <div class="live-pill"><span class="live-dot"></span> Live on your phone</div>
-  <img src="{% url 'console:event_qr' event.id %}" alt="QR code to open {{ event.name }} in the Attnd app">
-  <div class="display-code">{{ event.event_code }}</div>
-  <ol class="small">
-    <li>Scan the code with your phone's camera. It opens the Attnd app, or an instant App Clip on iPhone with nothing to install.</li>
-    <li>Keep the app open and change something here: a location, the schedule, a tab or a color.</li>
-    <li>Watch your phone update within a few seconds. Attendees see the same thing.</li>
-  </ol>
-  {% if event.status == 'draft' %}<p class="small tone-warning">Drafts can only be opened by your team. Publish to let attendees join.</p>{% endif %}
-</div>
+{% load console_tags %}{# "See it live on your phone": the live_on_phone component's panel. Expects `event`. #}{% component "live_on_phone" event=event part="panel" %}

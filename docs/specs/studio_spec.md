@@ -8,10 +8,11 @@ Server-only feature plus one additive API key (**API-016** `event.website_url`).
   (AI designs everything, Attnd hosts the site). No payments yet (Stripe later, `ROADMAP.md`). Staff, or an event's
   owner/admin who has Studio access, switch an event to Studio on its Studio page. Prices are not shown anywhere new
   (the home page only has its existing pricing line).
-- **Admins only** (Nov 19, 2026; it was an invite-only beta before): a person has Studio access when they are
-  staff/superuser, or their email is in `STUDIO_BETA_EMAILS` (an explicit override, default empty; case-insensitive).
-  The beta invite list (`StudioAccess` model and its staff page) was removed (migration `studio.0003`). Without access
-  every Studio URL is a 404 and no entry point is shown (sidenav item, import checkbox, staff links).
+- **Every organizer designs** (D1, owner Nov 21, 2026; before: admins only): any signed-in team member builds, edits
+  and previews the event's site (AI spend counts toward their monthly credit; the per-event daily cap stays). There is
+  no switch-to-Studio step. **Publishing** needs the Studio plan ($499) or the Platform admin's per-event override
+  (`platform_admin.plans.can_go_live`); otherwise Publish reads "Upgrade to publish · $499" and makes an upgrade
+  request the owner approves in the Platform admin. Automatic "bring into Studio" on AI imports stays staff-only.
 - **Who edits**: the event's team with today's roles. Any team member (with Studio access) edits drafts, chats with the
   AI, uploads assets and reads form submissions; publishing, unpublishing, the site address and switching the plan
   need the owner or an event admin (`Event.can_manage_team`), like publishing the event.
@@ -123,7 +124,7 @@ The AI sees every asset (id, kind, size, description, tags) and references them 
   used when `ANTHROPIC_API_KEY` is set; `fallbacks: "default"` on refusals; a prompt-cache breakpoint on the newest
   block). The fallback model is used only when the error says the model is missing or not available to the account. `STUDIO_AI_PROVIDER` = `auto` (Anthropic when its key exists, else OpenAI) / `openai` / `anthropic`.
   Models (Nov 2026; settings): `STUDIO_OPENAI_MODEL` `gpt-5.5` (OpenAI's strongest coding model) falling back to
-  `STUDIO_OPENAI_FALLBACK_MODEL` `gpt-5` if the account can't use it; `STUDIO_ANTHROPIC_MODEL` `claude-opus-5-5`;
+  `STUDIO_OPENAI_FALLBACK_MODEL` `gpt-5` if the account can't use it; `STUDIO_ANTHROPIC_MODEL` `claude-sonnet-5-5` (Nov 21, 2026; was `claude-opus-5-5`);
   images `STUDIO_IMAGE_MODEL` `gpt-image-2` falling back to `gpt-image-1`. Prices per model in `STUDIO_PRICES`
   (conservative estimates; unknown models are priced high so the cap errs safe). Every call is logged in
   `StudioUsage`.
@@ -216,6 +217,90 @@ Sidenav "Studio" (beta badge) for users with access; topbar "Studio reports" (st
 `STUDIO_VISION_MODEL`, `STUDIO_DAILY_SPEND_CAP_USD`, `STUDIO_MAX_STEPS`, `STUDIO_IMPORT_MAX_STEPS`,
 `STUDIO_RUN_MAX_MINUTES`, `STUDIO_IMPORT_SECONDS`, `STUDIO_IMPORT_MAX_MB`, `STUDIO_PREVIEW_LINK_DAYS`, `STUDIO_PRICES`,
 rate limits `studio_form_ip`, `studio_form_site`, `studio_report_ip`.
+
+## 15. Quality, SEO, analytics and safeguards (batch 7 §6, Nov 22, 2026)
+
+**Pre-publish check** (`studio/quality.py`, no AI, no network): every page of the draft is parsed (stdlib
+`html.parser`) for broken links and images (site files and the event's assets), alt text, one `h1` and heading order,
+contrast of simple CSS rules (WCAG maths, < 4.5:1), page weight (code + referenced images; info > 0.7 MB, warning
+> 1.5 MB), mobile layout by static analysis (viewport meta, fixed widths > 600 px, text < 12 px), SEO basics (title,
+meta description, `lang`), safety (forms posting elsewhere, password / card fields, scripts from other sites: **errors,
+they block Publish**; shortener / risky-TLD links: warning) and **drift** (dates outside the event's days, an item's
+time near its name that no longer matches, the home page not naming the event after a rename). It is drawn above
+Publish in `website_overview` ("Before you publish", counts, ≤ 12 issues). **Fix N automatically**
+(`fix_website_issues`, `studio:fix`) adds alt text (asset alt or the file name), the viewport, `lang`, a title and the
+meta description, as one new version (Undo). **Update the site** (`update_website_from_check`) sends the rest (drift,
+stale translations, broken links, contrast) to the designer as one instruction.
+
+**Translations** (`translate_website`, `studio:translate`, a background run): pages under `<code>/` (es, fr, de, it, pt,
+zh, ja, ko, vi, ar, nl, pl), each with `<meta name="attnd-source" content="<page> <sha1[:12]>">` of its source page.
+A changed source page makes the translation **out of date** (a check warning; Update the site refreshes it). Served pages
+get `hreflang` alternates (+ `x-default`).
+
+**SEO** (`studio/seo.py`, added at serve time, a page's own tags win): schema.org `Event` JSON-LD on the home page from
+the event's real data (name, start / end in its zone, place, address, geo, description, flyer / logo image), Open Graph
+(`og:title`, `og:description`, `og:url`, `og:image` = the page's first image, else the flyer / logo) and
+`twitter:card`; canonicals (unchanged); `/<slug>/sitemap.xml` (every page) and `/<slug>/robots.txt`; the host's root
+robots.txt lists the host sitemap.
+
+**Get the app**: every served page (previews too) gets a small fixed card with the join QR (`_attnd/qr.svg`), the event
+code and **Open in Attnd** (the join link); closed for the tab with sessionStorage (no cookie); hidden in print.
+
+**Analytics** (cookie-free, `studio/analytics.py`, model `SiteHit`): live pages send `navigator.sendBeacon` to
+`/<slug>/_attnd/hit` with `{k: view|open_app|get_app, p: path, r: referring host}`; one upsert per (site, UTC day, kind,
+path, referrer host). No IP, user agent or identifier is stored (the IP only feeds the `studio_hit_ip` rate limit);
+previews never count. Component `website_analytics` (views per day, top pages, referrers, taps) on the Website page,
+the event's Metrics page (once the site is published) and the canvas Metrics tab.
+
+**Quick text edits** (`edit_website_text`, `studio:text_edit`, no AI): **Edit text** in the full screen preview makes
+the bridge (`bridge.js`) turn a clicked text-only element `contenteditable="plaintext-only"`; leaving it posts the old
+and new text to the console, which replaces that one text run between tags (never markup, scripts or styles) as a new
+version with Undo.
+
+**Safeguards**
+- **Forms, fields, scripts** are refused at save (`agent.check_safety`, every AI write and code save) and neutralised
+  when served (`hosting.sanitize`: an outside `action` → `#` + `data-attnd-blocked`, password / card inputs removed,
+  outside `<script src>` removed). Outbound links get `rel="noopener nofollow ugc"`.
+- **Content scan** (`studio/safety.py`) at Publish, once per version (`SiteVersion.scan`): the check's errors
+  (`blocked`, the organizer fixes them) + Claude Haiku over the pages' text, outbound links and ≤ 6 used images
+  (phishing, scams, impersonation, adult, hate, malware). **hold** → `Site.review_status = held`, staff emailed, the
+  organizer sees "Attnd is reviewing this website"; Platform → **Studio reports → Held for review** (Preview, Approve =
+  publish as asked, Reject = stays offline + email to the owner; `approve_held_site` / `reject_held_site`, always ask,
+  permission `studio.review_site`). A failed scan never blocks.
+- **Publish limits**: a site is live only while the event itself isn't a draft (a draft event's site is preview-only,
+  also for `website_url`), on the Studio plan or the owner's override. **Unpaid events** (an override) are served with a
+  "Demo event · made with Attnd" ribbon (chosen over preview-only: the organizer can share a real link while the
+  ribbon says it's a demo).
+- **Snapshots**: every AI run starts from the draft, which is always a stored version, and ends in a new version, so
+  Undo / Restore always reach the site before the edit.
+- **Reports**: 2+ open reports on one site email staff once (`Site.reports_alerted_at`, cleared by Resolve).
+- **Caps**: ≤ 40 files, 300 KB each, 2 MB of code per version; the asset library ≤ 200 files / 300 MB, per-kind size
+  limits; uploaded JPEG / PNG / WebP lose EXIF / GPS / XMP (`safety.strip_metadata`, orientation applied first).
+- **Rights**: before the first publish of a site with an imported version, Publish reads **Confirm rights and publish**
+  (`confirm_rights=1`, also an Ask Attnd parameter) and the confirmation is stored (`Site.rights_confirmed_at` / `_by`)
+  and logged in the event's History.
+
+Tests: `studio/tests_safeguards.py`.
+
+## 16. Site styles (batch 7 Track D, Nov 22, 2026)
+
+The best generated sites settled into five looks, now a documented set in `studio/styles.py` (the source of truth;
+Platform → Site styles shows each with phone and laptop previews in an event's colours):
+
+| Style | Best for | Pages | Signature |
+|---|---|---|---|
+| Festival poster (`poster`) | festivals, concerts, art walks, fairs | index, lineup, map, faq | dark bar, full-bleed hero, huge condensed headline, pill buttons, alternating blocks |
+| Program (`program`) | conferences, talks, theatre, film | index, schedule, venue | calm white column (68ch), serif display, schedule by day, times in their own column |
+| Market day (`market`) | markets, food truck rallies, craft fairs | index, vendors, map | warm wash (secondary), map first, vendor cards by category, hours above the fold |
+| Course & countdown (`course`) | races, rides, tournaments | index, course, faq | huge countdown, timeline of key times, big course map |
+| One page (`single`) | small events | index | everything on one scrolling page |
+
+Each style defines the home page's sections in order (with the `attnd.js` elements they use), the type scale (system
+font stacks only: no web fonts needed), how the event theme's primary / secondary / tertiary colours are used, and do's
+and don'ts. A website started from scratch (`studio.views.starter_instruction`) gets `SITE STYLE "<name>" …` from
+`styles.prompt_text(styles.pick(event))`: course words (5K, race, ride…) → Course, market words → Market day, talk /
+conference words → Program, ≤ 2 places and ≤ 6 items → One page, else Festival poster. The system prompt says to
+follow a SITE STYLE and keep to it in later changes. Imports keep the old site's look (no style).
 
 ## 13. Custom domains (later, not built)
 `Site.custom_domain` + verification; the server adds it with the Heroku Platform API (`POST /apps/<app>/domains`, ACM)

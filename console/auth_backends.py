@@ -2,9 +2,12 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.db.models import Q
 
+from attnd.permissions import PermissionMixin
 
-class EmailOrUsernameBackend(ModelBackend):
-    """Sign in with the account's email or its username, ignoring case.
+
+class EmailOrUsernameBackend(PermissionMixin, ModelBackend):
+    """Sign in with the account's email or its username, ignoring case. Permissions: attnd.permissions (event roles,
+    the Staff role) plus Django's groups and per-user permissions.
 
     Accounts made with `createsuperuser` or the Django admin can have a username that isn't the
     email; this still lets them sign in with their email. An exact username match wins.

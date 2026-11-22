@@ -40,9 +40,21 @@ class Command(BaseCommand):
         recovered = jobs.recover_stale()
         from studio.agent import recover_stale as recover_studio_runs
         recover_studio_runs()  # Studio AI runs interrupted by a restart
+        from agent.loop import recover_stale as recover_agent_runs
+        recover_agent_runs()  # Ask Attnd runs interrupted by a restart; unanswered confirmations after a day
         watched, queued = watch.check_watched_events()
         from attestation.views import purge_expired_nonces
         purge_expired_nonces()
+        from console.undo import purge as purge_undo
+        purge_undo()  # Undo entries a day past their 24 h
+        from console.user_sessions import purge as purge_sessions
+        purge_sessions()
+        from platform_admin.models import EmailLog
+        EmailLog.purge()  # the Emails log keeps EMAIL_LOG_DAYS (90) days
+        from events import showcase
+        showcase.refresh()  # the home page's showcase events stay happening now (dev only for now)
+        from home.onboarding import purge_pending
+        purge_pending()  # home page composer submissions nobody signed up for, after a day  # signed-in sessions that have ended (Account → Signed in on other devices)
         # Privacy policy: device records unused for 12 months are deleted
         from datetime import timedelta
         from django.utils import timezone
@@ -62,10 +74,49 @@ class Command(BaseCommand):
             logging.getLogger(__name__).exception('Diagnostics purge failed')
 
         # Idempotent and cheap: delete unclaimed trial events past their expiry
+        try:
+            from attnd import indexnow
+            indexnow.flush()  # IndexNow: the queued page changes, one POST per host (production only)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('IndexNow flush failed')
         call_command('expire_trial_events', stdout=self.stdout)
 
         # The demo event (store reviewers and sales demos use it) must always be happening now.
         keep_demo_current(self.stdout)
+
+        # The home page gallery's covers (events/covers.py) for test / showcase events that never got a look.
+        try:
+            from events import covers
+            covers.refresh_due(self.stdout)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Event covers failed')
+
+        # Prospects (staff): a discovery run when its schedule is on and due (inline; never overlaps another run).
+        try:
+            from prospects.schedule import maybe_run
+            run = maybe_run()
+            if run is not None:
+                self.stdout.write(f'prospects run {run.pk}: {run.status}, {run.new} new, ${run.cost_usd:.4f}')
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Prospect discovery failed')
+
+        # API-021: "Plan your day" suggestions of events whose content changed (Claude Haiku 5.5; skipped without a key).
+        try:
+            from events.plan_suggestions import refresh_due
+            refreshed = refresh_due()
+            if refreshed:
+                self.stdout.write(f'plan suggestions refreshed: {refreshed}')
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Plan suggestions failed')
+
+        # F5: with the database task queue and no `tasks` dyno, drain what is due (≤ 4 minutes, before the next run).
+        import background
+        if background.database_queue():
+            call_command('run_tasks', once=True, max_seconds=240, stdout=self.stdout)
 
         # Inline jobs run in daemon threads; give them a moment to finish in this one-off dyno.
         import threading

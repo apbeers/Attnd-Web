@@ -1,0 +1,6 @@
+{% load console_tags %}{# app_layout: the event's look in the apps (display config); saves as you change it. #}<div class="stack component component--app_layout">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "phone" %} {{ d.name }}</h3>{% endif %}
+  <p class="small muted">{{ d.counts.locations }} location{{ d.counts.locations|pluralize }}, {{ d.counts.items }} schedule item{{ d.counts.items|pluralize }}{% if d.counts.spread %}, spread over {{ d.counts.spread }} km{% endif %}. Changes save as you make them and reach open apps within seconds.</p>
+  <p class="small muted" data-autosave-status role="status" aria-live="polite"></p>
+  {% include 'components/_form.html' with form=d.form %}
+</div>

@@ -68,6 +68,15 @@ Status: ✅ done · 🚧 in progress · ⬜ not started · — not needed. "dev"
 | API-018 | Rich context for the apps' on-device assistant: `event.context`, `locations[].context`, `schedule[].context` in `bundle/` (about, FAQ, amenities, policies, getting there, weather plan, menus, hours, age limits, performers with bios and genres, links); AI import/refresh extracts it, console "Details for the assistant" edits it (locks), DEMO has it | additive (new keys, `bundle/` only) | ✅ dev (5beae38) · ⬜ prod | ✅ (173575f; tools, search, detail screens) | ⬜ (later) |
 | API-019 | App Clip push topic: optional `app_clip` boolean in `POST events/<id>/join/` and `POST devices/` bodies; iOS sends `true` from the App Clip; the server sends clip devices' pushes (alerts, urgent, silent `content_updated`, Live Activity updates) on the clip's APNs topic | additive (new optional request field) | ✅ dev (4ff0467) · ⬜ prod | ✅ (c07ec37, local, not pushed yet) | n/a (no App Clip) |
 | API-020 | Retire the v1 events API: `SUPPORTED_API_VERSIONS` default `2`, `/api/v1/events/…` → `410` `update_required`; `/api/v1/attest/` unchanged | breaking for v1 only (no current app uses v1) | ✅ dev · ⬜ prod (needs a release + owner go-ahead) | — (uses v2) | — (uses v2) |
+| API-021 | "Plan your day" suggestions written for each event: `plan_suggestions` in `bundle/` (≤ 4 `{text, kind: plan\|question}`; Claude Haiku 5.5 in the background, deterministic fallback from the event's real days, categories and tags) | additive (new key, `bundle/` only) | ✅ dev · ⬜ prod | ⬜ | ⬜ |
+| API-022 | Place images found automatically: `locations[].image_credit` (credit / licence of a photo Attnd found and stores itself, or null) | additive (new key) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
+| API-023 | Per-event colour themes: `event.theme` in `bundle/` (`{light, dark}` × `primary` / `secondary` / `tertiary` hex, contrast-adjusted; `null` without a theme or when the organizer turned it off for the apps). Made by the AI import, edited in the console; used on the website now. **Apps: later, not in this change** (iOS built Nov 21, 2026) | additive (new key, `bundle/` only) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: tint, card wash, progress; the Live Activity's full theme, light / dark × primary / secondary / tertiary, 24c2b1c) · ⬜ prod | ⬜ (later) |
+| API-024 | Server-driven screens: `layout` in `bundle/` (per screen an ordered list of sections from a closed catalogue, overrides per category / tag, on-device conditions) for apps that send `X-Attnd-Sections: <catalogue version>` (ETag `-s<version>`); `home` in `display.tabs` for those apps; console App layout → Screens editor, Ask Attnd `update_screen_layout` | additive (new key, new optional request header, new `display.tabs` value only for apps that send the header) | ✅ dev (6630ce5, 3d4e0b9) · ⬜ prod | ✅ dev (8bd7bd3, 0f25083; TestFlight 2.0.161) | ⬜ (later) |
+| API-027 | Screens catalogue 2 (`X-Attnd-Sections: 2`): `my_schedule`, banners as sections (`status`, `update_banner`), new screens `schedule_tab`, `places_tab`, `updates_tab`, `onboarding`, section fields `ids` / `text` / `image`; `ask_about` out of the defaults; bundle `live_activity` (follows, buttons, urgent, stale text) | additive (new header value, new keys, new object) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: the four catalogue 2 screens, section ids / text / image, `update_banner`, `live_activity` follows / buttons / stale text; 800c978, TestFlight 2.0.171) · ⬜ prod | ⬜ (parked) |
+| API-026 | Faster live updates: the first change pushed at once (later ones grouped), `jitter_ms` in `content_updated` scaled to the event's size; organizer preview phones (`preview_token` on `join/`, `GET events/<id>/changes/` long-poll, `preview` in the join answer); `bundle/` records the version a device fetched | additive (new optional request field, new response and push keys, new endpoint) | 🚧 built · ⬜ prod | ✅ dev (Nov 21, 2026: `preview_token` from links and QR codes, `changes/` long-poll in the foreground, `jitter_ms`; 800c978, 641a8bf, TestFlight 2.0.171) · ⬜ prod | ⬜ (parked) |
+| API-031 | Live Google Places photos for places without a free one: `locations[].image_url` may be our `/img/places/<id>/` redirect (fetched per view, never stored), `image_credit` `"Photo: Google Maps"`, new `locations[].image_attribution_url` (the authors' names, JSON) | additive (new optional key; a new kind of image URL) | 🚧 built · ⬜ prod | ⬜ | ⬜ (paused) |
+| API-030 | Artist links: `schedule[].context.performers[].apple_music_url` (optional, `https://music.apple.com/…`; confident matches from the Apple Music catalog, or set by the organizer); console "Find music links" | additive (new optional key) | 🚧 built · ⬜ prod (needs `APPLE_MUSIC_*` on attnd-web) | ✅ dev (TestFlight 2.0.180: "Listen on Apple Music", https://music.apple.com links only) · ⬜ prod | ⬜ (paused) |
+| API-025 | Free limit: an unpaid event takes 20 different devices on `join/`; a new device beyond it gets `409 {error: "event_full_free", message, limit}` (rejoin always works; paid, DEMO, App Review sample and showcase events exempt) | additive (new error answer on an existing endpoint, for unpaid events only) | 🚧 built · ⬜ prod | ⬜ | ⬜ |
 | API-003 | Update check: `/api/app-status/`, update screen, 410 for retired versions | additive | ✅ dev · ✅ prod (Nov 15, 2026) | ✅ dev · ⬜ prod | ✅ dev · ⬜ prod |
 
 API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROADMAP.md`).
@@ -75,6 +84,180 @@ API-012 is reserved (Android FCM → Firebase Installation ID registration, `ROA
 ## Log
 
 Newest first. Each entry says what changed and what each app must do.
+
+### API-031: Live Google Places photos (fallback)
+**Why:** many places have no photo on the event's pages, their website or Wikimedia; Google Places usually has one.
+Google's terms forbid storing Places photos (owner, Nov 21, 2026: OK to show them live, attributed, client cache only).
+**Server (attnd-web):** when `events/place_images.py` finds no free photo, it sets `Location.google_photo` (and keeps
+only the place id, which the terms allow). `GET /img/places/<id>/` (public; published events, or the team for drafts;
+`place_photo_ip` 300 / 10 min per IP; `GOOGLE_PHOTOS_DAILY_MAX` loads a Pacific day, 2,000 by default) asks Google
+every time (Place Details `photos`, then the photo media URL with `skipHttpRedirect`) and answers a `302` to the photo
+(`Cache-Control: public, max-age=3600`), or `?format=json` with the authors. Counted on Diagnostics → Endpoints
+(`places_photos`). Off with `GOOGLE_PLACE_PHOTOS=0`. The console and Studio sites use the same URL.
+**Bundle (additive):** `locations[].image_url` = that URL, `image_credit` = `"Photo: Google Maps"`, new
+`locations[].image_attribution_url` (else `null`). See `API_V2.md` → Location.
+**iOS:** nothing to change for the image itself (it's a normal https URL that redirects; `CachedImage` keeps it like
+any other, which is within the terms as a client cache). Decode `image_attribution_url` leniently; on the place detail
+(and wherever the photo is large) fetch it and show its `credit` under the photo (authors linked when there's room),
+`image_credit` until then. Don't prefetch these photos for offline use beyond the normal image cache.
+**Android:** later (paused): the same.
+
+### API-030: Apple Music artist links for performers
+**Why:** attendees want to hear a band before they walk over (owner, Nov 21, 2026; Apple Music only: Spotify's Web
+API needs a Premium account owner, so no Spotify link).
+**Server (attnd-web):** `events/music.py`: for each performer in a schedule item's context the server searches the
+Apple Music catalog (`GET https://api.music.apple.com/v1/catalog/us/search?types=artists`, developer token = ES256
+JWT from the MusicKit key `APPLE_MUSIC_KEY_ID` / `APPLE_MUSIC_PRIVATE_KEY`, team `APPLE_TEAM_ID`) once per name, in
+the background after a save (new or renamed performers) or on **Find music links** (console readiness check, Ask
+Attnd `find_music_links`). Only confident matches are kept (normalised names equal; genres overlap when both sides
+have some; several same-named artists only when the genres single one out). Stored in `ScheduledItem.music` by
+normalised name; organizer links (the performers line's last cell `| https://music.apple.com/…`, or `| no link`) are
+locked and never replaced. Cached (found 30 days, nothing 7 days), counted per UTC day (Diagnostics → Endpoints), a
+429 pauses lookups for an hour; off without the keys.
+**Bundle (additive):** `schedule[].context.performers[].apple_music_url`, only when there is a link (`API_V2.md` →
+Context). A new or changed link bumps `content_version`.
+**iOS:** decode `apple_music_url` leniently (https only; ignore anything else); on performer rows, the item detail and
+chat components show **Listen on Apple Music** (Apple's wording; the Apple Music badge per Apple's marketing
+guidelines if used) that opens the URL (`openURL`: the Music app, else Safari); no MusicKit SDK, no account. Nothing
+when the key is missing. App and App Clip alike.
+**Android:** later (Android work paused): the same button with `Intent.ACTION_VIEW`.
+
+### API-027: Screens catalogue 2 and the Live Activity's content choices
+**Why:** the owner approved more server-driven screens (tab lists, Updates, banners, onboarding, Live Activity
+choices) on Nov 21, 2026; the iOS app's My schedule merges `plan_today` + `liked`.
+**Server (attnd-web):** `events/layout.py` `CATALOGUE_VERSION = 2`: new types with `since: 2` (see `API_V2.md` → Layout,
+catalogue 2), `for_version()` serves each app its catalogue (1: `my_schedule` → `plan_today` + `liked`, no new screens;
+2: `plan_today` / `liked` → one `my_schedule`), tab defaults from `display.schedule_style` / `locations_style`,
+`ids` / `text` / `image` section fields, `ask_about` dropped from the defaults (still valid). Console Screens editor:
+the new screens with previews, picks for `featured` / `pinned`, the welcome card's text and image.
+`events/live_activity.py` + `Event.live_activity`: bundle `live_activity` (always; defaults), console App layout →
+**Live Activity** (autosave; Ask Attnd `update_live_activity`). Tests: `events/tests_layout.py`.
+**iOS:** send `X-Attnd-Sections: 2`; draw the new screens / types / fields per `API_V2.md` (unknown → skip; a screen
+missing → built-in); keep urgent (12 h), offline and screenshot mode fixed; use `live_activity` for the default
+follow mode, the buttons and the stale text (urgent block always on).
+**Android:** parked.
+
+### API-026: Faster live updates and the organizer's preview phone
+**Why:** organizers edit with the app open on their phone and want to see changes at once; attendees should get them
+within seconds without anyone holding connections open on a sync server (owner, Nov 21, 2026).
+**Server (attnd-web):** `events/push.py`: the first `content_updated` of a burst goes out at once, later changes within
+15 s become one follow-up; attendee pushes carry `jitter_ms` (real devices with a token: < 100 → 1,000, < 1,000 →
+5,000, else 10,000), preview phones `jitter_ms: 0`. `events/preview.py`: signed tokens (person + event, 7 days, salt
+`attnd.preview.v1`), `join/` takes `preview_token` (a valid one marks `Device.preview_until` / `preview_by`, frees the
+device's free-limit spot, at most 3 live preview phones per event: a fourth ends the oldest), `GET events/<id>/changes/
+?since=` (preview phones only; ≤ 25 s; the database connection goes back to the pool while it sleeps; at most 2 waiting
+per process, shared with Ask Attnd's long-poll in `events/longpoll.py`, 3 per event; over a cap `retry_after: 15`).
+`bundle/` writes `Device.last_version` once per device per change. Preview phones are excluded from attendee counts
+(`Device.objects.attendees()`), never from pushes. Console: the "Live on your phone" card gets **Preview on my phone**
+(QR, Open as preview on phones), the preview phones with Remove (`remove_preview_phone`), and a live "Updated on 31 of
+37 phones" line (attendee phones seen in the last day, polled every 10 s). Tests: `events/tests_preview.py`.
+**iOS:** read `preview` from the join link (Universal Link, App Clip invocation URL, scanned QR, `attnd://join/<code>
+?preview=`; `DeepLink.httpsURL(fromAppScheme:)` must keep the query) and send it once as `preview_token` with `join/`;
+when the answer has `preview: true`, hold `changes/?since=<content_version>` while in the foreground (refetch at once
+on `changed`, honour `retry_after`, stop on `preview: false`); use `jitter_ms` from `content_updated` (0–`jitter_ms`
+ms, else 0–10 s). Old builds ignore all of it.
+**Android:** parked (owner, Nov 21, 2026). Builds ignore the new keys; `jitter_ms` would be the only easy win.
+- **Nov 22, 2026 (batch 7, additive):** over the cap of 3 live preview phones a phone with a valid token joins as an
+  ordinary attendee and the answer says `"preview": false` (before, it replaced the oldest preview phone). Apps: treat
+  `preview: false` like no key (nothing to show; no `changes/` long-poll). No app change needed.
+
+### API-025: Free limit on unpaid events
+**Why:** anyone can now sign up and create demo events (owner, Nov 21, 2026); going live stays invite-only (an admin
+marks the event paid, no checkout yet). A demo serves a dry run, not a real crowd.
+**Server (attnd-web):** `events/free_limit.py`: `EventJoin` records each device that ever joined an event (the existing
+devices were backfilled by the migration); `join/` refuses the 21st different real device of an unpaid event with `409
+{"error": "event_full_free", "message", "limit"}` and doesn't register it. A device that joined before always rejoins.
+Exempt: `paid`, `showcase`, the DEMO event, the App Review sample events (`seed_test_data`); `ci-` and `showcase-`
+device ids never count. Console: "14 of 20 free spots used" + **Remove the limit** (emails the admins) on the event's
+status card; staff **Mark paid** (`mark_event_paid`); listing in nearby search needs a paid event. `FREE_DEVICE_LIMIT`
+(default 20). Tests: `events/tests_free_limit.py`.
+**iOS / Android:** on a `409` from `join/` whose `error` is `event_full_free`, show the server's `message` (written for
+attendees: the event is full on its free trial; ask the organizer) instead of the generic join error, and go back to
+the launch screen; don't retry automatically. Older builds show their generic join error, which is acceptable.
+
+### API-024: Server-driven screens (layouts)
+**Why:** the owner wants each event to show what is relevant to it: every section compiled into the apps, the event's
+JSON choosing which appear, in what order and with which options, like the console's components (Nov 21, 2026). Data
+choosing among built-in components, never downloaded code (App Store guideline 2.5.2). Additive.
+**Server (attnd-web):** `events/layout.py`: the catalogue (screens × section types, each with the catalogue version
+that added it, the facts it needs and its parts), the apps' default layouts, `automatic()` (sections nothing in the
+event could fill are left out; food places with menus put the menu and hours first; tags whose items have performers
+put the performers first; Home per preset), `clean_config()` for `Event.layout_config` (organizers' screens, validated
+like the apps do) and `resolve_layout()` (organizer screens over automatic ones, filtered to the app's catalogue
+version). `bundle/` reads `X-Attnd-Sections`; without it `layout` is `null` and `display.tabs` never lists `home`
+(older apps are unchanged, their ETag too); with it the ETag ends in `-s<version>` and the cached bundle is per
+version. `display.tabs` accepts `home` (organizers turn it on; never automatic), at most 5 tabs. Usage accepts
+`tab_view` `home`. Console: App layout → **Screens** (per screen: drag order, on / off, header parts, titles, limits,
+the automatic overrides, a phone-shaped preview drawn by one Django component per section, autosave, Undo, Reset to
+automatic); Ask Attnd `update_screen_layout`. Changing a layout bumps `content_version` (the usual `content_updated`
+push). Contract: `API_V2.md` → Layout. Tests: `events/tests_layout.py`, `console/tests_screens.py`.
+**iOS:** send `X-Attnd-Sections: 1` on `bundle/`; decode `layout` leniently; resolve each screen with the rules in
+`API_V2.md` → Layout (unknown types, parts and conditions dropped, first matching override, data-driven visibility,
+fallback to the built-in layouts, which are today's screens); draw the item and place details, the event info, Options'
+event rows and the map overlay from them; a Home tab when `display.tabs` lists `home`; screenshot mode always uses the
+built-in layouts and never shows Home.
+**Android (later; not in this change):** the same rules and catalogue (`domain/` + the screens), sharing the iOS test
+cases (`ScreenLayoutTests`); until then Android sends no header and gets no layout and no Home tab.
+
+### API-023: Per-event colour themes
+**Why:** every event looked Attnd-purple; organizers want their own colours (owner, Nov 21, 2026). Additive: one new
+key in `bundle/`. `accent_color` is unchanged (the apps keep using it until they adopt this).
+**Server (attnd-web):** `Event.theme` (`{light: {primary, secondary, tertiary}, dark: {…}, source, …}`) with two
+switches, `theme_web` and `theme_apps` (both on by default). `events/theme.py` validates it (upper-case `#RRGGBB`, a
+missing mode derived from the other) and guarantees contrast before anything draws it (WCAG 2.2: text ≥ 4.5:1,
+highlights ≥ 3:1; a colour is never refused, it is nudged in lightness). The AI import picks one (Claude Haiku from the
+website's colours, logo / flyer and the event's style; a deterministic theme from the website's main colour, else
+Attnd's, without the AI); organizers edit the six hex codes in the console's **Colour theme** card (an edit locks it
+against AI work), **Generate with AI** with an instruction, or reset it. The console's event pages, the Ask Attnd
+canvas and the join / shared-plan pages use it when "Use custom theme on the website" is on. The bundle's
+`event.theme` = the contrast-adjusted colours, or `null` without a theme or when "Use custom theme in the apps" is
+off; changing it (or that switch) bumps `content_version`, so apps get the usual `content_updated` push. Not in
+`lookup/` / `nearby/`. Tests: `events/tests_theme.py`.
+**iOS / Android (later; not in this change):** decode `event.theme` leniently (missing, `null`, a missing mode or role,
+a value that isn't `#RRGGBB` → treat the theme as absent, or derive the missing part from what is there; ignore
+unknown keys). When present, prefer it over `accent_color`: `primary` = the tint (buttons, selected tabs, links; text
+on it is readable as sent), `secondary` = soft tints (selected rows, chips, backgrounds at low opacity), `tertiary` =
+highlights (progress, badges, gradients' end); pick `light` or `dark` by the system appearance. `null` → keep today's
+behaviour (`accent_color`, else the brand purple).
+
+### API-022: Place images in our own store, with credit
+**Why:** imports used Google Places photo links, which expire and which Google's terms don't let us keep; many places
+had no image at all.
+**Server (attnd-web):** `events/place_images.py`. A new location without an image (AI import, by hand, Ask Attnd) gets
+one looked for in the background: images on the event's own pages that name the place, the place's website
+(og:image; the website found with Google Places' `websiteUri`, never its photos), then Wikimedia Commons near the pin
+or by name (author + licence kept). Each candidate is ≥ 600 px wide, not a logo / map / icon, not another place's
+picture, and confirmed by Claude Haiku's vision; it is re-encoded (JPEG, ≤ 2000 px, no EXIF / GPS) and stored as the
+location's own image (Cloudinary), so `image_url` points at our storage. Organizer images and locked images are never
+touched; console **Remove photo** never looks again, **Replace photo** / **Find a photo** look now; a daily cost cap.
+`manage.py find_place_images` backfills and replaces old Google photo links. The bundle adds `image_credit` (string or
+`null`, only for found photos).
+**iOS / Android (later):** decode `image_credit` leniently (missing → `null`). When set, show it small (caption
+style, secondary colour) under or over the bottom of the location's large image (location detail; optional on cards).
+No other change.
+
+### API-021: "Plan your day" suggestions from the server
+**Why:** the apps made their "Plan your day" examples on the phone from tags and weekdays, which often didn't fit: a
+Thursday-only art walk got "Plan my Saturday around art and evening" (owner, Nov 21, 2026). The server knows the
+event's real days and highlights, so it writes them. Additive: one new key in `bundle/`.
+**Server (attnd-web):** `events/plan_suggestions.py`. `bundle.plan_suggestions` = up to 4 `{text, kind}` (`kind`
+`plan` or `question`), in order: one or two plan requests on the event's real days, parts of the day and highlights
+("Plan my Thursday evening around the galleries"), a short-visit one ("I've got 2 hours — show me the highlights"), a
+family one only when schedule items carry a family tag (kid-friendly, kids, family, all ages, family-friendly), and
+one question last ("What's on near me right now?" or one for this event). Claude Haiku 5.5 writes them (official
+`anthropic` SDK, structured output, cached system prompt, effort `low`), checked in code (only the event's weekdays,
+the family rule, ≤ 80 characters, kinds, ≤ 1 question); stored on `Event.plan_suggestions` with the content version
+they were made for, regenerated in the background ~90 s after content changes (from the debounced content push; at most
+one AI run per event per 10 minutes; `run_scheduled_tasks` catches up) and never in the bundle request. New ones bump
+`content_version` once (so apps refetch). The bundle re-checks stored ones against the current days and otherwise
+uses the deterministic fallback (the event's real dates, categories and tags), so the key is always present.
+Without `ANTHROPIC_API_KEY`, or when the AI fails or refuses, the fallback is used. Tests: `events/tests_plan_suggestions.py`.
+**iOS / Android (later; not started):** decode `plan_suggestions` leniently (missing, `null`, empty, entries without
+`text` or with an unknown `kind` → skip). **When the bundle has at least one usable entry, show those as the "Plan
+your day" examples** (onboarding card, the empty plan page / My plan, the plan card) in the given order: a `plan`
+entry makes the plan from its text (`PlanRequest` path, as the local examples do), a `question` entry asks it (the
+model / router turn, as "What's on near me right now?" does today). **Otherwise keep the local `PlanRequest.examples`
+exactly as now** (offline with an old saved bundle, older servers). No other change; no new usage metrics.
 
 ### API-020: API v1 events API retired
 **Why:** no shipped app calls `/api/v1/events/` any more (owner, Nov 19, 2026: "nobody uses it"); both apps use v2 and

@@ -1,0 +1,59 @@
+{% load static console_tags %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include 'home/_icons.html' %}
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex, nofollow"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confirm it’s you — Attnd</title>
+  <link rel="stylesheet" href="{% static 'console/console.css' %}">
+</head>
+<body>
+<main class="page page--centered">
+  <div class="panel panel--narrow stack">
+    <div class="auth-head">
+      <h1 class="auth-title">Confirm it’s you</h1>
+      <p class="muted small center">This change needs a sign-in from the last {{ window_minutes }} minutes, {{ user.email }}. Then you go straight back.</p>
+    </div>
+    {% if error %}<div class="notice notice--error notice--compact" role="alert">{{ error }}</div>{% endif %}
+    {% if email_sent %}<div class="notice notice--success notice--compact" role="status">We emailed a 6-digit code to {{ user.email }}. It works once, for {{ email_minutes }} minutes.</div>{% endif %}
+
+    {% if has_passkeys %}
+    <div data-passkey-reauth data-passkey-scope data-options-url="{% url 'passkey_auth_options' %}"
+         data-verify-url="{% url 'passkey_auth' %}" data-next="{{ next }}">
+      <div class="notice notice--error notice--compact" role="alert" data-passkey-error hidden></div>
+      <div data-passkey-ui hidden>
+        <button type="button" class="button button--primary button--block" data-passkey-button>{% icon "key" %} Use a passkey</button>
+      </div>
+      <p class="small muted" data-passkey-fallback hidden>This browser can’t use passkeys. Use your password instead.</p>
+    </div>
+    {% endif %}
+
+    <form method="post" class="stack">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="text" name="username" value="{{ user.email }}" autocomplete="username" hidden>
+      <div class="field"><label class="field__label" for="id_password">Password</label>
+        <input type="password" name="password" id="id_password" autocomplete="current-password" required{% if not has_passkeys %} autofocus{% endif %}></div>
+      {% if needs_code %}
+      <div class="field"><label class="field__label" for="id_code">Code</label>
+        <input class="mono" type="text" name="code" id="id_code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="20" aria-describedby="code_help" required>
+        <div class="field__help" id="code_help">{{ code_help }}</div></div>
+      {% endif %}
+      <button class="button {% if has_passkeys %}button--outline{% else %}button--primary{% endif %} button--block">Continue</button>
+    </form>
+
+    <div class="center">
+      {% if email_on %}
+      <form method="post">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="action" value="send_email">
+        <button class="button button--ghost button--small">{% icon "mail" %} {% if email_sent %}Email me a new code{% else %}Email me a code{% endif %}</button>
+      </form>
+      {% endif %}
+      <a class="button button--ghost button--small muted" href="{{ next }}">Cancel</a>
+    </div>
+  </div>
+</main>
+<script src="{% static 'console/tz.js' %}"></script>
+<script src="{% static 'console/passkeys.js' %}"></script>
+</body>
+</html>

@@ -1,43 +1,13 @@
 {% extends 'console/base.html' %}
 {% load console_tags %}
 {% block title %}{% if location.pk %}{{ location.name }}{% else %}New location{% endif %} · {{ event.name }}{% endblock %}
+{% block crumb_back %}{% url 'console:locations' event.id %}{% endblock %}
+{% block crumbs_more %}<li><a href="{% url 'console:locations' event.id %}">Locations</a></li><li><span aria-current="page">{% if location.pk %}{{ location.name }}{% else %}New location{% endif %}</span></li>{% endblock %}
 {% block event_content %}
-<a href="{% url 'console:locations' event.id %}" class="back-link">← All locations</a>
 <h2 class="title-2">{% if location.pk %}{{ location.name }}{% else %}New location{% endif %}</h2>
 <div class="split">
   <div class="split__main panel panel--roomy">
-    <form method="post" enctype="multipart/form-data">{% csrf_token %}
-      {% with locked=location.locked_fields %}
-      <div class="split split--compact">
-        <div class="split__main">{% include 'console/_field.html' with field=form.name %}</div>
-        <div class="split__aside">{% include 'console/_field.html' with field=form.category %}</div>
-      </div>
-      <datalist id="category-options">{% for c in categories %}<option value="{{ c }}">{% endfor %}
-        <option value="Stage"><option value="Food"><option value="Vendor"><option value="Venue"><option value="Restroom"><option value="Parking"><option value="Info"></datalist>
-      {% include 'console/_field.html' with field=form.snippet %}
-      {% include 'console/_field.html' with field=form.description %}
-      {% include 'console/_field.html' with field=form.tags_text %}
-      {% include 'console/_event_tags.html' %}
-      {% include 'console/_field.html' with field=form.address %}
-      <div class="grid grid--2">
-        {% include 'console/_field.html' with field=form.latitude %}
-        {% include 'console/_field.html' with field=form.longitude %}
-      </div>
-      <div id="pin-map" class="pin-map" data-pin-svg="{% filter force_escape %}{% icon 'pin-fill' %}{% endfilter %}"></div>
-      <p class="form-note">Click the map to place the pin.</p>
-      {% include 'console/_field.html' with field=form.website %}
-      <div class="grid grid--2">
-        {% include 'console/_field.html' with field=form.image %}
-        {% include 'console/_field.html' with field=form.image_url %}
-      </div>
-      {% include 'console/_field.html' with field=form.hidden %}
-    {% include 'console/_assistant_context.html' %}
-      {% endwith %}
-      <div class="cluster">
-        <button class="button button--primary">Save</button>
-        <button class="button button--outline" name="save_add" value="1">Save &amp; add another</button>
-      </div>
-    </form>
+    {% component "location_form" event=event location=location form=form part="form" %}
   </div>
   <div class="split__aside stack stack--loose">
     {% if location.pk %}
@@ -50,30 +20,9 @@
         {% empty %}<li class="muted small">Nothing scheduled here.</li>{% endfor %}
       </ul>
     </div>
-    <form method="post" action="{% url 'console:location_action' event.id location.pk %}" class="cluster">{% csrf_token %}
-      <input type="hidden" name="next" value="{% url 'console:location_edit' event.id location.pk %}">
-      {% if location.locked_fields %}<button name="action" value="unlock" class="button button--secondary button--small">{% icon "unlock" %} Let AI update it again</button>{% endif %}
-      <button name="action" value="delete" class="button button--danger button--small" data-confirm="Delete this location?">Delete</button>
-    </form>
+    {% component "location_form" event=event location=location form=form part="actions" %}
+    <div class="panel">{% component "object_history" event=event location=location %}</div>
     {% endif %}
   </div>
 </div>
-{% endblock %}
-{% block scripts %}
-<script nonce="{{ csp_nonce }}">
-(function () {
-  const lat = document.getElementById('id_latitude'), lng = document.getElementById('id_longitude');
-  const has = lat.value && lng.value;
-  const center = has ? [+lat.value, +lng.value]
-    : {% if event.latitude is not None %}[{{ event.latitude|stringformat:"f" }}, {{ event.longitude|stringformat:"f" }}]{% else %}[39.8, -98.6]{% endif %};
-  const zoom = (has || {{ event.latitude|yesno:"true,false" }}) ? 16 : 4;
-  if (window.attndMaps) {
-    attndMaps.pinMap(document.getElementById('pin-map'), lat, lng, center, zoom)
-      .catch(() => pinPicker(document.getElementById('pin-map'), lat, lng, center, zoom));
-    attndMaps.addressAutocomplete(document.getElementById('id_address'), {lat, lng}).catch(() => {});
-  } else {
-    pinPicker(document.getElementById('pin-map'), lat, lng, center, zoom);
-  }
-})();
-</script>
 {% endblock %}

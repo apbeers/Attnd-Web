@@ -1,0 +1,9 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Colours · {{ event.name }}{% endblock %}
+{% block crumb_event %}<a href="{% url 'console:event' event.id %}">{{ event.name }}</a>{% endblock %}
+{% block crumbs_more %}<li><span aria-current="page">Colours</span></li>{% endblock %}
+{% block crumb_back %}{% url 'console:event' event.id %}{% endblock %}
+{% block event_content %}
+<div class="panel panel--roomy">{% component "event_theme_editor" event=event form=form %}</div>
+{% endblock %}

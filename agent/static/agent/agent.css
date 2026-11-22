@@ -1,0 +1,384 @@
+/* Ask Attnd panel (agent/templates/agent/_panel.html). Uses the console's design tokens (console.css). */
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.agent { position: fixed; right: var(--space-4); bottom: var(--space-4); z-index: 1055; display: flex; flex-direction: column;
+  align-items: flex-end; gap: var(--space-2); }
+/* The task tray and toasts keep clear of the launcher through console.css's --fab-* tokens; the open panel hides the tray. */
+.agent.is-open ~ .task-tray { display: none; }
+
+.agent__launcher { display: inline-flex; align-items: center; gap: var(--space-2); padding: .6rem 1rem; font: inherit;
+  font-weight: 600; color: #fff; background: var(--color-brand); border: 0; border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-lg); cursor: pointer; }
+.agent__launcher:hover { background: var(--color-brand-dark); }
+.agent__launcher:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.agent__launcher.needs-you { background: var(--color-warning-text); }
+.agent__launcher .spinner { margin: 0; }
+.agent.is-open .agent__launcher { display: none; }
+
+.agent__panel { display: flex; flex-direction: column; width: min(26rem, calc(100vw - 2rem)); height: min(40rem, calc(100vh - 2rem));
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg); overflow: hidden; }
+.agent__panel[hidden] { display: none; }
+.agent__head { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border); }
+.agent__titles { flex: 1; min-width: 0; }
+.agent__title { margin: 0; font-size: var(--text-md); color: var(--color-brand); }
+.agent__status { font-size: var(--text-xs); color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent__status:empty { display: none; }
+.agent__switch { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); font-weight: 600;
+  color: var(--color-muted); margin-right: var(--space-1); cursor: pointer; }
+/* Recent requests drop over the log as a sheet (never in its flow, so the log doesn't move); closed by a pick, Esc, ×
+   or a tap outside (agent.js). */
+.agent__head { position: relative; z-index: 3; }
+.agent__recent { position: absolute; top: 100%; left: 0; right: 0; max-height: min(24rem, 60dvh); overflow: auto;
+  overscroll-behavior: contain; padding: var(--space-2) var(--space-4) var(--space-3); background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border); box-shadow: var(--shadow-lg); }
+.agent__recent[hidden] { display: none; }
+.agent__recent-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.agent__recent-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.agent__recent-list .link-button { text-align: left; }
+.agent__log { flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+.agent__msg { max-width: 90%; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); line-height: 1.45;
+  border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent__msg--user { align-self: flex-end; color: #fff; background: var(--color-brand); }
+.agent__msg--assistant { align-self: flex-start; background: var(--color-brand-soft); }
+.agent__msg--error { align-self: flex-start; color: var(--color-danger); background: var(--color-danger-soft); }
+.agent__msg--step { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-1) var(--space-2); align-self: stretch;
+  max-width: none; padding: var(--space-1) var(--space-2); color: var(--color-muted); background: none; border-radius: var(--radius); }
+.agent__msg--step > .status-mark { margin-top: .05rem; }
+.agent__step-text { flex: 1 1 10rem; min-width: 0; }
+.agent__msg--step.is-changed { color: var(--color-text); background: color-mix(in srgb, var(--color-success-soft) 55%, transparent); }
+.agent__msg--step.is-failed { color: var(--color-danger-text); background: color-mix(in srgb, var(--color-danger-soft) 70%, transparent); }
+.agent__open { margin-left: var(--space-1); font-weight: 600; }
+.agent__undo { margin-left: var(--space-1); padding: .1rem .55rem; font: inherit; font-size: var(--text-xs); font-weight: 600;
+  color: var(--color-brand); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-pill); cursor: pointer; }
+.agent__undo:hover:not(:disabled) { background: var(--color-brand-soft); }
+.agent__undo:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.agent__undo:disabled { color: var(--color-muted); cursor: default; }
+/* Console components in the chat (console/components): the same templates as the pages, at the chat's width. */
+.agent__component { align-self: stretch; display: grid; gap: var(--space-2); }
+.agent__card { min-width: 0; font-size: var(--text-sm); }
+.agent__card .panel { padding: var(--space-3); }
+.agent__card .panel--link { height: auto; }
+.agent__card .list--boxed { border-radius: var(--radius); }
+.agent__card .list > li { padding: var(--space-3); }
+.agent__card .event-header { margin: 0; }
+.agent__card .live-panel img { width: 9rem; height: auto; }
+.agent__card .display-code { font-size: var(--text-xl); }
+.agent__card .button:not(.button--small) { padding: .35rem .8rem; font-size: var(--text-sm); }
+.agent__card[data-detail] .agent__card-body { cursor: pointer; }
+.agent__card[data-detail] .agent__card-body:hover > * { box-shadow: 0 2px 10px rgba(0, 0, 0, .08); }
+.agent__card.is-busy { opacity: .6; pointer-events: none; }
+.agent__card.is-gone { padding: var(--space-1) var(--space-2); background: var(--color-surface-2); border-radius: var(--radius); }
+.agent__folded { text-align: left; }
+/* Tappable answers (ask_user options) and follow-up suggestions. */
+.agent__chips { display: flex; flex-wrap: wrap; gap: var(--space-1); align-self: flex-start; }
+.agent__chip { padding: .35rem .85rem; font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--color-brand);
+  background: var(--color-surface); border: 1px solid var(--color-brand-line, var(--color-border)); border-radius: var(--radius-pill);
+  cursor: pointer; }
+.agent__chip:hover:not(:disabled) { background: var(--color-brand-soft); }
+.agent__chip:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.agent__chip:disabled { opacity: .5; cursor: default; }
+.agent__confirm { position: relative; margin: 0 var(--space-3) var(--space-2); padding: var(--space-4); background: var(--color-surface);
+  border: 1px solid var(--color-brand-line); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); display: grid; gap: var(--space-2); }
+.agent__confirm-note { margin: 0; }
+.agent__confirm:focus { outline: 2px solid var(--color-focus); }
+.agent__confirm-title { font-weight: 700; color: var(--color-brand-text); }
+.agent__confirm-text { margin: 0; font-size: var(--text-base); font-weight: 600; }
+.agent__footer { padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border); display: grid; gap: var(--space-1); }
+.agent__links { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.agent__links[hidden] { display: none; }
+.agent__files { list-style: none; margin: 0; padding: 0; font-size: var(--text-xs); color: var(--color-muted); }
+.agent__files:empty { display: none; }
+/* One line that grows to three, with the attach and send buttons inside the same box. */
+.agent__form { display: flex; align-items: flex-end; gap: var(--space-1); padding: 4px; border: 1px solid var(--color-border);
+  border-radius: 1.25rem; background: var(--color-surface); }
+.agent__form:focus-within { border-color: var(--color-brand); box-shadow: 0 0 0 2px var(--color-brand-soft); }
+.agent__form textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; box-shadow: none; background: transparent;
+  padding: .45rem .25rem; font: inherit; font-size: var(--text-sm); line-height: 1.4; min-height: calc(1.4em + .9rem);
+  max-height: calc(4.2em + .9rem); overflow-y: auto; }
+.agent__icon { flex: none; display: inline-grid; place-items: center; width: 2.1rem; height: 2.1rem; padding: 0; border: 0;
+  border-radius: 50%; background: none; color: var(--color-muted); cursor: pointer; }
+.agent__icon:hover { color: var(--color-brand); background: var(--color-brand-soft); }
+.agent__icon:focus-visible, .agent__attach:focus-within { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.agent__icon[hidden] { display: none; }
+.agent__send { color: #fff; background: var(--color-brand); }
+.agent__send:hover { color: #fff; background: var(--color-brand-dark); }
+.agent__send:disabled { opacity: .5; cursor: default; }
+.agent__stop { color: #fff; background: var(--color-danger); }
+.agent__stop:hover { color: #fff; background: var(--color-danger); }
+
+@media print { .agent { display: none; } }
+
+/* ---- Theme (Nov 21, 2026): Layla-like chat: soft bubbles, a composer card with the attach button and a round send
+   button, suggestion chips above it, a one-line thinking indicator. ------------------------------------------- */
+.agent__panel { border-radius: var(--radius-xl); }
+.agent__msg { border-radius: 1.1rem; }
+.agent__msg--user { border-bottom-right-radius: .35rem; }
+.agent__msg--assistant { color: var(--color-text); border-bottom-left-radius: .35rem; }
+.agent__footer { padding: var(--space-2) var(--space-3) var(--space-3); }
+.agent__form { padding: 6px 6px 6px 4px; border-radius: 1.4rem; background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.agent__send { width: 2.35rem; height: 2.35rem; }
+.agent__suggest { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.agent__suggest .agent__chip { font-size: var(--text-xs); padding: .3rem .75rem; }
+/* Floating panel → full screen (desktop only) */
+.agent__full-link { display: none; }
+@media (min-width: 1024px) { .agent__full-link { display: inline-flex; } }
+
+/* The thinking line: a small gradient ring and the current stage; each new stage fades out and in on the same line. */
+.agent__thinking { display: flex; align-items: center; gap: var(--space-2); align-self: flex-start; padding: var(--space-1) 0;
+  font-size: var(--text-sm); color: var(--color-muted); }
+.agent__thinking[hidden] { display: none; }
+.agent__thinking-spinner { flex: none; width: 1rem; height: 1rem; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 20%, var(--color-brand-mid) 60%, var(--color-brand-text));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: agent-spin .9s linear infinite; }
+.agent__thinking-text { transition: opacity .16s ease, transform .16s ease; }
+.agent__thinking-text.is-leaving { opacity: 0; transform: translateY(2px); }
+@keyframes agent-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .agent__thinking-spinner { animation: none; }
+  .agent__thinking-text { transition: none; }
+}
+
+/* Full screen: what went to the canvas is one line in the chat ("Showing 18 locations →") */
+.agent__note { align-self: flex-start; }
+.agent__shown { color: var(--color-brand-text); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.agent__link { color: var(--color-brand-text); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---- Full screen (/console/assistant/): chat column + canvas ---------------------------------------------- */
+.page:has(.assistant) { padding: var(--space-3) clamp(.75rem, 1.1vw, 1.25rem) var(--space-3); }
+.assistant { display: grid; gap: var(--space-4); grid-template-columns: minmax(20rem, 36%) minmax(0, 1fr); }
+/* One chat, every width (Nov 22, 2026): the page is an opaque app shell of exactly the visible height (no outer page
+   scroll, nothing of a page behind it): the top bar, then the chat (and the canvas when wide). --app-height /
+   --app-top come from the visual viewport (agent.js; iOS Safari's keyboard only shrinks that), else 100dvh. */
+body:has(.assistant) { position: fixed; left: 0; right: 0; top: var(--app-top, 0); height: var(--app-height, 100dvh);
+  display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: none; }
+body:has(.assistant) > .topbar { flex: none; }
+body:has(.assistant) > .page { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+body:has(.assistant) > .page > .assistant { flex: 1 1 auto; height: auto; min-height: 0; }
+.agent--full { position: static; display: flex; z-index: auto; min-height: 0; order: -1; }
+.agent--full .agent__launcher, .agent--full .agent__switch { display: none; }
+.agent--full .agent__panel { width: 100%; height: 100%; box-shadow: var(--shadow); }
+.canvas { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: var(--space-4) var(--space-5) 0;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; }
+.canvas__tabs { flex: none; margin-bottom: var(--space-4); flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x; scrollbar-width: none; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { .canvas__tabs { scroll-behavior: auto; } }
+/* More tabs past an edge: a soft fade on that side (mask, so it follows the theme) and a chevron that scrolls a page */
+.canvas__tabs-wrap { position: relative; flex: none; margin-bottom: var(--space-4); }
+.canvas__tabs-wrap > .canvas__tabs { margin-bottom: 0; }
+.canvas__tabs-wrap.has-left .canvas__tabs { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 2.5rem); mask-image: linear-gradient(to right, transparent 0, #000 2.5rem); }
+.canvas__tabs-wrap.has-right .canvas__tabs { -webkit-mask-image: linear-gradient(to left, transparent 0, #000 2.5rem); mask-image: linear-gradient(to left, transparent 0, #000 2.5rem); }
+.canvas__tabs-wrap.has-left.has-right .canvas__tabs { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 2.5rem, #000 calc(100% - 2.5rem), transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 2.5rem, #000 calc(100% - 2.5rem), transparent 100%); }
+.canvas__tabs-more { position: absolute; top: 50%; transform: translateY(-60%); z-index: 2; width: 1.75rem; height: 1.75rem; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-surface);
+  color: var(--color-text); box-shadow: var(--shadow-sm, 0 1px 3px rgb(0 0 0 / .12)); cursor: pointer; }
+.canvas__tabs-more[hidden] { display: none; }
+.canvas__tabs-more--left { left: 0; }
+.canvas__tabs-more--right { right: 0; }
+.canvas__tabs::-webkit-scrollbar { display: none; }
+.canvas__tabs .tabs__tab { flex: none; }
+/* A count next to a tab's name: a filled badge when it waits for the person (Review), muted when it only informs. */
+.tab-count { display: inline-grid; place-items: center; min-width: 1.35rem; height: 1.35rem; padding: 0 .4rem; margin-left: .15rem;
+  font-size: var(--text-xs); font-weight: 800; line-height: 1; border-radius: 999px; font-variant-numeric: tabular-nums;
+  color: var(--color-muted); background: var(--color-surface-2); border: 1px solid var(--color-border); }
+.tab-count--alert { color: var(--color-on-danger); background: var(--color-danger); border-color: var(--color-danger); }
+.canvas__body { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: var(--space-5); }
+.canvas__pane[hidden] { display: none; }
+.canvas__cards { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+.canvas__cards--rows { grid-template-columns: 1fr; gap: 0; }
+.canvas__cards--rows .agent__card .list--boxed { border-radius: 0; border-width: 0 0 1px; box-shadow: none; }
+.canvas .agent__card { font-size: var(--text-md); }
+.canvas__empty { display: grid; place-items: center; align-content: center; gap: var(--space-2); height: 100%; text-align: center; }
+.canvas__empty-mark { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; font-size: 1.6rem; color: var(--color-brand-text);
+  background: var(--color-brand-soft); border-radius: 1.2rem; }
+/* Details open as an overlay on the canvas: breadcrumb + back arrow; Esc / the arrow goes back a level. */
+.canvas__overlay { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--color-surface);
+  overflow: hidden; }
+.canvas__overlay[hidden] { display: none; }
+.canvas__overlay-head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) var(--space-5) var(--space-3);
+  border-bottom: 1px solid var(--color-border); }
+.canvas__overlay-head .crumbs { margin: 0; }
+.canvas__overlay-head .crumbs__back { cursor: pointer; font: inherit; }
+.canvas__overlay-head [data-overlay-title]:focus { outline: none; }
+.canvas__overlay-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: var(--space-5); }
+/* Open: slides in from the right with a fade. Back (the arrow, Esc, a crumb): the level slides out to the right with
+   a fade, the one below comes back; nested levels animate between them. No motion with prefers-reduced-motion. */
+.canvas__level { display: grid; gap: var(--space-4); align-content: start; }
+.canvas__level[hidden] { display: none; }
+/* Sections of a tab (Updates: compose, then every update) and the tab's toolbar (Add location…). */
+.canvas__toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-bottom: var(--space-3); }
+.canvas__section + .canvas__section { margin-top: var(--space-5); }
+/* Every canvas tab uses the full canvas width (owner, Nov 21, 2026; agent/tests_canvas_width.py): no read-width cap
+   on a pane, its grid or a section; a section with one card spans the row; tabs with several sections put them side
+   by side on wide canvases; components lay out their own parts in columns (forms keep readable fields). */
+.canvas__pane, .canvas__grid, .canvas__section { width: 100%; max-width: none; }
+.canvas__pane { container: pane / inline-size; }
+.canvas__cards:has(> .agent__card:only-child) { grid-template-columns: minmax(0, 1fr); }
+.canvas .component > p, .canvas .component .stack > p { max-width: none; }
+@container pane (min-width: 48rem) {
+  /* Notifications: the compose card and "Sent and scheduled" side by side */
+  .canvas__pane[data-tab=Notifications] > .canvas__grid { display: grid; grid-template-columns: minmax(22rem, 5fr) minmax(0, 6fr); gap: var(--space-5); align-items: start; }
+  .canvas__pane[data-tab=Notifications] [data-section=notification_form] { position: sticky; top: 0; }
+  /* Settings, Metrics, History: their sections in columns */
+  .canvas__pane:is([data-tab=Settings], [data-tab=Metrics], [data-tab=History]) > .canvas__grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: var(--space-5); align-items: start; }
+  .canvas__pane:is([data-tab=Notifications], [data-tab=Settings], [data-tab=Metrics], [data-tab=History]) > .canvas__grid > .canvas__section + .canvas__section { margin-top: 0; }
+  /* Website: the preview across the row, then versions | forms and files in columns */
+  .canvas__pane[data-tab=Website] > .canvas__grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--space-5); align-items: start; }
+  .canvas__pane[data-tab=Website] > .canvas__grid > .canvas__section + .canvas__section { margin-top: 0; }
+  .canvas__pane[data-tab=Website] [data-section=website_overview] { grid-column: 1 / -1; }
+  /* Settings' big forms (app layout and Screens) span the whole row */
+  .canvas__pane[data-tab=Settings] [data-section=app_layout] { grid-column: 1 / -1; }
+  /* Team: the members beside the invite form */
+  .canvas .component--event_team { display: grid; grid-template-columns: minmax(0, 3fr) minmax(18rem, 2fr); gap: var(--space-5); align-items: start; }
+  .canvas .component--event_team > h3 { grid-column: 1 / -1; }
+}
+/* (the compose form gets a soft card on the canvas) */
+.canvas [data-section=notification_form] .agent__card { padding: var(--space-4) var(--space-5); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.canvas [data-section=event_overview] .canvas__cards, .canvas__level .canvas__cards { grid-template-columns: 1fr; }
+.canvas__heading { margin: 0 0 var(--space-2); }
+.canvas__none { padding: var(--space-5) 0; text-align: center; }
+.canvas [data-sortable] > .agent__card.dragging { opacity: .4; }
+@media (max-width: 1023px) {
+  .assistant { grid-template-columns: 1fr; }
+  .canvas { display: none; }
+}
+/* Phones: the chat is the whole screen (its header has Exit back to the page), edge to edge, the composer above the
+   home indicator; toasts at the top so they never cover the composer; 44px targets, 16px input (no iOS zoom). */
+@media (max-width: 600px) {
+  body:has(.assistant) > .topbar { display: none; }
+  .page:has(.assistant) { padding: 0; }
+  .assistant { gap: 0; }
+  .agent--full .agent__panel { border: 0; border-radius: 0; box-shadow: none; }
+  .agent--full .agent__head { padding-top: max(var(--space-2), env(safe-area-inset-top)); }
+  .agent--full .agent__footer { padding-bottom: max(var(--space-3), env(safe-area-inset-bottom)); }
+  .agent--full .agent__log { overscroll-behavior: contain; }
+  .agent--full .agent__form textarea { font-size: 16px; }
+  .agent--full .agent__icon, .agent--full .agent__send { width: 44px; height: 44px; }
+  .agent--full .agent__chip { min-height: 44px; }
+  body:has(.assistant) .toasts { top: calc(env(safe-area-inset-top) + 4rem); bottom: auto; }
+  /* typing (keyboard up): the section chips step aside so the log keeps room above the composer */
+  .agent--full:has(.agent__form textarea:focus) .agent__tabs-chips { display: none; }
+}
+
+.agent__group { margin: var(--space-3) 0 var(--space-1); }
+.canvas__cards--rows .agent__group { padding: 0 var(--space-2); }
+.agent__target-line { display: flex; flex: none; align-items: center; gap: var(--space-2); padding: 0 0 0 var(--space-2);
+  font-size: var(--text-sm); color: var(--color-muted); }
+/* "Filling in X · tell Attnd what to change": one compact line, cut with an ellipsis, × a full-size target */
+.agent__target-line .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent__target-line button { flex: none; min-width: 2.75rem; min-height: 2.75rem; }
+
+/* Restoring the conversation on load (A21): hidden until it is complete and scrolled, then one gentle fade-in */
+.agent.is-restoring [data-agent-log] { visibility: hidden; }
+.agent.is-restored [data-agent-log] { animation: agent-restored .22s ease-out both; }
+@keyframes agent-restored { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .agent.is-restored [data-agent-log] { animation: none; } }
+
+/* 👍 / 👎 under an answer (stage I) */
+.agent__feedback { display: flex; flex-wrap: wrap; gap: var(--space-1); align-self: flex-start; margin-top: calc(var(--space-1) * -1); }
+.agent__feedback-button { border: 1px solid transparent; background: none; border-radius: 999px; padding: .1rem .45rem;
+  font-size: .85rem; line-height: 1.4; opacity: .55; cursor: pointer; }
+.agent__feedback-button:hover, .agent__feedback-button:focus-visible { opacity: 1; border-color: var(--color-border); }
+.agent__feedback-button[aria-pressed="true"] { opacity: 1; background: var(--color-brand-soft); border-color: var(--color-brand); }
+
+/* a file dragged over the chat (stage I3) */
+.agent__panel.is-dropping { outline: 2px dashed var(--color-brand); outline-offset: -6px; }
+
+/* voice input (stage I8) */
+.agent__mic.is-listening { color: var(--color-on-brand); background: var(--color-danger); border-radius: 50%; }
+@keyframes agent-listen { 50% { opacity: 1; transform: scale(1.18); } }
+.agent__mic.is-listening { position: relative; }
+.agent__mic.is-listening::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 4px var(--color-danger-soft); opacity: 0; animation: agent-listen 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .agent__mic.is-listening, .agent__mic.is-listening::after { animation: none; } }
+
+/* command bar (stage I10) */
+.agent__commands { list-style: none; margin: 0 var(--space-2); padding: var(--space-1); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px); background: var(--color-surface, var(--color-bg)); box-shadow: var(--shadow-md, none); }
+.agent__commands li { display: flex; gap: var(--space-2); padding: .35rem .5rem; border-radius: 8px; cursor: pointer; font-size: var(--text-sm); }
+.agent__commands li[aria-selected="true"] { background: var(--color-brand-soft); }
+.agent__commands .mono { color: var(--color-brand-text); }
+
+/* phone: the event's sections as chips above the composer (stage I15) */
+.agent__tabs-chips { display: flex; gap: var(--space-1); overflow-x: auto; padding: var(--space-1) var(--space-2);
+  scrollbar-width: none; }
+.agent__tabs-chips::-webkit-scrollbar { display: none; }
+.agent__tabs-chips .chip { flex: none; }
+
+/* "Talk to a person" (stage I18) */
+.agent__contact { align-self: stretch; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md, 12px);
+  background: var(--color-surface-2); }
+
+/* Confirm it's you (console/recent_auth.py): a risky action waits for a recent sign-in. */
+.agent__reauth { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: var(--space-2) 0;
+  padding: var(--space-3) var(--space-4); background: var(--color-warning-soft); border: 1px solid var(--color-warning-line);
+  border-radius: var(--radius-lg); }
+.agent__reauth p { flex: 1 1 12rem; margin: 0; font-size: var(--text-sm); color: var(--color-warning-text); }
+
+/* A failed run's details (staff only): status, error type, request id. */
+.agent__error-details { margin-top: var(--space-2); font-size: var(--text-xs); }
+.agent__error-details summary { cursor: pointer; color: var(--color-muted); }
+.agent__error-details code { display: block; margin-top: var(--space-1); overflow-wrap: anywhere; }
+
+/* Background tasks in the chat column (owner, Nov 21, 2026): "Picking colours from your website…" with the thinking
+   ring while it runs, then "Colours applied · See the colours" when it is done. */
+.agent__tasks { display: grid; gap: var(--space-1); }
+.agent__tasks:empty { display: none; }
+.agent__task { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3); font-size: var(--text-sm); }
+.agent__task--done { color: var(--color-success-text); }
+.agent__task--failed { color: var(--color-danger-text); }
+.agent__task a { font-weight: 650; }
+.agent__task .status-mark { flex: none; }
+
+.agent__feedback-more { flex-basis: 100%; max-width: 28rem; }
+.agent__feedback-more textarea { width: 100%; }
+
+/* A background task started in the conversation (batch 5): a live card at that step */
+.agent__taskcard { display: grid; gap: var(--space-2); margin: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4);
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.agent__taskcard.is-failed { background: var(--color-danger-soft); border-color: var(--color-danger-line); }
+.agent__taskcard.is-done { border-color: var(--color-success-line); }
+.agent__taskcard-head { display: flex; align-items: center; gap: var(--space-2); }
+.agent__taskcard-title { font-size: var(--text-sm); }
+.agent__taskcard-steps { display: grid; gap: .3rem; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.agent__taskcard-steps .task-step { display: flex; align-items: center; gap: var(--space-2); }
+.agent__taskcard-steps .task-step--done { color: var(--color-muted); }
+.agent__taskcard-hint { margin: 0; }
+.agent__taskcard-hint:empty, .agent__taskcard-foot:empty, .agent__taskcard-steps:empty { display: none; }
+.agent__taskcard-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.agent__taskcard-foot p { margin: 0; flex-basis: 100%; }
+
+/* Back from the full-screen chat: the launcher pulses three times (agent-loader.js); reduced motion: a tooltip */
+@keyframes agent-launcher-pulse { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.35); } }
+.agent__launcher.is-pulsing { position: relative; }
+.agent__launcher.is-pulsing::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 55%, transparent); animation: agent-launcher-pulse .85s ease-out; }
+.agent__still-here { position: absolute; right: 0; bottom: calc(100% + var(--space-2)); padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm); white-space: nowrap; color: var(--color-on-brand); background: var(--color-brand); border-radius: 999px; }
+@media (prefers-reduced-motion: reduce) { .agent__launcher.is-pulsing, .agent__launcher.is-pulsing::after { animation: none; } }
+
+/* Folding groups (Your events: Happening now / Upcoming / Past / Showcase & demo; notifications Scheduled / Sent) */
+.agent__group-toggle { display: inline-flex; align-items: center; gap: .35rem; padding: 0; font: inherit; color: inherit;
+  letter-spacing: inherit; text-transform: inherit; background: none; border: 0; cursor: pointer; }
+.agent__group-toggle::before { content: "▾"; font-size: .8em; transition: transform .15s ease; }
+.agent__group-toggle[aria-expanded="false"]::before { transform: rotate(-90deg); }
+/* One block per group, across the whole width of the list's grid, with its own cards in the same columns */
+.agent__groupsec { grid-column: 1 / -1; display: grid; gap: inherit; grid-template-columns: inherit; align-content: start; }
+.canvas__cards--rows > .agent__groupsec { gap: 0; }
+.agent__groupsec > .agent__group, .agent__groupsec > .agent__group-more { grid-column: 1 / -1; justify-self: start; }
+.agent__groupsec[data-folded] > .agent__card, .agent__groupsec[data-folded] > .agent__group-more,
+.agent__groupsec:not([data-all-past]) > [data-more] { display: none; }
+@media (prefers-reduced-motion: reduce) { .agent__group-toggle::before { transition: none; } }
+
+/* Scrolled up while new lines arrive: a pill back to the newest (agent.js stick) */
+.agent__newpill { align-self: center; position: relative; z-index: 2; margin-top: calc(-1 * var(--space-6, 2.5rem)); margin-bottom: var(--space-2); box-shadow: var(--shadow-md, 0 4px 14px rgb(0 0 0 / .15)); }
+.agent__newpill[hidden] { display: none; }
+
+/* §4: the unpublished-changes bar at the bottom of the canvas */
+.canvas__publish { position: sticky; bottom: var(--space-3); margin: var(--space-3) var(--space-4) 0; }

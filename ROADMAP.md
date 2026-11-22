@@ -61,6 +61,32 @@ Needed for team invites (`EventInvite`), password reset, sign-up confirmation an
   concurrently (HTTP/2 multiplexing, a thread pool) or on the worker dyno, outside the row lock.
 - Revisit the "push straight to develop" rule (branch protection, PRs) once there are real users.
 
+## Round 3 web plan (owner-approved Nov 21, 2026; in progress)
+Built on `develop` in this order; ticked as it ships.
+- [ ] **A. Console + chat polish**: address search on every location form (Google Places, else Find on the map via
+  Google Places / Nominatim on the server) ✅, the location map with the event's other locations ✅, Fill from this
+  website ✅, Notifications two columns + Scheduled / Sent sections + editing scheduled ones ✅, canvas-first answers
+  (one line in the chat) ✅, Team and Metrics tabs ✅, platform help with links ✅, narrower margins ✅, no dumps / one
+  answer ✅, History hides Locked fields ✅, Add with AI on every form + fill_form ✅, AI fills Details for the
+  assistant ✅, Updates → Notifications in the console ✅, one reveal helper for every cross-place change ✅, the event
+  map on the Overview ✅, live numbers every 60 s ✅, the rest of the organizer's work on the canvas (review, layout,
+  watching, event details, flyer, sharing kit, lifecycle, restore, CSV) ✅, Prospects on the canvas (staff) ✅, Chat as
+  default ✅, reload without jumps ✅, A-fix architecture corrections ✅ except splitting agent.js into modules
+  (chat, cards, canvas, overlay, fill: ~1,500 lines in one closure today; do it with stage H's lazy-loaded Ask Attnd).
+- [x] **B. Sign-in flow** ✅: signed in → console; logo → /home/; no prompts during a session.
+- [x] **C. All AI on Anthropic** ✅ (official SDK; OpenAI only for Studio images).
+- [x] **D. Place images in our own store** (event pages, venue site, Wikimedia; API-022 `image_credit`).
+- [x] **E. Packages**: latest everything, psycopg 3 + pooling; Python stays `3.15` in `.python-version` (newest 3.15.x
+  on Heroku and CI).
+- [x] **F. Django built-ins**: database cache ✅, LoginRequiredMiddleware ✅, Postgres search ✅, humanize + db_default ✅
+  (no GeneratedField: the ends we query need interval maths, which Postgres won't store), django.tasks with our own
+  DB-backed worker ✅ (built, off by default: `TASKS_BACKEND=database` on dev first, then a `tasks` dyno or the scheduler).
+- [x] **G. Security** ✅: ALLOWED_HOSTS, Scrypt, Permissions-Policy, SECRET_KEY_FALLBACKS, Ask Attnd rate limit + magic bytes.
+- [x] **H. Performance** ✅ (agent.js split into modules still open, see A): console scripts in `<head>` with `defer`, lazy Ask Attnd, cached root files, sized images, polling back-off.
+- [x] **I. Chat-first additions** ✅ (real-model check: the nightly harness once `ANTHROPIC_HARNESS_KEY` is set) (Tiers 1–3: preview-before-apply, briefing / readiness, paste anything, server-side
+  conversation, quality harness, live ops, notification drafting, voice, numbers, command bar, preferences, roll over,
+  search, streaming, mobile chat-first, organizer notifications, first-run walkthrough, talk to a person).
+
 ## Future
 
 ### Event assistant (in progress; spec agreed Nov 15, 2026)
@@ -105,12 +131,37 @@ currently suppresses the deprecation (`PushNotifications.kt`, `AttndMessagingSer
 entry: what `push_token` carries, how `events/push.py` sends to it (FCM HTTP v1 target), and a transition where
 the server accepts both. Do it before the old API is removed.
 
+### Live connections for attendees (parked, Nov 21, 2026)
+API-026 gives only the organizers' preview phones a long-poll (`changes/`). Since batch 7 the web dyno runs ASGI and
+long-polls wait on the event loop (`attnd/longpoll_asgi.py`, ≤ 500 per process, measured 300 held with no effect on
+other requests), so the server side of attendee long-polls exists; what's left is an API change (tracker entry, apps
+opt in) and a decision on how many attendees one dyno should hold. Until then attendees stay on push + the slow
+safety poll. Also parked:
+partial bundles (send only what changed) and content inside the push.
+
+## Growth: prospects → free app → Studio (dashboard built Nov 19, 2026)
+
+The funnel: find events that suit the app (staff **Prospects** dashboard, `/console/prospects/`, DFW first), make a
+testing-only copy to show the organizer the app with their own event, offer the app free, then sell Attnd Studio (we
+build their website; they always keep the app). Outreach is by a person, CAN-SPAM compliant, do-not-contact honoured.
+Follow-ups:
+- "Refresh details" on one prospect (re-read its pages for new contacts and dates; today only new prospects are read).
+- A way to hand a testing-only event to the organizer once they say yes (transfer ownership, clear `testing_only`,
+  publish to nearby, turn on website watching), and a printable one-pager with the QR for the pitch.
+- Outreach templates (sender identity, physical address, opt-out line) and a log of who was contacted when; a
+  suppression list across prospects so do-not-contact follows the person, not one prospect row.
+- More regions: several `ProspectSettings` profiles (Austin, Houston, …) instead of one row.
+- Robots.txt check before reading a prospect's pages (the shared fetch has none today).
+- Check the real cost of a full 40-event run on dev and tune `PROSPECT_DAILY_SPEND_CAP_USD` / per-run caps.
+
 ## Attnd Studio (admins only for now; after that)
 
 ### Stripe checkout for the two tiers
 Stripe Checkout (the expected exception to the dependency policy) for the two event tiers: **Standard** (import and
 manage an existing event) and **Studio** (AI designs the site, flyer and app look; Attnd hosts the site). `Event.plan`
-already exists and staff switch it by hand; checkout would set it (and `paid`) from a webhook. Prices
+already exists; today an organizer's "Upgrade to publish" / "Remove the limit" is an `UpgradeRequest` a superuser
+approves in the Platform admin (D2, which records a `PaymentRecord`); checkout would set the plan (and `paid`) from a
+webhook and create the `PaymentRecord` itself, at the prices in `PlatformSettings`. Prices
 (owner, Nov 15, 2026): **$299 per event** = bring an event in, **$499 per event** = Studio + ticketing. The home page
 already says "$299 per event, flat"; add the $499 tier there when Studio leaves beta.
 
@@ -161,3 +212,80 @@ the branch, `TICKETS_ENABLED=1`):
 - **Platform**: organizations (multiple events, series, venues, shared branding/roles), integrations (webhooks,
   Sheets/CSV, Mailchimp import, calendar feeds), legal/compliance (ToS, privacy, data requests, WCAG for sites,
   moderation), help center + AI support for organizers.
+
+## Ask Attnd (console agent) follow-ups
+Built Nov 20, 2026 (`agent/`, CLAUDE.md → Ask Attnd). Later:
+- Check the panel in real browsers (desktop, iPhone/Android bottom sheet, screen readers: VoiceOver, TalkBack, NVDA)
+  and tune the copy; only the server side and the JSON endpoints are tested automatically.
+- Cost: the full tool list (~70 tools for staff, ~11k tokens) goes with every call; OpenAI's prompt cache makes repeats
+  cheap. If runs get expensive, send only the tools of the pages the run has touched (plus a `more_tools` tool).
+- Undo all covers what History snapshots (details, locations, schedule); extend snapshots to the app layout, so
+  Undo all can roll that back too. Updates already sent can't be unsent.
+- Watch mode navigates the person's own window; a side-by-side "follow along" view on wide screens would be nicer.
+- Streaming the model's text into the panel (now: steps appear as each tool finishes, polled every 1.5 s).
+- A staff page of runs and spend across users (now: Django admin → Ask Attnd runs / usage).
+- Console components (built Nov 20–21, 2026: Your events, the overview's pieces, locations, schedule, updates, event
+  details, new event, history): add the app layout as a component when the chat needs it; the bespoke screens (Studio
+  editor, diagnostics, AI review, prospects, usage, team) stay pages. In the floating panel a "new location / item"
+  form that saved could show the new row (the full-screen canvas goes back to the list, which shows it); a run's model
+  context could refresh the JSON of components the person changed by hand after they were shown (now: the stored
+  JSON + get_component). Opening a detail on the canvas records a pick, which adds a tile to the chat each time; fold
+  repeated picks of the same item into one.
+- History (LogEntry, Nov 21, 2026) doesn't record `QuerySet.update()` writes (drag-to-reorder) or background jobs
+  outside a request (website watching auto-applying changes); record those with the job as the actor if wanted.
+
+## API-021 in the apps (not started)
+The server sends `plan_suggestions` in every bundle (API_CHANGES.md → API-021). iOS and Android: show them as the
+"Plan your day" examples when present (plan → make the plan, question → ask it), else keep the local examples.
+
+## API-023 in the apps (web done Nov 21, 2026; iOS built Nov 21, 2026; Android not started)
+The bundle's `event.theme` carries each event's colours (light and dark × primary / secondary / tertiary, already
+contrast-adjusted; `null` without a theme or when the organizer turned "Use custom theme in the apps" off;
+API_CHANGES.md → API-023). iOS and Android: decode it leniently and, when set, use it instead of `accent_color` for
+the event's tint (primary), soft surfaces (secondary) and highlights (tertiary), following the system's light / dark
+mode; `null` → today's behaviour (`accent_color`, else the brand purple).
+
+## Android: adopt My schedule and the iOS assistant architecture (iOS built Nov 21, 2026)
+iOS replaced likes and the separate AI plan with **My schedule** (items, places at a time, saved places; per-entry
+reminders; "+ Add" / "In my schedule"; Schedule tab section, Home "Up next in my schedule", organizer-change hints;
+migration from hearts and plans; API-009 heart metrics unchanged), removed Ask About This and the Demo badge, and moved
+the assistant to: conversation memory ("it", "the second one"), the router's My schedule grammar (add / remove / move /
+remind, clashes), tool-calling model turns with a token budget, one component catalogue shared by chat answers and
+API-024 layouts (catalogue version 2: `my_schedule` on Home; `plan_today` / `liked` map to it), and My plan as one
+continuous chat. Spec: `ios-my-schedule.md` (owner-approved) and the iOS CLAUDE.md sections My schedule / Assistant
+architecture / One component catalogue. Android: port `MySchedule`, `ConversationContext`, `Component` and the router
+changes into `domain/` with the iOS test cases (the shared fixtures now diverge; CLAUDE.md lists each), then the UI.
+Server: when ready, add `my_schedule` to `events/layout.py`'s catalogue as version 2 (the apps already map the old names).
+
+## API-024 server-driven screens: Android, and later sections (iOS + web built Nov 21, 2026)
+- **Android adopts it** (phase 5 of the plan): port `ScreenLayout` (catalogue, validation, overrides, conditions, facts;
+  the iOS `ScreenLayoutTests` cases) into `domain/`, draw the detail screens, event info, Options' event rows and the
+  map overlay from it, add the Home tab, and send `X-Attnd-Sections: 1` on `bundle/`. Until then Android gets no layout
+  and no Home tab (the server strips both without the header).
+- Later section types (a new catalogue version, an app release each): sponsors, a hero image, nearby places, update
+  detail screens (neither app has one yet), weather.
+- Check on a device (TestFlight): the DEMO event with a festival vs a single-room layout, and a section turned off in
+  the console reaching the phone after the `content_updated` push.
+
+## Onboarding follow-ups (built Nov 21, 2026: open sign-ups, demo events, free limit, home page)
+- **Testimonials / "used at" logos** on the home page once real events have run with Attnd (with the organizers' OK).
+- **"Happening near you" without Google**: today the browser asks Google's Geolocation API for an approximate position
+  from the visitor's IP (no prompt, `home.js`). Once prospects span several regions, consider an IP database on our own
+  server instead (e.g. MaxMind GeoLite2, free with an account and attribution; refreshed weekly), so nothing goes to
+  Google and it works without the browser key.
+- API-025 in the apps: show the server's `event_full_free` message on a full free event (API_CHANGES.md → API-025).
+- Checkout: "Remove the limit" emails the admins and an admin marks the event paid; a real checkout (Stripe) later.
+- Showcase events on production: set `SHOWCASE_EVENTS=1` on attnd-web when the owner wants the gallery there, and
+  `manage.py load_showcase_events --images` once for AI covers (OpenAI, a few cents each).
+- More real screenshots on the home page (the planner, the Live Activity, Studio) from the next store screenshot run.
+
+## Parked / skipped (owner, Nov 21–22, 2026)
+
+- **Spotify artist links: skipped.** Spotify's Web API needs the developer account's owner to have Premium; API-030
+  links Apple Music only. Revisit if that changes (the bundle field would be additive: `spotify_url` on performers).
+- **ShazamKit "What's this song?"**: parked idea (identify the song playing at a stage and link the performer); the
+  Media ID has ShazamKit deliberately off until then.
+- **Android work paused** (batch 7, owner): when it resumes — foldable screenshots for Play (unfolded captures in the
+  phone set), minSdk 35 → 36 (approved), and the parity port (My schedule, the iOS assistant architecture, API-021
+  / 023 / 024 / 027 / 030 in the app).
+

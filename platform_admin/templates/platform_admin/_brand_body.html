@@ -1,0 +1,11 @@
+<section class="stack"><h2 class="title-3">Logo and mark</h2>
+  <div class="cluster cluster--loose"><div class="panel">{{ mark_svg|safe }}</div><div class="panel" style="width:128px">{{ icon_svg|safe }}</div></div>
+  <div class="cluster"><a class="button button--primary" href="?download=zip">Download everything (zip)</a>
+    <a class="button button--outline button--small" href="?file=wordmark.svg">Wordmark SVG</a>
+    <a class="button button--outline button--small" href="?file=icon.svg">App icon SVG</a>
+    {% for label, path in b.files %}<a class="button button--ghost button--small" href="{{ path }}">{{ label }}</a>{% endfor %}</div></section>
+<section class="stack"><h2 class="title-3">Colours</h2><div class="grid grid--3">{% for name, hex, use in b.colours %}<div class="panel stack stack--tight"><span style="display:block;height:48px;border-radius:12px;background:{{ hex }}" aria-hidden="true"></span><strong>{{ name }}</strong><span class="mono small">{{ hex }}</span><span class="small muted">{{ use }}</span></div>{% endfor %}</div></section>
+<section class="grid grid--2"><div class="stack"><h2 class="title-3">Type</h2><ul>{% for what, how in b.type %}<li><strong>{{ what }}</strong>: {{ how }}</li>{% endfor %}</ul></div>
+  <div class="stack"><h2 class="title-3">Voice</h2><ul>{% for v in b.voice %}<li>{{ v }}</li>{% endfor %}</ul></div></section>
+<section class="grid grid--2"><div class="stack"><h2 class="title-4">Do</h2><ul>{% for v in b.do %}<li>{{ v }}</li>{% endfor %}</ul></div>
+  <div class="stack"><h2 class="title-4">Don't</h2><ul>{% for v in b.dont %}<li>{{ v }}</li>{% endfor %}</ul></div></section>

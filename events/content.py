@@ -11,8 +11,10 @@ import threading
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
 from attnd.links import join_url
+from attnd.images import event_logo_url
 
 from events import context as ctx
+from events import music
 from events.models import Event, EventRevision, Location, Notification, ScheduledItem, normalize_tags
 
 _state = threading.local()
@@ -66,24 +68,15 @@ def _abs(request, url):
 # Phone-sized images (v2 only): Cloudinary delivers a resized, recompressed copy in the best format the app
 # accepts (f_auto: WebP/AVIF/JPEG), so the apps download a fraction of an organizer's original photo.
 # Deterministic, so the URL stays the same for the same image (the apps cache images by URL).
-APP_IMAGE_WIDTH = {'location': 1200, 'logo': 512, 'flyer': 2000}
-_CLOUDINARY_UPLOAD = re.compile(r'^(https?://res\.cloudinary\.com/[^/]+/image/upload/)(.+)$')
-_RASTER = ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.avif', '.bmp', '.tif', '.tiff')
-_TRANSFORM_SEGMENT = re.compile(r'^[a-z]{1,3}_[^/]*$')  # e.g. w_800,c_fill (already transformed: leave it)
+APP_IMAGE_WIDTH = {'location': 1200, 'logo': 512, 'flyer': 2000,
+                   'thumb': 96, 'preview': 192, 'flyer_preview': 800}  # the last three: console (stage H)
 
 
 def app_image_url(url, kind):
-    """`url` with Cloudinary delivery transformations for phones, or unchanged (other hosts, PDFs, GIFs,
-    URLs that already carry a transformation)."""
-    if not url:
-        return url
-    match = _CLOUDINARY_UPLOAD.match(url)
-    if not match:
-        return url
-    rest = match.group(2)
-    if not rest.split('?', 1)[0].lower().endswith(_RASTER) or _TRANSFORM_SEGMENT.match(rest.split('/', 1)[0]):
-        return url
-    return f'{match.group(1)}f_auto,q_auto,c_limit,w_{APP_IMAGE_WIDTH[kind]}/{rest}'
+    """`url` at the width the apps / console need (attnd/images.py: Cloudinary delivery transforms, or a local
+    resized copy without Cloudinary), or unchanged (other hosts, PDFs, GIFs, already transformed URLs)."""
+    from attnd.images import variant
+    return variant(url, APP_IMAGE_WIDTH[kind]) if url else url
 
 
 def event_v2(event, request=None):
@@ -103,7 +96,7 @@ def event_v2(event, request=None):
         'is_demo': not event.paid,
         'flyer_url': app_image_url(_abs(request, event.flyer.url), 'flyer') if event.flyer else None,
         'accent_color': event.accent_color or None,
-        'logo_url': app_image_url(event.logo_url, 'logo') or None,
+        'logo_url': app_image_url(_abs(request, event_logo_url(event)), 'logo') or None,
         'content_version': event.content_version,
         'join_url': join_url(event),
         # API-016: the event's Attnd Studio website while it is published, else null.
@@ -118,6 +111,21 @@ def _website_url(event):
     return website_url(event)
 
 
+def _photo_abs(request, path):
+    from django.conf import settings
+    return request.build_absolute_uri(path) if request is not None else settings.SITE_URL.rstrip('/') + path
+
+
+def _is_google_photo(location):
+    return bool(location.google_photo and location.google_place_id and not location.image and not location.image_url)
+
+
+def _image_credit(location):
+    if _is_google_photo(location):
+        return 'Photo: Google Maps'  # the authors' names come live from image_attribution_url (API-031)
+    return (location.image_credit or None) if location.image_auto else None
+
+
 def location_v2(location, request=None):
     return {
         'id': location.id,
@@ -126,7 +134,12 @@ def location_v2(location, request=None):
         'description': location.description,
         'category': location.category or None,
         'website': location.website or None,
-        'image_url': app_image_url(_abs(request, location.resolved_image_url), 'location'),
+        'image_url': (_photo_abs(request, location.resolved_image_url) if _is_google_photo(location)
+                      else app_image_url(_abs(request, location.resolved_image_url), 'location')),
+        'image_credit': _image_credit(location),  # API-022
+        # API-031: a live Google photo's authors ({name, uri} list, fetched per view: never in the bundle itself)
+        'image_attribution_url': (_photo_abs(request, location.resolved_image_url) + '?format=json'
+                                  if _is_google_photo(location) else None),
         'address': location.address,
         'latitude': _coord(location.latitude),
         'longitude': _coord(location.longitude),
@@ -146,7 +159,7 @@ def item_v2(item):
         'location_id': item.location_id,
         'location_name': item.location.name if item.location_id else None,
         'tags': normalize_tags(item.tags),
-        'context': ctx.for_bundle(ctx.ITEM, item.context),  # API-018
+        'context': music.with_links(ctx.for_bundle(ctx.ITEM, item.context), item),  # API-018, API-030
     }
 
 
@@ -160,7 +173,11 @@ def notification_v2(n):
     }
 
 
-def bundle(event, request=None):
+def bundle(event, request=None, sections=0):
+    """`sections`: the layout catalogue version the app draws (X-Attnd-Sections, API-024; 0 = none: no layout,
+    no Home tab)."""
+    from events import layout as screen_layout
+    from events import live_activity, plan_suggestions
     from events.display import event_stats, resolve_display
 
     locations = list(event.location_set.filter(hidden=False).order_by('sort_order', 'name'))
@@ -178,17 +195,28 @@ def bundle(event, request=None):
     event_row = event_v2(event, request)
     event_row['context'] = ctx.for_bundle(ctx.EVENT, event.context, location_ids={loc.id for loc in locations})
     ctx.apply_budget(event_row['context'], location_rows, item_rows, label=f'event {event.pk}')
+    # API-023: the event's colour theme (contrast-adjusted), null without one or when it is off for the apps.
+    from events import theme as event_theme
+    event_row['theme'] = event_theme.for_bundle(event)
+    display = resolve_display(event, stats, sections)
     return {
         'schema_version': 2,
         'content_version': event.content_version,
         'updated_at': _dt(event.content_updated_at),
         'event': event_row,
-        'display': resolve_display(event, stats),
+        'display': display,
         'categories': categories,
         'locations': location_rows,
         'schedule': item_rows,
         'notifications': [notification_v2(n) for n in notifications],
         'tickets': None,  # API-017: ticketing parked (git branch parked/tickets), always null
+        # API-021: "Plan your day" examples written for this event (stored, re-checked; else the deterministic ones)
+        'plan_suggestions': plan_suggestions.for_bundle(event, locations, items),
+        # The Live Activity's content choices (always; the defaults when the organizer chose nothing)
+        'live_activity': live_activity.for_bundle(event, locations),
+        # API-024: the screens' sections (null for apps that don't send X-Attnd-Sections)
+        'layout': screen_layout.resolve_layout(event, locations, items, sections, display['resolved_preset'],
+                                               event_row.get('website_url'), display),
     }
 
 
@@ -246,6 +274,9 @@ def snapshot(event):
 
 
 def save_revision(event, summary, user=None):
+    from agent.context import current as agent_step
+    if agent_step() and 'Ask Attnd' not in summary:
+        summary = f'{summary} (Ask Attnd)'  # made while Ask Attnd ran a console view for this person
     return EventRevision.objects.create(
         event=event,
         content_version=event.content_version,

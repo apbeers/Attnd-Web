@@ -1,159 +1,76 @@
 {% extends 'console/base.html' %}
-{% load console_tags %}
+{% load console_tags humanize %}
 {% block title %}{{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="stack stack--loose">
-{% if event.status == 'draft' %}
-<div class="panel panel--warning cluster cluster--loose">
-  <div class="grow"><strong>This event is a draft.</strong> Review the details, locations and schedule, then publish it so attendees can join.</div>
-  <form method="post" action="{% url 'console:event_status' event.id %}">{% csrf_token %}
-    <button name="action" value="publish" class="button button--success">{% icon "broadcast" %} Publish</button></form>
-</div>
-{% endif %}
+{% comment %}Batch 7: by importance. Status + free limit + the next step first, then the phone, what needs you, the numbers,
+the map, colours, visibility and sharing; settings and history folded at the end.{% endcomment %}
+{% component "event_status_line" event=event %}
 {% if studio_import %}{% with r=studio_import %}
 {% if r.status == 'queued' or r.status == 'running' %}
 <div class="panel panel--accent cluster" data-studio-import="running">
   <div class="grow"><span class="spinner"></span> <strong>Studio is rebuilding your website.</strong> <span class="muted">It reads every page, copies the images, fonts and PDFs, then designs the new site. This takes a few minutes.</span></div>
-  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Watch in Studio</a>
+  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} See the website</a>
 </div>
 {% elif r.status == 'failed' %}
 <div class="panel panel--warning cluster" data-studio-import="failed">
   <div class="grow"><strong>Bringing your website into Studio didn't finish.</strong> <span class="small">{{ r.error|truncatechars:240 }}</span></div>
-  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">Open Studio to retry</a>
+  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">Open the website to retry</a>
 </div>
 {% elif r.result_version_id and not r.site.published_id %}
 <div class="panel panel--accent cluster" data-studio-import="done">
   <div class="grow">{% icon "stars" "tone-brand" %} <strong>Your new website is ready in Studio.</strong> Review it and publish it when you like it.</div>
-  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Open Studio</a>
+  <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Open the website</a>
 </div>
 {% endif %}{% endwith %}{% endif %}
-{% if pending_changes %}
-<div class="panel panel--accent cluster">
-  <div class="grow">{% icon "stars" "tone-brand" %} <strong>{{ pending_changes }} AI update{{ pending_changes|pluralize }} waiting for review.</strong></div>
-  <a class="button button--primary" href="{% url 'console:changesets' event.id %}">Review</a>
-</div>
-{% endif %}
-
 <div class="split">
   <div class="split__main stack stack--loose">
-    {% with t=event.timing %}
-    <div class="timing timing--{{ t }}">
-      {% if t == 'now' %}<span class="live-dot"></span><strong>Happening now</strong><span class="small">ends {{ event.effective_end|date:"D M j, g:i A" }}</span>
-      {% elif t == 'upcoming' %}{% icon "calendar" %}<strong>Starts in {{ event.start_time|timeuntil }}</strong><span class="small">{{ event.start_time|date:"D M j, g:i A" }}</span>
-      {% else %}{% icon "history" %}<strong>Ended {{ event.effective_end|timesince }} ago</strong>{% endif %}
-    </div>
-    {% endwith %}
-    <div class="panel">
-      <div class="grid grid--3 grid--stats">
-        <div><div class="stat__value">{{ stats.location_count }}</div><div class="eyebrow">Locations</div></div>
-        <div><div class="stat__value">{{ stats.item_count }}</div><div class="eyebrow">Schedule items</div></div>
-        <div><div class="stat__value">{{ audience.joined }}</div><div class="eyebrow">Attendees joined</div></div>
-        <div><div class="stat__value">{{ audience.active_today }}</div><div class="eyebrow">Active today</div></div>
-        <div><div class="stat__value">{{ audience.subscribed }}</div><div class="eyebrow">Get notifications</div></div>
-        <div><div class="stat__value">{{ audience.ios }}/{{ audience.android }}</div><div class="eyebrow">iPhone / Android</div></div>
-      </div>
-    </div>
-
+    {% component "live_on_phone" event=event %}
+    {% component "needs_review" event=event %}
+    {% component "event_stats" event=event part="timing" %}
+    {% component "event_stats" event=event part="numbers" %}
+    <div class="panel">{% component "event_map" event=event %}</div>
+    <div class="panel" id="theme">{% component "event_theme" event=event %}</div>
     <div class="panel stack">
-      <h2 id="sync-settings">{% icon "stars" "tone-brand" %} Keep it in sync with your website</h2>
-      <p class="muted small">Turn on watching and Attnd checks your pages for changes: every 10 minutes during the event, hourly in the week before, every few hours before that.
-        Checking is free; the AI only re-reads a page when its content actually changed. Anything you edited by hand is never overwritten.
-        {% if event.last_refreshed_at %}Last AI update {{ event.last_refreshed_at|timesince }} ago.{% endif %}</p>
-      <form method="post" action="{% url 'console:event_refresh' event.id %}" enctype="multipart/form-data" class="stack stack--tight"
-            data-background data-busy-label="Checking for updates…" data-after-start="reset">{% csrf_token %}
-        <details><summary class="small muted">Add new material (optional)</summary>
-          <div class="details-body">{% for field in refresh_form %}{% include 'console/_field.html' %}{% endfor %}</div>
-        </details>
-        <div><button class="button button--outline">{% icon "refresh" %} Check for updates now</button></div>
-      </form>
-      <form method="post" action="{% url 'console:event_sources' event.id %}">{% csrf_token %}
-        {% include 'console/_field.html' with field=sources_form.source_urls_text %}
-        <div class="grid grid--2">
-          {% include 'console/_field.html' with field=sources_form.refresh_schedule %}
-          {% include 'console/_field.html' with field=sources_form.update_mode %}
-        </div>
-        <details class="field"><summary class="small muted">Extra source text</summary>
-          <div class="details-body">{{ sources_form.source_text }}</div></details>
-        {% if can_manage %}<button class="button button--secondary button--small">Save</button>{% else %}<p class="small muted">Only the owner and event admins can change these.</p>{% endif %}
-      </form>
-      {% if source_pages %}
-      <details><summary class="small muted">Watched pages ({{ source_pages|length }}){% if event.sources_checked_at %} · checked {{ event.sources_checked_at|timesince }} ago{% endif %}</summary>
-        <ul class="small details-body">{% for p in source_pages %}
-          <li><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|truncatechars:70 }}</a>
-            <span class="muted">· {% if p.has_pending_change %}<strong class="tone-brand">changed, AI update pending</strong>{% elif p.changed_at %}last changed {{ p.changed_at|timesince }} ago{% elif p.checked_at %}no changes yet{% else %}not checked yet{% endif %}{% if p.failures %} · <span class="tone-danger">{{ p.last_status }}</span>{% endif %}</span></li>
-        {% endfor %}</ul>
-      </details>
-      {% endif %}
+      <h2 class="eyebrow">Visibility</h2>
+      {% component "event_lifecycle" event=event %}
     </div>
+  </div>
 
-    <div class="panel">
-      <div class="cluster"><h2 class="eyebrow grow">{% icon "heart" "tone-danger" %} Most liked</h2>
-        <a class="small" href="{% url 'console:usage' event.id %}">Usage</a></div>
-      {% if most_hearted %}
-      <ul class="list list--inset">
-      {% for row in most_hearted %}
-        <li class="cluster">
-          <a class="grow" href="{% if row.kind == 'location' %}{% url 'console:location_edit' event.id row.obj.id %}{% else %}{% url 'console:item_edit' event.id row.obj.id %}{% endif %}">{{ row.obj.name }}</a>
-          <span class="small muted">{% if row.kind == 'location' %}{{ row.obj.category|default:"Location" }}{% else %}{{ row.obj.start_time|date:"D g:i A" }}{% if row.obj.location %} · {{ row.obj.location.name }}{% endif %}{% endif %}</span>
-          <span class="small nowrap hearts">{% icon "heart" "tone-danger" %} {{ row.count }}</span>
-        </li>
-      {% endfor %}
-      </ul>
-      {% else %}<p class="small muted">Attendees can like locations and schedule items in the app (the heart button). The favourites show up here (anonymous counts only).</p>{% endif %}
-    </div>
+  <div class="split__aside stack stack--loose">
+    <div class="panel stack"><h2 class="eyebrow">Share it</h2>{% component "sharing_kit" event=event %}</div>
+  </div>
+</div>
 
+<details class="panel overview-more"><summary class="strong">Settings and recent activity</summary>
+  <div class="details-body stack stack--loose">
+    <section class="stack">
+      <h2 class="title-4" id="sync-settings">{% icon "stars" "tone-brand" %} Keep it in sync with your website</h2>
+      {% component "website_watching" event=event %}
+    </section>
+    {% component "event_stats" event=event part="most_liked" %}
     {% if changesets %}
-    <div class="panel">
+    <section>
       <h2 class="eyebrow">Recent AI updates</h2>
       <ul class="list list--inset">
       {% for cs in changesets %}
         <li class="cluster">
           <a href="{% url 'console:changeset' cs.id %}" class="grow">{{ cs.summary }}</a>
           <span class="badge {% if cs.status == 'pending' %}badge--primary{% else %}badge--neutral{% endif %}">{{ cs.get_status_display }}</span>
-          <span class="muted small">{{ cs.created_at|timesince }} ago</span>
+          <span class="muted small">{{ cs.created_at|naturaltime }}</span>
         </li>
       {% endfor %}
       </ul>
-    </div>
+    </section>
     {% endif %}
-  </div>
-
-  <div class="split__aside stack stack--loose">
-    <div class="stack stack--tight">{% include 'console/_live_phone.html' %}
-      <div class="cluster cluster--center">
-        <a class="button button--secondary button--small" href="{% url 'console:event_qr' event.id %}?download=1">{% icon "download" %} QR</a>
-        <a class="button button--secondary button--small" href="{% url 'console:event_poster' event.id %}" target="_blank">{% icon "printer" %} Poster</a>
-        <button class="button button--secondary button--small" data-copy="{{ join_url }}">{% icon "link" %} Copy link</button>
-      </div>
-      <div class="small muted break center">{{ join_url }}</div>
-    </div>
-
-    <div class="panel stack">
-      <h2 class="eyebrow">Visibility</h2>
-      <form method="post" action="{% url 'console:event_status' event.id %}" class="stack stack--tight">{% csrf_token %}
-        {% if event.status == 'published' %}
-          {% if event.public %}
-            <button name="action" value="unlist" class="button button--secondary button--small button--block">Hide from “nearby events”</button>
-          {% else %}
-            <button name="action" value="list" class="button button--outline button--small button--block">Show in “nearby events”</button>
-          {% endif %}
-          <button name="action" value="archive" class="button button--secondary button--small button--block">Mark as ended (archive)</button>
-          <button name="action" value="unpublish" class="button button--ghost button--small button--block muted">Move back to draft</button>
-        {% elif event.status == 'archived' %}
-          <button name="action" value="publish" class="button button--outline button--small button--block">Make live again</button>
-        {% endif %}
-      </form>
-      {% if not event.paid %}<p class="small muted">{% icon "info" %} Attendees see a “Demo event” banner until the event is upgraded.</p>{% endif %}
-    </div>
-
-    <div class="panel stack stack--tight">
+    <section class="stack stack--tight">
       <h2 class="eyebrow">App layout</h2>
       <p class="title-4"><strong>{{ display.resolved_preset|capfirst }}</strong>{% if display.preset == 'auto' %} <span class="muted">(automatic)</span>{% endif %}</p>
       <p class="small muted">{{ display.reason }}</p>
       <div><a class="button button--secondary button--small" href="{% url 'console:display' event.id %}">Customize</a></div>
-    </div>
+    </section>
   </div>
-</div>
+</details>
 </div>
 {% if event.refresh_schedule == 'watch' %}
 <dialog id="sync-notice" class="dialog" data-event="{{ event.id }}">
@@ -181,7 +98,7 @@
     if (!action) return;
     try { localStorage.setItem(key, '1'); } catch (err) {}
     dialog.close();
-    if (action === 'settings') document.getElementById('sync-settings')?.scrollIntoView({ behavior: 'smooth' });
+    if (action === 'settings') { const more = document.querySelector('.overview-more'); if (more) more.open = true; document.getElementById('sync-settings')?.scrollIntoView({ behavior: 'smooth' }); }
   });
 })();
 </script>

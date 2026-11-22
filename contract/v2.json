@@ -4,6 +4,7 @@
     "diagnostics/logs/",
     "diagnostics/reports/",
     "events/<int:event_id>/bundle/",
+    "events/<int:event_id>/changes/",
     "events/<int:event_id>/join/",
     "events/<int:event_id>/leave/",
     "events/<int:event_id>/usage/",
@@ -92,6 +93,8 @@
           "has_flyer": "boolean",
           "item_count": "integer",
           "location_count": "integer",
+          "mappable_count": "integer",
+          "sent_count": "integer",
           "spread_km": "number"
         },
         "tabs": [
@@ -143,9 +146,31 @@
         "paid": "boolean",
         "start_time": "string",
         "status": "string",
+        "theme": {
+          "dark": {
+            "primary": "string",
+            "secondary": "string",
+            "tertiary": "string"
+          },
+          "light": {
+            "primary": "string",
+            "secondary": "string",
+            "tertiary": "string"
+          }
+        },
         "tickets_url": "null",
         "timezone": "string",
         "website_url": "string"
+      },
+      "layout": "null",
+      "live_activity": {
+        "buttons": [
+          "string"
+        ],
+        "follows": "string",
+        "location_id": "null",
+        "stale_text": "null",
+        "urgent": "boolean"
       },
       "locations": [
         {
@@ -172,6 +197,8 @@
           },
           "description": "string",
           "id": "integer",
+          "image_attribution_url": "null",
+          "image_credit": "null",
           "image_url": "string",
           "latitude": "number",
           "longitude": "number",
@@ -191,6 +218,286 @@
           "priority": "string",
           "send_time": "string",
           "title": "string"
+        }
+      ],
+      "plan_suggestions": [
+        {
+          "kind": "string",
+          "text": "string"
+        }
+      ],
+      "schedule": [
+        {
+          "context": {
+            "about": "string",
+            "accessibility": "string",
+            "age_limit": "string",
+            "links": [
+              {
+                "title": "string",
+                "url": "string"
+              }
+            ],
+            "performers": [
+              {
+                "bio": "string",
+                "genres": [
+                  "string"
+                ],
+                "name": "string"
+              }
+            ],
+            "price": "string"
+          },
+          "description": "string",
+          "end_time": "string",
+          "id": "integer",
+          "location_id": "integer",
+          "location_name": "string",
+          "name": "string",
+          "start_time": "string",
+          "tags": [
+            "string"
+          ]
+        }
+      ],
+      "schema_version": "integer",
+      "tickets": "null",
+      "updated_at": "string"
+    },
+    "GET events/<id>/bundle/ (X-Attnd-Sections)": {
+      "categories": [
+        "string"
+      ],
+      "content_version": "integer",
+      "display": {
+        "accent_color": "string",
+        "default_tab": "string",
+        "enable_search": "boolean",
+        "group_by_category": "boolean",
+        "locations_style": "string",
+        "logo_url": "string",
+        "map_clustering": "boolean",
+        "map_fit_all": "boolean",
+        "preset": "string",
+        "reason": "string",
+        "resolved_preset": "string",
+        "schedule_style": "string",
+        "schema_version": "integer",
+        "secondary_pane": "string",
+        "show_location_images": "boolean",
+        "stats": {
+          "category_count": "integer",
+          "has_flyer": "boolean",
+          "item_count": "integer",
+          "location_count": "integer",
+          "mappable_count": "integer",
+          "sent_count": "integer",
+          "spread_km": "number"
+        },
+        "tabs": [
+          "string"
+        ]
+      },
+      "event": {
+        "accent_color": "string",
+        "address": "string",
+        "content_version": "integer",
+        "context": {
+          "about": "string",
+          "accessibility": "string",
+          "amenities": [
+            {
+              "kind": "string",
+              "location_id": "integer",
+              "name": "string",
+              "note": "string"
+            }
+          ],
+          "faq": [
+            {
+              "a": "string",
+              "q": "string"
+            }
+          ],
+          "getting_there": "string",
+          "links": [
+            {
+              "title": "string",
+              "url": "string"
+            }
+          ],
+          "policies": "string",
+          "weather_plan": "string"
+        },
+        "description": "string",
+        "end_time": "string",
+        "event_code": "string",
+        "flyer_url": "null",
+        "id": "integer",
+        "is_demo": "boolean",
+        "join_url": "string",
+        "latitude": "number",
+        "logo_url": "string",
+        "longitude": "number",
+        "name": "string",
+        "paid": "boolean",
+        "start_time": "string",
+        "status": "string",
+        "theme": {
+          "dark": {
+            "primary": "string",
+            "secondary": "string",
+            "tertiary": "string"
+          },
+          "light": {
+            "primary": "string",
+            "secondary": "string",
+            "tertiary": "string"
+          }
+        },
+        "tickets_url": "null",
+        "timezone": "string",
+        "website_url": "string"
+      },
+      "layout": {
+        "catalogue": "integer",
+        "screens": {
+          "event_info": {
+            "sections": [
+              {
+                "show": [
+                  "string"
+                ],
+                "type": "string"
+              }
+            ]
+          },
+          "home": {
+            "sections": [
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "item_detail": {
+            "overrides": [
+              {
+                "match": "string",
+                "sections": [
+                  {
+                    "show": [
+                      "string"
+                    ],
+                    "type": "string"
+                  }
+                ]
+              }
+            ],
+            "sections": [
+              {
+                "show": [
+                  "string"
+                ],
+                "type": "string"
+              }
+            ]
+          },
+          "map_overlay": {
+            "sections": [
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "options_event": {
+            "sections": [
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "place_detail": {
+            "sections": [
+              {
+                "show": [
+                  "string"
+                ],
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "source": {
+          "event_info": "string",
+          "home": "string",
+          "item_detail": "string",
+          "map_overlay": "string",
+          "options_event": "string",
+          "place_detail": "string"
+        }
+      },
+      "live_activity": {
+        "buttons": [
+          "string"
+        ],
+        "follows": "string",
+        "location_id": "null",
+        "stale_text": "null",
+        "urgent": "boolean"
+      },
+      "locations": [
+        {
+          "address": "string",
+          "category": "string",
+          "context": {
+            "about": "string",
+            "accessibility": "string",
+            "age_limit": "string",
+            "hours": "string",
+            "links": [
+              {
+                "title": "string",
+                "url": "string"
+              }
+            ],
+            "menu": [
+              {
+                "name": "string",
+                "note": "string",
+                "price": "string"
+              }
+            ]
+          },
+          "description": "string",
+          "id": "integer",
+          "image_attribution_url": "null",
+          "image_credit": "null",
+          "image_url": "string",
+          "latitude": "number",
+          "longitude": "number",
+          "name": "string",
+          "snippet": "string",
+          "sort_order": "integer",
+          "tags": [
+            "string"
+          ],
+          "website": "string"
+        }
+      ],
+      "notifications": [
+        {
+          "body": "string",
+          "id": "integer",
+          "priority": "string",
+          "send_time": "string",
+          "title": "string"
+        }
+      ],
+      "plan_suggestions": [
+        {
+          "kind": "string",
+          "text": "string"
         }
       ],
       "schedule": [
@@ -279,6 +586,7 @@
       },
       "content_version": "integer",
       "event_id": "integer",
+      "jitter_ms": "integer",
       "type": "string"
     },
     "apns:liveactivity": {
@@ -334,6 +642,7 @@
       "data": {
         "content_version": "integer",
         "event_id": "integer",
+        "jitter_ms": "integer",
         "type": "string"
       },
       "notification": "null"

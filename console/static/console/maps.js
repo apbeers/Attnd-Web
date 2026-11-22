@@ -1,10 +1,12 @@
-/* Google Maps in the console: address autocomplete and a draggable pin map.
- * Used only when GOOGLE_MAPS_BROWSER_KEY is set (a browser key restricted to our domains); otherwise
- * pages keep the plain address field and the OpenStreetMap pin picker in console.js.
+/* Google Maps in the console: address autocomplete and the location map (pin + the event's other locations).
+ * Used only when GOOGLE_MAPS_BROWSER_KEY is set (a browser key restricted to our domains); otherwise console.js keeps
+ * the plain address field with a Find button (server search) and its OpenStreetMap map. console.js attndEnhance
+ * calls these for every form on the page and in the chat / canvas cards.
  *
- * attndMaps.addressAutocomplete(input, {lat, lng})  – Places suggestions; picking one fills the address
- *                                                     and the coordinate fields
- * attndMaps.pinMap(el, latInput, lngInput, [lat, lng], zoom) – click or drag to place the pin
+ * attndMaps.addressAutocomplete(input, {lat, lng, form}) – Places suggestions; picking one fills the address and the
+ *                                                          coordinate fields (and moves that form's map)
+ * attndMaps.pinMap(el, latInput, lngInput, [lat, lng], zoom, others) – tap or drag to place the pin; others =
+ *                                                          [{name, lat, lng}] drawn as small muted pins, framed to fit
  */
 (function () {
   const config = document.getElementById('maps-config');
@@ -13,18 +15,43 @@
   const mapId = config.dataset.mapId || 'DEMO_MAP_ID';
   let loading = null;
 
+  // Maps JS injects a Roboto stylesheet from Google Fonts; the console uses system fonts, so that link is dropped
+  // (Lighthouse, Nov 22, 2026: one webfont request less). Every other element is inserted as usual.
+  function blockRoboto() {
+    const isRoboto = (n) => n && n.tagName === 'LINK' && /fonts\.googleapis\.com\/css\?family=Roboto/.test(n.href || '');
+    const insertBefore = document.head.insertBefore;
+    document.head.insertBefore = function (node, ref) { return isRoboto(node) ? node : insertBefore.call(this, node, ref); };
+    const appendChild = document.head.appendChild;
+    document.head.appendChild = function (node) { return isRoboto(node) ? node : appendChild.call(this, node); };
+  }
+
   function load() {
     if (loading) return loading;
+    blockRoboto();
     loading = new Promise((resolve, reject) => {
       window.__attndMapsReady = () => resolve(window.google.maps);
       const script = document.createElement('script');
+      // Only the marker library up front: `places` (~100 KB) is imported when an address field is used.
       script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key) +
-        '&v=weekly&loading=async&libraries=places,marker&callback=__attndMapsReady';
+        '&v=weekly&loading=async&libraries=marker&callback=__attndMapsReady';
       script.async = true;
-      script.onerror = () => reject(new Error('Google Maps did not load'));
+      script.onerror = () => { loading = null; reject(new Error('Google Maps did not load')); };
       document.head.appendChild(script);
     });
     return loading;
+  }
+
+  // Google's Maps JS (and its billing) starts only when a map or an address field is actually on screen (or the
+  // field is focused), never just because a console page has a hidden form.
+  function whenVisible(el) {
+    return new Promise((resolve) => {
+      if (!('IntersectionObserver' in window)) { resolve(); return; }
+      let done = false;
+      const go = () => { if (done) return; done = true; io.disconnect(); el.removeEventListener('focusin', go); resolve(); };
+      const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && go(), { rootMargin: '200px' });
+      io.observe(el);
+      el.addEventListener('focusin', go);
+    });
   }
 
   const setValue = (input, value) => {
@@ -32,23 +59,40 @@
     input.value = value;
     input.dispatchEvent(new Event('change', { bubbles: true }));
   };
+  // The console's theme (data-theme on <html>, else the system's): the map follows it.
+  const dark = () => {
+    const t = document.documentElement.dataset.theme;
+    return t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  };
+
+  // Address fields load Maps + places only when the person actually uses the field (focus), not when it scrolls by.
+  function whenFocused(el) {
+    return new Promise((resolve) => el.addEventListener('focusin', () => resolve(), { once: true }));
+  }
 
   async function addressAutocomplete(input, coords) {
-    if (!input) return;
+    if (!input || input.dataset.autocomplete) return;
+    input.dataset.autocomplete = '1';
+    await whenFocused(input);
     const maps = await load();
+    // PlaceAutocompleteElement groups a person's typing and their pick into one session token by itself (billed per
+    // session, not per keystroke); it has no minimum-characters option.
     const { PlaceAutocompleteElement } = await maps.importLibrary('places');
     const widget = new PlaceAutocompleteElement();
     widget.className = 'place-autocomplete';
     widget.setAttribute('placeholder', input.value || 'Search for an address or place');
+    if (dark()) widget.style.colorScheme = 'dark';
     input.before(widget);
     input.classList.add('place-autocomplete-target');
+    requestAnimationFrame(() => widget.focus && widget.focus());
+    const scope = (coords && coords.form) || document;
     const choose = async (place) => {
       await place.fetchFields({ fields: ['formattedAddress', 'location', 'displayName'] });
       setValue(input, place.formattedAddress || place.displayName || '');
       if (place.location && coords) {
         setValue(coords.lat, place.location.lat().toFixed(7));
         setValue(coords.lng, place.location.lng().toFixed(7));
-        document.dispatchEvent(new CustomEvent('attnd:place', { detail: { lat: place.location.lat(), lng: place.location.lng() } }));
+        scope.dispatchEvent(new CustomEvent('attnd:place', { detail: { lat: place.location.lat(), lng: place.location.lng() } }));
       }
     };
     // Newer API: gmp-select with a prediction; older: gmp-placeselect with a place.
@@ -56,33 +100,93 @@
     widget.addEventListener('gmp-placeselect', (e) => e.place && choose(e.place));
   }
 
-  async function pinMap(el, latInput, lngInput, center, zoom) {
+  async function pinMap(el, latInput, lngInput, center, zoom, others, opts) {
+    opts = opts || {};
+    if (!latInput) { latInput = document.createElement('input'); lngInput = document.createElement('input'); }
+    await whenVisible(el);
     const maps = await load();
     const { Map } = await maps.importLibrary('maps');
-    const { AdvancedMarkerElement } = await maps.importLibrary('marker');
+    const { AdvancedMarkerElement, PinElement } = await maps.importLibrary('marker');
     el.innerHTML = '';
+    el.classList.add('pin-map--google');
     const has = latInput.value && lngInput.value;
     const map = new Map(el, { center: { lat: center[0], lng: center[1] }, zoom, mapId,
-                              streetViewControl: false, mapTypeControl: false, fullscreenControl: false });
+                              colorScheme: dark() ? 'DARK' : 'LIGHT',
+                              streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
+                              clickableIcons: false });
+    const css = getComputedStyle(document.documentElement);
+    const token = (name, fallback) => (css.getPropertyValue(name) || fallback).trim();
+    (others || []).forEach((o) => {
+      const pin = new PinElement({ scale: 0.6, background: token('--map-other', '#9b93ad'), borderColor: token('--map-other-line', '#7d7590'),
+                                   glyphColor: token('--map-other-line', '#7d7590') });
+      const m = new AdvancedMarkerElement({ map, position: { lat: o.lat, lng: o.lng }, content: pin.element, title: o.name, zIndex: 1,
+                                             gmpClickable: !!opts.onOther });
+      if (opts.onOther) m.addListener('click', () => opts.onOther(o, m));
+    });
+    const main = new PinElement({ background: token('--color-brand', '#431f86'), borderColor: token('--color-brand-line', '#2e1560'),
+                                  glyphColor: '#fff' });
     const marker = new AdvancedMarkerElement({ map: has ? map : null, position: has ? { lat: +latInput.value, lng: +lngInput.value } : null,
-                                               gmpDraggable: true, title: 'Drag to move' });
+                                               content: main.element, gmpDraggable: !opts.readonly, title: 'Drag to move', zIndex: 10 });
+    if ((others || []).length) {  // frame this place and the others
+      const bounds = new maps.LatLngBounds();
+      others.forEach((o) => bounds.extend({ lat: o.lat, lng: o.lng }));
+      if (has) bounds.extend({ lat: +latInput.value, lng: +lngInput.value });
+      map.fitBounds(bounds, 40);
+      maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 18) map.setZoom(18); });
+    }
     const place = (lat, lng, pan) => {
       marker.position = { lat, lng };
       marker.map = map;
       setValue(latInput, lat.toFixed(7));
       setValue(lngInput, lng.toFixed(7));
       if (pan) { map.panTo({ lat, lng }); if (map.getZoom() < 15) map.setZoom(16); }
+      el.dispatchEvent(new CustomEvent('attnd:pinned', { bubbles: true }));
     };
-    map.addListener('click', (e) => place(e.latLng.lat(), e.latLng.lng(), false));
+    if (!opts.readonly) map.addListener('click', (e) => place(e.latLng.lat(), e.latLng.lng(), false));
     marker.addListener('dragend', () => {
       const p = marker.position;
       place(typeof p.lat === 'function' ? p.lat() : p.lat, typeof p.lng === 'function' ? p.lng() : p.lng, false);
     });
-    document.addEventListener('attnd:place', (e) => place(e.detail.lat, e.detail.lng, true));
+    (el.closest('form') || document).addEventListener('attnd:place', (e) => place(e.detail.lat, e.detail.lng, true));
     const typed = () => { if (latInput.value && lngInput.value) place(+latInput.value, +lngInput.value, true); };
     latInput.addEventListener('input', typed);
     lngInput.addEventListener('input', typed);
   }
 
-  window.attndMaps = { addressAutocomplete, pinMap, load };
+  // The event map starts as a Static Maps image (one small JPEG at the displayed size × DPR, the LCP stays cheap)
+  // and becomes the interactive map on hover / focus / touch, or once the page is idle while it is on screen.
+  // Returns false (draw the interactive map now) when the box has no size yet.
+  function staticFirst(el, center, zoom, pins, interactive) {
+    const w = Math.min(640, Math.round(el.clientWidth || 0)), h = Math.min(640, Math.round(el.clientHeight || 0));
+    if (!w || !h) return false;
+    const scale = (window.devicePixelRatio || 1) > 1 ? 2 : 1;
+    const brand = (getComputedStyle(document.documentElement).getPropertyValue('--color-brand') || '#431f86').trim().replace('#', '0x');
+    const params = new URLSearchParams({ size: `${w}x${h}`, scale: String(scale), format: 'jpg', key });
+    if (dark()) params.append('style', 'element:geometry|color:0x242f3e');
+    const points = (pins || []).slice(0, 60).map((p) => `${(+p.lat).toFixed(5)},${(+p.lng).toFixed(5)}`);
+    if (points.length) params.append('markers', `size:small|color:${brand}|${points.join('|')}`);
+    else { params.set('center', `${center[0]},${center[1]}`); params.set('zoom', String(zoom)); }
+    const img = document.createElement('img');
+    img.className = 'event-map__static';
+    img.alt = 'Map of the event’s locations (tap to explore)';
+    img.width = w; img.height = h;
+    img.decoding = 'async';
+    img.src = 'https://maps.googleapis.com/maps/api/staticmap?' + params.toString();
+    el.appendChild(img);
+    let started = false;
+    const go = () => {
+      if (started) return;
+      started = true;
+      ['pointerenter', 'focusin', 'touchstart', 'click'].forEach((t) => el.removeEventListener(t, go));
+      interactive().then(() => img.remove(), () => { started = false; });
+    };
+    img.onerror = go;
+    ['pointerenter', 'focusin', 'touchstart', 'click'].forEach((t) => el.addEventListener(t, go, { passive: true }));
+    if (!el.hasAttribute('tabindex')) el.tabIndex = 0;
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 2500));
+    whenVisible(el).then(() => idle(go, { timeout: 6000 }));
+    return true;
+  }
+
+  window.attndMaps = { addressAutocomplete, pinMap, load, staticFirst };
 })();

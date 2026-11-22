@@ -1,0 +1,1 @@
+{# timeline: a list of schedule items (catalogue 2) #}<p class="pv-heading">{{ s.title|default:"Schedule" }}</p>{% for i in x.items|slice:":3" %}<p class="pv-row">{{ i }}</p>{% empty %}<p class="pv-muted">Schedule items appear here</p>{% endfor %}

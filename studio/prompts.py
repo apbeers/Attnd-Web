@@ -46,6 +46,8 @@ with your tools. Attnd hosts the site and the Attnd app shows the same event.
   schedule.html / lineup.html, map.html or get-here.html, faq.html, sponsors.html, apply.html), one shared styles.css and,
   only if needed, one small site.js.
 - A request about a selected element (SELECTED ELEMENT) is about that element: change it, keep the rest.
+- A SITE STYLE in the request (one of Studio's styles: Festival poster, Program, Market day, Course & countdown,
+  One page) sets the pages, layout, type and colour use: follow it, and keep to it in later changes unless asked.
 - Use set_app_look to give the Attnd app the event's look (accent colour, logo) when you design or change the brand.
 - Use generate_image for flyer art, hero art or graphics when the organizer has no suitable images, and set_flyer to
   choose the event's flyer (shown in the app). Prefer the organizer's own assets (ASSETS) when they fit.
@@ -90,6 +92,17 @@ Event sites are posters you can scroll: loud, confident, local, and useful on a 
   at least 4.5:1 (3:1 for large type), no information by colour alone, a "Skip to content" link.
 - Fast: no frameworks, images with width/height and loading="lazy" below the fold, one stylesheet, scripts deferred.
 - Open Graph tags (og:title, og:description, og:image when there is art) on index.html.
+- Never hard-code dates, times or item names that the data library can show (<attnd-event field="dates">,
+  <attnd-schedule>): Attnd's pre-publish check flags page text that no longer matches the event.
+
+## Safety rules (Attnd enforces these when the site is saved and served)
+- Forms only post to Attnd's handler (data-attnd-form, action "_attnd/forms/<name>"), never to another site. No password,
+  card, bank or ID-number fields: never ask visitors for them.
+- No scripts from other sites. Links to other sites get rel="noopener nofollow ugc" automatically; link to the real
+  address, never through a link shortener.
+- Attnd adds a small "Get the app" card with the event's QR code to every page; don't build another floating one.
+- Translations: when asked for another language, write the pages under <code>/ (es/index.html …) and put
+  <meta name="attnd-source" content="<source page> <hash>"> in each, with the hash you were given.
 """ + DATA_LIBRARY
 
 IMPORT_PROMPT = """Bring my existing website into Attnd Studio: rebuild the WHOLE site as a closely matching

@@ -9,22 +9,7 @@
 <div class="panel panel--flush">
   <ul class="list list--roomy" id="location-list">
   {% for loc in locations %}
-    <li class="cluster cluster--loose cluster--nowrap" data-id="{{ loc.id }}">
-      {% icon "grip" "drag-handle icon--lg" %}
-      {% if loc.resolved_image_url %}<img src="{{ loc.resolved_image_url }}" alt="" width="48" height="48" class="thumb">
-      {% else %}<div class="thumb thumb--empty">{% icon "pin" %}</div>{% endif %}
-      <div class="grow">
-        <a href="{% url 'console:location_edit' event.id loc.id %}" class="title-link">{{ loc.name }}</a>
-        {% if loc.category %}<span class="badge badge--neutral">{{ loc.category }}</span>{% endif %}
-        {% if loc.hidden %}<span class="badge badge--muted">Hidden</span>{% endif %}
-        {% if loc.locked_fields %}{% icon "lock" "lock small" %}{% endif %}
-        <div class="small muted">{{ loc.snippet|default:loc.address|truncatechars:90 }}</div>
-        {% if loc.tags %}<div class="cluster cluster--tight">{% for t in loc.tags %}<span class="badge badge--neutral">{{ t }}</span>{% endfor %}</div>{% endif %}
-      </div>
-      {% if not loc.has_coordinates %}<span class="badge badge--warning" title="Not on the map yet">{% icon "pin" %} No pin</span>{% endif %}
-      {% if loc.hearts %}<span class="small nowrap hearts" title="Net likes from attendees">{% icon "heart" "tone-danger" %} {{ loc.hearts }}</span>{% endif %}
-      <span class="small muted nowrap">{{ loc.n_items }} item{{ loc.n_items|pluralize }}</span>
-    </li>
+    {% component "location_row" event=event location=loc hearts=loc.hearts %}
   {% empty %}
     <li class="list__empty">No locations yet. Add stages, booths, venues, food — anywhere attendees go.</li>
   {% endfor %}
@@ -33,6 +18,7 @@
 {% endblock %}
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', () => {  // console.js is deferred
 const list = document.getElementById('location-list');
 if (list) makeSortable(list, {
   handle: '.drag-handle',
@@ -42,6 +28,7 @@ if (list) makeSortable(list, {
     fetch('{% url "console:locations_reorder" event.id %}', {method: 'POST', body,
       headers: {'X-CSRFToken': '{{ csrf_token }}'}});
   }
+});
 });
 </script>
 {% endblock %}

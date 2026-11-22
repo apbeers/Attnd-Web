@@ -17,6 +17,9 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
+from attnd.permissions import requires
+from agent.registry import agent_action, param as P
+
 from diagnostics import records, retrace, storage, summary, symbolicate, timing
 from diagnostics.models import (APP_CATEGORIES, LEVELS, REASONS, SERVER_CATEGORY, DiagnosticReport,
                                 DiagnosticSession, SymbolFile)
@@ -24,14 +27,8 @@ from events.models import Event, UsageCount
 from events.usage import PERF_METRICS
 
 
-def staff_required(view):
-    @login_required
-    @wraps(view)
-    def wrapper(request, *args, **kwargs):
-        if not (request.user.is_staff or request.user.is_superuser):
-            raise Http404
-        return view(request, *args, **kwargs)
-    return wrapper
+# Staff (attnd.permissions: the Staff role has diagnostics.view_diagnosticsession; 404 for everyone else).
+staff_required = requires('diagnostics.view_diagnosticsession')
 
 
 def _day(value, end=False):
@@ -68,6 +65,7 @@ def _perf(days=7):
     return out
 
 
+@agent_action('diagnostics_overview', 'Debug log sessions and API-014 performance (staff).', kind='read')
 @staff_required
 def overview(request):
     sessions = DiagnosticSession.objects.all()
@@ -112,6 +110,7 @@ def overview(request):
     })
 
 
+@agent_action('diagnostics_session', 'One debug log session (staff).', kind='read')
 @staff_required
 def session_detail(request, code):
     session = get_object_or_404(DiagnosticSession, code=code.upper())
@@ -123,6 +122,7 @@ def session_detail(request, code):
     })
 
 
+@agent_action('diagnostics_session_entries', 'A debug session\'s entries as JSON (?level=, ?cat=, ?q=).', kind='read')
 @staff_required
 def session_entries(request, code):
     session = get_object_or_404(DiagnosticSession, code=code.upper())
@@ -143,6 +143,8 @@ def session_export(request, code):
     return response
 
 
+@agent_action('delete_diagnostics_session', 'Delete a debug log session and its entries (staff).', confirm=True,
+              title='Deleted a log session')
 @staff_required
 @require_POST
 def session_delete(request, code):
@@ -153,6 +155,7 @@ def session_delete(request, code):
     return redirect('diagnostics:overview')
 
 
+@agent_action('diagnostics_reports', 'Crash / hang / ANR reports (staff).', kind='read')
 @staff_required
 def reports(request):
     rows = DiagnosticReport.objects.all()
@@ -173,6 +176,13 @@ def mapping_for(report):
             if report.build else None)
 
 
+@agent_action('symbolicate_report', 'Start symbolicating an iOS report (GitHub workflow).',
+              fixed={'action': 'symbolicate'}, title='Started symbolication')
+@agent_action('retrace_report', 'Retrace an Android report with its R8 mapping.', fixed={'action': 'retrace'},
+              title='Retraced a report')
+@agent_action('delete_diagnostics_report', 'Delete a crash report.', confirm=True, fixed={'action': 'delete'},
+              title='Deleted a report')
+@agent_action('diagnostics_report', 'One crash report (staff).', kind='read')
 @staff_required
 def report_detail(request, pk):
     report = get_object_or_404(DiagnosticReport, pk=pk)
@@ -208,17 +218,53 @@ def report_detail(request, pk):
     })
 
 
+@agent_action('diagnostics_endpoints', 'API endpoint timings p50/p95 (staff).', kind='read')
 @staff_required
 def endpoints(request):
     window = request.GET.get('window', '24h')
     hours = {'1h': 1, '24h': 24, '7d': 24 * 7, '30d': 24 * 30}.get(window, 24)
     since = (timezone.now() - timedelta(hours=hours)).replace(minute=0, second=0, microsecond=0)
     timing.flush()
+    from datetime import date
+
+    from attnd import google
+    today = date.fromisoformat(google._today())
+    days = [(today - timedelta(days=n)).isoformat() for n in range(3)]
     return render(request, 'diagnostics/endpoints.html', {
         'section': 'diagnostics', 'rows': timing.table(since), 'window': window,
-        'windows': ['1h', '24h', '7d', '30d']})
+        'windows': ['1h', '24h', '7d', '30d'],
+        'google': [{'day': d, 'api': api, 'over': i == 0 and google.over_quota(api), **n}
+                   for i, d in enumerate(days) for api, n in google.usage(d).items()],
+        'music': _music_rows(), 'indexnow': _indexnow_rows()})
 
 
+def _indexnow_rows():
+    """IndexNow pings per UTC day (attnd.indexnow)."""
+    from datetime import date
+
+    from attnd import indexnow
+    today = date.fromisoformat(indexnow._today())
+    from django.core.cache import cache
+    return {'enabled': indexnow.enabled(), 'pending': len(cache.get(indexnow.QUEUE) or []),
+            'days': [{'day': d, **indexnow.usage(d)} for d in ((today - timedelta(days=n)).isoformat() for n in range(3))]}
+
+
+def _music_rows():
+    """API-030 Apple Music lookups per UTC day (events.music)."""
+    from datetime import date
+
+    from events import music
+    today = date.fromisoformat(music._today())
+    return {'enabled': music.enabled(), 'paused': music.paused(),
+            'days': [{'day': d, **music.usage(d)} for d in ((today - timedelta(days=n)).isoformat() for n in range(3))]}
+
+
+@agent_action('retrace_stack', 'Retrace a pasted Android stack trace with a stored mapping.', returns_page=True,
+              params={'mapping': P('integer', 'mapping id'), 'stack': P('string', 'the stack trace')},
+              title='Retraced a stack')
+@agent_action('delete_symbol_mapping', 'Delete a stored R8 mapping.', confirm=True, fixed={'action': 'delete'},
+              params={'id': P('integer', 'mapping id')}, title='Deleted a mapping')
+@agent_action('diagnostics_symbols', 'Stored Android R8 mappings (staff).', kind='read')
 @staff_required
 def symbols(request):
     result = None

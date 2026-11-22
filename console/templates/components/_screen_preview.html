@@ -1,0 +1,10 @@
+{% comment %} The phone-shaped preview of one screen order (API-024): one small template per section type
+(components/screen/<type>.html), drawn from the sample subject in p.subject, in the order the apps would show them.
+{% endcomment %}<div class="screen-phone" role="img" aria-label="How the screen looks in the app">
+  <div class="screen-phone__bar">{{ p.subject.name|default:"Preview" }}</div>
+  <div class="screen-phone__screen stack stack--tight">
+    {% if p.empty %}<p class="small muted">{{ p.empty }}</p>{% endif %}
+    {% for s in p.sections %}<div class="pv-section pv-section--{{ s.type }}" data-pv="{{ s.type }}">{% with t="components/screen/"|add:s.type|add:".html" %}{% include t with s=s x=p.subject screen=screen %}{% endwith %}</div>{% endfor %}
+  </div>
+  {% if p.hidden %}<p class="small muted screen-phone__note">Not shown for {{ p.subject.name }}: {{ p.hidden|join:", " }} (no data).</p>{% endif %}
+</div>

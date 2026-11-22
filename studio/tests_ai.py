@@ -215,56 +215,52 @@ class AgentTests(StudioTestCase):
 
 class ProviderTests(StudioTestCase):
     @override_settings(ANTHROPIC_API_KEY='sk-ant-test', STUDIO_AI_PROVIDER='auto')
-    def test_anthropic_over_urllib(self):
+    def test_anthropic_on_the_sdk(self):
+        from types import SimpleNamespace
         self.assertIsInstance(ai.get_provider(), ai.AnthropicProvider)
-        reply = {'model': 'claude-opus-5-5', 'stop_reason': 'tool_use', 'usage': {'input_tokens': 100, 'output_tokens': 20},
+        reply = {'model': 'claude-sonnet-5-5', 'stop_reason': 'tool_use', 'usage': {'input_tokens': 100, 'output_tokens': 20},
                  'content': [{'type': 'thinking', 'thinking': '', 'signature': 'sig'},
                              {'type': 'text', 'text': 'Writing it.'},
                              {'type': 'tool_use', 'id': 'tu1', 'name': 'write_file',
                               'input': {'path': 'index.html', 'content': '<p>x</p>'}}]}
         sent = {}
 
-        class Response(io.BytesIO):
+        class Stream:
+            def __init__(self, data):
+                self.data = data
+
             def __enter__(self):
-                return self
+                return SimpleNamespace(get_final_message=lambda: SimpleNamespace(
+                    model_dump=lambda **kw: self.data))
 
             def __exit__(self, *a):
                 return False
 
-        def fake_urlopen(request, timeout):
-            sent['request'] = request
-            return Response(json.dumps(reply).encode())
+        class Api:
+            class messages:
+                @staticmethod
+                def stream(**kwargs):
+                    sent.update(kwargs)
+                    return Stream(sent.get('_reply', reply))
 
         provider = ai.get_provider()
         messages = provider.start('hello')
-        with mock.patch('urllib.request.urlopen', fake_urlopen):
+        with mock.patch('attnd.claude.client', return_value=Api()):
             turn = provider.chat('SYSTEM', messages, agent.TOOLS)
-        request = sent['request']
-        body = json.loads(request.data)
-        self.assertEqual(request.full_url, 'https://api.anthropic.com/v1/messages')
-        self.assertEqual(request.headers['X-api-key'], 'sk-ant-test')
-        self.assertEqual(body['model'], 'claude-opus-5-5')
-        self.assertEqual(body['fallbacks'], 'default')
-        self.assertNotIn('temperature', body)
-        self.assertNotIn('thinking', body)
-        self.assertEqual(body['tools'][0]['input_schema']['required'], ['path', 'content'])
+        self.assertEqual(sent['model'], 'claude-sonnet-5-5')
+        self.assertEqual(sent['extra_body'], {'fallbacks': 'default'})
+        self.assertEqual(sent['extra_headers']['anthropic-beta'], 'server-side-fallback-2026-07-01')
+        self.assertNotIn('temperature', sent)
+        self.assertNotIn('thinking', sent)
+        self.assertEqual(sent['tools'][0]['input_schema']['required'], ['path', 'content'])
         self.assertEqual((turn.text, turn.calls[0].name, turn.calls[0].args['path']), ('Writing it.', 'write_file', 'index.html'))
         provider.add_turn(messages, turn)
         provider.add_results(messages, [(turn.calls[0], 'ok')])
         self.assertEqual(messages[1]['content'][0]['type'], 'thinking')  # blocks go back unchanged
         self.assertEqual(messages[2]['content'][0], {'type': 'tool_result', 'tool_use_id': 'tu1', 'content': 'ok'})
-
-    @override_settings(ANTHROPIC_API_KEY='sk-ant-test')
-    def test_anthropic_refusal(self):
-        class Response(io.BytesIO):
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-        with mock.patch('urllib.request.urlopen', return_value=Response(b'{"stop_reason": "refusal", "content": []}')):
-            with self.assertRaises(ai.AIError):
-                ai.AnthropicProvider().chat('s', [], [])
+        sent['_reply'] = {'stop_reason': 'refusal', 'content': []}
+        with mock.patch('attnd.claude.client', return_value=Api()), self.assertRaises(ai.AIError):
+            ai.AnthropicProvider().chat('s', [], [])
 
     @override_settings(ANTHROPIC_API_KEY='', STUDIO_AI_PROVIDER='auto')
     def test_no_key_is_a_clear_error(self):
@@ -589,9 +585,10 @@ class ImporterTests(StudioTestCase):
         self.assertTrue(run.context['captured'])
         copied = StudioAsset.objects.filter(event=self.event).count()
         self.assertEqual(copied, 13)
-        editor = self.client.get(reverse('studio:editor', args=[self.event.pk]))
-        self.assertContains(editor, reverse('studio:run_retry', args=[self.event.pk, run.pk]))
-        self.assertContains(editor, 'The AI request failed (500)')
+        from studio.views import run_task
+        task = run_task(run)
+        self.assertEqual(task['retry_url'], reverse('studio:run_retry', args=[self.event.pk, run.pk]))
+        self.assertIn('The AI request failed (500)', task['error'])
         overview = self.client.get(reverse('console:event', args=[self.event.pk]))
         self.assertContains(overview, 'data-studio-import="failed"')
         # Retry: a new import run with the same crawl; nothing is fetched again.
@@ -599,7 +596,7 @@ class ImporterTests(StudioTestCase):
             response = self.client.post(reverse('studio:run_retry', args=[self.event.pk, run.pk]),
                                         HTTP_ACCEPT='application/json')
         self.assertEqual(response.status_code, 202)
-        retry = StudioRun.objects.get(pk=response.json()['run']['id'])
+        retry = StudioRun.objects.get(pk=int(response.json()['task']['id'].removeprefix('studio-')))
         self.assertEqual((retry.kind, retry.context['pages']), (StudioRun.KIND_IMPORT, run.context['pages']))
         log = []
         provider = FakeProvider([ai.Turn(calls=[call('write_file', path='index.html', content=PAGE)]),
@@ -625,7 +622,7 @@ class ImporterTests(StudioTestCase):
             importer.start_import(self.site, 'https://someone-else.example/', self.owner)
         self.assertTrue(importer.allowed_url(self.event, 'https://www.artsfair.example/about'))
         response = self.client.post(f'/console/events/{self.event.pk}/studio/import/', {'url': 'https://evil.example/'})
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 400)
         self.assertFalse(StudioRun.objects.exists())
 
     def test_ssrf_guard(self):
@@ -669,7 +666,7 @@ class ImporterTests(StudioTestCase):
             jobs.run_job(job.pk)
         job.refresh_from_db()
         event = job.event
-        self.assertEqual(event.plan, 'studio')
+        self.assertEqual(event.plan, 'standard')  # designing never needs the plan; publishing does (D1)
         run = StudioRun.objects.get(site__event=event)
         self.assertEqual((run.kind, run.context['import_url']), (StudioRun.KIND_IMPORT, 'https://new.example/'))
         start.assert_called_once_with(run)
@@ -720,7 +717,7 @@ class ImporterTests(StudioTestCase):
         with mock.patch('studio.importer.start_import') as start:
             jobs._bring_into_studio(job, event)
         event.refresh_from_db()
-        self.assertEqual(event.plan, 'studio')
+        self.assertEqual(event.plan, 'standard')
         start.assert_called_once()
 
     def test_ai_import_form_sets_the_flag(self):

@@ -5,18 +5,9 @@
 <div class="stack stack--loose">
 <p class="muted">How attendees used the app for this event. Everything here is anonymous: the app only reports counts (for example "the Map tab was opened"), never who did it. Times are in the event's time zone ({{ event.timezone|default:"UTC" }}).</p>
 
-<div class="panel">
-  <div class="grid grid--4 grid--stats">
-    <div><div class="stat__value">{{ usage.joins }}</div><div class="eyebrow">Joined in the app</div></div>
-    <div><div class="stat__value">{{ in_event_now }}</div><div class="eyebrow">Still in the event</div></div>
-    <div><div class="stat__value">{{ usage.opens }}</div><div class="eyebrow">App opens</div></div>
-    <div><div class="stat__value">{{ usage.interactions }}</div><div class="eyebrow">Interactions</div></div>
-    <div><div class="stat__value">{{ usage.notification_opens }}</div><div class="eyebrow">Notifications opened</div></div>
-    <div><div class="stat__value">{{ usage.searches }}</div><div class="eyebrow">Searches</div></div>
-    <div><div class="stat__value">{{ usage.platforms.ios }}/{{ usage.platforms.android }}</div><div class="eyebrow">iPhone / Android activity</div></div>
-    <div><div class="stat__value">{% if usage.busiest %}{{ usage.busiest.hour|date:"D g A" }}{% else %}–{% endif %}</div><div class="eyebrow">Busiest hour</div></div>
-  </div>
-</div>
+<div class="panel">{% component "event_metrics" event=event usage=usage %}</div>
+{% if event.studio_site.published_id %}<div class="panel">{% component "website_analytics" event=event %}</div>{% endif %}
+<div class="panel">{% component "event_exports" event=event %}</div>
 
 {% if not usage.has_data %}
 <div class="panel panel--empty">

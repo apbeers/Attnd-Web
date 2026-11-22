@@ -60,6 +60,9 @@ class BundleTests(V2Base):
         self.assertEqual(self.get(url, HTTP_IF_NONE_MATCH=first['ETag']).status_code, 304)
         self.loc.name = 'Main Stage'
         self.loc.save()
+        self.assertEqual(self.get(url, HTTP_IF_NONE_MATCH=first['ETag']).status_code, 304)  # §4: a draft change
+        from events import drafts
+        drafts.publish(self.event)
         second = self.get(url, HTTP_IF_NONE_MATCH=first['ETag'])
         self.assertEqual(second.status_code, 200)
         self.assertNotEqual(second['ETag'], first['ETag'])
@@ -265,7 +268,7 @@ class PushTests(V2Base):
 
     def test_content_push_debounce_defaults(self):
         from django.conf import settings
-        self.assertEqual((settings.CONTENT_PUSH_DELAY, settings.CONTENT_PUSH_MIN_INTERVAL), (3, 15))
+        self.assertEqual((settings.CONTENT_PUSH_DELAY, settings.CONTENT_PUSH_MIN_INTERVAL), (0, 15))
 
     def test_devices_stores_push_token_when_not_subscribed(self):
         resp = self.post('/api/v2/devices/', {'device_id': 'quiet', 'platform': 'ios',
@@ -394,8 +397,8 @@ class ContentPushTests(V2Base):
             self.loc.save()
             self.item.name = 'Headliner'
             self.item.save()
-        self.assertEqual(timer.call_count, 2)
-        self.assertEqual(timer.return_value.cancel.call_count, 1)  # the second change replaced the first timer
+        self.assertEqual(timer.call_count, 1)  # the second change joins the push that is already waiting
+        self.assertEqual(timer.return_value.cancel.call_count, 0)
         self.assertEqual(timer.call_args.args[1], push._send_content_push)
         with patch('events.push.notify_content_updated') as notify:
             push._send_content_push(self.event.id)

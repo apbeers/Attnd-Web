@@ -1,0 +1,16 @@
+{% extends 'console/base.html' %}
+{% load static console_tags %}
+{% block title %}{{ p.name }} · Prospects{% endblock %}
+{% block content %}
+{% include 'prospects/_nav.html' %}
+<div class="stack">
+<a class="back-link" href="{% url 'prospects:list' %}">← All prospects</a>
+<div class="cluster">
+  <h2 class="title-3 grow">{{ p.name }}</h2>
+  <span class="badge badge--{{ p.fit_tone }}" title="Fit score, 0–100">Fit {{ p.fit_score }}</span>
+  <span class="badge badge--neutral">{{ p.get_status_display }}</span>
+</div>
+
+{% component "prospect_detail" prospect=p %}
+</div>
+{% endblock %}

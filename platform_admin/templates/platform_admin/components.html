@@ -1,0 +1,20 @@
+{% extends 'console/base.html' %}
+{% load console_tags platform_tags %}
+{% block title %}Components{% endblock %}
+{% block content %}
+<div class="column stack stack--loose">
+  {% platform_nav "components" %}
+  <p class="muted">Every component as the chat and phones draw it (360 px) and as pages and the canvas draw it (768 and 1280 px). Each frame has its own width, so container queries decide the layout. Scroll a row sideways to see the wide frames.</p>
+  {% if events %}<form method="get" class="cluster"><label class="field"><span class="field__label">Event</span>
+    <select name="event" data-autosubmit>{% for e in events %}<option value="{{ e.pk }}"{% if e.pk == event.pk %} selected{% endif %}>{{ e.name }} ({{ e.event_code }})</option>{% endfor %}</select></label></form>
+  {% else %}<p class="notice notice--info">Join an event's team (or own one) to see its components here.</p>{% endif %}
+  {% for c in entries %}<section class="gallery-row stack stack--tight" id="component-{{ c.name }}" data-gallery-component="{{ c.name }}">
+    <h2 class="title-4">{{ c.title }} <span class="mono small muted">{{ c.name }}</span></h2>
+    {% if c.skipped %}<p class="small muted">Not drawn here: {{ c.skipped }}.</p>
+    {% else %}<div class="gallery-row__frames">{% for f in c.frames %}<div class="gallery-frame gallery-frame--{{ f.width }}" data-gallery-frame="{{ f.width }}">
+      <p class="eyebrow">{{ f.width }} px · {{ f.surface }}</p>
+      <div class="gallery-frame__body">{% for html in f.html %}{{ html|safe }}{% endfor %}</div>
+    </div>{% endfor %}</div>{% endif %}
+  </section>{% endfor %}
+</div>
+{% endblock %}

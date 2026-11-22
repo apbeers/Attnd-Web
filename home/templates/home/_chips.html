@@ -1,0 +1,4 @@
+{% comment %} The hero's starting points: each fills the composer (or jumps to the gallery) and shows its look in the phone. {% endcomment %}<div class="chips" role="group" aria-label="Ways to start">{% for c in chips %}
+  {% if c.href %}<a class="chip" href="{{ c.href }}" data-chip="{{ c.key }}" data-look="{{ c.look }}" data-metric="chip" data-detail="{{ c.key }}">{{ c.label }}</a>
+  {% else %}<button type="button" class="chip" data-chip="{{ c.key }}" data-look="{{ c.look }}" data-prompt="{{ c.prompt }}"{% if c.attach %} data-attach{% endif %} data-metric="chip" data-detail="{{ c.key }}">{{ c.label }}</button>{% endif %}{% endfor %}
+</div>

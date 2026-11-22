@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="robots" content="noindex, nofollow">
   {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if signups_open %}Sign Up{% else %}Invite only{% endif %} — Attnd</title>
@@ -12,6 +13,7 @@
   <div class="panel panel--narrow stack">
     {% if signups_open %}
     <h1 class="auth-title">Create an account</h1>
+    {% if request.GET.building %}<p class="notice notice--info small">Got it! Create your account (or <a href="{% url 'login' %}?next={% url 'console:dashboard' %}">sign in</a>) and Attnd starts building your event right away.</p>{% endif %}
     {% else %}
     <h1 class="auth-title">Invite only</h1>
     <div class="notice notice--info" {% if refused %}role="alert"{% endif %}>
@@ -19,20 +21,14 @@
       <p>{{ invite_only_message }}</p>
     </div>
     {% endif %}
-    {% if claim_code %}
-    <div class="notice notice--success notice--compact center small">
-      <strong>✓ Event found.</strong> Sign up to claim it as yours.
-    </div>
-    {% endif %}
     {% if rate_limited %}<div class="notice notice--warning notice--compact" role="alert">{{ rate_limited }}</div>{% endif %}
     {% if not signups_open %}
-    <details class="stack" {% if form_open or claim_code %}open{% endif %}>
+    <details class="stack" {% if form_open %}open{% endif %}>
       <summary class="strong">Have an invite? Sign up with the email it was sent to</summary>
       <div class="details-body">
     {% endif %}
     <form method="post" autocomplete="on">
       {% csrf_token %}
-      {% if claim_code %}<input type="hidden" name="claim" value="{{ claim_code }}">{% endif %}
       {% for field in form %}{% include 'console/_field.html' %}{% endfor %}
       {% if form.non_field_errors %}
         <div class="notice notice--error notice--compact">{{ form.non_field_errors }}</div>
@@ -49,5 +45,6 @@
     {% endif %}
   </div>
 </main>
+<script src="{% static 'console/tz.js' %}"></script>
 </body>
 </html>

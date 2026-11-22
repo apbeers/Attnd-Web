@@ -17,11 +17,30 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 12. Admin sign-in security | ⬜ After the next deploy: optionally set a private `ADMIN_URL_PATH`, then add a passkey (or an authenticator app) at the first admin sign-in, on dev and again on production (passkeys are per domain), and save the recovery codes. |
 | 13. CI keys (live tests) | ✅ Nov 15, 2026: `CI_API_KEYS` set on production (release v109; takes effect once API-008 is released to `main`), `ATTND_PROD_CI_KEY` in all three repos, `ATTND_DEV_API_KEY` in Attnd-Web. |
 | 14. Diagnostics (API-013) | ✅ `GITHUB_SYMBOLICATE_TOKEN` on both Heroku apps (Nov 15, 2026) (iOS symbolication). Everything else needs no setup: the tables, caps and purge come with the deploy. |
-| 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15); optional `ANTHROPIC_API_KEY`. |
+| 15. Attnd Studio (beta) | ⬜ Works with no setup on each Heroku app's herokuapp.com hostname. To do: buy a separate sites domain, add it to Heroku and set `SITES_HOST` (step 15). AI on Claude Sonnet 5.5 (step 18). |
 | 16. Tickets (Stripe, Wallet) | ⏸ **Parked** (Nov 19, 2026): moved to git branch `parked/tickets` (API-017), organizers use Eventbrite for now. The setup steps live on that branch. Optional: drop dev's orphan `tickets_*` tables (step 16). |
+| 17. Prospects (staff) | ✅ No setup: it uses `ANTHROPIC_API_KEY` (Claude Sonnet's web search, ~$0.01 per search + tokens; stage C). The schedule is off until turned on in `/console/prospects/settings/`. Optional: `PROSPECT_MODEL`, `PROSPECT_DAILY_SPEND_CAP_USD` (default 5), `PROSPECT_RUN_MAX_MINUTES` (step 17). |
+| 18. Ask Attnd (console agent) | ✅ Runs on Anthropic's Claude Haiku 5.5 (`ANTHROPIC_API_KEY` set on dev and production, Nov 21, 2026; Studio on Claude Sonnet 5.5, step 18). Without the key it uses the existing `OPENAI_API_KEY` (gpt-5-mini → gpt-5). Optional: `AGENT_PROVIDER`, `AGENT_ANTHROPIC_MODEL`, `AGENT_DAILY_SPEND_CAP_USD` (default 2 per person per UTC day), `AGENT_MAX_STEPS` (40). |
+| 19. Business listings & discoverability | ⬜ Search Console verified for attnd.app (owner, Nov 21, 2026); the rest of the list under Open owner tasks. Code side done: dev never indexed, canonicals, sitemap with listed events, `public/llms.txt`, schema.org `sameAs` from `SOCIAL_PROFILES`. |
+| 20. Apple Music (API-030 artist links) | ⏳ ✅ Media ID `media.com.arcu.attnd` (MusicKit only; ShazamKit and Apple Music Feed deliberately off) and the MusicKit key "Attnd MusicKit" (Key ID `2X6W6X6PLA`) made Nov 21, 2026; `APPLE_MUSIC_PRIVATE_KEY` + `APPLE_MUSIC_KEY_ID` set on attnd-dev (verified). ⬜ Production later (step 20). Spotify skipped (ROADMAP). |
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
+- [ ] IndexNow on production (step 22): `heroku config:set -a attnd-web INDEXNOW_KEY=$(openssl rand -hex 16)` (batch 7).
+- [ ] Maps Static API on the browser key (Lighthouse, Nov 22, 2026): Google Cloud console → APIs & Services → enable
+      **Maps Static API**, then add it to the **browser key**'s API restrictions (the key behind
+      `GOOGLE_MAPS_BROWSER_KEY`). The event map now starts as a static image; without the API the image fails and the
+      interactive map loads at once (as before).
+- [ ] Stripe (when taking card payments; billing is built and off): create the account in the LLC's name, then
+      `heroku config:set -a attnd-dev STRIPE_SECRET_KEY=sk_test_… STRIPE_WEBHOOK_SECRET=whsec_…` (a webhook to
+      `https://dev.attnd.app/console/billing/stripe/webhook/`, event `checkout.session.completed`; turn on the Customer
+      Portal in Stripe's settings); production later with live keys and `https://attnd.app/...`.
+- [ ] Mailgun events in the Emails log (batch 7): Mailgun → Sending → Webhooks → copy the **HTTP webhook signing key**,
+      `heroku config:set -a attnd-dev MAILGUN_WEBHOOK_SIGNING_KEY=…` (then `-a attnd-web` with production's key), and add
+      webhooks for **Delivered**, **Permanent failure**, **Temporary failure**, **Spam complaints** and **Unsubscribes**
+      to `https://dev.attnd.app/email/mailgun/` (production: `https://attnd.app/email/mailgun/`). Without the key the
+      log still records sent / failed; it just never moves on to delivered / bounced.
+- [ ] Privacy policy rewrite: read `docs/privacy_policy_draft.md` (five decisions at the top), then say publish (batch 7).
 - [x] 3e: store the CI signing certificate (`.p12` + password as GitHub secrets). Done Nov 14, 2026 (certificate expires Nov 14, 2027).
 - [x] Database backups: daily at 03:00 America/Chicago on attnd-web and attnd-dev, first manual backup taken (Nov 14, 2026). Essential plans keep 7 daily + 1 weekly backup. Restore: `heroku pg:backups:restore <backup-id> DATABASE_URL -a <app>`.
 - [x] Protect `main` in all three repos: ruleset "Protect main" blocks force-push and deletion (Nov 14, 2026). Add "require status checks" once releases go through pull requests.
@@ -31,9 +50,10 @@ Do these steps once, in order. Each step says which values go where. For any sin
       same on `attnd-web` with a go-ahead; the three live suites check the new facts), and tag the existing events with
       the AI: `heroku run -a attnd-dev python manage.py backfill_tags --all --dry-run`, then without `--dry-run` (step 9).
 - [x] iOS manual CI signing (Nov 19, 2026; first manually signed build 145 uploaded): an Apple Distribution
-      certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). No App Group: the "Now & Next"
-      widget, its only user, was removed (Nov 19, 2026; Live Activities only); `group.com.arcu.Attnd` can stay
-      registered unused. WeatherKit is no longer used (removed from iOS Nov 19, 2026: not offered for App Clip App
+      certificate and three App Store profiles stored as GitHub secrets (step 3f; renew before Nov 19, 2027). App Group `group.com.arcu.Attnd`
+      back on `com.arcu.Attnd` and `com.arcu.Attnd.clip` (Nov 21, 2026: the App Clip hands its event, My schedule,
+      chat and settings to the full app; app, clip and widgets profiles regenerated and their secrets updated; the
+      app's App ID also has Push Notifications → Broadcast ticked, unused). WeatherKit is no longer used (removed from iOS Nov 19, 2026: not offered for App Clip App
       IDs); the capability can be unticked on `com.arcu.Attnd` whenever its profile is regenerated.
 - [x] Google Weather API **disabled** (Nov 19, 2026, owner): it was enabled in `attnd-df28e` and on the Android Maps key
       `af7cec96-…` the same day for planner weather, which neither app builds now. Nothing is billed.
@@ -43,9 +63,16 @@ Do these steps once, in order. Each step says which values go where. For any sin
 - [x] App Review sample events: FWFM2026, ATIS2026 and DACN2026 on production are **kept on purpose**: App Review uses
       them (owner, Nov 19, 2026). The release phase's `seed_test_data` keeps them current; don't delete them or the
       command.
-- [ ] Attnd Studio (step 15): buy a separate domain for hosted event sites (not a subdomain of attnd.app), then
+- [x] Studio sites on **attnd.site** (owner bought it, Nov 21, 2026; production `SITES_HOST=attnd.site` set and verified Nov 21, 2026). Done: the Heroku domains `dev.attnd.site` on
+      attnd-dev (DNS target `genetic-salmon-1jo14r3peboo8qusoemv7xrz.herokudns.com`) and `attnd.site` on attnd-web
+      (DNS target `encircled-eggplant-pbyuddr6oxnp2ggjecvwc5be.herokudns.com`), automatic certificates (ACM) on both.
+      DNS records set and both certificates issued (dev.attnd.site and attnd.site); **dev is switched**
+      (`SITES_HOST=dev.attnd.site` on attnd-dev, Nov 21, 2026) and **production is switched** (`SITES_HOST=attnd.site` on
+      attnd-web, verified Nov 21, 2026); after a switch run `heroku run -a <app> python manage.py
+      refresh_site_addresses` so the apps pick up the new `website_url`. The old herokuapp.com sites host then only
+      301s site paths to the new host. Older note (step 15):
       `heroku domains:add <domain> -a attnd-web` (+ DNS + ACM) and `heroku config:set -a attnd-web SITES_HOST=<domain>`
-      with a go-ahead; until then sites are served on the Heroku hostnames. Optional: `ANTHROPIC_API_KEY`.
+      with a go-ahead; until then sites are served on the Heroku hostnames. (`ANTHROPIC_API_KEY`: done, step 18.)
 - [x] Tickets prep (Wallet passes, not payments; nothing built yet; done Nov 15, 2026): Apple Pass Type ID `pass.com.arcu.attnd.tickets`
       + Pass Type ID certificate (✅ Pass Type ID registered Nov 15, 2026; key, CSR, `.cer` and PEM in
       `/Users/andrewbeers/Documents/Attnd/apple-wallet-pass` on the owner's Mac, plus the password manager), and a Google Pay & Wallet Console business
@@ -53,6 +80,31 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `attnd-wallet@attnd-df28e.iam.gserviceaccount.com` added as a Developer user. Plan: `docs/specs/tickets_spec.md` on branch `parked/tickets`.
 - [ ] ⏸ Tickets: parked on git branch `parked/tickets` (Nov 19, 2026; Eventbrite for now), not a task now. Optional: drop
       dev's orphan `tickets_*` tables (step 16).
+- [x] Ask Attnd harness (stage I): `ANTHROPIC_HARNESS_KEY` Actions secret set on apbeers/Attnd-Web (owner, Nov 21,
+  2026). Only remaining: the nightly run starts once `agent-harness.yml` is on `main` (the next production release);
+  then run it once with `gh workflow run agent-harness.yml -R apbeers/Attnd-Web`.
+- [x] Anthropic monthly spend limit **$20** set in the Anthropic Console (owner, Nov 21, 2026). It covers everything:
+  the nightly Ask Attnd harness and all dev and production AI (Ask Attnd, Studio, imports, website checks, themes,
+  place photos, plan suggestions, prospects). Keep the per-feature daily caps under it (`AGENT_DAILY_SPEND_CAP_USD`,
+  `STUDIO_DAILY_SPEND_CAP_USD`, `PROSPECT_DAILY_SPEND_CAP_USD`, `PLACE_IMAGES_DAILY_CAP_USD`, the new accounts' import
+  cap): one busy day of Studio on its own default ($10 per event) could use half the month.
+- [x] Background tasks on dev (F5, owner Nov 21, 2026): `TASKS_BACKEND=database` set on attnd-dev and a `tasks` dyno
+  scaled to 1 Basic. Production only after it has proved itself on dev: `heroku config:set TASKS_BACKEND=database -a
+  attnd-web` and `heroku ps:scale tasks=1:basic -a attnd-web` (with a go-ahead).
+- [x] DEMO reloaded on dev with its theme (owner, Nov 21, 2026). Production: the same `load_demo_event` with a go-ahead
+  after the release.
+- [ ] Onboarding (Nov 21, 2026, on dev): sign-ups are **open by default** now (`SIGNUPS_OPEN` defaults to on; anyone
+  makes demo events, capped at 20 phones each, API-025). Before releasing to production decide: keep it open, or
+  `heroku config:set SIGNUPS_OPEN=0 -a attnd-web` (invited emails only). Showcase events are dev-only (`SHOWCASE_EVENTS`
+  unset = dev.attnd.app only); for production later: `heroku config:set SHOWCASE_EVENTS=1 -a attnd-web`, and once for
+  AI covers on either app: `heroku run -a attnd-dev python manage.py load_showcase_events --images` (OpenAI, a few
+  cents each). Watch `ADMIN_EMAILS`: "Remove the limit" requests and event claims are emailed there.
+- [x] Home page "Happening near <city>" (done Nov 21, 2026, 17:44 UTC: Geolocation API enabled and
+      `geolocation.googleapis.com` added to the "Attnd web (browser)" key's API restrictions; referrers unchanged): in Google Cloud (project `attnd-df28e`), enable the
+      **Geolocation API** and add it to the **browser key**'s API restrictions (the key behind
+      `GOOGLE_MAPS_BROWSER_KEY`, referrer-restricted to attnd.app / dev.attnd.app). The browser calls it at most once a day
+      for an approximate position from the visitor's IP (no prompt); billed per request after the monthly free usage,
+      about $5 per 1,000. Without it the page shows the prospects region's cards instead (nothing breaks).
 - [ ] Later (before outside organizers or payments): move everything to a Texas LLC — `docs/LLC_MIGRATION.md`.
 - [x] Repos made public (Nov 19, 2026); history scan found old secrets: the OpenAI key in `_set_heroku_env.command`
       (revoked Apr 29, 2026) and the 2021 service-account keys `attnd-prod` (`bf9dce7d…`) and `attnd-742` (`73dbb440…`),
@@ -60,6 +112,41 @@ Do these steps once, in order. Each step says which values go where. For any sin
       `AIzaSyD5d9fk…` Android) are deleted or restricted; turn on GitHub secret scanning + push protection on all three
       repos (`gh api -X PATCH repos/apbeers/<repo> -F security_and_analysis[secret_scanning][status]=enabled
       -F security_and_analysis[secret_scanning_push_protection][status]=enabled`).
+- [x] Keys rotated (owner, Nov 21, 2026; dev config values had been exposed in a session log): the Anthropic keys on
+      attnd-dev and attnd-web (now separate keys per app, the old ones deleted), the dev static `API_KEY` on attnd-dev,
+      and the GitHub secrets `ATTND_API_KEY` (Attnd-iOS, Attnd-Android) and `ATTND_DEV_API_KEY` (Attnd-Web).
+- [ ] Low priority: rotate the APNs key (`7Q3H2446BU`, step 3a), deliberately deferred on Nov 21, 2026. Make a new key,
+      set `APNS_KEY_ID` / `APNS_AUTH_KEY` on both apps (the `read -s` way below), test a push, then revoke the old key.
+- **Business listings & discoverability** (owner, Nov 21, 2026; not urgent). Add each profile's URL to `SOCIAL_PROFILES`
+  on attnd-web (comma-separated; the home page's schema.org `sameAs`):
+  - [x] Google Search Console: attnd.app verified as a domain property (DNS TXT), Nov 21, 2026. Still to do:
+        - [ ] submit https://attnd.app/sitemap.xml;
+        - [ ] next, after the SEO release reaches production: **Validate fix** on the "Duplicate without
+              user-selected canonical" and "Not found (404)" reports;
+        - [ ] add an attnd.site property once a Studio site is published there.
+  - [ ] Google Business Profile: only as a service-area business (no storefront); optional.
+  - [x] Bing Webmaster Tools: attnd.app verified (CNAME record), sitemap and the home page submitted (owner, Nov 21,
+        2026); Bing's index feeds ChatGPT search, Copilot and DuckDuckGo. Still to do:
+        - [ ] in a few weeks: look at **AI Performance**;
+        - [ ] after the next production release: run **Site Scan**;
+        - [ ] add attnd.site later (once a Studio site is published).
+        - Microsoft Clarity: deliberately skipped (session recording; the platform keeps to anonymous counts).
+  - [x] ChatGPT: business listing done (category Software, owner, Nov 21, 2026). It also finds Attnd through Bing and
+        OpenAI's crawler (OAI-SearchBot, allowed by robots.txt). Later, optional: a ChatGPT app (Apps SDK).
+  - [~] Apple Business (Business Connect): organization "Attnd" submitted for review Nov 21, 2026 (Org ID 552089622879).
+        After approval:
+        - [x] verify attnd.app under Domains (done, owner, Nov 21, 2026);
+        - [x] link the App Store app (done, owner, Nov 21, 2026);
+        - [x] brand logo added (owner, Nov 21, 2026); description and website once approved;
+        - [ ] Branded Mail: pending, needs a DMARC policy of quarantine or reject on mg.attnd.app (Gmail BIMI is
+              skipped, owner, batch 7);
+        - no public Location listing (no storefront; the organization's address is private and never goes in the repo).
+  - [ ] Perplexity, Claude and other AI search: allowed by robots.txt and `llms.txt`; nothing to submit.
+  - [ ] LinkedIn company page, Crunchbase profile, X and Instagram handles (claim "attnd").
+  - [ ] Software directories AI answers cite: G2, Capterra / GetApp / Software Advice, a Product Hunt launch,
+        AlternativeTo, SaaSHub.
+  - [ ] Event industry: Eventbrite App Marketplace listing (an integration later), EventMB and event-tech directories.
+  - [ ] Wikidata entry, once there is press coverage.
 - [ ] Sign in to the dev console and add a passkey or authenticator app (staff accounts must, step 12); again on production after the release (a dev passkey doesn't work on attnd.app).
 
 Notes:
@@ -79,6 +166,14 @@ Notes:
 | **GitHub environment secrets** | Keys the CI/CD pipelines use. | No, write-only |
 | **Heroku config vars** | Keys the running server uses. | Yes (`heroku config:get`) |
 | **Claude cloud environment** ("Attnd Cloud Environment") | Network secrets that give Claude API access. Currently: a Heroku API token for `api.heroku.com`. Claude never sees the value. | No, write-only |
+
+**Setting a secret without exposing it** (Nov 21, 2026): `heroku config:set` prints the values it set, so type the
+value into a hidden prompt and throw the output away, and never paste a key copied from instructions or the clipboard
+history:
+```
+read -s VALUE && heroku config:set -a attnd-dev ANTHROPIC_API_KEY="$VALUE" > /dev/null; unset VALUE
+```
+For GitHub, pipe it the same way: `read -s VALUE && printf %s "$VALUE" | gh secret set NAME -R apbeers/<repo>; unset VALUE`.
 
 Never keep keys only on your Mac. Once a key is in the password manager and wherever it's used, delete the downloaded file (`.p8`, `.jks`, `.json`).
 
@@ -297,6 +392,10 @@ with a stored **Apple Distribution** certificate and three **App Store** provisi
 | `IOS_PROFILE_APP_B64` | App Store profile "Attnd AppStore" for `com.arcu.Attnd` |
 | `IOS_PROFILE_WIDGETS_B64` | "Attnd Widgets AppStore" for `com.arcu.Attnd.widgets` |
 | `IOS_PROFILE_CLIP_B64` | "Attnd Clip AppStore" for `com.arcu.Attnd.clip` |
+| `IOS_PROFILE_CLIP_WIDGETS_B64` | "Attnd Clip Widgets AppStore" for `com.arcu.Attnd.clip.widgets` |
+
+App Group `group.com.arcu.Attnd` (Nov 21, 2026): enabled on `com.arcu.Attnd` and `com.arcu.Attnd.clip` only (the
+widget extensions don't use it); both entitlements files list it, so those two profiles must include it.
 
 Set them from the folder:
 ```
@@ -708,7 +807,7 @@ On those hostnames the app serves only the sites (console, admin and API are 404
    Published sites move to the new address (the apps get the new `website_url` with the next refresh). Optionally do the
    same for dev with a second domain or a subdomain of it (`dev.attndsites.com`, `-a attnd-dev`).
 
-**Optional settings:** `ANTHROPIC_API_KEY` (Studio then uses Claude, `claude-opus-5-5`; otherwise OpenAI `gpt-5.5`
+**Settings:** `ANTHROPIC_API_KEY` (set on dev and production, Nov 21, 2026: Studio uses Claude, `claude-sonnet-5-5` (`STUDIO_ANTHROPIC_MODEL`); otherwise OpenAI `gpt-5.5`
 with `gpt-5` as fallback), `STUDIO_DAILY_SPEND_CAP_USD` (default 5). Studio is for admins only (staff and
 superusers; Nov 19, 2026): `STUDIO_BETA_EMAILS` (default empty) is only an explicit override, and the old **Studio
 beta** invite page is gone.
@@ -809,7 +908,7 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
 - **Put:** Heroku (both apps). Also put the **dev** value in the `ATTND_API_KEY` repo secret in Attnd-iOS and Attnd-Android, and in your local dev config (step 5). Get it with `heroku config:get API_KEY -a attnd-dev | pbcopy`.
 - **If leaked:** set a new value and update the GitHub secrets. To block a leaked value permanently, add its SHA-256 to `REVOKED_API_KEY_SHA256` in `events/apis.py`.
 
-**`OPENAI_API_KEY`**: AI event import and refresh.
+**`OPENAI_API_KEY`**: only Studio's image generation since stage C (Nov 21, 2026); AI import, refresh, tags, vision, prospects and Ask Attnd run on Claude (`ANTHROPIC_API_KEY`).
 - **Create:** [platform.openai.com](https://platform.openai.com) → **API keys → Create new secret key**. Name it "Attnd server", pick the project, and set permissions to "Restricted" with Model capabilities = Write. Optionally set a monthly budget under Settings → Limits.
 - **Put:** both Heroku apps. Use one key for both, or create a separate "Attnd dev" key to keep spending apart.
 - **If leaked:** revoke it on the same page and create a new one.
@@ -819,6 +918,17 @@ When Claude needs one, it opens a secure form for you; never paste keys into cha
   - **API restrictions:** restrict the key to those two APIs.
   - **Application restrictions:** None. Heroku has no fixed IP address.
 - **Put:** both Heroku apps.
+- **Daily quotas** ✅ (owner, Nov 21, 2026, project `attnd-df28e` → APIs & Services → Places API (New) → Quotas &
+  System Limits, "per day"): Autocomplete **300**, GetPlace **150**, SearchText **400**, SearchNearby **30**, Photo media
+  **30**, reviews / media / summary **0**. Recent usage had been ~244 SearchText a day (place-image venue lookups during
+  the cover backfill), before the caching below. The same from the command line (the quota names are listed by the
+  first command):
+  `gcloud services quota list --service=places.googleapis.com --consumer=projects/attnd-df28e` and
+  `gcloud alpha services quota update --service=places.googleapis.com --consumer=projects/attnd-df28e --metric=<metric> --unit=1/d/{project} --value=<n>`.
+- **When a quota is reached** Google answers 429 / `RESOURCE_EXHAUSTED`; `attnd/google.py` logs it once and that API
+  returns "nothing" (no pin, no venue website) until midnight Pacific, when Google resets the daily quotas. Nothing
+  else breaks: imports keep the AI's own coordinates, the console's Find falls back to typing coordinates. The staff
+  Diagnostics → Endpoints page shows calls, cache hits, errors and refusals per day ("over quota" badge).
 
 **`APNS_KEY_ID`, `APNS_AUTH_KEY`**: iPhone push notifications.
 - **Create:** [developer.apple.com](https://developer.apple.com/account/resources/authkeys/list) → **Keys → +**, name it "Attnd APNs", tick **Apple Push Notifications service (APNs)**, then **Continue → Register → Download**. The Key ID is shown on that page.
@@ -915,3 +1025,93 @@ DEMO event and register `ci-` test devices.
 | Heroku API token ("Heroku API token (Claude)") | `api.heroku.com` | ✅ saved; Claude can manage both Heroku apps |
 
 Revoke it any time with `heroku authorizations` / `heroku authorizations:revoke <id>`, or from the environment's settings.
+
+## 17. Prospects (staff sales dashboard): nothing to set up
+
+`/console/prospects/` (staff and superusers only) finds events in a region that suit the app with Claude's web
+search tool, reads their pages for organizer contacts and can make testing-only copies of them. It uses the existing
+`OPENAI_API_KEY` (web search must be allowed for the key's project; it is by default). Optional settings:
+```bash
+heroku config:set -a attnd-dev PROSPECT_DAILY_SPEND_CAP_USD=5 PROSPECT_RUN_MAX_MINUTES=20 PROSPECT_MODEL=gpt-5.5
+```
+Region, themes, caps and the schedule (off by default; Heroku Scheduler's `run_scheduled_tasks` starts it when due)
+are edited on the dashboard's Settings tab. Manual run from a shell: `heroku run -a attnd-dev python manage.py
+find_prospects --max 10`. Outreach is done by a person and must follow CAN-SPAM (who you are, a physical mailing
+address, an opt-out that is honoured); Attnd never emails prospects.
+
+## 18. Ask Attnd and Studio on Anthropic ✅
+
+Done Nov 21, 2026 (owner): `ANTHROPIC_API_KEY` is set on **attnd-dev and attnd-web**, and both AI features run on
+Anthropic:
+- **Ask Attnd** (`agent/`): the official `anthropic` SDK with `claude-haiku-5-5` ($0.10 / $0.50 per million input /
+  output tokens, cache reads a tenth); `AGENT_PROVIDER` defaults to `anthropic` when the key is set (`openai` to switch
+  back). A request Claude Haiku declines continues on Claude Sonnet (`AGENT_REFUSAL_MODEL`).
+- **Studio** (`studio/`): `STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5` ($2 / $10) on both apps; dev also has
+  `STUDIO_AI_PROVIDER=anthropic`, production's is `auto` (Anthropic because the key is set). Images and vision stay on
+  OpenAI.
+```bash
+heroku config:set -a attnd-dev ANTHROPIC_API_KEY=sk-ant-… STUDIO_AI_PROVIDER=anthropic STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5
+heroku config:set -a attnd-web ANTHROPIC_API_KEY=sk-ant-… STUDIO_ANTHROPIC_MODEL=claude-sonnet-5-5
+```
+✅ Anthropic Console monthly spend limit: $20 (owner, Nov 21, 2026), a second cap behind the per-feature daily caps.
+Still to check there: no training on customer data (docs/LLC_MIGRATION.md).
+
+
+## Rotating SECRET_KEY (stage G, Nov 21, 2026)
+
+Sessions, password-reset links and signed values keep working during a rotation: the old key goes into
+`SECRET_KEY_FALLBACKS` while the new one becomes `SECRET_KEY`, and it is removed after two weeks.
+
+```bash
+heroku config:get SECRET_KEY -a attnd-web > /tmp/old_key
+heroku config:set SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')" SECRET_KEY_FALLBACKS="$(cat /tmp/old_key)" -a attnd-web
+rm /tmp/old_key
+```
+
+Two weeks later:
+
+```bash
+heroku config:unset SECRET_KEY_FALLBACKS -a attnd-web
+```
+
+## 20. Apple Music artist links (API-030)
+
+The server looks performers up in the Apple Music catalog to add "Listen on Apple Music" links (API-030). It signs a
+developer token (ES256) with a MusicKit key; the team is `APPLE_TEAM_ID`.
+
+Done (owner, Nov 21, 2026):
+- Media ID `media.com.arcu.attnd` with **MusicKit** only (ShazamKit and Apple Music Feed deliberately left off).
+- MusicKit key **"Attnd MusicKit"**, Key ID `2X6W6X6PLA`. The `.p8` can be downloaded only once: it is kept on the
+  owner's Mac at `/Users/andrewbeers/Documents/Attnd/ios-signing/AuthKey_2X6W6X6PLA.p8` (and in the password
+  manager). **Never commit it.**
+- `APPLE_MUSIC_KEY_ID` and `APPLE_MUSIC_PRIVATE_KEY` (the whole `.p8`, header lines included) on **attnd-dev**
+  (verified).
+
+To do (production, when releasing API-030):
+```
+heroku config:set APPLE_MUSIC_KEY_ID=2X6W6X6PLA -a attnd-web
+heroku config:set APPLE_MUSIC_PRIVATE_KEY="$(cat /Users/andrewbeers/Documents/Attnd/ios-signing/AuthKey_2X6W6X6PLA.p8)" -a attnd-web
+```
+Without the two variables the lookups are off and nothing else changes. Spotify is skipped (its Web API needs a
+Premium account owner; ROADMAP).
+
+
+## 21. Web server: ASGI (batch 7, nothing to set up)
+
+Since Nov 22, 2026 the `web` process runs gunicorn's own ASGI worker (`Procfile`: `gunicorn attnd.asgi --worker-class
+asgi`), no new package. Django still runs as before on a pool of `WEB_THREADS` threads (default 4, optional config
+var); long-polls (preview phones, Ask Attnd) wait on the event loop instead of holding a thread. To go back, change
+the Procfile's web line to `gunicorn attnd.wsgi --worker-class gthread --workers 1 --threads 4 --timeout 300` and
+push (nothing else depends on it). Check after a deploy:
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://dev.attnd.app/health/
+```
+
+## 22. IndexNow (batch 7, 1 min, production only)
+
+Tells Bing and the other IndexNow engines when a listed event's join page or a Studio site changes. Off until the key
+is set (dev never sends). A random key, then nothing else (the key file is served automatically):
+```bash
+heroku config:set -a attnd-web INDEXNOW_KEY=$(openssl rand -hex 16)
+```
+Check after the next deploy: Diagnostics → Endpoints → IndexNow shows "0 waiting" and the counts per day.

@@ -3,8 +3,10 @@ Passkey (WebAuthn) endpoints are in views_passkeys.py."""
 
 from urllib.parse import urlencode
 
+from attnd.permissions import signed_in
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import forms as auth_forms
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
@@ -37,7 +39,13 @@ EMAIL_LIMITED = 'We’ve sent several codes already. Please wait 15 minutes, or 
 
 
 class SignInView(auth_views.LoginView):
-    """Django's LoginView, with failed attempts limited per email and per IP."""
+    """Django's LoginView, with failed attempts limited per email and per IP. Signed-in people go on to the console
+    (sessions last until local midnight: never a sign-in prompt during one)."""
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_authenticated and twofactor.pending_step(request) is None:
+            return redirect(self.get_success_url())
+        return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         self.ip = client_ip(request)
@@ -62,8 +70,28 @@ class SignInView(auth_views.LoginView):
         return response
 
 
+class BrandedPasswordResetForm(auth_forms.PasswordResetForm):
+    """Django's reset form; the email goes through console.mail (the branded template, the email log)."""
+
+    def send_mail(self, subject_template_name, email_template_name, context, from_email, to_email,
+                  html_email_template_name=None):
+        from django.template import loader
+
+        from console import mail
+        subject = ''.join(loader.render_to_string(subject_template_name, context).splitlines())
+        url = f'{context["protocol"]}://{context["domain"]}' + reverse(
+            'password_reset_confirm', kwargs={'uidb64': context['uid'], 'token': context['token']})
+        mail.send('password_reset', [to_email], subject, heading='Reset your password',
+                  paragraphs=[f'Someone asked to reset the password for the Attnd account {context["email"]}.',
+                              'Choose a new password here (the link works once, for 3 days):'],
+                  button={'label': 'Choose a new password', 'url': url},
+                  after=['If it wasn’t you, ignore this email; your password stays the same.'],
+                  from_email=from_email, fail_silently=False)
+
+
 class ResetPasswordView(auth_views.PasswordResetView):
     """Django's PasswordResetView, with requests limited per email and per IP."""
+    form_class = BrandedPasswordResetForm
 
     def form_valid(self, form):
         ip, email = client_ip(self.request), form.cleaned_data['email']
@@ -104,7 +132,7 @@ def _with_next(name: str, next_url: str) -> str:
     return reverse(name) + '?' + urlencode({'next': next_url})
 
 
-@login_required
+@signed_in
 def two_factor_verify(request):
     """Second sign-in step after the password: a passkey (JavaScript, views_passkeys), or a code from the
     authenticator app, an emailed code, or a recovery code (this form)."""
@@ -161,14 +189,19 @@ def _qr_svg(text: str) -> str:
     return qr_svg(text, box_size=8)
 
 
-@login_required
+@signed_in
 def two_factor_setup(request):
     """Add a strong sign-in method. Staff without one are sent here until they've done it: a passkey first
     (JavaScript, views_passkeys), or an authenticator app (open the setup link, scan the QR code or type
     the key, confirm with a code). No recovery codes here: they are optional, from the Account page."""
     next_url = _next_url(request)
-    if twofactor.pending_step(request) == 'verify':
+    pending = twofactor.pending_step(request)
+    if pending == 'verify':
         return redirect(_with_next('two_factor_verify', next_url))
+    if pending is None:  # adding one from the Account page (not staff enrollment): a recent sign-in first
+        from console import recent_auth
+        if (response := recent_auth.require(request, reverse('console:account'))) is not None:
+            return response
     existing = TwoFactorDevice.objects.filter(user=request.user).first()
     if existing is not None and existing.confirmed:
         messages.info(request, 'Your authenticator app is already set up.')
@@ -258,3 +291,53 @@ def account_two_factor_action(request):
         OTP_USER.hit(user.pk)
         messages.error(request, 'That code didn’t work.')
     return None, back
+
+
+@signed_in
+def confirm_identity(request):
+    """Confirm it's you (console/recent_auth.py): a passkey (JavaScript, mode "reauth"), or the password plus the
+    second step's code where the account has one. Rate limited like sign-in (per email and IP) and the codes like
+    the second step (per account). Success records the time and goes back to `next`."""
+    from console import recent_auth
+    user = request.user
+    next_url = _next_url(request)
+    step = twofactor.pending_step(request)
+    if step is not None:
+        return redirect(_with_next('two_factor_verify' if step == 'verify' else 'two_factor_setup', next_url))
+    email_on = twofactor.email_codes_on(user)
+    has_totp = twofactor.confirmed_device(user) is not None
+    needs_code = twofactor.has_second_factor(user) and (has_totp or email_on or twofactor.recovery_codes_left(user))
+    error, status, email_sent = None, 200, False
+    ip, email = client_ip(request), user.email or user.username
+    if request.method == 'POST' and request.POST.get('action') == 'send_email':
+        if email_on and not EMAIL_CODE_USER.exceeded(user.pk):
+            EMAIL_CODE_USER.hit(user.pk)
+            twofactor.send_email_code(user)
+            email_sent = True
+        elif email_on:
+            error, status = EMAIL_LIMITED, 429
+    elif request.method == 'POST':
+        if LOGIN_IP.exceeded(ip) or LOGIN_EMAIL.exceeded(email) or (needs_code and OTP_USER.exceeded(user.pk)):
+            error, status = LOGIN_LIMITED, 429
+        elif not user.check_password(request.POST.get('password', '')):
+            LOGIN_IP.hit(ip)
+            LOGIN_EMAIL.hit(email)
+            error = 'That password isn’t right.'
+        elif needs_code and not twofactor.check_code(user, request.POST.get('code', '')):
+            OTP_USER.hit(user.pk)
+            error = 'That code didn’t work. Check it and try again.'
+        else:
+            LOGIN_EMAIL.reset(email)
+            if needs_code:
+                OTP_USER.reset(user.pk)
+            recent_auth.mark(request)
+            return redirect(next_url)
+    kinds = [kind for kind, on in (('the 6-digit code from your authenticator app', has_totp),
+                                   ('the code we email you', email_on),
+                                   ('a recovery code', twofactor.recovery_codes_left(user) > 0)) if on]
+    return render(request, 'console/confirm_identity.html', {
+        'next': next_url, 'error': error, 'email_sent': email_sent, 'needs_code': needs_code,
+        'code_help': ('Then enter ' + ' or '.join(kinds) + '.') if kinds else '',
+        'has_passkeys': twofactor.has_passkeys(user), 'email_on': email_on,
+        'email_minutes': twofactor.EMAIL_CODE_MINUTES, 'window_minutes': recent_auth.WINDOW // 60,
+    }, status=status)

@@ -1,0 +1,56 @@
+{% load console_tags %}{# website_overview: the event's Studio website: live preview, state, publish, ask for a change. #}<div class="stack component component--website_overview" id="website">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "brush" %} {{ d.name }}</h3>{% endif %}
+  {% if not d.built %}
+    {% if d.working %}<p class="small" data-website-working="{{ d.working.id }}"><span class="spinner" aria-hidden="true"></span> {{ d.working.title }}: {{ d.working.progress }}</p>{% endif %}
+    <div class="website-empty">
+      <span class="website-empty__icon" aria-hidden="true">{% icon "globe" "icon--xl" %}</span>
+      <p class="strong">No website yet</p>
+      {% if d.starts %}<p class="small muted">{% if d.source %}Build it from <span class="mono">{{ d.source|truncatechars:60 }}</span>, or start from the event's own details.{% else %}Studio builds a first version from the event's own details. Ask for any change in the chat afterwards.{% endif %}</p>
+      <div class="cluster">{% for f in d.starts %}{% include 'components/_form.html' with form=f %}{% endfor %}</div>{% endif %}
+    </div>
+  {% else %}
+    {% if d.held %}<p class="notice notice--info">Attnd is reviewing this website before it goes live (usually within a day). We’ll email you.</p>
+    {% elif d.rejected %}<p class="notice notice--warning">Attnd couldn’t publish the last version. Change what the email said and publish again.</p>{% endif %}
+    {% if d.event_draft %}<p class="small muted">The event is still a draft: the website stays preview-only until the event is published.</p>{% endif %}
+    {% if d.check %}{% with c=d.check %}<section class="stack stack--tight site-check" aria-label="Before you publish">
+      <div class="cluster"><strong class="grow">{% if c.ok %}{% icon "check" %} Ready to publish: nothing to fix{% else %}Before you publish{% endif %}</strong>
+        {% if not c.ok %}<span class="small muted">{% if c.counts.error %}<span class="badge badge--danger">{{ c.counts.error }} must fix</span> {% endif %}{% if c.counts.warning %}<span class="badge badge--warning">{{ c.counts.warning }} to check</span> {% endif %}{% if c.counts.info %}<span class="badge badge--neutral">{{ c.counts.info }} tips</span>{% endif %}</span>{% endif %}</div>
+      {% if c.issues %}<ul class="list site-check__list">{% for i in c.issues %}<li class="site-check__item site-check__item--{{ i.level }}"><span class="status-mark status-mark--{% if i.level == 'error' %}danger{% elif i.level == 'warning' %}warning{% else %}info{% endif %}" aria-hidden="true">{% if i.level == 'error' %}×{% elif i.level == 'warning' %}!{% else %}i{% endif %}</span>
+        <span class="small">{% if i.page %}<span class="mono muted">{{ i.page }}</span> · {% endif %}{{ i.text }}{% if i.fix and i.fix != 'update_site' and i.fix != 'update_translation' %} <span class="muted">(fixed automatically)</span>{% endif %}</span></li>{% endfor %}
+        {% if c.more %}<li class="small muted">and {{ c.more }} more</li>{% endif %}</ul>{% endif %}
+      {% if c.translations %}<p class="small">Translations: {% for t in c.translations %}{{ t.name }} ({{ t.pages }} page{{ t.pages|pluralize }}{% if t.stale %}, <span class="tone-warning">{{ t.stale }} out of date</span>{% endif %}){% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    </section>{% endwith %}{% endif %}
+    {% if d.rights_text %}<p class="small">{% icon "info" %} This site was brought in from another website. Publishing confirms: “{{ d.rights_text }}” (kept in the event’s History).</p>{% endif %}
+    {% if d.demo %}<p class="small muted">Live sites of unpaid events show a small “Demo event” ribbon.</p>{% endif %}
+    {# Status and Publish above the preview (owner, Nov 21, 2026); Full screen preview opens a dialog with the same draft. #}
+    <div class="cluster website-bar">
+      <p class="small grow">
+        {% if d.suspended %}<span class="badge badge--danger">Taken down by Attnd</span>
+        {% elif d.public_url %}<span class="badge badge--success">Live</span> version {{ d.live }} at <a href="{{ d.public_url }}" target="_blank" rel="noopener">{{ d.public_url }}</a>
+        {% else %}<span class="badge badge--neutral">Not published</span>{% endif %}
+        {% if not d.can_go_live %} · <span class="muted">Publishing needs the Studio plan</span>{% endif %}
+      {% if d.draft %} · draft: version {{ d.draft }}{% if d.pages %} ({{ d.pages|length }} page{{ d.pages|length|pluralize }}){% endif %}{% endif %}
+      </p>
+      {% if d.preview %}<button type="button" class="button button--outline button--small" data-dialog-open="#{{ uid }}site-full-{{ d.event_id }}">{% icon "expand" %} Full screen preview</button>{% endif %}
+      {% if d.actions %}{% include 'components/_actions.html' with actions=d.actions %}{% endif %}
+    </div>
+    {% if d.working %}<p class="small" data-website-working="{{ d.working.id }}"><span class="spinner" aria-hidden="true"></span> {{ d.working.title }}: {{ d.working.progress }}</p>{% endif %}
+    {% if d.preview %}<div class="website-preview"><iframe src="{{ d.preview }}" title="Preview of the draft website" sandbox="allow-scripts allow-forms allow-popups" referrerpolicy="no-referrer" loading="lazy"></iframe></div>
+    <dialog class="dialog site-full" id="{{ uid }}site-full-{{ d.event_id }}" aria-label="Full screen preview of the draft website" data-site-full>
+      <div class="site-full__bar cluster">
+        <strong class="grow">Draft preview{% if d.draft %} · version {{ d.draft }}{% endif %}</strong>
+        <div class="segmented" role="group" aria-label="Preview size">
+          <button type="button" class="segmented__button" data-site-size="desktop" aria-pressed="true">Desktop</button>
+          <button type="button" class="segmented__button" data-site-size="mobile" aria-pressed="false">Mobile</button>
+        </div>
+        {% if surface != 'chat' %}<button type="button" class="button button--outline button--small" data-site-edit-text aria-pressed="false" data-text-url="{% url 'studio:text_edit' d.event_id %}">{% icon "cursor" %} Edit text</button>{% endif %}
+        {% if d.actions %}{% include 'components/_actions.html' with actions=d.actions %}{% endif %}
+        <button type="button" class="button button--ghost button--small" data-dialog-close aria-label="Close the preview">{% icon "close" %} Close</button>
+      </div>
+      <div class="site-full__stage" data-site-stage="desktop"><iframe src="{{ d.preview }}" title="Full screen preview of the draft website" sandbox="allow-scripts allow-forms allow-popups" referrerpolicy="no-referrer" loading="lazy"></iframe></div>
+    </dialog>
+    {% else %}<p class="small muted">The preview needs the sites address (SITES_HOST).</p>{% endif %}
+    <p class="small muted">{% icon "stars" %} Ask for changes in the chat: “make the hero bigger”, “add a sponsors page”. Or press <strong>Edit text</strong> in the full screen preview and type over any text.</p>
+    {% if d.translate %}<div class="site-translate">{% include 'components/_form.html' with form=d.translate %}</div>{% endif %}
+  {% endif %}
+</div>

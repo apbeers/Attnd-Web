@@ -100,6 +100,11 @@ class BlankEventForm(StyledFormMixin, forms.ModelForm):
         model = Event
         fields = ['name', 'start_time', 'timezone', 'address']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:  # console.js starts it on the browser's zone
+            self.fields['timezone'].widget.attrs['data-browser-tz'] = '1'
+
 
 class EventForm(AssistantContextMixin, StyledFormMixin, forms.ModelForm):
     context_kind = assistant_context.EVENT
@@ -138,6 +143,33 @@ class EventForm(AssistantContextMixin, StyledFormMixin, forms.ModelForm):
     def save(self, commit=True):
         self._save_context()
         return super().save(commit)
+
+
+class EventContextForm(AssistantContextMixin, StyledFormMixin, forms.ModelForm):
+    """Only the event's Details for the assistant (the canvas's card): saves nothing else."""
+    context_kind = assistant_context.EVENT
+
+    class Meta:
+        model = Event
+        fields = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_context()
+
+    def save(self, commit=True):
+        self._save_context()
+        if commit:
+            self.instance.save(update_fields=['context'])
+        return self.instance
+
+
+class EventFlyerForm(StyledFormMixin, forms.ModelForm):
+    """Only the event's flyer (image or PDF): saves nothing else."""
+
+    class Meta:
+        model = Event
+        fields = ['flyer']
 
 
 class SourcesForm(StyledFormMixin, forms.ModelForm):
@@ -179,6 +211,47 @@ class RefreshForm(StyledFormMixin, forms.Form):
     clean_upload = AIImportForm.clean_upload
     MAX_UPLOAD = AIImportForm.MAX_UPLOAD
     ALLOWED_TYPES = AIImportForm.ALLOWED_TYPES
+
+
+class DuplicateEventForm(StyledFormMixin, forms.Form):
+    """Stage I12: a copy of the event as a new draft, moved to a new first day (clock times kept)."""
+    name = forms.CharField(max_length=256, label='Name of the copy')
+    start_date = forms.DateField(label='New first day', widget=forms.DateInput(attrs={'type': 'date'}),
+                                 help_text='Every schedule item moves by the same number of days; times stay the same.')
+    keep_team = forms.BooleanField(label='Keep the team', required=False, initial=True)
+
+
+class PasteImportForm(StyledFormMixin, forms.Form):
+    """Stage I3: pasted text or a dropped file (flyer image, PDF, CSV / XLSX schedule, an email) read into an existing
+    event as AI suggestions to review. Only that source: no website crawl, no removals."""
+    XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ALLOWED_TYPES = AIImportForm.ALLOWED_TYPES + ('text/plain', 'text/csv', XLSX)
+    MAX_UPLOAD = AIImportForm.MAX_UPLOAD
+    upload = forms.FileField(label='File', required=False,
+                             help_text='A flyer (image or PDF), a schedule (CSV or Excel) or a text file.')
+    text = forms.CharField(label='Pasted text', required=False, widget=forms.Textarea(attrs={'rows': 4}),
+                           help_text='An email, a lineup, a menu… anything with details of the event.')
+    instructions = AIImportForm.base_fields['instructions']
+
+    def clean_upload(self):
+        f = self.cleaned_data.get('upload')
+        if f:
+            if f.size > self.MAX_UPLOAD:
+                raise forms.ValidationError('Files must be under 15 MB.')
+            head = f.read(8)
+            f.seek(0)
+            kind = f.content_type or ''
+            ok = (kind in AIImportForm.ALLOWED_TYPES or kind in ('text/plain', 'text/csv')
+                  or (kind == self.XLSX and head.startswith(b'PK\x03\x04')))
+            if not ok:
+                raise forms.ValidationError('Upload a PDF, an image, a CSV or Excel (.xlsx) file or a text file.')
+        return f
+
+    def clean(self):
+        data = super().clean()
+        if not (data.get('upload') or (data.get('text') or '').strip()):
+            raise forms.ValidationError('Paste some text or add a file.')
+        return data
 
 
 TAGS_HELP = ('Comma separated, lower case, e.g. live music, bbq, kid-friendly. Attendees can filter and search by '
@@ -229,6 +302,12 @@ class LocationForm(AssistantContextMixin, TagsFieldMixin, StyledFormMixin, forms
     def save(self, commit=True):
         self._save_tags()
         self._save_context()
+        loc = self.instance
+        if loc.image_auto and {'image', 'image_url'} & set(self.changed_data):
+            # The organizer's own image (or the found one cleared): no credit, and never look again when cleared.
+            loc.image_never_refetch = not loc.image and not self.cleaned_data.get('image_url')
+            loc.image_auto = False
+            loc.image_credit = loc.image_license = loc.image_source_url = ''
         return super().save(commit)
 
 
@@ -246,7 +325,8 @@ class ScheduledItemForm(AssistantContextMixin, TagsFieldMixin, StyledFormMixin, 
 
     def __init__(self, *args, event=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['location'].queryset = event.location_set.order_by('sort_order', 'name')
+        self.fields['location'].queryset = (event.location_set.order_by('sort_order', 'name') if event is not None
+                                            else Location.objects.none())  # none: Ask Attnd's schema only
         self.fields['location'].required = False
         self.fields['location'].empty_label = '— No specific location —'
         self._init_tags()
@@ -296,7 +376,7 @@ class NotificationForm(StyledFormMixin, forms.ModelForm):
         send_time = data.get('send_time')
         if data.get('urgent') and data.get('when') == self.WHEN_NOW and self.event is not None:
             from events.push import urgent_sends_left
-            if urgent_sends_left(self.event) <= 0:
+            if urgent_sends_left(self.event, now=timezone.now()) <= 0:  # exact, never the page's memoised count
                 self.add_error('urgent', 'This event has sent the most urgent updates allowed in an hour. Send it as '
                                          'a normal update, or try again later.')
         if data.get('when') == self.WHEN_LATER:
@@ -317,11 +397,12 @@ class NotificationForm(StyledFormMixin, forms.ModelForm):
 class DisplayForm(forms.Form):
     preset = forms.ChoiceField(choices=[(p, LABELS['preset'][p]) for p in PRESETS],
                                widget=forms.RadioSelect)
-    tabs = forms.MultipleChoiceField(choices=[(t, LABELS['tabs'][t]) for t in TABS],
+    tabs = forms.MultipleChoiceField(choices=[(t, LABELS['tabs'][t]) for t in TABS if t != 'home'],
                                      widget=forms.CheckboxSelectMultiple,
                                      required=False)
     tab_order = forms.CharField(widget=forms.HiddenInput, required=False)
-    default_tab = forms.ChoiceField(choices=[('', 'Automatic')] + [(t, LABELS['tabs'][t]) for t in TABS],
+    default_tab = forms.ChoiceField(label='Default tab (apps without Home)',
+                                    choices=[('', 'Automatic')] + [(t, LABELS['tabs'][t]) for t in TABS if t != 'home'],
                                     required=False)
     locations_style = forms.ChoiceField(choices=[('', 'Automatic')] + [(s, LABELS['locations_style'][s]) for s in LOCATIONS_STYLES], required=False)
     schedule_style = forms.ChoiceField(choices=[('', 'Automatic')] + [(s, LABELS['schedule_style'][s]) for s in SCHEDULE_STYLES], required=False)
@@ -341,19 +422,32 @@ class DisplayForm(forms.Form):
     customize_tabs = forms.BooleanField(label='Choose tabs myself', required=False)
 
     BOOL_KEYS = ['map_clustering', 'map_fit_all', 'show_location_images', 'enable_search', 'group_by_category']
+
+    def __init__(self, *args, empty=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empty = set(empty)  # tabs with nothing to show: left out of the apps, so they don't count
     CHOICE_KEYS = ['default_tab', 'locations_style', 'schedule_style', 'secondary_pane']
 
     @classmethod
     def initial_from(cls, overrides):
         initial = {'preset': overrides.get('preset', 'auto'),
                    'customize_tabs': 'tabs' in overrides,
-                   'tabs': overrides.get('tabs', TABS),
-                   'tab_order': ','.join(overrides.get('tabs', TABS))}
+                   # Home is always on (first and the default; never in the list organizers edit).
+                   'tabs': [t for t in overrides.get('tabs', TABS) if t != 'home'],
+                   'tab_order': ','.join(t for t in overrides.get('tabs', TABS) if t != 'home')}
         for key in cls.CHOICE_KEYS:
             initial[key] = overrides.get(key, '')
         for key in cls.BOOL_KEYS:
             initial[key] = {True: '1', False: '0'}.get(overrides.get(key), '')
         return initial
+
+    def clean(self):
+        from events.display import MAX_TABS, TAB_LIMIT_NOTE
+        data = super().clean()
+        shown = [t for t in (data.get('tabs') or []) if t not in self.empty]
+        if data.get('customize_tabs') and len(shown) > MAX_TABS - 1:  # + Home
+            self.add_error('tabs', TAB_LIMIT_NOTE)
+        return data
 
     def to_overrides(self):
         d = self.cleaned_data
@@ -361,8 +455,8 @@ class DisplayForm(forms.Form):
         if d['preset'] != 'auto':
             out['preset'] = d['preset']
         if d.get('customize_tabs'):
-            order = [t for t in (d.get('tab_order') or '').split(',') if t in TABS]
-            order += [t for t in TABS if t not in order]
+            order = [t for t in (d.get('tab_order') or '').split(',') if t in TABS and t != 'home']
+            order += [t for t in TABS if t not in order and t != 'home']
             out['tabs'] = [t for t in order if t in d.get('tabs', [])]
         for key in self.CHOICE_KEYS:
             if d.get(key):
@@ -373,6 +467,89 @@ class DisplayForm(forms.Form):
         return out
 
 
+class NotificationEditForm(StyledFormMixin, forms.Form):
+    """Change a scheduled notification before it goes out. Empty fields keep their current value (so Ask Attnd can
+    pass only what changes); urgency can't be changed here (that goes through Send's confirmation)."""
+    title = forms.CharField(max_length=60, required=False)
+    body = forms.CharField(max_length=256, required=False, widget=forms.Textarea(attrs={'rows': 3, 'maxlength': 256}))
+    send_time = forms.DateTimeField(
+        required=False, input_formats=DT_FORMATS, label='Send at',
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'step': 600}, format='%Y-%m-%dT%H:%M'),
+        help_text='A 10-minute mark in the future.')
+
+    def clean_send_time(self):
+        send_time = self.cleaned_data.get('send_time')
+        if send_time:
+            if not is_send_slot(send_time):
+                raise forms.ValidationError('Pick a time on a 10-minute mark (e.g. 6:00, 6:10, 6:20).')
+            if send_time <= timezone.now():
+                raise forms.ValidationError('Pick a time in the future.')
+        return send_time
+
+
 class TeamInviteForm(StyledFormMixin, forms.Form):
     email = forms.EmailField(label='Email')
     role = forms.ChoiceField(label='Role', choices=EventMember.ROLE_CHOICES, initial=EventMember.ROLE_CONTRIBUTOR)
+
+
+class EventThemeForm(forms.Form):
+    """API-023: the event's six colours (light and dark × primary, secondary, tertiary) as exact hex codes. The
+    console draws a colour picker next to each field (console.js) and a contrast note under it (events.theme.checks)."""
+
+    ROLE_HELP = {'primary': 'Buttons, active chips and links', 'secondary': 'Soft tints: selected rows, chips, the page glow',
+                 'tertiary': 'Highlights: tab underlines, hovers, gradients'}
+
+    light_primary = forms.CharField(label='Light · Primary', max_length=7)
+    dark_primary = forms.CharField(label='Dark · Primary', max_length=7)
+    light_secondary = forms.CharField(label='Light · Secondary', max_length=7)
+    dark_secondary = forms.CharField(label='Dark · Secondary', max_length=7)
+    light_tertiary = forms.CharField(label='Light · Tertiary', max_length=7)
+    dark_tertiary = forms.CharField(label='Dark · Tertiary', max_length=7)
+
+    def __init__(self, *args, theme=None, **kwargs):
+        from events import theme as T
+        current = T.normalize(theme) or T.default_theme()
+        kwargs.setdefault('initial', {f'{m}_{r}': current[m][r] for m in T.MODES for r in T.ROLES})
+        super().__init__(*args, **kwargs)
+        checks = T.checks(current)
+        for mode in T.MODES:
+            for role in T.ROLES:
+                f = self.fields[f'{mode}_{role}']
+                f.widget.attrs.update({'data-hex': '', 'pattern': '#?[0-9A-Fa-f]{6}', 'maxlength': '7', 'size': '8',
+                                       'spellcheck': 'false', 'autocomplete': 'off', 'inputmode': 'text'})
+                note = checks[mode][role]['note']
+                f.help_text = self.ROLE_HELP[role] + (f'. {note}' if note else '.')
+
+    def _clean_hex(self, name):
+        from events.theme import clean_hex
+        value = clean_hex(self.cleaned_data.get(name))
+        if not value:
+            raise forms.ValidationError('Enter a colour as #RRGGBB, e.g. #431F86.')
+        return value
+
+    def clean(self):
+        data = super().clean()
+        for name in list(self.fields):
+            if name in data:
+                try:
+                    data[name] = self._clean_hex(name)
+                except forms.ValidationError as e:
+                    self.add_error(name, e)
+        return data
+
+    def to_theme(self):
+        from events import theme as T
+        d = self.cleaned_data
+        return {m: {r: d[f'{m}_{r}'] for r in T.ROLES} for m in T.MODES}
+
+
+class EventThemeSwitchesForm(forms.Form):
+    theme_web = forms.BooleanField(label='Use custom theme on the website', required=False,
+                                   help_text='The console’s event pages and the join and shared-plan pages')
+    theme_apps = forms.BooleanField(label='Use custom theme in the apps', required=False,
+                                    help_text='Sent to the iPhone and Android apps (they adopt it in a later update)')
+
+
+class ThemeGenerateForm(StyledFormMixin, forms.Form):
+    instruction = forms.CharField(label='Anything to keep in mind?', required=False, max_length=300,
+                                  help_text='Optional: “warmer”, “match our logo”, “more contrast”…')

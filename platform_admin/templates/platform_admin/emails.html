@@ -1,0 +1,31 @@
+{% extends 'console/base.html' %}
+{% load console_tags platform_tags %}
+{% block title %}Emails{% endblock %}
+{% block content %}
+<div class="column stack stack--loose">
+  {% platform_nav "emails" %}
+  <p class="muted">Every email Attnd sent in the last {{ retention_days }} days, one row per recipient. The body is never stored (it can hold sign-in codes and links).</p>
+  <div class="cluster">
+    <span class="badge{% if enabled %} badge--success{% else %} badge--warning{% endif %}">{% if enabled %}Sending through Mailgun{% else %}Email off: logged only{% endif %}</span>
+    {% if allow_list %}<span class="badge badge--info">Allow list on</span>{% endif %}
+    <span class="badge{% if webhook_on %} badge--success{% endif %}">{% if webhook_on %}Mailgun events on{% else %}Mailgun events off (no signing key){% endif %}</span>
+    <span class="small muted">{{ total_24h }} in 24 h{% for c in counts %} · {{ c.label }} {{ c.n }}{% endfor %}</span>
+  </div>
+  <form method="get" class="cluster email-filters">
+    <label class="field"><span class="field__label">Kind</span><select name="kind" data-autosubmit><option value="">Every kind</option>{% for k in kinds %}<option value="{{ k.key }}"{% if k.key == kind %} selected{% endif %}>{{ k.label }}</option>{% endfor %}</select></label>
+    <label class="field"><span class="field__label">Status</span><select name="status" data-autosubmit><option value="">Every status</option>{% for s, l in statuses %}<option value="{{ s }}"{% if s == status %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+    <label class="field grow"><span class="field__label">Address or subject</span><input type="search" name="q" value="{{ q }}"></label>
+    <button class="button button--secondary">Filter</button>
+  </form>
+  <div class="panel panel--flush table-scroll"><table class="data-table data-table--compact small"><thead><tr><th>When</th><th>To</th><th>Kind</th><th>Subject</th><th>Status</th><th>Mailgun</th></tr></thead><tbody>
+  {% for r in rows %}<tr>
+    <td title="{{ r.row.created_at|date:'c' }}">{{ r.row.created_at|date:"M j, H:i" }}</td>
+    <td class="mono">{{ r.row.to }}</td>
+    <td>{{ r.kind_label }}{% if r.category == 'optional' %} <span class="badge">optional</span>{% endif %}</td>
+    <td>{{ r.row.subject }}</td>
+    <td><span class="badge{% if r.row.status in 'sent delivered' %} badge--success{% elif r.row.status in 'failed bounced complained' %} badge--danger{% elif r.row.status == 'deferred' %} badge--warning{% endif %}">{{ r.row.get_status_display }}</span>{% if r.row.error %} <span class="small muted">{{ r.row.error }}</span>{% endif %}</td>
+    <td class="small muted">{% for e in r.row.events %}{{ e.event }}{% if e.reason %} ({{ e.reason }}){% endif %}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</td>
+  </tr>{% empty %}<tr><td colspan="6" class="muted">No emails yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

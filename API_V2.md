@@ -41,14 +41,17 @@ Finds an event by exact code, case-insensitive, then by exact name. Unlisted eve
 ### `GET events/<id>/bundle/`
 Returns everything the app shows, in one response.
 - **Caching:** send `If-None-Match: <ETag from last response>`. You get `304 Not Modified` if nothing changed.
-- **Device tracking:** optionally send `X-Device-Id: <device id>`, which updates the device's last-seen time for organizer stats.
+- **Device tracking:** optionally send `X-Device-Id: <device id>`, which updates the device's last-seen time and the
+  content version it last fetched (API-026: the console's "Updated on 31 of 37 phones") for organizer stats.
 - **When to call it:**
   - on join
   - when the app comes to the foreground
   - on pull-to-refresh
   - when a `content_updated` push arrives (API-007), **only if its `content_version` is newer than the bundle you have**, after
-    a random 0–10 s delay so every phone in the event doesn't refresh at the same moment. The server sends it about 3 s after the
-    last change, at most once every 15 s per event, and collapses it per event (an offline device gets only the latest).
+    a random delay so every phone in the event doesn't refresh at the same moment: 0 to `jitter_ms` milliseconds when the
+    push carries it (API-026: 1,000 under 100 phones, 5,000 under 1,000, else 10,000; 0 for a preview phone), else 0–10 s.
+    The server sends the first change at once and groups later ones into one follow-up at most every 15 s per event, and
+    collapses it per event (an offline device gets only the latest). (Before API-026: about 3 s after the last change.)
   - **while the app is open (foreground) and in an event, as a safety poll** (catches lost or throttled pushes):
     - every **60 seconds** when the device has **no push token** (push unavailable or not granted, the iOS App Clip);
     - every **5 minutes** when it has one.
@@ -66,9 +69,18 @@ Returns everything the app shows, in one response.
   "locations": [<Location>],
   "schedule": [<ScheduleItem>],
   "notifications": [<Notification>],
-  "tickets": null
+  "tickets": null,
+  "plan_suggestions": [{"text": "Plan my Thursday evening around the galleries", "kind": "plan"}, …]
 }
 ```
+`plan_suggestions` (API-021): up to 4 "Plan your day" examples written for this event, in order, each
+`{"text": string, "kind": "plan" | "question"}`: plan requests on the event's real days and highlights, a short-visit
+one ("I've got 2 hours — show me the highlights"), a family one only when items have a family tag, and at most one
+question, last ("What's on near me right now?" or one for this event). Tapping one sends its `text` to the app's
+planner (`plan`) or asks it (`question`). Written in the background by the server (Claude Haiku 5.5, checked against
+the event's days; a deterministic fallback from the event's real dates, categories and tags otherwise), so it is
+always present in new bundles, but **decode leniently**: a missing key, `null`, an empty list, entries without `text`,
+or an unknown `kind` → ignore that entry (or the key) and keep the app's own local examples. Older servers don't send it.
 `tickets` (API-017): always `null` (ticketing parked, see Tickets). `event.context`, `locations[].context` and `schedule[].context` (API-018): see
 Context. In `bundle/` only; `lookup/` and `nearby/` event objects have no `context` key.
 Hidden locations and items are already filtered out. `locations` are already in the organizer's order, and `schedule` is sorted by `start_time`. `notifications` are newest first.
@@ -79,6 +91,41 @@ Hidden locations and items are already filtered out. `locations` are already in 
 ```
 → `{ "status": "ok", "content_version": 15 }`. Only `device_id` is required. iOS also sends `app_clip` (API-019, see
 `POST devices/`).
+
+**Free limit (API-025).** An unpaid (demo) event takes at most 20 different devices. A device that joined the event
+before (also after leaving) always joins again. A new device beyond the limit gets:
+```json
+409 { "error": "event_full_free", "message": "This event is full for now: its free trial takes 20 people. Ask the organizer to remove the limit, then try again.", "limit": 20 }
+```
+The device is not registered. Show `message` (it is written for attendees) with a way back to the launch screen; until
+an app knows the code it shows its generic join error. Paid events, the DEMO event, the App Review sample events and
+Attnd's showcase events have no limit; `ci-` test devices never count.
+
+**Preview phones (API-026).** The organizer console's **Preview on my phone** QR is the join link with a
+`preview` query parameter: `https://attnd.app/join/<code>/?preview=<token>` (also `attnd://join/<code>?preview=<token>`).
+Send it as `preview_token` in the join body:
+```json
+{ "device_id": "uuid", "platform": "ios", "preview_token": "…" }
+```
+→ `{ "status": "ok", "content_version": 15, "preview": true }`. A valid token (made for someone on the event's team, 7
+days) makes the device that event's preview phone: it isn't an attendee (not counted, never refused by the free limit),
+its `content_updated` pushes carry `jitter_ms: 0`, and while the app is on screen it may hold `changes/` (below). An
+invalid or expired token is ignored (an ordinary join, no `preview` key). With 3 live preview phones already (batch 7)
+the phone joins as an ordinary attendee and the answer says `"preview": false` (the app shows nothing special; it
+counts toward an unpaid event's free limit like any attendee). Joining another event or leaving ends it; the
+console can remove a preview phone (it leaves the event). Keep the token only for that join; never show it.
+
+### `GET events/<id>/changes/?since=<content_version>` (API-026, preview phones only)
+Send `X-Device-Id`. Answers at once when the event's `content_version` is past `since`, else after about 25 s:
+```json
+{ "content_version": 16, "changed": true, "preview": true, "retry_after": 0 }
+```
+- `changed: true` → refetch `bundle/` at once (no random wait), then call `changes/` again with the new version.
+- `changed: false`, `retry_after: 0` → call again at once.
+- `retry_after` > 0 → wait that many seconds first (the server is busy: at most 2 waiting requests per server process,
+  3 preview phones per event; or the device isn't a preview phone: `preview: false`, `retry_after: 300` — stop and
+  keep the normal polling).
+- Only while the app is in the foreground; never for attendees (their live updates stay push + slow poll).
 
 ### `POST events/<id>/leave/`
 ```json
@@ -360,7 +407,9 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
   "content_version": 15,
   "join_url": "https://attnd.app/join/FWFM2026/",
   "website_url": "https://sites.attnd-example.com/fw-fair/" | null,
-  "tickets_url": null
+  "tickets_url": null,
+  "theme": {"light": {"primary": "#B23A1E", "secondary": "#F2A65A", "tertiary": "#1F7A8C"},
+            "dark": {"primary": "#F4895F", "secondary": "#7A3B24", "tertiary": "#4FB3C4"}} | null
 }
 ```
 - `tickets_url` (API-017): always `null` (ticketing parked, see Tickets).
@@ -370,16 +419,40 @@ Digital Asset Links file is domain-wide, so the Android app's verified intent fi
   attnd.app (`SITES_HOST`), so never send credentials or the device id to it.
 - `status == "archived"`: show an "This event has ended" banner. The content is still viewable.
 - `context` (API-018, `bundle/` only): see Context.
+- `theme` (API-023, `bundle/` only): see Theme. `lookup/` and `nearby/` event objects have no `theme` key.
+
+### Theme (API-023)
+The event's own colours, for light and dark mode, or `null` (no theme, or the organizer turned "Use custom theme in
+the apps" off): use your defaults then (`accent_color`, else the brand purple). Each mode has three `#RRGGBB` colours:
+- `primary`: the tint: buttons, selected tabs and chips, links. Already adjusted so white or near-black text on it is
+  readable (≥ 4.5:1); pick whichever of the two contrasts more.
+- `secondary`: soft surfaces: selected rows, chips, backgrounds (use it at low opacity or mixed with the background).
+- `tertiary`: highlights: progress, badges, the end of a gradient from `primary`; ≥ 3:1 on the page.
+Pick `light` or `dark` by the system appearance. **Decode leniently**: ignore unknown keys; a missing mode or role, or
+a value that isn't `#RRGGBB`, means use your defaults for it. A change bumps `content_version` like any content change.
 
 ### Location
 ```json
 { "id": 5, "name": "…", "snippet": "…", "description": "…", "category": "Food" | null,
-  "website": "https://…" | null, "image_url": "https://…" | null, "address": "…",
+  "website": "https://…" | null, "image_url": "https://…" | null, "image_credit": "…" | null,
+  "image_attribution_url": "https://…" | null, "address": "…",
   "latitude": 32.74 | null, "longitude": -97.36 | null, "sort_order": 0,
   "tags": ["food", "bbq", "kid-friendly"] }
 ```
+- `image_credit` (API-022): set when Attnd found the location's photo automatically (its venue website, the event's
+  pages or Wikimedia Commons), e.g. `"Jane Doe · CC BY-SA 4.0 · Wikimedia Commons"` or `"Photo: venue.example"`;
+  `null` for the organizer's own images and when there is no image. Show it small on or under the image where the
+  image is shown large (location detail). Missing (older servers) = `null`.
 - `tags` (API-010): see Tags below. Missing in responses from servers before API-010: default `[]`.
 - `context` (API-018): see Context. Missing = `null`.
+- **Live Google photos** (API-031): when no free source had a photo, `image_url` may be
+  `https://<host>/img/places/<id>/`, a redirect to the place's Google Places photo fetched at that moment (never stored
+  by Attnd; Google's terms). Load and cache it like any image (follow the redirect; the HTTP cache is fine, don't
+  persist the file beyond your normal image cache). `image_credit` is then `"Photo: Google Maps"` and
+  `image_attribution_url` (else `null`; missing on older servers = `null`) answers `{"url", "attributions": [{"name",
+  "uri"}], "credit": "Photo: Ana Ruiz · Google Maps"}`: show that `credit` (the authors' names, linking `uri` where
+  there is room) wherever the image is shown large; until it loads, or if it fails, show `image_credit`. A `404` from
+  either URL = no photo right now (show the placeholder).
 
 ### ScheduleItem
 ```json
@@ -413,7 +486,8 @@ location.context = null | {
 }
 schedule_item.context = null | {
   "about": str,                 // ≤ 2000
-  "performers": [{"name": str, "bio": str (≤ 600), "genres": [str] (≤ 5, lower case)}],  // ≤ 10
+  "performers": [{"name": str, "bio": str (≤ 600), "genres": [str] (≤ 5, lower case),
+                  "apple_music_url": str}],  // ≤ 10; apple_music_url: API-030, only when there is one
   "age_limit": str, "price": str, "accessibility": str,  // ≤ 300 each
   "links": [{"title": str, "url": str}]  // ≤ 5
 }
@@ -433,6 +507,12 @@ schedule_item.context = null | {
   `about` texts are dropped first (last item first), then location `about` texts, then (only if still over) whole
   item / location contexts, last first.
 - A change to any context bumps `content_version` (a `content_updated` push and a new ETag) like other content.
+- **`performers[].apple_music_url`** (API-030, optional): the performer's artist page in Apple Music
+  (`https://music.apple.com/…`, storefront `us`), present only when the server is confident it is that artist (the
+  name matches exactly, the genres overlap when known) or the organizer set it; omitted otherwise (and when the
+  organizer chose "no link"). Show **Listen on Apple Music** and open the URL (it is a universal link: the Music app,
+  else the browser); send nothing with it. Adding or changing a link bumps `content_version`. There is no Spotify
+  link.
 
 ### Tags (API-010)
 `Location.tags` and `ScheduleItem.tags` are lists of short labels for filtering and search: genre, category, audience,
@@ -456,7 +536,7 @@ This object holds the organizer's layout choices, already resolved by the server
 
 | Key | Values | Meaning |
 |---|---|---|
-| `tabs` | ordered subset of `map`, `locations`, `schedule`, `flyer`, `notifications` | The visible tabs, in order. Unknown values are ignored. |
+| `tabs` | ordered subset of `home`, `map`, `locations`, `schedule`, `flyer`, `notifications`, at most 5 | The visible tabs, in order. Unknown values are ignored. `home` (API-024) only appears for apps that send `X-Attnd-Sections` ≥ 1; it is the `home` screen of `layout`. See the tab rules below. |
 | `default_tab` | one of `tabs` | The tab selected after joining. |
 | `locations_style` | `cards` \| `list` \| `grouped` | `cards`: large image cards. `list`: compact rows with a thumbnail. `grouped`: sections by `category`. |
 | `schedule_style` | `timeline` \| `by_day` \| `by_location` \| `now_next` | `timeline`: one chronological list. `by_day`: sections per day in the event's time zone. `by_location`: sections per location. `now_next`: a "Happening now" section, then "Up next" (the next 2 hours), then "Later". |
@@ -468,7 +548,23 @@ This object holds the organizer's layout choices, already resolved by the server
 | `secondary_pane` | `locations` \| `schedule` \| `now_next` \| `none` | On an unfolded foldable (iPhone Duo inner display, Android foldable inner display), what sits beside the map. |
 | `accent_color` | `#RRGGBB` \| null | The app's tint colour for this event. `null` means the default brand colour. |
 | `logo_url` | URL \| null | Shown in the event header. |
-| `preset`, `resolved_preset`, `reason`, `stats`, `schema_version` | — | Informational only. Clients may ignore them. |
+| `preset`, `resolved_preset`, `reason`, `stats`, `schema_version` | — | Informational only. Clients may ignore them. `stats` also has `mappable_count` (visible locations with coordinates) and `sent_count` (sent notifications) since Nov 21, 2026. |
+
+Tab rules (server behaviour, Nov 21, 2026; the contract's types are unchanged):
+- Automatic tabs (no organizer tab list): `home` first and `default_tab: home` for apps that send `X-Attnd-Sections`
+  ≥ 1 (older apps keep the preset's default tab), then the preset's tabs **minus the ones with nothing to show**:
+  `schedule` without a visible item (ended items count; hidden items and items at hidden locations don't),
+  `locations` without a visible location, `map` without a visible location that has coordinates, `flyer` without a
+  flyer, `notifications` without a sent notification. Home plus five: the flyer is left out first. An app that gets
+  `home` and nothing else shows the Home tab alone; an older app that would get no tab gets `[map, notifications]`.
+- An organizer's own tab list (App layout) is sent as chosen **minus the tabs with nothing to show** (the same rules
+  as automatic tabs; Nov 22, 2026, batch 7 Q2: they come back by themselves once they have content), and **`home` is always first and `default_tab` is always `home`** for apps that send
+  `X-Attnd-Sections` ≥ 1 (Nov 22, 2026, batch 7: organizers can't turn Home off; it counts as one of the five).
+- Every path gives the same tabs for the same catalogue version: the published copy, the draft (preview phones) and a
+  copy published before this rule. The `ETag` carries the catalogue version (`…-s2`), so an `If-None-Match` saved from
+  a request without the header (or with another version) gets a full `200`, never a `304` for a body without `home`.
+  Apps should store the ETag with the catalogue version they sent and drop it when that changes.
+- Apps list ended schedule items (greyed) when nothing is left to come, rather than an empty Schedule tab.
 
 Client defaults when `display` or a key is missing:
 - `tabs`: `[map, locations, schedule, notifications]`, plus `flyer` if `flyer_url` is set
@@ -481,6 +577,111 @@ Client defaults when `display` or a key is missing:
 - `enable_search`: `true`
 - `group_by_category`: `false`
 - `secondary_pane`: `locations`
+
+
+### Layout (API-024)
+`layout` says which **sections** the apps draw on each screen and in which order. Sections are chosen from one closed
+catalogue compiled into the apps (data choosing among built-in components, never code). An app sends the catalogue
+version it draws with every bundle request:
+
+```
+X-Attnd-Sections: 1
+```
+
+- Without the header (older apps) `layout` is `null` and `display.tabs` never lists `home`.
+- With it, `layout` only holds section types of that catalogue version or older, so an app never gets a type it
+  can't draw. The `ETag` then ends in `-s<version>` (`"e12-v40-s1"`), so an app updated to a newer catalogue gets a
+  full body, not a `304`.
+
+```json
+"layout": {
+  "catalogue": 1,
+  "source": {"home": "automatic", "place_detail": "organizer", "…": "…"},
+  "screens": {
+    "item_detail": {
+      "sections": [{"type": "header", "show": ["time", "status", "tags"]}, {"type": "about"}, {"type": "place_link"}],
+      "overrides": [{"match": "tag:live music", "sections": [{"type": "header"}, {"type": "performers"}, {"type": "about"}]}]
+    },
+    "home": {"sections": [{"type": "header"}, {"type": "now_next", "when": ["not:after_end"]}, {"type": "updates", "limit": 3}]}
+  }
+}
+```
+
+- **Screens:** `home` (the Home tab), `event_info` (the event's info page), `item_detail` (every schedule item),
+  `place_detail` (every location), `map_overlay` (the map's Now playing strip and pin card: on / off only),
+  `options_event` (the event rows in Options). A screen that is missing has no layout: the app uses its built-in one.
+- **Section:** `type` (required), `show` (parts of the type, for `header`), `title` (≤ 60 characters, replaces the
+  section's heading), `limit` (1–20 entries, for lists), `when` (conditions that must all hold). Only `type` is always
+  present.
+- **Overrides** (`item_detail`, `place_detail` only, ≤ 8): the first whose `match` fits the subject replaces the screen's
+  sections. `category:<name>` compares case-insensitively with the place's category (a schedule item: its place's);
+  `tag:<tag>` with the subject's tags as sent (lower case).
+- **Conditions** (a closed set; the app evaluates them on the device): `has:<fact>` (`description`, `image`,
+  `coordinate`, `website`, `tags`, `category`, `flyer`, `logo`, `context`, `context.about|menu|hours|accessibility|
+  age_limit|price|performers|links|faq|amenities|getting_there|policies|weather_plan`, `items_here`, `likes`, `plan`,
+  `updates`, `urgent`, `locations`, `pins`, `schedule`, `upcoming`), `has_plan`, `model_available`, `now_playing`,
+  `within_walk`, `before_start`, `during`, `after_end` (the event), `day:YYYY-MM-DD` (today in the event's zone) and
+  `not:<condition>`. An unknown condition is false.
+- **A section draws only when its subject has the data** (a `menu` on a place without a menu is skipped).
+
+Catalogue version 1:
+
+| Screen | Section types (default order = today's screen) |
+|---|---|
+| `item_detail` | `header` (parts `time`, `status`, `tags`), `about`, `performers`, `good_to_know`, `links`, `place_link`, `ask_about`; also `countdown` |
+| `place_detail` | `header` (parts `image`, `category`, `tags`, `address`, `distance`, `now_next`), `walk_map`, `ask_about`, `about`, `hours`, `good_to_know`, `menu`, `links`, `at_this_location`; also `directions`, `now_next` |
+| `event_info` | `header` (part `website`), `about`, `faq`, `amenities`, `getting_there`, `accessibility`, `policies`, `weather_plan`, `links` |
+| `options_event` | `header`, `website`, `event_info_link` |
+| `map_overlay` | `now_playing`, `selected_place` |
+| `home` | `header`, `urgent`, `countdown`, `now_next`, `plan_today`, `liked`, `whats_on`, `map`, `places`, `updates`, `faq`, `getting_there`, `about`, `links`, `flyer`, `website` (the automatic Home layout leaves `now_next` out since Nov 21, 2026: `whats_on` covers it; organizers can still add it) |
+
+Catalogue version 2 (API-027, Nov 21, 2026; send `X-Attnd-Sections: 2`). An app on 1 gets none of this: its home
+shows `plan_today` + `liked` where 2 has `my_schedule`, and the four new screens are left out.
+
+| Screen | Section types (new in 2; default order first) |
+|---|---|
+| `home` | adds `my_schedule` (the attendee's plan and likes in one list; replaces `plan_today` + `liked`, which an app on 2 maps to `my_schedule`, once), `update_banner` (the newest update of the last day, dismissible), `status` (Demo event / Event ended badges). Default: `header`, `urgent`, `update_banner`, `countdown`, `my_schedule`, … |
+| `map_overlay` | adds `status`, `update_banner` (default: `status`, `update_banner`, `now_playing`, `selected_place`) |
+| `schedule_tab` | `status`, `update_banner`, `my_schedule`, `happening_now`, `up_next`, `featured`, `timeline`, `by_day`, `by_place`. Default: `status`, `update_banner`, then the list for `display.schedule_style` (`timeline` → `timeline`, `by_day` → `by_day`, `by_location` → `by_place`, `now_next` → `happening_now`, `up_next`). List types take `show` parts `time`, `place`, `tags`, `walk`, `progress`, `add` (all when missing) and `limit` |
+| `places_tab` | `status`, `update_banner`, `featured`, `nearby`, `by_category`, `all_places`. Default: `status`, `update_banner`, then `all_places` (`locations_style` `cards`: every part; `list`: without `image`) or `by_category` (`grouped`). List types take `show` parts `image`, `category`, `now_next`, `distance`, `events` |
+| `updates_tab` | `status`, `urgent` (urgent announcements first), `pinned`, `latest`, `earlier`, `faq`, `getting_there`. Default: `status`, `urgent`, `latest`, `earlier` |
+| `onboarding` | the first-join cards: `intro` (the app's "what you can do"), `welcome` (the organizer's card), `location`, `notifications`, `lock_screen`, `plan` (on-device AI only). Default: `intro`, `location`, `notifications`, `plan` |
+
+New section fields in 2:
+- `ids` (`featured` on `schedule_tab` / `places_tab`, `pinned` on `updates_tab`): schedule item, location or
+  notification ids in the organizer's order (≤ 20). Skip ids the bundle doesn't have; with none left the section
+  draws nothing.
+- `welcome`: `title` (as for every section), `text` (≤ 300 characters), `image` (an absolute `https` URL, ≤ 500).
+
+```json
+{"type": "featured", "ids": [12, 31], "show": ["time", "place"], "title": "Don't miss"}
+{"type": "welcome", "title": "Welcome to Prairie Fest", "text": "Gates open at 10. Water is free at every stage.", "image": "https://…/welcome.jpg"}
+```
+
+Safety rules stay on the device whatever the layout says: an urgent announcement shows for 12 h (`urgent` / the
+banner), the offline notice is fixed, screenshot modes use the built-in layouts. `ask_about` stays in the catalogue
+(saved layouts keep validating) but no automatic layout lists it any more (Nov 21, 2026).
+
+Client rules: drop unknown screens, types, parts and conditions; a type appears once per screen (the first); at most
+24 sections per screen; a screen with nothing valid left, or no `layout`, uses the built-in layout; screenshot modes
+always use the built-in layouts. The server builds an **automatic** layout from what the event has (sections nothing
+could fill are left out, food places with menus lead with the menu, tags whose items have performers lead with the
+performers, Home per preset) and replaces whole screens with the organizer's (console App layout → Screens).
+
+### Live Activity (`live_activity`)
+Always in `bundle/` (the defaults when the organizer chose nothing; console App layout → Live Activity):
+```json
+"live_activity": {"follows": "my_schedule", "location_id": null, "buttons": ["add", "skip", "map"], "urgent": true, "stale_text": null}
+```
+- `follows`: what the Live Activity follows by default: `my_schedule` (the plan, else likes, else everything: today's
+  rule), `everything` (every item of the day), `location` (only the items at `location_id`; an id the bundle doesn't
+  have → `my_schedule`). Unknown → `my_schedule`.
+- `buttons`: which buttons show, in this order, from `add` (add to My schedule / like), `skip`, `map`; `[]` = none.
+  Unknown names are dropped.
+- `urgent`: always `true` (a safety rule: the urgent block always shows).
+- `stale_text`: the text when the activity is stale (≤ 60 characters), `null` = the app's own ("Open Attnd to update").
+
+Older apps ignore the key. Changing it bumps `content_version` like other content.
 
 ---
 
@@ -531,11 +732,14 @@ The server sends pushes through APNs (iOS) and FCM HTTP v1 (Android) to devices 
     local update.
   - `timestamp` and `stale-date` are UNIX seconds; `stale-date` = sent + 12 h.
 - **Content updated:**
-  - Silent push, sent about 3 s after any attendee-visible change (at most once every 15 s per event).
-  - Custom data: `type = "content_updated"`, `event_id`, `content_version` (on Android all strings, as for every data value).
+  - Silent push, sent at once after an attendee-visible change; later changes within 15 s are grouped into one follow-up
+    (API-026; before: about 3 s after the last change).
+  - Custom data: `type = "content_updated"`, `event_id`, `content_version`, `jitter_ms` (API-026: the longest random
+    wait before refetching, in milliseconds; 0 for preview phones) (on Android all strings, as for every data value).
   - iOS: `content-available: 1`, no alert; `apns-push-type: background`, priority 5, `apns-collapse-id: content-<event_id>`,
     expires after about an hour. Background delivery is best-effort (iOS throttles it); in the foreground it arrives at once.
   - Android: data-only message, priority `normal`, `collapse_key: content_<event_id>`, TTL 1 hour.
-  - The app refetches the bundle only if `content_version` is newer than its own, after a random 0–10 s delay (see `bundle/`).
+  - The app refetches the bundle only if `content_version` is newer than its own, after a random delay of 0 to `jitter_ms`
+    (0–10 s without it; see `bundle/`).
 
 When the app is opened from a notification, it should open the Notifications tab for that event.

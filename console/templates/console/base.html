@@ -1,35 +1,54 @@
-{% load console_tags %}{% load static console_tags %}<!DOCTYPE html>
+{% load static console_tags agent_tags platform_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="robots" content="noindex, nofollow">
   {% include 'home/_icons.html' with app_manifest=True %}
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <title>{% block title %}Console{% endblock %} — Attnd</title>
   <link rel="stylesheet" href="{% static 'console/console.css' %}">
+  {% agent_panel as show_agent %}{% if show_agent %}<link rel="stylesheet" href="{% static 'agent/agent.css' %}">{% endif %}
   <link rel="manifest" href="{% url 'console:manifest' %}">
+  {# Stage H: downloaded while the page parses, run in this order after it (page scripts use defer too). #}
+  <script src="{% static 'console/screen.js' %}"></script>{# the breakpoints for every script below (tiny, not deferred) #}
+  <script src="{% static 'console/console.js' %}" defer></script>
+  <script src="{% static 'console/tz.js' %}" defer></script>
+  <script src="{% static 'console/passkeys.js' %}" defer></script>
+  {% if GOOGLE_MAPS_BROWSER_KEY %}<script src="{% static 'console/maps.js' %}" defer></script>{% endif %}
   <meta name="theme-color" content="#431f86">
   {% block head %}{% endblock %}
+  {% event_theme_style %}
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="{% url 'console:dashboard' %}">attnd<span>.</span></a>
+  <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
   <a class="topbar__link" href="{% url 'console:dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %}>{% icon "list" %} Your events</a>
   <div class="topbar__actions">
     <a class="button button--primary button--small" href="{% url 'console:event_new' %}">{% icon "plus" %} New event</a>
-    {% if user.is_staff or user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'diagnostics:overview' %}">{% icon "gauge" %} Diagnostics</a>
-    <a class="button button--secondary button--small" href="{% url 'studio:reports' %}">{% icon "brush" %} Studio reports</a>{% endif %}
-    {% if user.is_superuser %}<a class="button button--secondary button--small" href="{% url 'console:admin_usage' %}">{% icon "chart" %} App usage</a>
-    <a class="button button--secondary button--small" href="{% url 'admin:index' %}">Admin</a>{% endif %}
+    {# One Platform entry for anyone with a platform permission; every admin tool is a sub-tab there (platform_admin/areas.py). #}
+    {% platform_entry as platform_url %}{% if platform_url %}<a class="button button--secondary button--small" href="{{ platform_url }}">{% icon "gauge" %} Platform</a>{% endif %}
+    {% chat_default as chat_on %}<form method="post" action="{% url 'console:chat_default' %}" class="chat-switch-form">{% csrf_token %}
+      <input type="hidden" name="on" value="{{ chat_on|yesno:'0,1' }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+      {% if event.id %}<input type="hidden" name="event_id" value="{{ event.id }}">{% elif agent_event.id %}<input type="hidden" name="event_id" value="{{ agent_event.id }}">{% endif %}
+      <button class="chat-switch" role="switch" aria-checked="{{ chat_on|yesno:'true,false' }}" title="Open the console in the chat">
+        {% icon "chat" %}<span class="chat-switch__label">Chat as default</span><span class="chat-switch__track" aria-hidden="true"><span class="chat-switch__knob"></span></span></button></form>
     <a class="button button--ghost button--small muted topbar__account" href="{% url 'console:account' %}" title="Account">{{ user.email }}</a>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}
       <button class="button button--ghost button--small muted">Sign out</button></form>
   </div>
 </header>
 <main class="page">
-  {% for message in messages %}
-    <div class="notice notice--{% if message.tags == 'error' %}error{% else %}{{ message.tags|default:'info' }}{% endif %} notice--dismissible">
-      {{ message }}<button type="button" class="notice__close" data-dismiss aria-label="Close">×</button></div>
-  {% endfor %}
+  {# Messages are floating toasts (batch 7): top-right on desktop, bottom on phones; auto-hide (errors stay), Undo inside. #}
+  <div class="toasts" data-toasts aria-live="polite">
+  {% for message in messages %}{% with undo_id=message.extra_tags|tag_id:'undo' redo_id=message.extra_tags|tag_id:'redo' %}
+    <div class="notice toast notice--{% if message.level_tag == 'error' %}error{% else %}{{ message.level_tag|default:'info' }}{% endif %} notice--dismissible"{% if undo_id %} data-undo-id="{{ undo_id }}"{% endif %}{% if redo_id %} data-redo-id="{{ redo_id }}"{% endif %} role="{% if message.level_tag == 'error' %}alert{% else %}status{% endif %}">
+      <span class="notice__text">{{ message }}</span>
+      {% if undo_id or redo_id %}<form method="post" action="{% url 'console:undo' undo_id|default:redo_id %}" class="notice__undo">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button type="submit" class="button button--small button--outline" data-undo-button>{% if undo_id %}{% icon "undo" %} Undo{% else %}Redo{% endif %}</button></form>{% endif %}
+      <button type="button" class="notice__close" data-dismiss aria-label="Close">×</button></div>
+  {% endwith %}{% endfor %}
+  </div>
   {% passkey_prompt as show_passkey_prompt %}{% if show_passkey_prompt %}
     <div class="notice notice--info" data-passkey-prompt data-passkey-scope hidden role="region" aria-label="Passkey">
       <div class="cluster cluster--loose">
@@ -46,13 +65,15 @@
     </div>
   {% endif %}
   {% if event and section %}
-    <a class="back-link" href="{% url 'console:dashboard' %}">← Your events</a>
-    <div class="cluster event-header">
-      <h1>{{ event.name }}</h1>
-      {% include 'console/_status_badges.html' with e=event %}
-      {% if event.public %}<span class="badge badge--neutral">{% icon "pin" %} Listed nearby</span>{% endif %}
-      <span class="muted mono">{{ event.event_code }}</span>
-    </div>
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a class="crumbs__back" href="{% block crumb_back %}{% url 'console:dashboard' %}{% endblock %}" aria-label="Back" title="Back">{% icon "arrow-left" %}</a>
+      <ol>
+        <li><a href="{% url 'console:dashboard' %}">Your events</a></li>
+        <li>{% block crumb_event %}{% if section == 'overview' %}<span aria-current="page">{{ event.name }}</span>{% else %}<a href="{% url 'console:event' event.id %}">{{ event.name }}</a>{% endif %}{% endblock %}</li>
+        {% block crumbs_more %}{% endblock %}
+      </ol>
+    </nav>
+    {% component "event_header" event=event %}
     <div class="event-shell">
       <nav class="sidenav" aria-label="Event">
         <a class="sidenav__link" {% if section == 'overview' %}aria-current="page"{% endif %} href="{% url 'console:event' event.id %}">{% icon "gauge" %}Overview</a>
@@ -61,29 +82,29 @@
         <a class="sidenav__link" {% if section == 'schedule' %}aria-current="page"{% endif %} href="{% url 'console:schedule' event.id %}">{% icon "calendar" %}Schedule</a>
         <a class="sidenav__link" {% if section == 'notifications' %}aria-current="page"{% endif %} href="{% url 'console:notifications' event.id %}">{% icon "bell" %}Notifications</a>
         <a class="sidenav__link" {% if section == 'display' %}aria-current="page"{% endif %} href="{% url 'console:display' event.id %}">{% icon "phone" %}App layout</a>
-        {% if studio_access %}<a class="sidenav__link" {% if section == 'studio' %}aria-current="page"{% endif %} href="{% url 'studio:editor' event.id %}">{% icon "brush" %}Studio <span class="badge badge--neutral badge--pill">Beta</span></a>{% endif %}
+        {% if studio_access %}<a class="sidenav__link" {% if section == 'studio' %}aria-current="page"{% endif %} href="{% url 'studio:editor' event.id %}">{% icon "brush" %}Website <span class="badge badge--neutral badge--pill">Beta</span></a>{% endif %}
         <a class="sidenav__link" {% if section == 'changes' %}aria-current="page"{% endif %} href="{% url 'console:changesets' event.id %}">{% icon "stars" %}AI updates
           {% if pending_changes %}<span class="badge badge--primary badge--pill">{{ pending_changes }}</span>{% endif %}</a>
         <a class="sidenav__link" {% if section == 'usage' %}aria-current="page"{% endif %} href="{% url 'console:usage' event.id %}">{% icon "chart" %}Usage</a>
         <a class="sidenav__link" {% if section == 'history' %}aria-current="page"{% endif %} href="{% url 'console:history' event.id %}">{% icon "history" %}History</a>
+        {% if can_manage or event.user_id == user.id %}<a class="sidenav__link" {% if section == 'billing' %}aria-current="page"{% endif %} href="{% url 'console:event_billing' event.id %}">{% icon "chart" %}Billing</a>{% endif %}
         <a class="sidenav__link" {% if section == 'team' %}aria-current="page"{% endif %} href="{% url 'console:team' event.id %}">{% icon "people" %}Team</a>
       </nav>
       <div>{% block event_content %}{% endblock %}</div>
     </div>
+    {% if event.status != 'draft' %}<div class="publish-bar-slot" data-publish-bar="{% url 'console:event_changes' event.id %}?bar=1" aria-live="polite"></div>{% endif %}
   {% else %}
     {% block content %}{% endblock %}
   {% endif %}
 </main>
+{% if show_agent %}{% include 'agent/_panel.html' %}{% endif %}
 {% if user.is_authenticated %}
 <div id="task-tray" class="task-tray" hidden aria-live="polite">
   <button type="button" class="task-toggle"><span class="spinner"></span><span class="task-count"></span></button>
   <div class="task-panel"><div class="task-panel-title">Background tasks</div><ul class="task-list"></ul></div>
 </div>
 {% endif %}
-<script src="{% static 'console/console.js' %}"></script>
-<script src="{% static 'console/passkeys.js' %}"></script>
-{% if GOOGLE_MAPS_BROWSER_KEY %}<div id="maps-config" hidden data-key="{{ GOOGLE_MAPS_BROWSER_KEY }}" data-map-id="{{ GOOGLE_MAPS_MAP_ID }}"></div>
-<script src="{% static 'console/maps.js' %}"></script>{% endif %}
+{% if GOOGLE_MAPS_BROWSER_KEY %}<div id="maps-config" hidden data-key="{{ GOOGLE_MAPS_BROWSER_KEY }}" data-map-id="{{ GOOGLE_MAPS_MAP_ID }}"></div>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

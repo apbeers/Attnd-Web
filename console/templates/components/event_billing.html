@@ -1,0 +1,15 @@
+{% load console_tags %}{# event_billing: plan, Pay now / Upgrade, invoices with PDF, send a receipt, export. #}<div class="stack component component--event_billing" id="billing">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "chart" %} {{ d.name }}</h3>{% endif %}
+  <div class="cluster"><p class="grow"><span class="badge badge--neutral">{{ d.plan }}</span> {% if d.paid_total %}· paid ${{ d.paid_total }} in all{% endif %}</p>
+    {% if d.actions %}{% include 'components/_actions.html' with actions=d.actions %}{% endif %}</div>
+  {% if not d.stripe %}<p class="small muted">{% icon "info" %} Payments aren't set up yet: Remove the limit or Upgrade sends Attnd a request, and we email you an invoice.</p>{% endif %}
+  {% if d.invoices %}<div class="table-scroll"><table class="data-table data-table--compact">
+    <thead><tr><th>Invoice</th><th>Date</th><th>For</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for i in d.invoices %}<tr>
+      <td class="mono">{{ i.number }}</td><td class="nowrap small">{{ i.date }}</td><td class="small">{{ i.description }}</td>
+      <td>${{ i.amount }}</td><td>{% if i.status == 'paid' %}<span class="badge badge--success">Paid</span>{% elif i.status == 'void' %}<span class="badge badge--neutral">Void</span>{% else %}<span class="badge badge--warning">Due</span>{% endif %}</td>
+      <td><a class="button button--ghost button--small" href="{{ i.pdf }}" target="_blank" rel="noopener">{% icon "download" %} PDF</a></td></tr>{% endfor %}</tbody></table></div>
+  {% if d.receipt_form %}<details class="small"><summary>Send a receipt to someone</summary>{% include 'components/_form.html' with form=d.receipt_form %}</details>{% endif %}
+  <p class="small"><a href="{{ d.csv }}">{% icon "download" %} Export all invoices (CSV)</a></p>
+  {% else %}<p class="small muted">No invoices yet.</p>{% endif %}
+</div>

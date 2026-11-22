@@ -6,6 +6,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = bool(os.getenv('DEBUG'))
 
 SECRET_KEY = os.getenv('SECRET_KEY', '')
+# Key rotation (stage G): put the old key here (comma-separated) when setting a new SECRET_KEY; sessions, password
+# reset links and signed values made with it keep working until they expire. Remove it after two weeks.
+SECRET_KEY_FALLBACKS = [k.strip() for k in os.getenv('SECRET_KEY_FALLBACKS', '').split(',') if k.strip()]
 if not SECRET_KEY:
     if DEBUG or os.getenv('CI'):
         SECRET_KEY = 'insecure-dev-only-secret-key'
@@ -30,7 +33,9 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 if DEBUG:
     ALLOWED_HOSTS = ['*']
 else:
-    ALLOWED_HOSTS = ['.herokuapp.com', '.attnd.app']
+    # Only our own hostnames (stage G): the site's host from SITE_URL (+ www for attnd.app) and the Studio sites host
+    # are added below, once they are known; ALLOWED_HOSTS_EXTRA (comma-separated) adds others.
+    ALLOWED_HOSTS = [h.strip().lower() for h in os.getenv('ALLOWED_HOSTS_EXTRA', '').split(',') if h.strip()]
 
 # Local runs (manage.py runserver/test, health checks from inside the dyno). This used to also switch off
 # the HTTPS redirect and secure cookies everywhere, because this list always contains localhost; local
@@ -45,6 +50,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sitemaps',
+    'background.apps.BackgroundConfig',  # django.tasks on our own database queue (F5)
+    'django.contrib.humanize',  # naturaltime / intcomma in the console (F4)
     'django.contrib.postgres',  # GIN trigram + BRIN indexes for diagnostics (built into Django)
     'cloudinary_storage',
     'cloudinary',
@@ -56,9 +63,17 @@ INSTALLED_APPS = [
     'attestation.apps.AttestationConfig',
     'diagnostics.apps.DiagnosticsConfig',
     'studio.apps.StudioConfig',
+    'prospects.apps.ProspectsConfig',
+    'agent.apps.AgentConfig',
+    'credit.apps.CreditConfig',
+    'platform_admin.apps.PlatformAdminConfig',  # superusers: prices, customers, upgrades, overrides (D2)
 ]
 
 MIDDLEWARE = [
+    # Off production (dev.attnd.app, dev.attnd.site): robots.txt disallows everything, X-Robots-Tag noindex.
+    'attnd.middleware.NoIndexMiddleware',
+    # www.attnd.app → attnd.app (301; /.well-known/ served on www as is).
+    'attnd.middleware.WwwRedirectMiddleware',
     # Attnd Studio's hosted sites (SITES_HOST): only site routes there, no cookies, the sites' own CSP.
     'studio.middleware.SitesHostMiddleware',
     # First, so it times the whole request: one JSON line per /api/ request + X-Request-Id (API-013).
@@ -67,12 +82,29 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     # gzip for the API's JSON and the HTML pages (after WhiteNoise, which serves static files pre-compressed).
     'attnd.middleware.CompressionMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    'attnd.middleware.SecurityHeadersMiddleware',
+    # Django's session middleware + Ask Attnd's internal requests (they use the person's session, never saved).
+    'agent.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # AI credit (credit/): every AI call while answering a request is attributed to its person (or visitor).
+    'credit.middleware.SpendContextMiddleware',
+    # Organizers' 14-day sliding sign-in (7 days idle); staff keep until-midnight (console/session_expiry.py).
+    'console.session_expiry.SessionLifetimeMiddleware',
+    # Where the account is signed in (Account → Signed in on other devices) + the device cookie (console/user_sessions.py).
+    'console.user_sessions.SessionTrackingMiddleware',
+    # Every view needs a sign-in unless it is marked public (attnd/public.py; the list: attnd/tests_public.py).
+    'django.contrib.auth.middleware.LoginRequiredMiddleware',
+    # Deny by default: a view that declares no permission is refused (attnd/permissions.py, tests_permissions.py).
+    'attnd.permissions.DeclaredPermissionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'console.middleware.TwoFactorMiddleware',
+    # Ask Attnd's chat cards (console.middleware): a form with errors comes back as just that component; a saved one
+    # answers JSON with the Undo id (outside UndoMiddleware, which adds it).
+    'console.middleware.ComponentFragmentMiddleware',
+    # Undo for every console change (console/undo.py): after MessageMiddleware, so it can tag the success message.
+    'console.undo.UndoMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.csp.ContentSecurityPolicyMiddleware',
 ]
@@ -106,10 +138,18 @@ WSGI_APPLICATION = 'attnd.wsgi.application'
 # Without DATABASE_URL this points at the local database from `scripts/dev_db.sh` (Postgres 18 in Docker).
 import dj_database_url  # noqa: E402
 
+# psycopg 3 with Django's connection pool (psycopg_pool, one per process): the web dyno's 4 threads plus the
+# background threads (AI jobs, Ask Attnd, place images) share up to DB_POOL_MAX connections (essential-0 allows 20 in
+# all, and the release phase and Heroku Scheduler have their own). DB_POOL=0 = Django's persistent connections.
+DB_POOL = os.getenv('DB_POOL', '1') != '0'
 DATABASES = {
     'default': dj_database_url.config(
-        default='postgres://attnd:attnd@localhost:5432/attnd', conn_max_age=600, conn_health_checks=True),
+        default='postgres://attnd:attnd@localhost:5432/attnd', conn_max_age=0 if DB_POOL else 600,
+        conn_health_checks=not DB_POOL),
 }
+if DB_POOL:
+    DATABASES['default'].setdefault('OPTIONS', {})['pool'] = {
+        'min_size': 1, 'max_size': int(os.getenv('DB_POOL_MAX', '8')), 'timeout': 20}
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -127,6 +167,9 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 WHITENOISE_ROOT = os.path.join(BASE_DIR, 'public')
 WHITENOISE_MIMETYPES = {'.webmanifest': 'application/manifest+json'}
+# Root files (H): icons a day with a week of stale-while-revalidate (their names never change, so not immutable);
+# robots.txt and the manifest an hour. Hashed /static/ files stay immutable for a year (WhiteNoise's default).
+from attnd.static_headers import root_headers as WHITENOISE_ADD_HEADERS_FUNCTION  # noqa: E402,N812
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
@@ -135,14 +178,29 @@ STORAGES = {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'BACKEND': 'attnd.static_storage.MinifyingStaticFilesStorage',
     },
 }
 
 # Tests render templates without running collectstatic first
 import sys  # noqa: E402
+# Passwords (stage G): scrypt first (memory-hard); existing PBKDF2 hashes keep working and are upgraded at sign-in.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
+# Browser features the site never uses are switched off (attnd.middleware.SecurityHeadersMiddleware). The console's
+# map may ask for the location and Ask Attnd's voice input the microphone; nothing may use the camera, payment or USB.
+PERMISSIONS_POLICY = os.getenv('PERMISSIONS_POLICY', 'accelerometer=(), camera=(), geolocation=(self), gyroscope=(), '
+                               'magnetometer=(), microphone=(self), payment=(), usb=(), interest-cohort=(), '
+                               'browsing-topics=()')
+
 TESTING = len(sys.argv) > 1 and sys.argv[1] == 'test'
 if TESTING:
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher'] + PASSWORD_HASHERS  # fast tests
     STORAGES['staticfiles']['BACKEND'] = 'django.contrib.staticfiles.storage.StaticFilesStorage'
     # No collectstatic in tests: WhiteNoise finds files through the finders on demand instead of scanning
     # STATIC_ROOT at startup (which warned "No directory at: …/staticfiles/").
@@ -151,20 +209,21 @@ if TESTING:
 
 # Silent "content_updated" push whenever attendee-visible content changes (events.push.content_changed).
 CONTENT_PUSH_ENABLED = not TESTING and os.getenv('CONTENT_PUSH_ENABLED', '1') not in ('0', 'false', 'False')
-CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '3'))
+CONTENT_PUSH_DELAY = int(os.getenv('CONTENT_PUSH_DELAY', '0'))  # API-026: the first change goes out at once
 CONTENT_PUSH_MIN_INTERVAL = int(os.getenv('CONTENT_PUSH_MIN_INTERVAL', '15'))
 
-# Rate limits (attnd.ratelimit) and other per-process counters (scrape/'s "try it" limit) live here.
-# LocMemCache is shared by the gthread threads of one process, and Heroku runs a single web process
-# (Procfile: 1 worker), so the counts are global. With more web processes or dynos each process would
-# count on its own (limits effectively multiply); switch to DatabaseCache (+ `createcachetable` in the
-# Procfile release line) then.
+# Rate limits (attnd.ratelimit), the bundle cache, component and place-search caches live in the database cache
+# (F1), shared by every process and dyno (web, worker, Heroku Scheduler, a second web dyno one day); the table is
+# made by `createcachetable` in the Procfile's release line (and by the test runner). `local` is a per-process
+# LocMemCache for hot, rebuildable things. CACHE_BACKEND=locmem keeps everything in memory (one process).
+if os.getenv('CACHE_BACKEND', 'database') == 'locmem':
+    _default_cache = {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'attnd'}
+else:
+    _default_cache = {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 'LOCATION': 'attnd_cache'}
 CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'attnd',
-        'OPTIONS': {'MAX_ENTRIES': 10000},
-    },
+    'default': {**_default_cache, 'OPTIONS': {'MAX_ENTRIES': 20000, 'CULL_FREQUENCY': 4}},
+    'local': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'attnd-local',
+              'OPTIONS': {'MAX_ENTRIES': 5000}},
 }
 
 
@@ -192,8 +251,19 @@ RATE_LIMITS = {
     'studio_form_ip': _rate('studio_form_ip', '10/600'),       # Studio site form posts per IP per site, 10 min
     'studio_form_site': _rate('studio_form_site', '300/3600'),  # Studio site form posts per site, 1 hour
     'studio_report_ip': _rate('studio_report_ip', '5/3600'),    # "Report this site" per IP, 1 hour
-    'scrape_ip': _rate('scrape_ip', '5/3600'),                  # homepage trial AI imports per IP, 1 hour
+    'studio_hit_ip': _rate('studio_hit_ip', '120/600'),         # site analytics beacons per IP per site, 10 min
     'attest_nonce_ip': _rate('attest_nonce_ip', '30/60'),       # attestation challenges per IP, 1 minute
+    'place_search_user': _rate('place_search_user', '60/600'),  # the location form's address searches per person
+    'location_fill_user': _rate('location_fill_user', '30/3600'),  # "Fill from this website?" per person, 1 hour
+    'agent_quiet_runs': _rate('agent_quiet_runs', '60/3600'),  # chat buttons that start a quiet run, per person
+    'agent_start_user': _rate('agent_start_user', '30/600'),
+    'limit_request_user': _rate('limit_request_user', '3/86400'),  # "Remove the limit" requests per person, a day
+    'home_metric_ip': _rate('home_metric_ip', '120/600'),  # the home page's anonymous counts per IP, 10 minutes
+    'home_near_ip': _rate('home_near_ip', '30/600'),
+    'place_photo_ip': _rate('place_photo_ip', '300/600'),  # live Google place photos per IP, 10 minutes (API-031)  # the home page's approximate "near you" lookups per IP, 10 minutes
+    'pending_import_ip': _rate('pending_import_ip', '10/3600'),  # home composer submissions per IP, an hour
+    'claim_user': _rate('claim_user', '5/86400'),  # "Claim this event" requests per person, a day
+    'agent_contact_user': _rate('agent_contact_user', '3/3600'),  # "Talk to a person" messages per person, an hour  # Ask Attnd requests started per person, 10 minutes
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
 # Set to 0 when not behind such a proxy (the header could then be forged freely).
@@ -219,7 +289,7 @@ WATCH_MIN_AI_GAP_MINUTES = int(os.getenv('WATCH_MIN_AI_GAP_MINUTES', '15'))
 WATCH_MAX_AI_RUNS_PER_DAY = int(os.getenv('WATCH_MAX_AI_RUNS_PER_DAY', '24'))
 
 # Organizers sign in with their email (or username), case-insensitively.
-AUTHENTICATION_BACKENDS = ['console.auth_backends.EmailOrUsernameBackend']
+AUTHENTICATION_BACKENDS = ['console.auth_backends.EmailOrUsernameBackend']  # + attnd.permissions (roles)
 
 # Google Maps in the console (address autocomplete, pin map). A *browser* key restricted to our domains
 # (HTTP referrers) for the Maps JavaScript API and Places API (New); not the server key above.
@@ -311,6 +381,9 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 ADMINS = [('Attnd admin', e.strip()) for e in os.getenv('ADMIN_EMAILS', '').split(',') if e.strip()]
 # Comma-separated addresses or @domains; when set, mail to anyone else is logged and dropped (use on dev).
 EMAIL_ALLOWED_RECIPIENTS = [e.strip().lower() for e in os.getenv('EMAIL_ALLOWED_RECIPIENTS', '').split(',') if e.strip()]
+# Mailgun's webhook signing key (Sending → Webhooks): delivered / failed / complained events update the Emails log.
+MAILGUN_WEBHOOK_SIGNING_KEY = os.getenv('MAILGUN_WEBHOOK_SIGNING_KEY', '')
+EMAIL_LOG_DAYS = int(os.getenv('EMAIL_LOG_DAYS', '90'))  # the Emails log's retention
 MAILERS = {
     'default': ({'BACKEND': 'console.mail.AllowListSMTPBackend', 'OPTIONS': EMAIL_SMTP_OPTIONS} if EMAIL_ENABLED
                 else {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}),
@@ -328,30 +401,74 @@ _HEROKU_SITES_HOSTS = {'attnd.app': 'attnd-web-7a02b020850d.herokuapp.com',
                        'dev.attnd.app': 'attnd-dev-7ab893f37020.herokuapp.com'}
 SITES_HOST = os.getenv('SITES_HOST', '').strip().lower().rstrip('/') or (
     '127.0.0.1:8000' if DEBUG else _HEROKU_SITES_HOSTS.get(_site.hostname or '', ''))
-if SITES_HOST and '*' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(SITES_HOST.split(':')[0])  # a bought sites domain isn't under .attnd.app/.herokuapp.com
+if '*' not in ALLOWED_HOSTS:
+    if _site.hostname:
+        ALLOWED_HOSTS.append(_site.hostname)  # attnd.app / dev.attnd.app
+        if _site.hostname == 'attnd.app':
+            ALLOWED_HOSTS.append('www.attnd.app')
+    if SITES_HOST:
+        ALLOWED_HOSTS.append(SITES_HOST.split(':')[0])  # the Studio sites host (attnd.site / dev.attnd.site)
+# The sites' old host (the Heroku app's herokuapp.com name) once SITES_HOST names a real domain: it only answers 301s
+# from a site's path to the same path on SITES_HOST (studio.middleware); everything else there is a 404.
+OLD_SITES_HOST = _HEROKU_SITES_HOSTS.get(_site.hostname or '', '')
+if OLD_SITES_HOST == SITES_HOST.split(':')[0]:
+    OLD_SITES_HOST = ''
+if OLD_SITES_HOST and '*' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(OLD_SITES_HOST)
 SITES_ORIGIN = f"{'http' if DEBUG and SITES_HOST.startswith(('127.0.0.1', 'localhost')) else 'https'}://{SITES_HOST}"
 # Console origins allowed to frame hosted pages (the editor's preview); nobody else may frame them.
 STUDIO_CONSOLE_ORIGINS = list(dict.fromkeys(WEBAUTHN_ORIGINS))
 # Organizer sign-ups (console.signups): off = invite-only (only invited emails can create an account, and the
 # homepage's anonymous AI import is closed). Attendees and existing accounts are unaffected.
-SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '').strip().lower() in ('1', 'true', 'yes', 'on')
+# Open since the onboarding work (owner, Nov 21, 2026): anyone can sign up and make demo events; going live stays
+# invite-only (an admin marks the event paid). SIGNUPS_OPEN=0 closes sign-ups again (invited emails only).
+# Home page showcase events (events/showcase.py): unset = on for dev.attnd.app and DEBUG only; 1 / 0 overrides.
+SHOWCASE_EVENTS = (os.getenv('SHOWCASE_EVENTS').strip().lower() in ('1', 'true', 'yes', 'on')
+                   if os.getenv('SHOWCASE_EVENTS') else None)
+# The full-screen chat as the console's default view for new accounts (owner, Nov 21, 2026); off in tests (TESTING
+# below) so page tests see the pages.
+CHAT_DEFAULT_ON = os.getenv('CHAT_DEFAULT_ON', '1') not in ('0', 'false', 'False') and not TESTING
+FREE_DEVICE_LIMIT = int(os.getenv('FREE_DEVICE_LIMIT', '20'))  # API-025: phones per unpaid event
+NEW_ACCOUNT_DAILY_IMPORTS = int(os.getenv('NEW_ACCOUNT_DAILY_IMPORTS', '3'))  # AI imports a day for new accounts
+SIGNUPS_OPEN = os.getenv('SIGNUPS_OPEN', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 # Studio is for admins (staff and superusers) only. These emails (comma-separated, default none) are an explicit
 # override that also get Studio.
 STUDIO_BETA_EMAILS = [e.strip().lower() for e in os.getenv('STUDIO_BETA_EMAILS', '').split(',') if e.strip()]
-# AI: auto = Anthropic when ANTHROPIC_API_KEY is set, else OpenAI (the existing OPENAI_API_KEY).
+# AI: auto = Anthropic when ANTHROPIC_API_KEY is set, else OpenAI. OpenAI stays only for Studio's images (and Studio's
+# optional OpenAI text provider); everything else runs on Claude (stage C).
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 STUDIO_AI_PROVIDER = os.getenv('STUDIO_AI_PROVIDER', 'auto').strip().lower()
 STUDIO_OPENAI_MODEL = os.getenv('STUDIO_OPENAI_MODEL', 'gpt-5.5')
 STUDIO_OPENAI_FALLBACK_MODEL = os.getenv('STUDIO_OPENAI_FALLBACK_MODEL', 'gpt-5')
-STUDIO_ANTHROPIC_MODEL = os.getenv('STUDIO_ANTHROPIC_MODEL', 'claude-opus-5-5')
+STUDIO_ANTHROPIC_MODEL = os.getenv('STUDIO_ANTHROPIC_MODEL', 'claude-sonnet-5-5')  # owner, Nov 21, 2026
 STUDIO_IMAGE_MODEL = os.getenv('STUDIO_IMAGE_MODEL', 'gpt-image-2')
 STUDIO_IMAGE_FALLBACK_MODEL = os.getenv('STUDIO_IMAGE_FALLBACK_MODEL', 'gpt-image-1')
-STUDIO_VISION_MODEL = os.getenv('STUDIO_VISION_MODEL', '') or os.getenv('OPENAI_MODEL', 'gpt-5-mini')
 # AI spend per event per UTC day (all Studio calls: chat, images, asset descriptions). 0 = no Studio AI.
 # $10: a full import (a 10-25 page site rebuilt in one run) costs roughly $2-4 with gpt-5.5 and prompt caching, up
 # to ~$6 on Claude, so $5 left little or nothing for the chat turns that follow it on the same day.
 STUDIO_DAILY_SPEND_CAP_USD = float(os.getenv('STUDIO_DAILY_SPEND_CAP_USD', '10'))
+
+# Background tasks (F5): Django's tasks framework. TASKS_BACKEND=database queues them in Postgres
+# (background.backend.DatabaseBackend) for `manage.py run_tasks` (a `tasks` dyno, or Heroku Scheduler's
+# `run_scheduled_tasks`, which drains the queue for up to 4 minutes); otherwise (default) work keeps running in this
+# process's background threads and TASKS is Django's immediate backend.
+TASKS_BACKEND = os.getenv('TASKS_BACKEND', 'threads')
+TASKS = {'default': {'BACKEND': 'background.backend.DatabaseBackend' if TASKS_BACKEND == 'database'
+                     else 'django.tasks.backends.immediate.ImmediateBackend'}}
+
+# Place images found automatically (stage D, events/place_images.py): on for new places (not in tests), checked by
+# Claude Haiku's vision, a cost cap over every look per UTC day.
+# API-030: Apple Music artist links (events/music.py). The MusicKit key; without both, nothing is looked up.
+APPLE_MUSIC_KEY_ID = os.getenv('APPLE_MUSIC_KEY_ID', '')
+APPLE_MUSIC_PRIVATE_KEY = os.getenv('APPLE_MUSIC_PRIVATE_KEY', '')
+MUSIC_LINKS_ON_SAVE = not TESTING
+
+PLACE_IMAGES_ENABLED = os.getenv('PLACE_IMAGES_ENABLED', '1') != '0'
+PLACE_IMAGES_ON_CREATE = PLACE_IMAGES_ENABLED and not TESTING
+PLACE_IMAGES_DAILY_CAP_USD = float(os.getenv('PLACE_IMAGES_DAILY_CAP_USD', '1'))
+# The home page gallery's card covers (events/covers.py): Wikimedia checks + AI pictures, all of them per UTC day.
+EVENT_COVERS_DAILY_CAP_USD = float(os.getenv('EVENT_COVERS_DAILY_CAP_USD', '2'))
+PLACE_IMAGES_MIN_CONFIDENCE = 0.75
 STUDIO_MAX_STEPS = int(os.getenv('STUDIO_MAX_STEPS', '24'))
 STUDIO_IMPORT_MAX_STEPS = int(os.getenv('STUDIO_IMPORT_MAX_STEPS', '40'))  # model calls of an import run
 STUDIO_RUN_MAX_MINUTES = int(os.getenv('STUDIO_RUN_MAX_MINUTES', '25'))  # wall clock per run (stops, keeps the work)
@@ -367,8 +484,42 @@ STUDIO_PRICES = {
     'gpt-5': (1.25, 10.0),
     'gpt-5-mini': (0.25, 2.0),
     'claude-opus-5-5': (4.0, 20.0),
+    'claude-sonnet-5-5': (2.0, 10.0),
+    'claude-haiku-5-5': (0.10, 0.50),  # prompts <= 100K tokens (Ask Attnd's are far smaller); cache reads a tenth
     'image': 0.25,
 }
+
+# Prospects (prospects/, staff only): find events in a region that suit the app (Claude Sonnet with web search), read
+# their pages for organizer contacts (Claude Haiku scores them), and make testing-only copies. By hand or scheduled.
+PROSPECT_MODEL = os.getenv('PROSPECT_MODEL', 'claude-sonnet-5-5')  # the search (Haiku has no web search)
+PROSPECT_SCORE_MODEL = os.getenv('PROSPECT_SCORE_MODEL', 'claude-haiku-5-5')  # fit score + contacts
+PROSPECT_DAILY_SPEND_CAP_USD = float(os.getenv('PROSPECT_DAILY_SPEND_CAP_USD', '5'))  # all runs per UTC day
+PROSPECT_RUN_MAX_MINUTES = int(os.getenv('PROSPECT_RUN_MAX_MINUTES', '20'))  # wall clock per run
+PROSPECT_WEB_SEARCH_CALL_USD = 0.01  # Anthropic's web search: $10 per 1,000 searches (+ results as input tokens)
+
+# Ask Attnd (agent/): the console's AI agent. Every tool runs the real console view as the signed-in person.
+# Claude only (stage C, agent/providers.py; the official SDK, AGENT_ANTHROPIC_MODEL).
+# Claude everywhere outside Ask Attnd's loop and Studio (attnd/claude.py): Haiku for imports, website checks, tags,
+# vision, form fills and scores; Sonnet where Haiku can't (web search).
+AI_MODEL = os.getenv('AI_MODEL', 'claude-haiku-5-5')
+AI_SMART_MODEL = os.getenv('AI_SMART_MODEL', 'claude-sonnet-5-5')
+AGENT_ANTHROPIC_MODEL = os.getenv('AGENT_ANTHROPIC_MODEL', 'claude-haiku-5-5')  # owner, Nov 21, 2026
+PLAN_SUGGESTIONS_MODEL = os.getenv('PLAN_SUGGESTIONS_MODEL', 'claude-haiku-5-5')  # API-021 (events/plan_suggestions.py)
+# A run Claude Haiku declines (stop_reason refusal) continues once on this model (agent/loop.py _refusal_fallback).
+AGENT_REFUSAL_MODEL = os.getenv('AGENT_REFUSAL_MODEL', 'claude-sonnet-5-5')
+AGENT_DAILY_SPEND_CAP_USD = float(os.getenv('AGENT_DAILY_SPEND_CAP_USD', '2'))  # per person per UTC day
+# AI credit (credit/): first defaults of the staff-editable "AI limits" (the database row wins once saved).
+# schema.org sameAs on the home page: the company's profiles once they exist (comma-separated URLs; SETUP.md).
+SOCIAL_PROFILES = os.getenv('SOCIAL_PROFILES', '')
+AI_MONTHLY_CREDIT_USD = float(os.getenv('AI_MONTHLY_CREDIT_USD', '30'))  # per person per calendar month (UTC)
+AI_VISITOR_CREDIT_USD = float(os.getenv('AI_VISITOR_CREDIT_USD', '5'))  # signed-out visitors, carried over at sign-up
+AI_PLATFORM_ALERT_USD = float(os.getenv('AI_PLATFORM_ALERT_USD', '100'))  # all AI spend this month → email admins
+AGENT_MAX_STEPS = int(os.getenv('AGENT_MAX_STEPS', '40'))  # model calls per run
+AGENT_RUN_MAX_MINUTES = int(os.getenv('AGENT_RUN_MAX_MINUTES', '15'))  # wall clock per run (waiting doesn't count)
+# One reasoning effort for every call of a run and the whole conversation (a changed effort loses the prompt cache).
+# AGENT_PLANNING_EFFORT (the old first-call setting) is still read as a fallback; AGENT_STEP_EFFORT is ignored.
+AGENT_EFFORT = os.getenv('AGENT_EFFORT') or os.getenv('AGENT_PLANNING_EFFORT') or 'medium'
+AGENT_MAX_ATTACHMENT_MB = int(os.getenv('AGENT_MAX_ATTACHMENT_MB', '15'))
 
 # ---------------------------------------------------------------------------
 # Content Security Policy (Django's built-in CSP middleware)
@@ -415,6 +566,12 @@ SECURE_CSP_REPORT_ONLY = CSP_POLICY if CSP_MODE == 'report' else {}
 if os.getenv('CLOUDINARY_URL'):
     STORAGES['default']['BACKEND'] = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
+# Images (attnd/images.py): without Cloudinary (local dev) pages get Pillow-made resized copies of our media files;
+# outside image links (location image_url, event logo_url) are copied into our storage after a save.
+IMAGE_LOCAL_VARIANTS = (os.getenv('IMAGE_LOCAL_VARIANTS', '1' if DEBUG else '0') != '0'
+                        and not os.getenv('CLOUDINARY_URL') and not TESTING)
+IMAGE_SELF_HOST_ON_SAVE = os.getenv('IMAGE_SELF_HOST_ON_SAVE', '1') != '0' and not TESTING
+
 
 LOGGING = {
     "version": 1,
@@ -460,6 +617,12 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+        # Ask Attnd: one JSON line per internal request (run, step, method, path, status) and run failures.
+        "attnd.agent": {
+            "handlers": ["request"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
 if TESTING:
@@ -467,8 +630,14 @@ if TESTING:
     # Only its errors (5xx, unhandled exceptions) stay visible in test output.
     LOGGING["loggers"]["django.request"] = {"handlers": ["console"], "level": "ERROR", "propagate": False}
     LOGGING["loggers"]["attnd.request"]["level"] = "WARNING"  # one line per API call would flood the output
+    LOGGING["loggers"]["attnd.agent"]["level"] = "WARNING"
 
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
+# API-031 (owner: OK): live Google Places photos for places no free source had a photo for; never stored.
+# IndexNow (attnd/indexnow.py): production only; 8–128 letters, digits or '-' (any random string).
+INDEXNOW_KEY = os.getenv('INDEXNOW_KEY', '')
+GOOGLE_PLACE_PHOTOS = os.getenv('GOOGLE_PLACE_PHOTOS', '1') not in ('0', 'false', '')
+GOOGLE_PHOTOS_DAILY_MAX = int(os.getenv('GOOGLE_PHOTOS_DAILY_MAX', '2000'))  # loads per Pacific day (2 calls each)
 
 # ---------------------------------------------------------------------------
 # Apple App Attest
@@ -516,7 +685,7 @@ FCM_SERVICE_ACCOUNT_JSON = os.getenv('FCM_SERVICE_ACCOUNT_JSON', '')
 # ---------------------------------------------------------------------------
 # AI event import (see scrape/)
 # ---------------------------------------------------------------------------
-OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
+# (Claude Haiku: AI_MODEL above, through attnd/claude.py.)
 # Run AI jobs in a background thread of the web dyno when no worker dyno is running.
 INGEST_RUN_INLINE = os.getenv('INGEST_RUN_INLINE', '1') not in ('0', 'false', 'False', '')
 
@@ -533,3 +702,7 @@ ANDROID_REQUIRE_PLAY_LICENSE = _env_bool('ANDROID_REQUIRE_PLAY_LICENSE', True)
 ANDROID_REQUIRE_STRONG_INTEGRITY = _env_bool('ANDROID_REQUIRE_STRONG_INTEGRITY', False)
 ANDROID_SIGNING_CERT_SHA256 = os.getenv('ANDROID_SIGNING_CERT_SHA256', '') or os.getenv('ANDROID_SHA256_FINGERPRINT', '')
 
+
+# Billing (batch 7): Stripe Checkout + Customer Portal + webhooks, off until both are set (platform_admin/billing.py).
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')

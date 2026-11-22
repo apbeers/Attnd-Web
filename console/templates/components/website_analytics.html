@@ -1,0 +1,16 @@
+{% load console_tags humanize %}{# website_analytics: cookie-free visits to the Studio website (last 30 days). #}<div class="stack component component--website_analytics" id="website-analytics">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "chart" %} {{ d.name }}</h3>{% else %}<h2 class="title-3">Website visits</h2>{% endif %}
+  {% if not d.views and not d.open_app %}<p class="small muted">{% if d.live %}No visits counted yet.{% else %}Visits are counted once the website is live.{% endif %} No cookies, no visitor identified.</p>
+  {% else %}
+  <div class="grid grid--stats">
+    <div><div class="title-3">{{ d.views|intcomma }}</div><div class="small muted">Page views · {{ d.days }} days</div></div>
+    <div><div class="title-3">{{ d.open_app|intcomma }}</div><div class="small muted">Open in Attnd taps</div></div>
+    <div><div class="title-3">{{ d.get_app|intcomma }}</div><div class="small muted">App store taps</div></div>
+  </div>
+  <div class="site-visits" role="img" aria-label="Page views per day over the last {{ d.days }} days">{% for day in d.per_day %}<span class="site-visits__bar" style="--h: {{ day.pct }}%" title="{{ day.label }}: {{ day.views }}"></span>{% endfor %}</div>
+  <div class="grid grid--2">
+    <div class="stack stack--tight"><strong class="small">Top pages</strong>{% for path, n in d.pages %}<div class="cluster small"><span class="grow mono">{{ path }}</span><span>{{ n|intcomma }}</span></div>{% empty %}<p class="small muted">—</p>{% endfor %}</div>
+    <div class="stack stack--tight"><strong class="small">Sent by</strong>{% for host, n in d.referrers %}<div class="cluster small"><span class="grow">{{ host }}</span><span>{{ n|intcomma }}</span></div>{% empty %}<p class="small muted">Mostly direct visits and QR codes.</p>{% endfor %}</div>
+  </div>
+  <p class="small muted">Counted without cookies; no visitor is identified.</p>{% endif %}
+</div>

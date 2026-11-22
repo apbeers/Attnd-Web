@@ -449,6 +449,12 @@ def apply_changeset(changeset, decisions, user=None, partial_ok=False):
                         ch.save(update_fields=['status'])
                     continue
                 fields = decision.get('fields')
+                if fields is None and ch.op == Change.OP_UPDATE and ch.conflict_fields:
+                    fields = [f for f in ch.data if f not in ch.conflict_fields]  # hand edits stay (P0 #7)
+                    if not fields:
+                        continue
+                if partial_ok and fields is not None and ch.op == Change.OP_UPDATE:
+                    _keep_the_rest_for_review(ch, fields)
                 if _apply_one(event, owner, ch, fields, ref_ids):
                     applied += 1
                     ch.status = Change.ACCEPTED
@@ -463,6 +469,23 @@ def apply_changeset(changeset, decisions, user=None, partial_ok=False):
             changeset.applied_by = user if (user and user.is_authenticated) else None
             changeset.save()
     return applied
+
+
+def _keep_the_rest_for_review(ch, fields):
+    """An automatic apply takes only some fields of an update (never locked / hand-edited ones): the others become a
+    pending change of their own, so a conflict such as the event's dates still waits in Review instead of vanishing
+    with the accepted part."""
+    rest = {k: v for k, v in ch.data.items() if k not in fields}
+    if not rest:
+        return
+    Change.objects.create(changeset=ch.changeset, entity=ch.entity, op=ch.op, target_id=ch.target_id, ref=ch.ref,
+                          label=ch.label, data=rest, conflict_fields=[f for f in ch.conflict_fields if f in rest],
+                          human_fields=[f for f in ch.human_fields if f in rest], reason=ch.reason, minor=False,
+                          sort=ch.sort)
+    ch.data = {k: v for k, v in ch.data.items() if k in fields}
+    ch.conflict_fields = [f for f in ch.conflict_fields if f in fields]
+    ch.human_fields = [f for f in ch.human_fields if f in fields]
+    ch.save(update_fields=['data', 'conflict_fields', 'human_fields'])
 
 
 def _apply_one(event, owner, ch, fields, ref_ids):

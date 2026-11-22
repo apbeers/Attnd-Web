@@ -1,0 +1,7 @@
+{% load console_tags %}{# event_rollover (stage I12): copy the event as a new draft on a new first day. #}<div class="stack component component--event_rollover">
+  <h3 class="title-4">{% icon "copy" %} Copy “{{ d.name }}”</h3>
+  <p class="small muted">A new draft with {{ d.counts.locations }} location{{ d.counts.locations|pluralize }} and {{ d.counts.items }} schedule item{{ d.counts.items|pluralize }}, moved to the new first day (clock times stay). Notifications, attendees and numbers aren’t copied.</p>
+  {% if d.preview %}<ul class="list readiness__list">{% for p in d.preview %}<li class="small"><strong>{{ p.name }}</strong>: <del class="muted">{{ p.old }}</del> → {{ p.new }}</li>{% endfor %}</ul>
+  <p class="small muted">Shown for the suggested date ({{ d.shift_days }} days later, the same weekday). Pick another first day below if you like.</p>{% endif %}
+  {% include 'components/_form.html' with form=d.form %}
+</div>

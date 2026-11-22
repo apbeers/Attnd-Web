@@ -1,0 +1,10 @@
+{% load console_tags %}{# One field from field JSON `f`: label, widget, help, errors (the console's .field markup). #}{% if f.widget == 'checkbox' %}<div class="field field--check">
+  <input type="checkbox" name="{{ f.name }}" id="{{ uid }}{{ f.id }}"{{ f.attrs|html_attrs:uid }}{% if f.checked %} checked{% endif %}> <label for="{{ uid }}{{ f.id }}">{{ f.label }}</label>
+{% else %}<div class="field">
+  <label class="field__label" for="{{ uid }}{{ f.id }}">{{ f.label }}
+    {% if f.locked %}{% icon "lock" "lock small" %}{% endif %}</label>
+  {% include 'components/_widget.html' %}
+{% endif %}
+  {% if f.help %}<div class="field__help" id="{{ uid }}{{ f.id }}_helptext">{{ f.help }}</div>{% endif %}
+  {% for error in f.errors %}<div class="field__error">{{ error }}</div>{% endfor %}
+</div>

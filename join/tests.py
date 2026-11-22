@@ -19,7 +19,6 @@ _EVENT_BASE = dict(
     longitude='-97.35',
     start_time=datetime(2025, 6, 1, 12, 0, tzinfo=dt_timezone.utc),
     address='123 Main St',
-    order_id='',
     public=True,
 )
 
@@ -299,3 +298,4 @@ class WellKnownTests(TestCase):
         self.assertIsInstance(data, list)
         self.assertEqual(data[0]['relation'], ['delegate_permission/common.handle_all_urls'])
         self.assertIn('android_app', data[0]['target']['namespace'])
+

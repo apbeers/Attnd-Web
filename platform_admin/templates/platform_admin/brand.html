@@ -1,0 +1,10 @@
+{% extends 'console/base.html' %}
+{% load console_tags platform_tags %}
+{% block title %}Brand{% endblock %}
+{% block content %}
+<div class="column stack stack--loose">
+  {% platform_nav "brand" %}
+  <p class="muted">Attnd's brand center. The public copy for press and partners is <a href="{% url 'home:brand' %}">/brand/</a>.</p>
+  {% include 'platform_admin/_brand_body.html' %}
+</div>
+{% endblock %}

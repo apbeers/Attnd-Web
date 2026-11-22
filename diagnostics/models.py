@@ -59,7 +59,7 @@ class DiagnosticEntry(models.Model):
     SOURCE_SERVER = 'server'
 
     id = models.BigAutoField(primary_key=True)
-    session = models.ForeignKey(DiagnosticSession, on_delete=models.CASCADE, related_name='entries')
+    session = models.ForeignKey(DiagnosticSession, on_delete=models.CASCADE, related_name='entries', db_index=False)  # db_review §4
     received_at = models.DateTimeField()
     ts = models.DateTimeField()
     mono_ms = models.BigIntegerField(null=True, blank=True)

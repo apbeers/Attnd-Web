@@ -24,7 +24,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.signals import user_logged_in
-from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.dispatch import receiver
 from django.utils import timezone
@@ -93,8 +92,10 @@ def is_verified(request) -> bool:
 
 
 def mark_verified(request) -> None:
+    from console import recent_auth
     request.session[SESSION_KEY] = str(request.user.pk)
-    request.session.cycle_key()  # new session id once fully signed in
+    recent_auth.mark(request)  # a full sign-in: risky actions are allowed for 20 minutes (console/recent_auth.py)
+    request.session.cycle_key()  # new session id once fully signed in (keeps the midnight expiry, session_expiry)
 
 
 def pending_step(request):
@@ -218,12 +219,12 @@ def send_email_code(user) -> None:
     row.email_code_hash = _hash_email_code(user, code)
     row.email_code_expires_at = timezone.now() + timedelta(minutes=EMAIL_CODE_MINUTES)
     row.save(update_fields=['email_code_hash', 'email_code_expires_at'])
-    send_mail(
-        f'Your Attnd sign-in code: {code}',
-        f'Your code to finish signing in to Attnd is:\n\n    {code}\n\n'
-        f'It works once, for {EMAIL_CODE_MINUTES} minutes. If you didn’t just sign in, someone else has your '
-        'password: change it on your Account page and turn on a passkey.\n',
-        settings.DEFAULT_FROM_EMAIL, [user.email])
+    from console import mail
+    mail.send('sign_in_code', [user.email], f'Your Attnd sign-in code: {code}', heading='Your sign-in code',
+              paragraphs=['Your code to finish signing in to Attnd is:'], code=code,
+              after=[f'It works once, for {EMAIL_CODE_MINUTES} minutes. If you didn’t just sign in, someone else has '
+                     'your password: change it on your Account page and turn on a passkey.'],
+              from_email=settings.DEFAULT_FROM_EMAIL, fail_silently=False)
 
 
 def check_email_code(user, code: str) -> bool:

@@ -23,6 +23,18 @@ def sites_host():
     return _strip_port(getattr(settings, 'SITES_HOST', ''))
 
 
+def is_old_sites_request(request):
+    """The sites' old host (settings.OLD_SITES_HOST, the herokuapp.com name) after the move to a real domain."""
+    old = getattr(settings, 'OLD_SITES_HOST', '')
+    if not old:
+        return False
+    try:
+        requested = request.get_host()
+    except Exception:  # DisallowedHost
+        requested = request.META.get('HTTP_HOST', '')
+    return _strip_port(requested) == old
+
+
 def is_sites_request(request):
     host = sites_host()
     if not host:
@@ -128,18 +140,86 @@ HASH_LINK_SCRIPT = (
     "history.replaceState(null,'',location.pathname+location.search+(id?'#'+id:''));});</script>")
 
 
-def render_page(source, base_href, preview=False, bridge=False):
+_CANONICAL_RE = re.compile(r'<link[^>]+rel=["\']?canonical', re.I)
+
+
+_A_RE = re.compile(r'<a\b[^>]*>', re.I)
+_FORM_RE = re.compile(r'<form\b[^>]*>', re.I)
+_INPUT_RE = re.compile(r'<input\b[^>]*>', re.I)
+_SCRIPT_SRC_RE = re.compile(r'<script\b[^>]*\bsrc\s*=\s*["\']?((?:https?:)?//[^"\'\s>]+)[^>]*>\s*</script\s*>', re.I)
+_ATTR = r'\b{}\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)'
+_BODY_RE = re.compile(r'<body\b[^>]*>', re.I)
+
+
+def _attr(tag, name):
+    m = re.search(_ATTR.format(name), tag, re.I)
+    return html.unescape(m.group(1).strip('"\'')) if m else None
+
+
+def _set_attr(tag, name, value):
+    value = html.escape(value, quote=True)
+    if re.search(_ATTR.format(name), tag, re.I):
+        return re.sub(_ATTR.format(name), f'{name}="{value}"', tag, count=1, flags=re.I)
+    return re.sub(r'\s*/?>$', lambda m: f' {name}="{value}"' + m.group(0), tag, count=1)
+
+
+def _external(url):
+    from urllib.parse import urlsplit
+    if not url or not url.lower().startswith(('http://', 'https://', '//')):
+        return False
+    host = (urlsplit(url if not url.startswith('//') else 'https:' + url).hostname or '').lower()
+    return host != sites_host().split(':')[0]
+
+
+def sanitize(text):
+    """What every served page goes through (batch 7 §6, also enforced at save by the quality check's errors):
+    outbound links get rel="noopener nofollow ugc"; a form that posts to another site is disabled; password and
+    card fields are removed; scripts from other sites are removed (the CSP blocks them anyway)."""
+    from studio.quality import CARD_WORDS
+
+    def link(m):
+        tag = m.group(0)
+        return _set_attr(tag, 'rel', 'noopener nofollow ugc') if _external(_attr(tag, 'href')) else tag
+
+    def form(m):
+        tag = m.group(0)
+        if _external(_attr(tag, 'action')):
+            tag = _set_attr(_set_attr(tag, 'action', '#'), 'data-attnd-blocked', 'other-site')
+        return tag
+
+    def field(m):
+        tag = m.group(0)
+        words = ' '.join(_attr(tag, k) or '' for k in ('name', 'id', 'autocomplete', 'placeholder'))
+        if (_attr(tag, 'type') or '').lower() == 'password' or 'password' in words.lower() \
+                or CARD_WORDS.search(words) or (_attr(tag, 'autocomplete') or '').lower().startswith('cc-'):
+            return '<!-- removed: sites can’t ask for passwords or card details -->'
+        return tag
+
+    text = _A_RE.sub(link, text)
+    text = _FORM_RE.sub(form, text)
+    text = _INPUT_RE.sub(field, text)
+    return _SCRIPT_SRC_RE.sub(lambda m: m.group(0) if not _external(m.group(1)) else '', text)
+
+
+def render_page(source, base_href, preview=False, bridge=False, canonical='', head='', body_start='', body_end=''):
     """Insert <base href> (relative links then work at /<slug>/ and later on a custom domain at /), the Attnd footer
-    with "Report this site", the preview ribbon and the editor's selection bridge."""
-    text = _BASE_RE.sub('', source)
+    with "Report this site", the preview ribbon and the editor's selection bridge; `head` / `body_start` /
+    `body_end` = SEO tags, the Get the app banner and the analytics beacon (studio.seo)."""
+    text = sanitize(_BASE_RE.sub('', source))
     base = f'<base href="{html.escape(base_href)}">'
     if preview:
         base += '<meta name="robots" content="noindex">'
+    elif canonical and not _CANONICAL_RE.search(text):
+        base += f'<link rel="canonical" href="{html.escape(canonical)}">'
+    base += head
     match = _HEAD_RE.search(text)
     if match:
         text = text[:match.end()] + base + text[match.end():]
     else:
         text = f'<head>{base}</head>' + text
+    if body_start:
+        m = _BODY_RE.search(text)
+        text = text[:m.end()] + body_start + text[m.end():] if m else body_start + text
     footer = (f'<footer data-attnd-host-footer style=\'{FOOTER_STYLE}\'>Made with '
               f'<a style="{LINK_STYLE}" href="{html.escape(settings.SITE_URL)}/" rel="noopener">Attnd</a> · '
               f'<a style="{LINK_STYLE}" href="_attnd/report" rel="nofollow">Report this site</a></footer>')
@@ -148,7 +228,7 @@ def render_page(source, base_href, preview=False, bridge=False):
                    'padding:4px 10px;border-radius:999px;background:#431f86;color:#fff;font:600 12px/1.4 sans-serif;'
                    'pointer-events:none">Preview</div>')
     # In-page links ("#faq") would resolve against <base> and leave the page: keep them on the page.
-    footer += HASH_LINK_SCRIPT
+    footer += HASH_LINK_SCRIPT + body_end
     if bridge:
         footer += '<script src="_attnd/bridge.js" defer></script>'
     matches = list(_BODY_END_RE.finditer(text))

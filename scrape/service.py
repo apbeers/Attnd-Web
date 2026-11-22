@@ -2,7 +2,7 @@
 Event scraping service.
 
 Crawls a URL with httpx + BeautifulSoup (BFS, max 2 deep / 10 pages), then
-sends the combined text to OpenAI to extract a structured Event + Locations
+sends the combined text to Claude (Haiku, structured output) to extract a structured Event + Locations
 payload.  No browser required — works on Heroku and any plain Python env.
 """
 
@@ -18,12 +18,11 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
-from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# JSON schema sent to OpenAI as response_format (strict structured output)
+# JSON schema for Claude's structured output (attnd/claude.structured)
 # ---------------------------------------------------------------------------
 
 def _nullable(t, description):
@@ -294,11 +293,13 @@ def _link_priority(link: str) -> int:
     return 0 if any(w in lower for w in _PRIORITY_WORDS) else 1
 
 
-def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int = 60) -> str:
+def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int = 60, on_page=None,
+           colors=None) -> str:
     """
     BFS crawl starting at url.  Stays on the same origin, visits at most
     max_pages pages up to max_depth levels deep, returns combined text.
-    Stops early if max_seconds wall-clock time is exceeded.
+    Stops early if max_seconds wall-clock time is exceeded. `colors` (a Counter, optional) collects the colours
+    of the pages' inline styles and theme-color (API-023: the event's theme).
     """
     logger.info("Crawl starting: %s (max_depth=%d, max_pages=%d, max_seconds=%d)", url, max_depth, max_pages, max_seconds)
     visited: set[str] = set()
@@ -331,9 +332,14 @@ def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int =
                 continue
 
             html = resp.text
+            if colors is not None:
+                from attnd.colors import html_colors
+                html_colors(html, colors)
             text = _page_text(html)
             if text:
                 parts.append(f"## Source: {current_url}\n\n{text}")
+                if on_page:
+                    on_page(current_url)
 
             if depth < max_depth:
                 new_links = _same_origin_links(html, current_url)
@@ -352,26 +358,15 @@ def _crawl(url: str, max_depth: int = 2, max_pages: int = 15, max_seconds: int =
 MAX_CONTENT_CHARS = 200_000
 
 
-def _model_kwargs(model: str) -> dict:
-    """Reasoning models reject temperature; older chat models reject reasoning_effort."""
-    if model.startswith(("gpt-5", "o1", "o3", "o4")):
-        return {"reasoning_effort": "low"}
-    return {"temperature": 0}
-
-
 def _extract(content: str, current: dict | None = None, attachments: list | None = None,
              instructions: str = "") -> dict:
     """
-    Send source text (+ optional image/PDF attachments) to OpenAI and return the parsed dict.
+    Send source text (+ optional image/PDF attachments) to Claude and return the parsed dict.
 
     current      existing event data (for refreshes) — enables existing_id matching
     attachments  list of {"name", "mime", "data": bytes}
     Raises ValueError if the response cannot be used.
     """
-    import base64
-
-    from django.conf import settings
-
     if len(content) > MAX_CONTENT_CHARS:
         logger.warning("Content truncated: %d → %d chars", len(content), MAX_CONTENT_CHARS)
     trimmed = content[:MAX_CONTENT_CHARS]
@@ -387,38 +382,24 @@ def _extract(content: str, current: dict | None = None, attachments: list | None
         parts.append({"type": "text", "text": "Organizer instructions:\n" + instructions[:4000]})
     if trimmed.strip():
         parts.append({"type": "text", "text": "SOURCES:\n\n" + trimmed})
+    from attnd import claude
     for att in attachments or []:
-        b64 = base64.b64encode(att["data"]).decode()
         mime = att.get("mime") or "application/octet-stream"
-        if mime.startswith("image/"):
-            parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
+        if mime.startswith("image/") and mime in ("image/png", "image/jpeg", "image/webp", "image/gif"):
+            parts.append(claude.image_block(att["data"], mime))
         elif mime == "application/pdf":
-            parts.append({"type": "file", "file": {"filename": att.get("name") or "flyer.pdf",
-                                                   "file_data": f"data:{mime};base64,{b64}"}})
+            parts.append(claude.document_block(att["data"], mime, att.get("name") or "flyer.pdf"))
     if not parts:
         raise ValueError("Nothing to read — add a URL, a file or some text.")
 
-    model = getattr(settings, "OPENAI_MODEL", "gpt-5-mini")
-    logger.info("Sending %d chars + %d attachments to OpenAI (%s)", len(trimmed), len(attachments or []), model)
-    client = OpenAI()
-    response = client.chat.completions.create(
-        model=model,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "event_extraction", "strict": True, "schema": EVENT_SCHEMA},
-        },
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": parts},
-        ],
-        **_model_kwargs(model),
-    )
-
-    raw = response.choices[0].message.content or ""
+    model = claude.fast_model()
+    logger.info("Sending %d chars + %d attachments to Claude (%s)", len(trimmed), len(attachments or []), model)
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"The AI returned an unreadable response: {raw[:200]}") from exc
+        data, cost = claude.structured(system=system, content=parts, schema=EVENT_SCHEMA, model=model,
+                                       effort="medium", max_tokens=48000, timeout=600.0)
+    except claude.ClaudeError as exc:
+        raise ValueError(f"The AI couldn't read those sources ({exc}). Please try again.") from exc
+    logger.info("Extraction cost $%s", cost)
     if not isinstance(data, dict) or not data.get("name"):
         raise ValueError("The AI could not find an event in those sources.")
     data = _normalize(data)
@@ -474,125 +455,56 @@ def _normalize(data: dict) -> dict:
     return data
 
 
-def gather_sources(urls: list[str], crawl: bool = True) -> str:
-    """Read the URLs. With crawl=False only the pages themselves (the website watcher re-reads just
-    the pages that changed)."""
-    parts = []
-    for url in urls:
-        try:
-            parts.append(_crawl(url) if crawl else _crawl(url, max_depth=0, max_pages=1))
-        except Exception as exc:  # one bad URL should not sink the rest
-            logger.warning("Crawl failed for %s: %s", url, exc)
-    return "\n\n---\n\n".join(p for p in parts if p)
+def gather_sources(urls: list[str], crawl: bool = True, on_page=None, colors=None, extras=None, fetch=None) -> str:
+    """Read the URLs (scrape.crawler: one shared budget, sitemap and detail pages, boilerplate dropped, most useful
+    pages first). With crawl=False only the pages themselves (the website watcher re-reads just the pages that
+    changed). `on_page(url)` is called for every page read (the task tray's step); `extras` (a list) receives the PDFs
+    and schedule images found, for the model to read as documents / images."""
+    from scrape.crawler import Crawl
+    if not urls:
+        return ""
+    run = Crawl(fetch=fetch, on_page=on_page, colors=colors).run(list(dict.fromkeys(urls)), crawl=crawl)
+    if extras is not None:
+        extras.extend(run.attachments)
+    return run.text()
 
 
 # ---------------------------------------------------------------------------
 # Google Places enrichment
 # ---------------------------------------------------------------------------
 
-_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
-_PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 
 
-def _geocode(query: str, api_key: str) -> tuple[float, float, str, None] | None:
+def _geocode(query: str, api_key: str = "") -> tuple[float, float, str, None] | None:
     """
-    Geocode a free-text address or place name.
-    Returns (lat, lng, formatted_address, None) or None on failure.
-    The trailing None keeps the shape consistent with _places_text_search.
+    Geocode a free-text address or place name (attnd/google.py: cached, counted, quota-safe).
+    Returns (lat, lng, formatted_address, None) or None. The trailing None keeps the shape of _places_text_search.
     """
-    try:
-        resp = httpx.get(
-            _GEOCODE_URL,
-            params={"address": query, "key": api_key},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        status = body.get("status", "UNKNOWN")
-        results = body.get("results", [])
-        if not results:
-            error_msg = body.get("error_message", "")
-            logger.warning(
-                "Geocode zero results for %r (status=%s%s)",
-                query, status, f": {error_msg}" if error_msg else "",
-            )
-            return None
-        loc = results[0]["geometry"]["location"]
-        address = results[0].get("formatted_address", "")
-        return loc["lat"], loc["lng"], address, None
-    except Exception as exc:
-        logger.warning("Geocode failed for %r: %s", query, exc)
+    from attnd import google
+    found = google.geocode(query)
+    if not found:
+        logger.info("Geocode found nothing for %r", query[:80])
         return None
-
-
-_PLACES_PHOTO_URL = "https://places.googleapis.com/v1/{name}/media"
-
-
-def _places_photo_uri(photo_name: str, api_key: str) -> str | None:
-    """
-    Resolve a Places API photo resource name to a public image URL.
-    Uses skipHttpRedirect=true so we get JSON back instead of a redirect.
-    """
-    try:
-        resp = httpx.get(
-            _PLACES_PHOTO_URL.format(name=photo_name),
-            params={"key": api_key, "maxHeightPx": 600, "skipHttpRedirect": "true"},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        uri = resp.json().get("photoUri")
-        if uri:
-            logger.debug("Places photo resolved: %s", uri[:80])
-        return uri
-    except Exception as exc:
-        logger.warning("Places photo fetch failed for %r: %s", photo_name, exc)
-        return None
+    return found["lat"], found["lng"], found.get("address", ""), None
 
 
 def _places_text_search(
     query: str,
-    api_key: str,
+    api_key: str = "",
     bias_lat: float | None = None,
     bias_lng: float | None = None,
 ) -> tuple[float, float, str, str | None] | None:
     """
-    Use the Places API Text Search to find a place.
-    Returns (lat, lng, formatted_address, photo_url_or_None) or None on failure.
+    Places Text Search for one place (attnd/google.py: cached, counted, quota-safe), biased within 50 km.
+    Returns (lat, lng, formatted_address, None) or None. (No Google photos: their terms forbid storing them; place
+    images come from events/place_images.py.)
     """
-    body: dict = {"textQuery": query, "pageSize": 1}
-    if bias_lat and bias_lng:
-        body["locationBias"] = {
-            "circle": {
-                "center": {"latitude": bias_lat, "longitude": bias_lng},
-                "radius": 50_000,  # 50 km
-            }
-        }
-    try:
-        resp = httpx.post(
-            _PLACES_SEARCH_URL,
-            json=body,
-            headers={
-                "X-Goog-Api-Key": api_key,
-                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.photos",
-            },
-            timeout=8,
-        )
-        resp.raise_for_status()
-        places = resp.json().get("places", [])
-        if not places:
-            return None
-        place = places[0]
-        loc = place.get("location", {})
-        address = place.get("formattedAddress", "")
-        # Attempt to fetch first photo
-        photo_url = None
-        photos = place.get("photos", [])
-        if photos:
-            photo_url = _places_photo_uri(photos[0]["name"], api_key)
-        return loc.get("latitude", 0), loc.get("longitude", 0), address, photo_url
-    except Exception as exc:
-        logger.warning("Places text search failed for %r: %s", query, exc)
+    from attnd import google
+    near = (bias_lat, bias_lng) if bias_lat and bias_lng else None
+    found = google.text_search(query, near=near, radius=50_000, limit=1)
+    if not found:
         return None
+    return found[0]["lat"], found[0]["lng"], found[0].get("address", ""), None
 
 
 def _km(lat1, lng1, lat2, lng2):
@@ -609,7 +521,7 @@ def _far(lat, lng, ref_lat, ref_lng, limit_km=50):
 
 def _enrich_with_places(data: dict, api_key: str) -> dict:
     """
-    Enrich the OpenAI-extracted event dict with accurate coordinates and
+    Enrich the AI-extracted event dict with accurate coordinates and
     addresses from Google Places / Geocoding API.
     """
     event_name = data.get("name", "")
@@ -637,7 +549,7 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
     for loc in data.get("locations", []):
         if loc.get("existing_id") and not loc.get("_needs_geocode"):
             continue  # matched to an existing location; keep its stored pin
-        if loc.get("latitude") is not None and loc.get("longitude") is not None and loc.get("image_url"):
+        if loc.get("latitude") is not None and loc.get("longitude") is not None:
             continue
         loc_name = loc.get("name", "")
         loc_address = loc.get("address", "")
@@ -657,8 +569,6 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
                 loc["latitude"], loc["longitude"] = lat, lng
             if address and not loc_address:
                 loc["address"] = address
-            if photo_url and not loc.get("image_url"):
-                loc["image_url"] = photo_url
         else:
             # Unknown pins stay null; the apps fall back to the event's pin rather than 0,0
             logger.warning("  Could not geocode location %r", loc_name)
@@ -666,19 +576,46 @@ def _enrich_with_places(data: dict, api_key: str) -> dict:
     return data
 
 
+def _n(n, word):
+    return f'{n} {word}{"" if n == 1 else "s"}'
+
+
 def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None = None, text: str = "",
                  attachments: list | None = None, current: dict | None = None,
-                 instructions: str = "", enrich: bool = True, crawl: bool = True) -> dict:
+                 instructions: str = "", enrich: bool = True, crawl: bool = True, progress=None,
+                 details: bool = True) -> dict:
     """
     Read the sources and return a normalized extraction dict (see EVENT_SCHEMA).
 
     Geocoding enrichment fills coordinates only for things that have none.
-    Raises ValueError when nothing usable can be extracted.
+    Raises ValueError when nothing usable can be extracted. `progress(text, done=…)` (optional) starts a friendly
+    step for the task tray (scrape.jobs.Steps); `progress.update(text)` changes the current one.
     """
+    from urllib.parse import urlparse
     urls = list(urls or ([url] if url else []))
+    say = progress or (lambda *a, **k: None)
+    update = getattr(progress, 'update', None) or (lambda *a, **k: None)
+    read = []
+
+    def on_page(page_url):
+        read.append(page_url)
+        update(f'Reading web pages: {len(read)} so far ({urlparse(page_url).netloc or page_url})…',
+               done=f'Read {len(read)} web page{"s" if len(read) != 1 else ""}')
+    if urls:
+        hosts = list(dict.fromkeys(urlparse(u).netloc or u for u in urls))
+        say(f'Reading {", ".join(hosts[:2])}{" and more" if len(hosts) > 2 else ""}…',
+            done='Couldn’t read any web pages')
     logger.info("scrape_event: %d urls, %d chars text, %d attachments, refresh=%s",
                 len(urls), len(text), len(attachments or []), current is not None)
-    content = gather_sources(urls, crawl=crawl) if urls else ""
+    from collections import Counter
+
+    from attnd.colors import most_used_hex
+    page_colors = Counter()
+    user_files = bool(attachments)
+    found = []  # PDFs and schedule images from the site (scrape.crawler)
+    content = gather_sources(urls, crawl=crawl, on_page=on_page, colors=page_colors, extras=found) if urls else ""
+    if found:
+        attachments = list(attachments or []) + found
     # Every web page that was read, so the website watcher can fingerprint them (scrape.watch).
     pages = list(dict.fromkeys(re.findall(r"^## Source: (https?://\S+)", content, flags=re.M)))
     if text:
@@ -686,11 +623,29 @@ def scrape_event(url: str = "", google_api_key: str = "", *, urls: list | None =
     if not content.strip() and not attachments:
         raise ValueError("No content could be retrieved from that URL.")
 
+    if found:
+        say(f'Reading {_n(len(found), "file")} from the website (schedules, maps, menus)…',
+            done=f'Read {_n(len(found), "file")} from the website')
+    if text or user_files:
+        what = ' and '.join(filter(None, ['your notes' if text else '', 'the file you attached' if user_files else '']))
+        say(f'Reading {what}…', done=f'Read {what}')
+    say('Finding the locations and the schedule…' if current is None else 'Looking for what changed…',
+        done='Understood the event' if current is None else 'Read the latest information')
     data = _extract(content, current=current, attachments=attachments, instructions=instructions)
+    if details and urls and crawl and content.strip():  # a crawl's text is the big one; notes and files are read whole
+        # The detail-fill pass (batch 7 A1): items / places the extraction left without assistant details get a
+        # focused second look with only the text that mentions them (scrape.detail_fill).
+        from scrape import detail_fill
+        if detail_fill.targets(data):
+            say('Adding details for the schedule and places…', done='Added details')
+            data["details_added"] = detail_fill.fill(data, content, progress)
+            update(detail_fill.done_text(data["details_added"]), done=detail_fill.done_text(data["details_added"]))
 
     if google_api_key and enrich:
+        say('Checking addresses on the map…', done='Checked addresses on the map')
         data = _enrich_with_places(data, google_api_key)
     data["source_pages"] = pages
+    data["page_colors"] = most_used_hex(page_colors)  # API-023: the event's theme starts from these
     return data
 
 
@@ -731,23 +686,13 @@ def suggest_tags(event_info: dict, entries: list[dict], vocabulary: list[str]) -
 
     Returns {"tag_vocabulary": [...], "tags": {("location"|"item", id): [tags]}} for the ids that were asked
     about (anything else the model returns is ignored). Raises ValueError on an unusable response."""
-    from django.conf import settings
-
-    model = getattr(settings, "OPENAI_MODEL", "gpt-5-mini")
+    from attnd import claude
     payload = {"event": event_info, "tag_vocabulary": vocabulary, "things_to_tag": entries}
-    response = OpenAI().chat.completions.create(
-        model=model,
-        response_format={"type": "json_schema",
-                         "json_schema": {"name": "event_tags", "strict": True, "schema": TAGS_SCHEMA}},
-        messages=[{"role": "system", "content": TAGS_PROMPT},
-                  {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-        **_model_kwargs(model),
-    )
-    raw = response.choices[0].message.content or ""
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"The AI returned an unreadable response: {raw[:200]}") from exc
+        data, _cost = claude.structured(system=TAGS_PROMPT, content=json.dumps(payload, ensure_ascii=False),
+                                        schema=TAGS_SCHEMA, effort="low", max_tokens=8000)
+    except claude.ClaudeError as exc:
+        raise ValueError(f"The AI returned no tags ({exc}).") from exc
     if not isinstance(data, dict):
         raise ValueError("The AI returned no tags.")
     wanted = {(e["kind"], e["id"]) for e in entries}

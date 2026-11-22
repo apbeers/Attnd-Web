@@ -1,74 +1,13 @@
 {% extends 'console/base.html' %}
-{% load console_tags %}
+{% load console_tags humanize %}
 {% block title %}Review AI updates · {{ event.name }}{% endblock %}
+{% block crumb_back %}{% url 'console:changesets' event.id %}{% endblock %}
+{% block crumbs_more %}<li><a href="{% url 'console:changesets' event.id %}">AI updates</a></li><li><span aria-current="page">Review</span></li>{% endblock %}
 {% block event_content %}
-<a href="{% url 'console:changesets' event.id %}" class="back-link">← AI updates</a>
 <h2 class="title-2">{{ cs.summary }}</h2>
-<p class="muted small">Found {{ cs.created_at|timesince }} ago{% if cs.status != 'pending' %} · {{ cs.get_status_display }}{% endif %}.</p>
+<p class="muted small">Found {{ cs.created_at|naturaltime }}{% if cs.status != 'pending' %} · {{ cs.get_status_display }}{% endif %}.</p>
 {% if cs.notes %}<div class="notice notice--neutral">{% icon "chat" %} <strong>AI notes:</strong> {{ cs.notes }}</div>{% endif %}
 {% if stale and cs.status == 'pending' %}<div class="notice notice--warning small">The event changed after these suggestions were made, so some “before” values may be out of date. Review carefully.</div>{% endif %}
 
-<form method="post" class="stack stack--tight">{% csrf_token %}
-{% if cs.status == 'pending' %}
-<div class="cluster toolbar">
-  <button type="button" class="button button--secondary button--small" data-select="all">Select all</button>
-  <button type="button" class="button button--secondary button--small" data-select="none">Select none</button>
-  <span class="small muted">{% icon "lock" "lock" %} = you edited this by hand, so it’s unticked</span>
-</div>
-{% endif %}
-{% for row in rows %}{% with ch=row.change %}
-<div class="panel stack stack--tight{% if ch.status == 'rejected' %} panel--faded{% endif %}">
-  <div class="cluster">
-    {% if cs.status == 'pending' and ch.status == 'pending' %}
-      <input class="change-toggle" type="checkbox" name="accept_{{ ch.id }}" value="1" id="c{{ ch.id }}"
-        {% if not ch.human_fields or ch.op == 'update' %}{% if ch.op != 'update' or row.fields|length > ch.conflict_fields|length %}checked{% endif %}{% endif %}>
-    {% endif %}
-    <span class="badge {% if ch.op == 'create' %}badge--success{% elif ch.op == 'delete' %}badge--danger{% else %}badge--primary{% endif %}">{{ ch.get_op_display }}</span>
-    <label class="strong" for="c{{ ch.id }}">{{ ch.get_entity_display }}: {{ ch.label }}</label>
-    {% if ch.minor %}<span class="badge badge--neutral">small</span>{% endif %}
-    {% if ch.human_fields %}<span class="badge badge--warning">{% icon "warning" %} Money: needs your OK</span>{% endif %}
-    {% if ch.status != 'pending' %}<span class="small muted push">{{ ch.get_status_display }}</span>{% endif %}
-  </div>
-  {% if ch.reason %}<div class="small muted">Why: {{ ch.reason }}</div>{% endif %}
-  {% if row.fields %}
-  <table class="data-table data-table--diff small"><tbody>
-    {% for f in row.fields %}
-    <tr>
-      <td class="diff-check">{% if ch.op == 'update' and cs.status == 'pending' and ch.status == 'pending' %}
-        <input class="field-toggle" data-change="{{ ch.id }}" type="checkbox" name="field_{{ ch.id }}_{{ f.name }}" value="1" aria-label="{{ f.label }}" {% if not f.conflict and not f.human %}checked{% endif %}>{% endif %}</td>
-      <td class="muted nowrap diff-label">{{ f.label }} {% if f.conflict %}{% icon "lock" "lock" %}{% endif %}</td>
-      <td>{% if ch.op == 'update' %}<span class="diff-old">{{ f.old|truncatechars:300 }}</span> → {% endif %}
-        {% if f.is_image and f.new != '—' %}<img src="{{ f.new }}" alt="" class="diff-thumb">{% endif %}
-        <span class="{% if ch.op == 'update' %}diff-new{% endif %}">{{ f.new|truncatechars:300 }}</span></td>
-    </tr>{% endfor %}
-  </tbody></table>
-  {% endif %}
-</div>
-{% endwith %}{% endfor %}
-
-{% if cs.status == 'pending' %}
-<div class="panel panel--sticky-bottom cluster cluster--loose">
-  <label class="check small grow" for="notify"><input type="checkbox" name="notify_attendees" id="notify" value="1"> Refresh attendees’ apps right away</label>
-  <div class="cluster">
-    <button name="action" value="discard" class="button button--secondary" data-confirm="Discard all suggestions?">Discard all</button>
-    <button name="action" value="apply" class="button button--primary">{% icon "check" %} Apply selected</button>
-  </div>
-</div>
-{% endif %}
-</form>
-{% endblock %}
-{% block scripts %}
-<script nonce="{{ csp_nonce }}">
-document.querySelectorAll('[data-select]').forEach(b => b.addEventListener('click', () => {
-  const on = b.dataset.select === 'all';
-  document.querySelectorAll('.change-toggle, .field-toggle').forEach(c => c.checked = on);
-}));
-document.querySelectorAll('.field-toggle').forEach(f => f.addEventListener('change', () => {
-  const any = [...document.querySelectorAll(`.field-toggle[data-change="${f.dataset.change}"]`)].some(x => x.checked);
-  document.getElementById('c' + f.dataset.change).checked = any;
-}));
-document.querySelectorAll('.change-toggle').forEach(c => c.addEventListener('change', () => {
-  document.querySelectorAll(`.field-toggle[data-change="${c.id.slice(1)}"]`).forEach(f => f.checked = c.checked);
-}));
-</script>
+{% component "changeset_review" event=event changeset=cs %}
 {% endblock %}

@@ -1,0 +1,25 @@
+{% extends 'console/base.html' %}
+{% load console_tags %}
+{% block title %}Run {{ run.pk }} · Prospects{% endblock %}
+{% block head %}{% if not run.is_finished %}<meta http-equiv="refresh" content="10">{% endif %}{% endblock %}
+{% block content %}
+{% include 'prospects/_nav.html' %}
+<div class="stack">
+<a class="back-link" href="{% url 'prospects:runs' %}">← All runs</a>
+<div class="cluster"><h2 class="title-3 grow">Run {{ run.pk }}</h2>
+  {% if not run.is_finished %}<span class="spinner"></span>{% endif %}<span class="badge badge--neutral">{{ run.get_status_display }}</span></div>
+<div class="grid grid--4 grid--stats panel">
+  <div><div class="stat__value">{{ run.found }}</div><div class="eyebrow">Found</div></div>
+  <div><div class="stat__value">{{ run.new }}</div><div class="eyebrow">New</div></div>
+  <div><div class="stat__value">{{ run.updated }} / {{ run.skipped }}</div><div class="eyebrow">Updated / skipped</div></div>
+  <div><div class="stat__value">${{ run.cost_usd|floatformat:4 }}</div><div class="eyebrow">AI cost</div></div>
+</div>
+{% if run.error %}<div class="notice notice--error">{{ run.error }}</div>{% endif %}
+<section class="panel"><h3 class="title-4">Log</h3><pre class="code-block">{{ run.log|default:"Waiting to start…" }}</pre></section>
+{% if found %}<section class="panel panel--flush"><div class="scroll-x"><table class="data-table">
+  <thead><tr><th>Fit</th><th>New prospect</th><th>Dates</th><th>City</th></tr></thead>
+  <tbody>{% for p in found %}<tr><td><span class="badge badge--{{ p.fit_tone }}">{{ p.fit_score }}</span></td>
+    <td><a href="{% url 'prospects:detail' p.pk %}">{{ p.name }}</a></td><td class="nowrap">{{ p.start_date|date:"M j, Y"|default:"?" }}</td><td>{{ p.city }}</td></tr>{% endfor %}</tbody>
+</table></div></section>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% load console_tags %}{# event_tile: one of your events (console home). In the chat a tap shows event_overview. #}{% if surface == 'chat' %}<div class="panel stack stack--tight component component--event_tile">{% else %}<a class="panel panel--link stack stack--tight component component--event_tile" href="{{ d.url }}">{% endif %}
+  <h3 class="title-3">{{ d.name }}</h3>
+  <div class="muted small">{{ d.start }} · <span class="mono">{{ d.code }}</span></div>
+  <div class="cluster cluster--tight">{% include 'components/_badges.html' with badges=d.badges %}</div>
+  <div class="cluster cluster--loose small muted">
+    <span>{% icon "pin" %} {{ d.counts.locations }}</span>
+    <span>{% icon "calendar" %} {{ d.counts.items }}</span>
+    <span>{% icon "phone" %} {{ d.counts.joined }} joined</span>
+    {% if d.counts.to_review %}<span class="tone-brand strong">{% icon "stars" %} {{ d.counts.to_review }} to review</span>{% endif %}
+  </div>
+{% if surface == 'chat' %}</div>{% else %}</a>{% endif %}

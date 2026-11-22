@@ -1,9 +1,11 @@
 {% load static tz %}<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-scheme="auto">
 <head>
   <meta charset="utf-8">
   {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if canonical %}<link rel="canonical" href="{{ canonical }}">{% endif %}
+  {% if noindex %}<meta name="robots" content="noindex">{% endif %}
   <title>{% if shared_plan %}A shared plan for {{ event.name }}{% else %}{{ event.name }} on Attnd{% endif %}</title>
   {% if shared_plan %}<meta name="robots" content="noindex">{% endif %}
   <meta name="description" content="Follow {{ event.name }} in the Attnd app: map, schedule and live updates. Event code {{ event.event_code }}.">
@@ -12,12 +14,13 @@
   {% if app_store_id %}<meta name="apple-itunes-app" content="app-id={{ app_store_id }}, app-clip-bundle-id={{ clip_bundle_id }}, app-clip-display=card">{% endif %}
   <meta name="theme-color" content="#431f86">
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
+  {% if theme_css %}<style nonce="{{ csp_nonce }}" data-event-theme="{{ event.id }}">{{ theme_css|safe }}</style>{% endif %}
 </head>
 <body>
 <main class="join-page">
   <div class="join-card{% if kind == 'ios' %} join-card--single{% endif %}">
     <section class="join-info">
-      <a class="brand" href="/">attnd<span>.</span></a>
+      <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
       {% with t=event.timing %}
         {% if t == 'now' and event.status != 'archived' %}<div class="join-status"><span class="pill pill--live"><i></i>Happening now</span></div>
         {% elif t == 'ended' or event.status == 'archived' %}<div class="join-status"><span class="pill">This event has ended</span></div>{% endif %}

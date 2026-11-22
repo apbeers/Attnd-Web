@@ -1,0 +1,1 @@
+{# featured: the items or places the organizer picked (catalogue 2) #}<p class="pv-heading">{{ s.title|default:"Featured" }}</p>{% for f in s.picked|slice:":3" %}<p class="pv-row">{{ f }}</p>{% empty %}<p class="pv-muted">Pick what to feature</p>{% endfor %}

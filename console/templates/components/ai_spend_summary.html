@@ -1,0 +1,27 @@
+{% load console_tags %}{# ai_spend_summary: this month's AI spend across Attnd (staff). #}<div class="stack component component--ai_spend_summary">
+  <div class="cluster"><h2 class="title-4 grow">{% icon "chart" %} AI spend · {{ d.month_label }}</h2>
+    {% if surface == 'page' %}<a class="button button--ghost button--small" href="?month={{ d.prev }}">← Earlier</a>{% if d.next %}<a class="button button--ghost button--small" href="?month={{ d.next }}">Later →</a>{% endif %}{% endif %}
+    <a class="button button--outline button--small" href="{{ d.csv }}">{% icon "download" %} CSV</a></div>
+  <div class="grid grid--4 grid--stats">
+    <div class="metric"><div class="stat__value">${{ d.total }}</div><div class="eyebrow">Spent</div></div>
+    <div class="metric"><div class="stat__value">{{ d.calls }}</div><div class="eyebrow">AI calls</div></div>
+    <div class="metric"><div class="stat__value">${{ d.exempt }}</div><div class="eyebrow">Not counted (Prospects, demo)</div></div>
+    <div class="metric"><div class="stat__value">${{ d.visitors.cost }}</div><div class="eyebrow">{{ d.visitors.count }} visitor{{ d.visitors.count|pluralize }}</div></div>
+  </div>
+  {% if d.alert != '0' %}<p class="small muted">Alert at ${{ d.alert }} this month: {{ d.alert_percent }}% reached.</p>
+  <span class="meter{% if d.alert_percent >= 80 %} meter--warning{% endif %}" role="img" aria-label="{{ d.alert_percent }}% of the alert amount"><span style="width: {{ d.alert_percent }}%"></span></span>{% endif %}
+  <div class="grid grid--2">
+    <div class="panel stack stack--tight"><h3 class="eyebrow">By feature</h3>
+      {% if d.features %}<ul class="list list--inset small">{% for r in d.features %}<li class="cluster"><span class="grow">{{ r.label }}</span><span class="muted">{{ r.calls }} call{{ r.calls|pluralize }} · {{ r.share }}%</span><span class="nowrap">${{ r.cost }}</span></li>{% endfor %}</ul>{% else %}<p class="small muted">No AI calls this month.</p>{% endif %}</div>
+    <div class="panel stack stack--tight"><h3 class="eyebrow">By model</h3>
+      {% if d.models %}<ul class="list list--inset small">{% for r in d.models %}<li class="cluster"><span class="grow mono">{{ r.label }}</span><span class="muted">{{ r.calls }}</span><span class="nowrap">${{ r.cost }}</span></li>{% endfor %}</ul>{% else %}<p class="small muted">—</p>{% endif %}</div>
+    <div class="panel stack stack--tight"><h3 class="eyebrow">People who used most</h3>
+      {% if d.people %}<ul class="list list--inset small">{% for r in d.people %}<li class="cluster"><span class="grow">{{ r.email }}</span><span class="muted">{{ r.calls }}</span><span class="nowrap">${{ r.cost }}</span></li>{% endfor %}</ul>{% else %}<p class="small muted">—</p>{% endif %}</div>
+    <div class="panel stack stack--tight"><h3 class="eyebrow">Events</h3>
+      {% if d.events %}<ul class="list list--inset small">{% for r in d.events %}<li class="cluster"><a class="grow" href="{{ r.url }}">{{ r.name }}</a><span class="muted mono">{{ r.code }}</span><span class="nowrap">${{ r.cost }}</span></li>{% endfor %}</ul>{% else %}<p class="small muted">—</p>{% endif %}</div>
+  </div>
+  {% if d.latest %}<div class="panel stack stack--tight"><h3 class="eyebrow">Latest calls</h3>
+    <div class="table-scroll"><table class="data-table data-table--compact small"><thead><tr><th>When</th><th>Who</th><th>Feature</th><th>Event</th><th>Model</th><th>Cost</th></tr></thead><tbody>
+    {% for r in d.latest %}<tr><td class="nowrap">{{ r.when }}</td><td>{{ r.who }}</td><td>{{ r.feature }}{% if r.background %} <span class="badge">background</span>{% endif %}{% if r.exempt %} <span class="badge">not counted</span>{% endif %}</td><td>{% if r.url %}<a href="{{ r.url }}">{{ r.event }}</a>{% endif %}</td><td class="mono">{{ r.model }}</td><td class="nowrap">${{ r.cost }}</td></tr>{% endfor %}
+    </tbody></table></div></div>{% endif %}
+</div>

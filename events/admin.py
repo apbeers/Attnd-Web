@@ -2,7 +2,14 @@
 Organizers manage their events in the console (/console/), never here."""
 from django.contrib import admin
 
-from events.models import Device, Event, Location, Notification, ScheduledItem, generate_event_code
+from events.models import (Device, Event, EventInvite, EventMember, Location, Notification, PlaceImageAttempt,
+                           ScheduledItem, generate_event_code)
+
+
+class HistoryAdmin(admin.ModelAdmin):
+    """History pages that also show changes made in the console and by Ask Attnd (console/history.py: a LogEntry per
+    change, with how it was made and the values before → after)."""
+    object_history_template = 'admin/attnd_object_history.html'
 
 
 class LocationInline(admin.TabularInline):
@@ -18,7 +25,7 @@ class NotificationInline(admin.TabularInline):
 
 
 @admin.register(Event)
-class EventAdmin(admin.ModelAdmin):
+class EventAdmin(HistoryAdmin):
     inlines = [LocationInline, NotificationInline]
     list_display = ['name', 'event_code', 'status', 'start_time', 'paid', 'plan', 'user']
     list_filter = ['status', 'paid', 'plan']
@@ -45,7 +52,7 @@ class ScheduledItemInline(admin.TabularInline):
 
 
 @admin.register(Location)
-class LocationAdmin(admin.ModelAdmin):
+class LocationAdmin(HistoryAdmin):
     inlines = [ScheduledItemInline]
     list_display = ['name', 'event', 'category', 'address']
     list_filter = ['event']
@@ -64,7 +71,7 @@ class LocationAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScheduledItem)
-class ScheduledItemAdmin(admin.ModelAdmin):
+class ScheduledItemAdmin(HistoryAdmin):
     list_display = ['name', 'start_time', 'location', 'event']
     list_filter = ['event']
     search_fields = ['name', 'description']
@@ -74,7 +81,7 @@ class ScheduledItemAdmin(admin.ModelAdmin):
 
 
 @admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
+class NotificationAdmin(HistoryAdmin):
     list_display = ['title', 'event', 'send_time', 'priority', 'sent']
     list_filter = ['sent', 'priority', 'event']
     search_fields = ['title', 'body', 'event__name']
@@ -88,3 +95,25 @@ class DeviceAdmin(admin.ModelAdmin):
     list_filter = ['platform', 'app_clip', 'subscribed']
     search_fields = ['id']
     raw_id_fields = ['event']
+
+
+@admin.register(EventMember)
+class EventMemberAdmin(HistoryAdmin):
+    list_display = ['user', 'event', 'role']
+    list_filter = ['role']
+    search_fields = ['user__email', 'event__name']
+    raw_id_fields = ['event', 'user']
+
+
+@admin.register(EventInvite)
+class EventInviteAdmin(HistoryAdmin):
+    list_display = ['email', 'event', 'role', 'created_at']
+    search_fields = ['email', 'event__name']
+    raw_id_fields = ['event', 'invited_by']
+
+
+@admin.register(PlaceImageAttempt)
+class PlaceImageAttemptAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'event', 'location', 'source', 'result', 'cost_usd')
+    list_filter = ('result', 'source')
+    readonly_fields = [f.name for f in PlaceImageAttempt._meta.fields]

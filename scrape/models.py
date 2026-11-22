@@ -12,7 +12,10 @@ class IngestJob(models.Model):
 
     KIND_CREATE = 'create'
     KIND_REFRESH = 'refresh'
-    KIND_CHOICES = [(KIND_CREATE, 'Create event'), (KIND_REFRESH, 'Refresh event')]
+    KIND_THEME = 'theme'  # API-023: pick the event's colours with the AI (events.theme_ai)
+    KIND_DETAILS = 'details'  # batch 7 A1: fill empty "Details for the assistant" from the website (scrape.detail_fill)
+    KIND_CHOICES = [(KIND_CREATE, 'Create event'), (KIND_REFRESH, 'Refresh event'), (KIND_THEME, 'Pick colours'),
+                    (KIND_DETAILS, 'Fill in details')]
 
     QUEUED, RUNNING, DONE, FAILED = 'queued', 'running', 'done', 'failed'
     STATUS_CHOICES = [(QUEUED, 'Queued'), (RUNNING, 'Running'), (DONE, 'Done'), (FAILED, 'Failed')]
@@ -20,6 +23,9 @@ class IngestJob(models.Model):
     TRIGGER_TRIAL, TRIGGER_CONSOLE, TRIGGER_SCHEDULE = 'trial', 'console', 'schedule'
     # The website watcher saw pages change: re-read only those pages (job.urls), without crawling.
     TRIGGER_WATCH = 'watch'
+    TRIGGER_PASTE = 'paste'  # pasted text or a dropped file for an existing event (stage I3): only that, no deletes
+    TRIGGER_PROSPECT = 'prospect'  # a staff test copy of a prospect's event (prospects.testing)
+    TRIGGER_HOME = 'home'  # the home page's composer (home.onboarding): a demo event for a new organizer
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     kind = models.CharField(max_length=16, choices=KIND_CHOICES)
@@ -38,9 +44,13 @@ class IngestJob(models.Model):
     timezone = models.CharField(max_length=64, blank=True)
     # Attnd Studio: when the import finishes, also bring the first source website into Studio (studio.importer).
     studio_import = models.BooleanField(default=False)
+    # Prospects (staff): the event is a published, unlisted, testing-only copy (Event.testing_only).
+    testing_only = models.BooleanField(default=False)
 
     # Progress / output
     progress = models.CharField(max_length=256, blank=True)
+    # Friendly steps for the task tray: [{text, state: running|done|failed|waiting, at}] (scrape.jobs.Steps)
+    steps = models.JSONField(default=list, blank=True)
     error = models.TextField(blank=True)
     result = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(default=dj_tz.now)
@@ -49,6 +59,9 @@ class IngestJob(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        # The task feed (console:tasks): a person's own jobs newest first, and the ones that finished lately.
+        indexes = [models.Index(fields=['created_by', '-created_at'], name='ingestjob_creator_recent'),
+                   models.Index(fields=['finished_at'], name='ingestjob_finished')]
 
     def __str__(self):
         return f'{self.get_kind_display()} [{self.status}] {self.event or self.urls}'
@@ -119,7 +132,7 @@ class Change(models.Model):
 class SourcePage(models.Model):
     """One web page an event's content comes from, fingerprinted so the watcher can tell cheaply
     whether it changed (scrape.watch). AI runs only when a fingerprint changes."""
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='source_pages')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='source_pages', db_index=False)  # db_review §4
     url = models.URLField(max_length=1024)
     etag = models.CharField(max_length=256, blank=True)
     last_modified = models.CharField(max_length=64, blank=True)

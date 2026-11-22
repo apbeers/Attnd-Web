@@ -1,0 +1,541 @@
+# Attnd's architecture: the parts code can't see (apps, hosting, DNS, outside services) and how they connect.
+# Read by platform_admin/architecture.py (Platform → Architecture) together with what it generates from the code
+# (Django apps, models, URLs, API v2 endpoints, push types, Ask Attnd actions, integrations configured).
+# TOML, not YAML: the standard library reads TOML (tomllib) and we add no dependencies.
+#
+# Adding an integration = add it here (a node with its hosts and env vars). attnd/tests_architecture.py fails CI
+# when a Django app, an outside host the code calls, a settings env var or a push type is missing from this file.
+#
+# layers: clients · edge · apps · data · external      tags: infra · data · ai · push · store · web · mail · pay
+
+[[node]]
+id = "ios_app"
+label = "iOS app"
+layer = "clients"
+tags = ["store", "push"]
+description = "SwiftUI app (iOS 26+, iPhone and iPhone Duo): API v2, App Attest, APNs, Live Activities, on-device Foundation Models."
+docs = "https://github.com/apbeers/Attnd-iOS/blob/develop/CLAUDE.md"
+code = ["Attnd-iOS: Attnd/"]
+edges = [{ to = "heroku_router", label = "API v2 (bundle, join, usage)", protocol = "HTTPS JSON", auth = "App Attest JWT" },
+         { to = "apns", label = "device + Live Activity tokens", protocol = "APNs", auth = "Apple" }]
+
+[[node]]
+id = "app_clip"
+label = "App Clip"
+layer = "clients"
+tags = ["store", "push"]
+description = "The same code as the iOS app, opened from the join QR / link with nothing to install (no silent pushes: 60 s poll)."
+docs = "https://github.com/apbeers/Attnd-iOS/blob/develop/CLAUDE.md"
+code = ["Attnd-iOS: AttndAppClip/"]
+edges = [{ to = "heroku_router", label = "API v2", protocol = "HTTPS JSON", auth = "App Attest JWT" }]
+
+[[node]]
+id = "ios_widgets"
+label = "Live Activity widgets"
+layer = "clients"
+tags = ["push"]
+description = "AttndWidgets / AttndClipWidgets: the Lock Screen Live Activity, Dynamic Island, Watch Smart Stack."
+code = ["Attnd-iOS: AttndWidgets/"]
+edges = [{ to = "apns", label = "liveactivity pushes (urgent)", protocol = "APNs", auth = "Apple" }]
+
+[[node]]
+id = "android_app"
+label = "Android app"
+layer = "clients"
+tags = ["store", "push"]
+description = "Kotlin + Compose (Android 15+): API v2, Play Integrity, FCM, Live Updates."
+docs = "https://github.com/apbeers/Attnd-Android/blob/develop/CLAUDE.md"
+code = ["Attnd-Android: app/"]
+edges = [{ to = "heroku_router", label = "API v2", protocol = "HTTPS JSON", auth = "Play Integrity JWT" },
+         { to = "fcm", label = "push token", protocol = "FCM", auth = "Google" }]
+
+[[node]]
+id = "console_browser"
+label = "Organizer console"
+layer = "clients"
+tags = ["web"]
+description = "The /console/ in a browser: pages, the Ask Attnd chat and canvas, Studio's preview."
+code = ["console/", "agent/static/agent/"]
+edges = [{ to = "heroku_router", label = "pages, fetch, long-polls", protocol = "HTTPS", auth = "session + 2FA / passkeys" },
+         { to = "google_maps_js", label = "maps, address search", protocol = "HTTPS", auth = "browser key" }]
+
+[[node]]
+id = "public_web"
+label = "Public site"
+layer = "clients"
+tags = ["web"]
+description = "attnd.app home page, join and shared-plan pages, the privacy page."
+code = ["home/", "join/"]
+edges = [{ to = "heroku_router", label = "pages", protocol = "HTTPS", auth = "none" },
+         { to = "google_geolocation", label = "approximate place (home page)", protocol = "HTTPS", auth = "browser key" }]
+
+[[node]]
+id = "studio_visitors"
+label = "Studio sites (visitors)"
+layer = "clients"
+tags = ["web"]
+description = "Hosted event websites on the sites host (attnd.site): no cookies, their own CSP."
+code = ["studio/views_sites.py", "studio/site_static/"]
+hosts = ["fonts.googleapis.com", "fonts.gstatic.com", "player.vimeo.com", "www.youtube-nocookie.com", "www.openstreetmap.org"]
+edges = [{ to = "heroku_router", label = "pages, data.json, forms, beacons", protocol = "HTTPS", auth = "none" }]
+
+[[node]]
+id = "heroku_router"
+label = "Heroku router + dynos"
+layer = "edge"
+tags = ["infra"]
+description = "attnd-web (production) and attnd-dev: web (gunicorn ASGI worker), scheduler every 10 min, optional worker / tasks dynos."
+docs = "https://devcenter.heroku.com/"
+code = ["Procfile", "attnd/asgi.py", "attnd/wsgi_bridge.py", "attnd/longpoll_asgi.py"]
+env = ["DATABASE_URL"]
+edges = [{ to = "attnd", label = "every request", protocol = "ASGI", auth = "" }]
+
+[[node]]
+id = "dns"
+label = "DNS (Namecheap)"
+layer = "edge"
+tags = ["infra"]
+description = "attnd.app (console, API, site; dev.attnd.app) and attnd.site (Studio sites; dev.attnd.site); Mailgun's mg.attnd.app records."
+code = ["SETUP.md"]
+edges = [{ to = "heroku_router", label = "CNAME", protocol = "DNS", auth = "" }]
+
+# --- Django apps (each local app in INSTALLED_APPS needs an entry) -----------------------------------------------
+
+[[node]]
+id = "attnd"
+label = "attnd (project)"
+layer = "apps"
+tags = ["infra"]
+description = "Settings, root URLs, ASGI, middleware, permissions, Claude / Google / image helpers, rate limits, IndexNow."
+code = ["attnd/"]
+env = ["SECRET_KEY", "SECRET_KEY_FALLBACKS", "DEBUG", "CI", "ALLOWED_HOSTS_EXTRA", "PERMISSIONS_POLICY", "SITE_URL",
+       "CSP_MODE", "ADMIN_URL_PATH", "RATE_LIMIT_TRUST_X_FORWARDED_FOR", "SECURE_HSTS_SECONDS", "DB_POOL", "DB_POOL_MAX",
+       "CACHE_BACKEND", "AI_MODEL", "AI_SMART_MODEL", "ADMIN_EMAILS", "CONTACT_EMAIL", "SOCIAL_PROFILES",
+       "IMAGE_LOCAL_VARIANTS", "IMAGE_SELF_HOST_ON_SAVE", "IOS_APP_STORE_URL", "ANDROID_PACKAGE_NAME"]
+edges = [{ to = "postgres", label = "ORM", protocol = "psycopg 3 pool", auth = "DATABASE_URL" }]
+
+[[node]]
+id = "events"
+label = "events"
+layer = "apps"
+tags = ["data", "push"]
+description = "Core models and the whole API v2: bundle, join, devices, usage, preview phones, push, drafts, free limit, layouts, themes."
+code = ["events/"]
+env = ["API_KEY", "STATIC_API_KEY_ENABLED", "CI_API_KEYS", "SUPPORTED_API_VERSIONS", "APP_MIN_VERSION_IOS",
+       "APP_MIN_VERSION_ANDROID", "APP_LATEST_VERSION_IOS", "APP_LATEST_VERSION_ANDROID", "APP_UPDATE_MESSAGE",
+       "CONTENT_PUSH_ENABLED", "CONTENT_PUSH_DELAY", "CONTENT_PUSH_MIN_INTERVAL", "FREE_DEVICE_LIMIT", "DEMO_EVENT_CODE",
+       "SHOWCASE_EVENTS", "PLAN_SUGGESTIONS_MODEL", "PLACE_IMAGES_ENABLED", "PLACE_IMAGES_DAILY_CAP_USD",
+       "EVENT_COVERS_DAILY_CAP_USD", "TASKS_BACKEND"]
+edges = [{ to = "apns", label = "alerts, silent content_updated, liveactivity", protocol = "HTTP/2", auth = ".p8 JWT" },
+         { to = "fcm", label = "data messages", protocol = "HTTPS", auth = "service account" },
+         { to = "anthropic", label = "plan suggestions, photo checks", protocol = "SDK", auth = "API key" },
+         { to = "wikimedia", label = "place photos, covers", protocol = "HTTPS", auth = "none" },
+         { to = "apple_music", label = "artist links", protocol = "HTTPS", auth = "MusicKit JWT" },
+         { to = "cloudinary", label = "media", protocol = "HTTPS", auth = "CLOUDINARY_URL" }]
+
+[[node]]
+id = "console"
+label = "console"
+layer = "apps"
+tags = ["web"]
+description = "Organizer console, components, sign-in (passkeys, 2FA), undo / history, billing pages, organizer emails."
+code = ["console/"]
+env = ["SIGNUPS_OPEN", "CHAT_DEFAULT_ON", "NEW_ACCOUNT_DAILY_IMPORTS", "TWO_FACTOR_ISSUER", "WEBAUTHN_RP_ID",
+       "WEBAUTHN_ORIGINS", "WEBAUTHN_RP_NAME", "GOOGLE_MAPS_BROWSER_KEY", "GOOGLE_MAPS_MAP_ID"]
+edges = [{ to = "mailgun", label = "sign-in codes, invites, receipts", protocol = "SMTP", auth = "Mailgun login" },
+         { to = "nominatim", label = "address search fallback", protocol = "HTTPS", auth = "none" },
+         { to = "google_places", label = "address search", protocol = "HTTPS", auth = "server key" }]
+
+[[node]]
+id = "home"
+label = "home"
+layer = "apps"
+tags = ["web"]
+description = "The home page, onboarding composer, gallery, privacy page, sitemaps."
+code = ["home/"]
+
+[[node]]
+id = "join"
+label = "join"
+layer = "apps"
+tags = ["web", "store"]
+description = "/join/<code>/ and /p/ shared plans → App Store / Play, AASA and assetlinks."
+code = ["join/"]
+env = ["ANDROID_SHA256_FINGERPRINT", "ANDROID_SIGNING_CERT_SHA256"]
+edges = [{ to = "app_store", label = "store links", protocol = "HTTPS", auth = "" },
+         { to = "google_play", label = "store links + install referrer", protocol = "HTTPS", auth = "" }]
+
+[[node]]
+id = "scrape"
+label = "scrape"
+layer = "apps"
+tags = ["ai"]
+description = "AI import, website watching, change sets, crawler."
+code = ["scrape/"]
+env = ["INGEST_RUN_INLINE", "WATCH_MIN_AI_GAP_MINUTES", "WATCH_MAX_AI_RUNS_PER_DAY"]
+edges = [{ to = "anthropic", label = "extraction (Haiku)", protocol = "SDK", auth = "API key" },
+         { to = "google_geocoding", label = "addresses", protocol = "HTTPS", auth = "server key" },
+         { to = "google_places", label = "places", protocol = "HTTPS", auth = "server key" }]
+
+[[node]]
+id = "attestation"
+label = "attestation"
+layer = "apps"
+tags = ["infra"]
+description = "App Attest and Play Integrity → short-lived JWTs."
+code = ["attestation/"]
+env = ["APPLE_APP_BUNDLE_ID", "APPLE_TEAM_ID", "APPLE_ATTEST_ENVIRONMENT", "ATTESTATION_JWT_SECRET",
+       "ATTESTATION_JWT_TTL_HOURS", "GOOGLE_SERVICE_ACCOUNT_JSON",
+       "ANDROID_ALLOW_UNRECOGNIZED_APP", "ANDROID_REQUIRE_PLAY_LICENSE", "ANDROID_REQUIRE_STRONG_INTEGRITY"]
+hosts = ["developer.android.com", "developer.apple.com", "www.apple.com", "www.w3.org"]
+edges = [{ to = "google_play_integrity", label = "verify token", protocol = "HTTPS", auth = "service account" }]
+
+[[node]]
+id = "credit"
+label = "credit"
+layer = "apps"
+tags = ["ai"]
+description = "The AI spend ledger, monthly credit, limits and overrides."
+code = ["credit/"]
+env = ["AI_MONTHLY_CREDIT_USD", "AI_VISITOR_CREDIT_USD", "AI_PLATFORM_ALERT_USD"]
+
+[[node]]
+id = "diagnostics"
+label = "diagnostics"
+layer = "apps"
+tags = ["data"]
+description = "App debug logs, crash reports, R8 retrace, iOS symbolication, endpoint timings."
+code = ["diagnostics/"]
+env = ["DIAGNOSTICS_MAX_MB", "DIAGNOSTICS_DEV_DAYS", "DIAGNOSTICS_DEBUG_DAYS", "DIAGNOSTICS_SESSION_MAX_ENTRIES",
+       "DIAGNOSTICS_MAX_SYMBOL_FILES", "GITHUB_SYMBOLICATE_TOKEN", "GITHUB_SYMBOLICATE_REPO", "GITHUB_SYMBOLICATE_REF"]
+edges = [{ to = "github_actions", label = "symbolicate.yml dispatch", protocol = "HTTPS", auth = "fine-grained token" }]
+
+[[node]]
+id = "studio"
+label = "studio"
+layer = "apps"
+tags = ["ai", "web"]
+description = "Attnd Studio: AI-designed websites, hosting on the sites host, quality check, content scan, analytics."
+code = ["studio/"]
+env = ["SITES_HOST", "STUDIO_BETA_EMAILS", "STUDIO_AI_PROVIDER", "STUDIO_ANTHROPIC_MODEL", "STUDIO_OPENAI_MODEL",
+       "STUDIO_OPENAI_FALLBACK_MODEL", "STUDIO_IMAGE_MODEL", "STUDIO_IMAGE_FALLBACK_MODEL", "STUDIO_DAILY_SPEND_CAP_USD",
+       "STUDIO_MAX_STEPS", "STUDIO_PREVIEW_LINK_DAYS", "STUDIO_IMPORT_MAX_STEPS", "STUDIO_RUN_MAX_MINUTES",
+       "STUDIO_IMPORT_SECONDS", "STUDIO_IMPORT_MAX_MB"]
+edges = [{ to = "anthropic", label = "the designer (Sonnet), content scan", protocol = "SDK", auth = "API key" },
+         { to = "openai", label = "images", protocol = "SDK", auth = "API key" },
+         { to = "indexnow", label = "site addresses", protocol = "HTTPS", auth = "key file" }]
+
+[[node]]
+id = "prospects"
+label = "prospects"
+layer = "apps"
+tags = ["ai"]
+description = "Staff sales pipeline: web-search discovery, contacts, test events, claims."
+code = ["prospects/"]
+env = ["PROSPECT_MODEL", "PROSPECT_SCORE_MODEL", "PROSPECT_DAILY_SPEND_CAP_USD", "PROSPECT_RUN_MAX_MINUTES"]
+edges = [{ to = "anthropic", label = "web search (Sonnet), scoring (Haiku)", protocol = "SDK", auth = "API key" }]
+
+[[node]]
+id = "agent"
+label = "agent (Ask Attnd)"
+layer = "apps"
+tags = ["ai"]
+description = "The console's AI agent: registry of views, internal requests, run loop, chat + canvas."
+code = ["agent/"]
+env = ["ANTHROPIC_API_KEY", "AGENT_ANTHROPIC_MODEL", "AGENT_REFUSAL_MODEL", "AGENT_EFFORT", "AGENT_PLANNING_EFFORT",
+       "AGENT_DAILY_SPEND_CAP_USD", "AGENT_MAX_STEPS", "AGENT_RUN_MAX_MINUTES", "AGENT_MAX_ATTACHMENT_MB"]
+edges = [{ to = "anthropic", label = "Messages API (Haiku)", protocol = "SDK", auth = "API key" }]
+
+[[node]]
+id = "background"
+label = "background"
+layer = "apps"
+tags = ["infra"]
+description = "django.tasks on our own Postgres queue (off by default)."
+code = ["background/"]
+edges = [{ to = "postgres", label = "QueuedTask", protocol = "SQL", auth = "" }]
+
+[[node]]
+id = "platform_admin"
+label = "platform_admin"
+layer = "apps"
+tags = ["pay"]
+description = "Plans, prices, overrides, upgrade requests, billing (invoices, Stripe), the Platform page's sub-tabs."
+code = ["platform_admin/"]
+env = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]
+edges = [{ to = "stripe", label = "Checkout, Portal, webhook", protocol = "SDK / HTTPS", auth = "secret key + signature" }]
+
+# --- data ----------------------------------------------------------------------------------------------------------
+
+[[node]]
+id = "postgres"
+label = "PostgreSQL 18"
+layer = "data"
+tags = ["data", "infra"]
+description = "Heroku Postgres essential-0 (1 GB, 20 connections): every model, the database cache, the task queue."
+docs = "https://devcenter.heroku.com/articles/heroku-postgresql"
+code = ["*/models.py", "background/backend.py"]
+
+[[node]]
+id = "cloudinary"
+label = "Cloudinary"
+layer = "data"
+tags = ["data"]
+description = "Media storage and delivery transforms (images), Studio assets (raw)."
+docs = "https://cloudinary.com/documentation"
+code = ["attnd/images.py", "studio/models.py"]
+env = ["CLOUDINARY_URL"]
+hosts = ["res.cloudinary.com"]
+
+# --- external --------------------------------------------------------------------------------------------------------
+
+[[node]]
+id = "anthropic"
+label = "Anthropic (Claude)"
+layer = "external"
+tags = ["ai"]
+description = "Every AI call: imports, Ask Attnd, Studio's designer, scans, vision checks."
+docs = "https://docs.anthropic.com/"
+code = ["attnd/claude.py", "agent/providers.py", "studio/ai.py"]
+hosts = ["api.anthropic.com"]
+status = "ai"
+
+[[node]]
+id = "openai"
+label = "OpenAI (images)"
+layer = "external"
+tags = ["ai"]
+description = "Studio's image generation only."
+code = ["studio/ai.py"]
+env = ["OPENAI_API_KEY"]
+hosts = ["api.openai.com"]
+
+[[node]]
+id = "google_places"
+label = "Google Places"
+layer = "external"
+tags = ["data"]
+description = "Text Search, Place Details (websites), live place photos (API-031)."
+code = ["attnd/google.py", "events/views_photos.py"]
+env = ["GOOGLE_PLACES_API_KEY", "GOOGLE_PLACE_PHOTOS", "GOOGLE_PHOTOS_DAILY_MAX"]
+hosts = ["places.googleapis.com"]
+status = "google"
+
+[[node]]
+id = "google_geocoding"
+label = "Google Geocoding"
+layer = "external"
+tags = ["data"]
+description = "Addresses → coordinates for imports and the location form."
+code = ["attnd/google.py"]
+hosts = ["maps.googleapis.com"]
+status = "google"
+
+[[node]]
+id = "google_maps_js"
+label = "Google Maps JS + Static Maps"
+layer = "external"
+tags = ["web"]
+description = "The console's maps and address autocomplete (browser key), the event map's static image."
+code = ["console/static/console/maps.js"]
+
+[[node]]
+id = "google_geolocation"
+label = "Google Geolocation"
+layer = "external"
+tags = ["web"]
+description = "The home page's approximate place (from the browser, once a day)."
+code = ["home/static/home/home.js"]
+
+[[node]]
+id = "google_play_integrity"
+label = "Play Integrity"
+layer = "external"
+tags = ["infra"]
+description = "Verifies the Android app's integrity token."
+code = ["attestation/android_attest.py"]
+hosts = ["playintegrity.googleapis.com", "www.googleapis.com"]
+
+[[node]]
+id = "fcm"
+label = "Firebase Cloud Messaging"
+layer = "external"
+tags = ["push"]
+description = "Android pushes: notifications, content_updated, urgent."
+code = ["events/push.py"]
+env = ["FCM_PROJECT_ID", "FCM_SERVICE_ACCOUNT_JSON"]
+hosts = ["fcm.googleapis.com"]
+status = "push"
+
+[[node]]
+id = "apns"
+label = "Apple Push (APNs)"
+layer = "external"
+tags = ["push"]
+description = "iOS and App Clip alerts, silent content_updated, Live Activity updates (per topic)."
+code = ["events/push.py"]
+env = ["APNS_AUTH_KEY", "APNS_KEY_ID", "APNS_TEAM_ID", "APNS_TOPIC", "APNS_CLIP_TOPIC", "APNS_USE_SANDBOX"]
+hosts = ["api.push.apple.com", "api.sandbox.push.apple.com"]
+status = "push"
+
+[[node]]
+id = "apple_music"
+label = "Apple Music API"
+layer = "external"
+tags = ["data"]
+description = "Artist links for performers (API-030)."
+code = ["events/music.py"]
+env = ["APPLE_MUSIC_KEY_ID", "APPLE_MUSIC_PRIVATE_KEY"]
+hosts = ["api.music.apple.com", "music.apple.com", "music.apple"]
+
+[[node]]
+id = "app_store"
+label = "App Store / App Store Connect"
+layer = "external"
+tags = ["store"]
+description = "iOS and App Clip distribution; CI uploads TestFlight builds and the listing."
+code = ["Attnd-iOS: scripts/ci/asc.py"]
+hosts = ["apps.apple.com"]
+
+[[node]]
+id = "google_play"
+label = "Google Play"
+layer = "external"
+tags = ["store"]
+description = "Android distribution, the install referrer; CI publishes with the Play Developer API."
+code = ["Attnd-Android: scripts/ci/play_publish.py"]
+hosts = ["play.google.com"]
+
+[[node]]
+id = "github_actions"
+label = "GitHub Actions"
+layer = "external"
+tags = ["infra"]
+description = "CI for the three repos, deploys, the nightly agent harness, iOS symbolication."
+code = [".github/workflows/"]
+hosts = ["api.github.com", "github.com"]
+
+[[node]]
+id = "mailgun"
+label = "Mailgun"
+layer = "external"
+tags = ["mail"]
+description = "Every email (SMTP, mg.attnd.app): one branded HTML template + plain text, the Emails log, one-click unsubscribe; its signed webhook reports delivered / failed / complained."
+code = ["attnd/settings.py", "console/mail.py", "templates/emails/", "platform_admin/views_email.py"]
+env = ["EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD", "DEFAULT_FROM_EMAIL", "EMAIL_ALLOWED_RECIPIENTS", "MAILGUN_SMTP_LOGIN",
+       "MAILGUN_SMTP_PASSWORD", "MAILGUN_SMTP_PORT", "MAILGUN_SMTP_SERVER", "MAILGUN_WEBHOOK_SIGNING_KEY", "EMAIL_LOG_DAYS"]
+status = "mail"
+
+[[node]]
+id = "stripe"
+label = "Stripe"
+layer = "external"
+tags = ["pay"]
+description = "Card payments for plans: Checkout, Customer Portal, webhooks (off until the keys exist)."
+code = ["platform_admin/billing.py"]
+
+[[node]]
+id = "wikimedia"
+label = "Wikimedia Commons"
+layer = "external"
+tags = ["data"]
+description = "Licensed photos for places and gallery covers."
+code = ["events/place_images.py", "events/covers.py"]
+hosts = ["commons.wikimedia.org", "upload.wikimedia.org"]
+
+[[node]]
+id = "nominatim"
+label = "OpenStreetMap Nominatim"
+layer = "external"
+tags = ["data"]
+description = "Address search when Google isn't configured."
+code = ["console/places.py"]
+hosts = ["nominatim.openstreetmap.org"]
+
+[[node]]
+id = "indexnow"
+label = "IndexNow / Search Console"
+layer = "external"
+tags = ["web"]
+description = "Pings search engines about changed public pages (production); Search Console and Bing verify the site."
+code = ["attnd/indexnow.py"]
+env = ["INDEXNOW_KEY"]
+hosts = ["api.indexnow.org"]
+
+# Push types the server sends (data `type`), events/push.py.
+[push_types]
+notification = "an organizer notification (alert; urgent ones time-sensitive, plus Live Activity pushes)"
+content_updated = "silent: refetch bundle/ (jitter_ms, preview phones 0)"
+
+# Hosts the code names without calling them (documentation links, schema ids, examples, form placeholders).
+[ignore_hosts]
+"attnd.app" = "our own host"
+"dev.attnd.app" = "our own dev host"
+"attnd.site" = "our own sites host"
+"dev.attnd.site" = "our own dev sites host"
+"schema.org" = "JSON-LD @context, never fetched"
+"docs.djangoproject.com" = "a comment"
+"example.org" = "demo data"
+"example.com" = "examples"
+"yourevent.com" = "a form placeholder"
+
+# Flows: drawn step by step on the diagram (Reduce Motion: a numbered list).
+[[flow]]
+id = "join"
+label = "QR → App Clip → join → bundle"
+steps = [["public_web", "A visitor scans the join QR (or opens the link)"],
+         ["app_clip", "iPhone opens the App Clip (Android: Play, then the install referrer)"],
+         ["heroku_router", "POST events/<id>/join/ with the device id"],
+         ["events", "Free limit checked, the device registered"],
+         ["postgres", "GET bundle/ answered from the published copy (304 when unchanged)"]]
+
+[[flow]]
+id = "import"
+label = "AI import"
+steps = [["console_browser", "An organizer pastes a website or drops a flyer"],
+         ["scrape", "An IngestJob crawls the site through the SSRF-guarded fetcher"],
+         ["anthropic", "Claude Haiku extracts locations, schedule, details"],
+         ["google_geocoding", "Addresses become coordinates"],
+         ["postgres", "The event is created; place photos and colours follow in the background"]]
+
+[[flow]]
+id = "watching"
+label = "Website watching"
+steps = [["heroku_router", "The scheduler runs every 10 minutes"],
+         ["scrape", "Changed pages only (conditional GET + hash)"],
+         ["anthropic", "The AI re-reads them with the current data"],
+         ["console_browser", "A change set waits for review (or applies in auto mode)"]]
+
+[[flow]]
+id = "urgent"
+label = "Urgent notification"
+steps = [["console_browser", "The organizer sends an urgent notification (it asks first)"],
+         ["events", "Every device with a token, time-sensitive"],
+         ["apns", "iOS alert + a liveactivity push to each Live Activity token"],
+         ["fcm", "Android high-priority data message"],
+         ["ios_widgets", "The Lock Screen shows the urgent block"]]
+
+[[flow]]
+id = "preview"
+label = "Preview phone"
+steps = [["console_browser", "The organizer scans Preview on my phone"],
+         ["events", "join/ with preview_token: a preview phone (≤ 3)"],
+         ["heroku_router", "changes/ long-polls on the event loop"],
+         ["ios_app", "Every draft change shows within a second"]]
+
+[[flow]]
+id = "studio_publish"
+label = "Studio publish"
+steps = [["console_browser", "Publish the website (it asks)"],
+         ["studio", "The quality check's errors and the rights confirmation"],
+         ["anthropic", "The content scan (hold → staff review)"],
+         ["studio_visitors", "The site is live; the app gets website_url"],
+         ["indexnow", "Search engines are told"]]
+
+[[flow]]
+id = "ai_credit"
+label = "AI credit check"
+steps = [["console_browser", "Any AI action (Ask Attnd, import, Studio)"],
+         ["credit", "The month's credit and the daily caps are checked"],
+         ["anthropic", "The call"],
+         ["postgres", "Its cost goes into the AiSpend ledger"]]

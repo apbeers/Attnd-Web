@@ -7,7 +7,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.core.cache import cache
+from django.core.cache import caches
 from django.db import connection
 from django.test import Client, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -24,7 +24,8 @@ CLOUD = 'https://res.cloudinary.com/demo/image/upload/'
 @override_settings(API_KEY='test-key')
 class PerfBase(TestCase):
     def setUp(self):
-        cache.clear()
+        caches['default'].clear()
+        caches['local'].clear()
         self.user = User.objects.create_user('o', 'o@example.com', 'pw')
         start = timezone.now() + timedelta(hours=2)
         self.event = Event.objects.create(
@@ -46,6 +47,8 @@ class PerfBase(TestCase):
         self.event.refresh_from_db()
         self.client = Client()
         self.url = f'/api/v2/events/{self.event.id}/bundle/'
+        from events import drafts
+        drafts.publish(self.event, push=False)  # §4: what attendees get (built once, here)
 
     def get(self, path, **extra):
         return self.client.get(path, secure=True, **AUTH, **extra)
@@ -84,13 +87,16 @@ class BundlePerfTests(PerfBase):
         loc = self.locations[0]
         loc.name = 'Renamed'
         loc.save()  # bumps content_version
+        from events import drafts
+        drafts.publish(self.event)  # §4: attendees get it after Publish
         second = self.get(self.url).json()
         self.assertGreater(second['content_version'], first['content_version'])
         self.assertIn('Renamed', [loc['name'] for loc in second['locations']])
 
     def test_304_without_building_the_bundle(self):
         etag = self.get(self.url)['ETag']
-        cache.clear()
+        caches['default'].clear()
+        caches['local'].clear()
         with self.assertNumQueries(1), patch('events.content.bundle', side_effect=AssertionError('built')):
             resp = self.get(self.url, HTTP_IF_NONE_MATCH=etag)
         self.assertEqual(resp.status_code, 304)
@@ -180,6 +186,10 @@ class AppImageTests(TestCase):
 class PagePerfTests(PerfBase):
     def test_public_pages(self):
         anon = Client()
+        from django.core.cache import caches
+        caches['local'].clear()
+        with self.assertNumQueries(4):  # the gallery (showcase, DEMO, near you, region), then cached a while
+            self.assertEqual(anon.get('/home/', secure=True).status_code, 200)
         with self.assertNumQueries(0):
             self.assertEqual(anon.get('/', secure=True).status_code, 200)
         with self.assertNumQueries(0):
@@ -202,11 +212,16 @@ class PagePerfTests(PerfBase):
         # More events and devices must not add queries (the dashboard used to join every relation per event).
         for i in range(3):
             Event.objects.create(name=f'Other {i}', event_code=f'OTHER{i}', start_time=timezone.now(), user=self.user)
-        bounds = {'/console/': 8,
-                  f'/console/events/{self.event.id}/': 17,
-                  f'/console/events/{self.event.id}/locations/': 11,
-                  f'/console/events/{self.event.id}/schedule/': 12,
-                  f'/console/events/{self.event.id}/usage/': 21}
+        # +2 on pages with the top bar: the person's group / own permissions, once per request (attnd.permissions).
+        # +1 on event pages: the header's plan / override badges (one query, batch 7).
+        bounds = {'/console/': 10,
+                  f'/console/events/{self.event.id}/': 26,  # +1: the QR card's phones line (API-026), +1 the event's platform override (D2), +4 the status line's next step (readiness checks, batch 7)
+                  f'/console/events/{self.event.id}/locations/': 12,
+                  f'/console/events/{self.event.id}/schedule/': 13,
+                  f'/console/events/{self.event.id}/usage/': 22,
+                  # db_review: one aggregate for the phones a notification reaches, shared with the form component.
+                  f'/console/events/{self.event.id}/notifications/': 13,
+                  '/console/tasks/': 5}
         for url, most in bounds.items():
             with self.subTest(url=url):
                 with self.assertMaxQueries(most):
@@ -221,5 +236,44 @@ class PagePerfTests(PerfBase):
         org = TwoFactorClient()
         org.force_login(member_user)
         resp = org.get('/console/', secure=True)
-        event = next(e for e in resp.context['upcoming'] + resp.context['past'] if e.pk == self.event.pk)
+        event = next(e for e in [e for s in resp.context['sections'] for e in s['events']] if e.pk == self.event.pk)
         self.assertEqual((event.n_locations, event.n_items, event.n_devices, event.n_pending), (18, 51, 30, 0))
+
+
+class DbReviewTests(PerfBase):
+    """docs/db_review.md: the counts the notifications page shows, the JSON shape checks, a legacy order that no
+    longer blocks deleting its event."""
+
+    def test_reach_in_one_query(self):
+        from events import push
+        Device.objects.create(id='quiet', event=self.event, platform='ios', subscribed=False, push_token='t',
+                              live_activity_token='la')
+        Device.objects.create(id='ci-x', event=self.event, platform='ios', subscribed=True, push_token='t')
+        event = Event.objects.get(pk=self.event.pk)
+        with self.assertNumQueries(1):
+            counts = push.reach(event)
+            self.assertEqual(push.reach(event), counts)  # memoised on the instance
+        self.assertEqual(counts, {'reach': 30, 'urgent_reach': 31, 'live_activities': 1})
+
+    def test_json_columns_keep_their_shape(self):
+        from django.db import IntegrityError, transaction
+        for model, field, bad in ((Event, 'theme', []), (Event, 'source_urls', {}), (Location, 'tags', 'food'),
+                                  (ScheduledItem, 'context', [1])):
+            with self.subTest(model=model.__name__, field=field), self.assertRaises(IntegrityError), \
+                    transaction.atomic():
+                row = model.objects.filter(event=self.event).first() if model is not Event else self.event
+                model.objects.filter(pk=row.pk).update(**{field: bad})
+
+    def test_legacy_order_does_not_block_deleting_the_event(self):
+        from console.models import Order
+        Order.objects.create(order_id='GPA.1', event=self.event, user=self.user)
+        self.event.delete()
+        self.assertIsNone(Order.objects.get().event)
+
+    def test_task_feed_still_lists_own_jobs(self):
+        from scrape.models import IngestJob
+        IngestJob.objects.create(kind=IngestJob.KIND_CHOICES[0][0], created_by=self.user, event=self.event)
+        from console.testing import TwoFactorClient
+        org = TwoFactorClient()
+        org.force_login(self.user)
+        self.assertEqual(len(org.get('/console/tasks/', secure=True).json()['tasks']), 1)

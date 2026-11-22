@@ -1,0 +1,1 @@
+{# earlier: organizer updates (catalogue 2) #}<p class="pv-heading">{{ s.title|default:"Earlier" }}</p>{% for u in x.updates|slice:":2" %}<p class="pv-row">{{ u }}</p>{% empty %}<p class="pv-muted">Sent notifications appear here</p>{% endfor %}

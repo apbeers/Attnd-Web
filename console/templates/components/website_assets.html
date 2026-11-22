@@ -1,0 +1,8 @@
+{% load console_tags %}{# website_assets: the website's file library, Delete always asks. #}<div class="stack component component--website_assets">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "image" %} {{ d.name }}</h3>{% else %}<h2 class="title-3">Files</h2>{% endif %}
+  {% if d.rows %}<ul class="list list--boxed">{% for r in d.rows %}
+    <li class="cluster">{% if r.thumb %}<img src="{{ r.thumb }}" alt="" width="48" height="48" class="thumb" loading="lazy" decoding="async">{% endif %}
+      <div class="grow"><strong class="small">{{ r.name }}</strong><div class="small muted">{{ r.kind }} · {{ r.size|filesizeformat }}</div></div>
+      {% include 'components/_actions.html' with actions=r.actions %}</li>{% endfor %}</ul>
+  {% else %}<p class="small muted">No files yet. Attach images or PDFs in the chat and ask Studio to use them.</p>{% endif %}
+</div>

@@ -1,4 +1,4 @@
-"""Studio's AI provider layer: OpenAI (the existing SDK) and Anthropic (Messages API over urllib), images,
+"""Studio's AI provider layer: OpenAI (the existing SDK) and Anthropic (the official SDK), images (OpenAI),
 vision descriptions, cost logging and the per-event daily spend cap.
 
 Both chat providers expose the same small interface for the agent loop (studio/agent.py):
@@ -16,8 +16,6 @@ gpt-5.5), Anthropic through the Messages API.
 import base64
 import json
 import logging
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
@@ -67,11 +65,15 @@ def price(model):
 CACHED_INPUT_FACTOR = 0.1  # cached input tokens cost a tenth of fresh ones (OpenAI and Anthropic cache reads)
 
 
-def token_cost(model, input_tokens, output_tokens, cached_tokens=0):
+CACHE_WRITE_FACTOR = 1.25  # Anthropic: 5-minute cache writes cost 1.25x fresh input
+
+
+def token_cost(model, input_tokens, output_tokens, cached_tokens=0, cache_write_tokens=0):
     per_in, per_out = price(model)
     cached = min(max(cached_tokens, 0), input_tokens)
-    fresh = input_tokens - cached
-    return Decimal(str(round((fresh + cached * CACHED_INPUT_FACTOR) * per_in / 1_000_000
+    written = min(max(cache_write_tokens, 0), input_tokens - cached)
+    fresh = input_tokens - cached - written
+    return Decimal(str(round((fresh + cached * CACHED_INPUT_FACTOR + written * CACHE_WRITE_FACTOR) * per_in / 1_000_000
                              + output_tokens * per_out / 1_000_000, 4)))
 
 
@@ -82,13 +84,24 @@ def spent_today(event):
     return total or Decimal('0')
 
 
+def daily_cap(event=None):
+    """Studio's AI per event per UTC day: the owner's per-event override, else the AI limits' value."""
+    if event is not None:
+        from platform_admin.models import EventOverride
+        override = EventOverride.of(event)
+        if override is not None and override.studio_daily_cap_usd is not None:
+            return Decimal(override.studio_daily_cap_usd)
+    from credit.ledger import limits
+    return Decimal(limits().studio_daily_usd)
+
+
 def budget_left(event):
-    return Decimal(str(settings.STUDIO_DAILY_SPEND_CAP_USD)) - spent_today(event)
+    return daily_cap(event) - spent_today(event)
 
 
 def check_budget(event):
     if budget_left(event) <= 0:
-        raise BudgetExceeded(f'Today\'s AI budget for this event (${settings.STUDIO_DAILY_SPEND_CAP_USD:.2f}) is used up. '
+        raise BudgetExceeded(f'Today\'s AI budget for this event (${daily_cap(event):.2f}) is used up. '
                              f'It resets at midnight UTC; you can still edit the code by hand.')
 
 
@@ -97,6 +110,11 @@ def record_usage(event, run, kind, provider, model, input_tokens=0, output_token
     cost = token_cost(model, input_tokens, output_tokens, cached_tokens) + Decimal(str(settings.STUDIO_PRICES['image'])) * images
     StudioUsage.objects.create(event=event, run=run, kind=kind, provider=provider, model=model[:64],
                                input_tokens=input_tokens, output_tokens=output_tokens, images=images, cost_usd=cost)
+    from credit import ledger  # (the images part is recorded by generate_image itself)
+    if input_tokens or output_tokens:
+        ledger.record(cost=token_cost(model, input_tokens, output_tokens, cached_tokens), model=model,
+                      provider=provider, input_tokens=input_tokens, output_tokens=output_tokens, feature='studio',
+                      user=getattr(run, 'created_by', None) if run is not None else None, event=event)
     return cost
 
 
@@ -105,7 +123,7 @@ def usage_summary(event, days=30):
     since = timezone.now() - timedelta(days=days)
     rows = StudioUsage.objects.filter(event=event, created_at__gte=since)
     agg = rows.aggregate(cost=Sum('cost_usd'), inp=Sum('input_tokens'), out=Sum('output_tokens'), img=Sum('images'))
-    return {'today': spent_today(event), 'cap': settings.STUDIO_DAILY_SPEND_CAP_USD, 'month': agg['cost'] or 0,
+    return {'today': spent_today(event), 'cap': daily_cap(event), 'month': agg['cost'] or 0,
             'input_tokens': agg['inp'] or 0, 'output_tokens': agg['out'] or 0, 'images': agg['img'] or 0}
 
 
@@ -120,16 +138,18 @@ def provider_name():
     return choice
 
 
-def get_provider():
+def get_provider(**options):
+    """The chat provider. `options` (all optional, used by Ask Attnd): model, fallback_model, effort,
+    parallel_tool_calls; Studio passes none and gets its own settings."""
     name = provider_name()
     if name == 'anthropic':
         if not settings.ANTHROPIC_API_KEY:
             raise AIError('STUDIO_AI_PROVIDER is anthropic but ANTHROPIC_API_KEY is not set.')
-        return AnthropicProvider()
+        return AnthropicProvider(effort=options.get('effort'))
     import os
     if not os.getenv('OPENAI_API_KEY'):
         raise AIError('No AI key is configured on the server (OPENAI_API_KEY or ANTHROPIC_API_KEY).')
-    return OpenAIProvider()
+    return OpenAIProvider(**options)
 
 
 _unavailable_models = set()  # OpenAI models this account can't use (fell back once; remembered per process)
@@ -169,17 +189,28 @@ class OpenAIProvider:
     """
     name = 'openai'
 
-    def __init__(self):
-        self.model = settings.STUDIO_OPENAI_MODEL
-        if self.model in _unavailable_models and settings.STUDIO_OPENAI_FALLBACK_MODEL:
-            self.model = settings.STUDIO_OPENAI_FALLBACK_MODEL
+    def __init__(self, model=None, fallback_model=None, effort='medium', parallel_tool_calls=True):
+        self.model = model or settings.STUDIO_OPENAI_MODEL
+        self.fallback_model = settings.STUDIO_OPENAI_FALLBACK_MODEL if fallback_model is None else fallback_model
+        if self.model in _unavailable_models and self.fallback_model:
+            self.model = self.fallback_model
+        self.effort = effort or 'medium'  # reasoning effort; callers may change it between calls
+        self.parallel_tool_calls = parallel_tool_calls
         self.previous_id = None
         self._sent = 0  # items of `messages` that OpenAI already has (through previous_response_id)
 
     @staticmethod
     def _tools(tools):
         return [{'type': 'function', 'name': t['name'], 'description': t['description'],
-                 'parameters': t['parameters'], 'strict': False} for t in tools]
+                 'parameters': t['parameters'], 'strict': bool(t.get('strict'))} for t in tools]
+
+    def state(self):
+        """What a paused conversation needs to continue later (in another thread): the chain position."""
+        return {'previous_id': self.previous_id, 'sent': self._sent, 'model': self.model}
+
+    def restore(self, state):
+        self.previous_id, self._sent = state.get('previous_id'), int(state.get('sent') or 0)
+        self.model = state.get('model') or self.model
 
     def start(self, user_text):
         self.previous_id, self._sent = None, 0
@@ -188,17 +219,17 @@ class OpenAIProvider:
     def chat(self, system, messages, tools):
         from openai import APIError, BadRequestError, NotFoundError, OpenAI
         client = OpenAI(timeout=900)
-        kwargs = {'reasoning': {'effort': 'medium'}} if self.model.startswith(REASONING_PREFIXES) else {}
+        kwargs = {'reasoning': {'effort': self.effort}} if self.model.startswith(REASONING_PREFIXES) else {}
         if self.previous_id:
             kwargs['previous_response_id'] = self.previous_id
         try:
             response = client.responses.create(
                 model=self.model, instructions=system, input=list(messages[self._sent:]),
-                tools=self._tools(tools), parallel_tool_calls=True, store=True, **kwargs)
+                tools=self._tools(tools), parallel_tool_calls=self.parallel_tool_calls, store=True, **kwargs)
         except (NotFoundError, BadRequestError) as exc:
-            fallback = settings.STUDIO_OPENAI_FALLBACK_MODEL
+            fallback = self.fallback_model
             if model_unavailable(exc) and fallback and self.model != fallback and not self.previous_id:
-                logger.warning('Studio model %s unavailable (%s); using %s', self.model, exc, fallback)
+                logger.warning('AI model %s unavailable (%s); using %s', self.model, exc, fallback)
                 _unavailable_models.add(self.model)
                 self.model = fallback
                 return self.chat(system, messages, tools)
@@ -239,39 +270,49 @@ class OpenAIProvider:
             messages.append({'type': 'function_call_output', 'call_id': call.id, 'output': text})
 
 
-ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
 
 class AnthropicProvider:
-    """Claude through the Messages API with urllib (no SDK dependency). Thinking is adaptive by default on the current
-    models; effort high; refusals fall back server-side (`fallbacks: "default"`)."""
+    """Claude through the official `anthropic` SDK (Messages API, streamed: long turns). Thinking is adaptive by
+    default on the current models; effort high; refusals fall back server-side (`fallbacks: "default"`, beta)."""
     name = 'anthropic'
 
-    def __init__(self):
+    def __init__(self, effort=None):
         self.model = settings.STUDIO_ANTHROPIC_MODEL
+        self.effort = effort or 'high'
 
     def start(self, user_text):
         return [{'role': 'user', 'content': user_text}]
 
+    def state(self):
+        return {}  # the messages list holds the whole conversation
+
+    def restore(self, state):
+        pass
+
     def _post(self, body):
-        request = urllib.request.Request(ANTHROPIC_URL, data=json.dumps(body).encode(), method='POST', headers={
-            'x-api-key': settings.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01',
-            'anthropic-beta': 'server-side-fallback-2026-07-01', 'content-type': 'application/json'})
+        """One streamed Messages call; returns the final message as a plain dict (blocks go back unchanged)."""
+        import anthropic
+
+        from attnd import claude
         try:
-            with urllib.request.urlopen(request, timeout=600) as response:
-                return json.loads(response.read())
-        except urllib.error.HTTPError as exc:
-            detail = exc.read()[:500].decode('utf-8', 'replace')
-            raise AIError(f'The AI request failed ({exc.code}): {detail}') from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
+            api = claude.client(timeout=600.0)
+            extra = {k: body.pop(k) for k in ('fallbacks',) if k in body}
+            with api.messages.stream(**body, extra_body=extra,
+                                     extra_headers={'anthropic-beta': 'server-side-fallback-2026-07-01'}) as stream:
+                final = stream.get_final_message()
+        except anthropic.APIStatusError as exc:
+            raise AIError(f'The AI request failed ({exc.status_code}): {str(getattr(exc, "message", exc))[:500]}') from exc
+        except anthropic.APIError as exc:
             raise AIError(f'Could not reach the AI service: {exc}') from exc
+        return final.model_dump(mode='json', exclude_none=True)
 
     def chat(self, system, messages, tools):
         body = {
             'model': self.model, 'max_tokens': 32000, 'system': system, 'messages': self._cached(messages),
             'tools': [{'name': t['name'], 'description': t['description'], 'input_schema': t['parameters']}
                       for t in tools],
-            'output_config': {'effort': 'high'}, 'fallbacks': 'default',
+            'output_config': {'effort': self.effort}, 'fallbacks': 'default',
         }
         data = self._post(body)
         if data.get('stop_reason') == 'refusal':
@@ -340,26 +381,26 @@ def generate_image(prompt, size='portrait', references=()):
             raise AIError(f'Image generation failed: {exc}') from exc
         item = response.data[0]
         if getattr(item, 'b64_json', None):
+            from credit import ledger
+            ledger.record(cost=Decimal(str(settings.STUDIO_PRICES['image'])), model=model, provider='openai',
+                          feature=(ledger.current().get('feature') or 'studio_images'))
             return base64.b64decode(item.b64_json), model
         raise AIError('The image model returned no image.')
     raise AIError(f'Image generation failed: {last_error}')
 
 
 def describe_image(part):
-    """Vision: {description, alt, tags, colors} for one image content part; returns (result, usage)."""
-    from openai import OpenAI
-
+    """Vision (Claude Haiku, structured output): {description, alt, tags, colors} for one image or SVG text block;
+    returns (result, usage)."""
+    from attnd import claude
     from studio.assets import DESCRIBE_SCHEMA
-    model = settings.STUDIO_VISION_MODEL
-    kwargs = {'reasoning_effort': 'low'} if model.startswith(('gpt-5', 'o3', 'o4')) else {}
-    response = OpenAI(timeout=120).chat.completions.create(
-        model=model,
-        response_format={'type': 'json_schema',
-                         'json_schema': {'name': 'asset', 'strict': True, 'schema': DESCRIBE_SCHEMA}},
-        messages=[{'role': 'system', 'content': 'You describe images an event organizer uploaded for their event '
-                                                'website, so a designer can reuse them. Be factual and brief.'},
-                  {'role': 'user', 'content': [part]}], **kwargs)
-    usage = response.usage
-    result = json.loads(response.choices[0].message.content or '{}')
-    return result, {'model': model, 'input': getattr(usage, 'prompt_tokens', 0) or 0,
-                    'output': getattr(usage, 'completion_tokens', 0) or 0}
+    meta = {}
+    try:
+        result, _cost = claude.structured(
+            system='You describe images an event organizer uploaded for their event website, so a designer can reuse '
+                   'them. Be factual and brief.', content=[part, {'type': 'text', 'text': 'Describe this.'}],
+            schema=DESCRIBE_SCHEMA, effort='low', max_tokens=800, meta=meta)
+    except claude.ClaudeError as exc:
+        raise AIError(str(exc)) from exc
+    return result, {'model': meta.get('model', claude.fast_model()), 'input': meta.get('input', 0),
+                    'output': meta.get('output', 0), 'cached': meta.get('cached', 0)}

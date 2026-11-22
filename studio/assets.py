@@ -94,6 +94,9 @@ def create_asset(event, data: bytes, filename, user=None, generated=False, origi
     if len(data) > LIMITS[kind]:
         raise AssetError(f'{filename or "That file"} is too big: {kind.upper() if kind != "image" else "images"} '
                          f'can be up to {LIMITS[kind] // MB} MB.')
+    if kind == StudioAsset.KIND_IMAGE:
+        from studio.safety import strip_metadata
+        data = strip_metadata(data, content_type)  # no EXIF / GPS on a public site (the digest stays the original's)
     check_library(event, len(data))
     width = height = None
     if kind == StudioAsset.KIND_IMAGE:
@@ -167,22 +170,23 @@ def start_describe(asset_id):
 
 
 def describe(asset_id):
-    """Ask the vision model for a description, alt text, tags and colours (skipped without an OpenAI key or budget)."""
-    import base64
-    import os
-
+    """Ask Claude Haiku (vision, structured output) for a description, alt text, tags and colours (skipped without an
+    Anthropic key or budget, or for image types it can't read)."""
+    from attnd import claude
     from studio import ai
     asset = StudioAsset.objects.select_related('event').filter(pk=asset_id).first()
-    if asset is None or not os.getenv('OPENAI_API_KEY') or not ai.budget_left(asset.event):
+    if asset is None or not claude.available() or not ai.budget_left(asset.event):
         return
     data = read_bytes(asset)
     if asset.kind == StudioAsset.KIND_SVG:
         part = {'type': 'text', 'text': 'SVG source:\n' + data[:20000].decode('utf-8', 'replace')}
+    elif asset.content_type in ('image/png', 'image/jpeg', 'image/gif', 'image/webp'):
+        part = claude.image_block(data, asset.content_type)
     else:
-        part = {'type': 'image_url', 'image_url': {
-            'url': f'data:{asset.content_type};base64,{base64.b64encode(data).decode()}', 'detail': 'low'}}
+        return
     result, usage = ai.describe_image(part)
-    ai.record_usage(asset.event, None, 'describe', 'openai', usage['model'], usage['input'], usage['output'])
+    ai.record_usage(asset.event, None, 'describe', 'anthropic', usage['model'], usage['input'], usage['output'],
+                    cached_tokens=usage.get('cached', 0))
     asset.description = str(result.get('description', ''))[:1000]
     asset.alt = str(result.get('alt', ''))[:300]
     asset.tags = [str(t).lower()[:32] for t in result.get('tags', [])][:12]

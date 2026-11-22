@@ -10,6 +10,7 @@ cache and any string is a valid key. A window starts with the first counted atte
 """
 
 import hashlib
+import time
 
 from django.conf import settings
 from django.core.cache import cache
@@ -43,22 +44,27 @@ class RateLimit:
         return f'rl:{self.name}:{digest}'
 
     def count(self, ident) -> int:
-        return cache.get(self.key(ident), 0)
+        value = cache.get(self.key(ident))
+        return value[0] if isinstance(value, (list, tuple)) else (value or 0)
 
     def exceeded(self, ident) -> bool:
         return self.count(ident) >= self.limit
 
     def hit(self, ident) -> int:
-        """Count one attempt; returns the new count. add + incr is atomic in LocMemCache, and incr keeps
-        the key's original expiry, so the window is fixed from the first attempt."""
+        """Count one attempt; returns the new count. The value is (count, window end), so the window stays fixed from
+        the first attempt in the database cache too (its incr would reset the expiry). Two attempts at the same
+        instant may count once: fine for limits."""
         key = self.key(ident)
-        if cache.add(key, 1, self.window):
+        now = time.time()
+        if cache.add(key, (1, now + self.window), self.window):
             return 1
-        try:
-            return cache.incr(key)
-        except ValueError:  # expired between add and incr
-            cache.add(key, 1, self.window)
+        value = cache.get(key)
+        if not isinstance(value, (list, tuple)) or value[1] <= now:
+            cache.set(key, (1, now + self.window), self.window)
             return 1
+        count, until = value[0] + 1, value[1]
+        cache.set(key, (count, until), max(1, int(until - now)))
+        return count
 
     def reset(self, ident) -> None:
         cache.delete(self.key(ident))

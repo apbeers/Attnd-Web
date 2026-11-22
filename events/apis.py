@@ -32,6 +32,8 @@ def nearby_events(latitude, longitude, now=None):
     radius = decimal.Decimal('0.5')
     events = Event.objects.filter(
         public=True,
+        testing_only=False,  # staff test copies of prospects' events are never listed
+        showcase=False,  # nor the home page's showcase events
         status=Event.STATUS_PUBLISHED,
         latitude__isnull=False,
         longitude__isnull=False,
@@ -211,6 +213,7 @@ def register_device(device_id, event=..., platform='', push_token=None, app_vers
             newly_joined = event
         if device.event_id != (event.id if event is not None else None):
             device.live_activity_token = ''  # it belonged to the Live Activity of the previous event
+            device.preview_until, device.preview_by, device.last_version = None, None, None  # API-026: per event
         device.event = event
     if platform in ('ios', 'android'):
         device.platform = platform
@@ -249,7 +252,8 @@ def _leave(device_id, event_id):
     device = devices.first()
     if device is None:
         return
-    Device.objects.filter(pk=device.pk).update(event=None, live_activity_token='')
+    Device.objects.filter(pk=device.pk).update(event=None, live_activity_token='', preview_until=None, preview_by=None,
+                                               last_version=None)
     if is_ci_device(device.pk):
         return
     from events import usage

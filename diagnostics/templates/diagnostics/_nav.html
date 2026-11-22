@@ -1,8 +1,5 @@
-{% load console_tags %}
-<div class="cluster diag-head">
-  <h1 class="title-2">{% icon "gauge" %} Diagnostics</h1>
-  <span class="badge badge--muted">Staff only</span>
-</div>
+{% load console_tags platform_tags %}
+{% platform_nav "diagnostics" %}
 <nav class="tabs diag-tabs" aria-label="Diagnostics">
   <a class="tabs__tab" href="{% url 'diagnostics:overview' %}"{% if tab == 'sessions' %} aria-current="page"{% endif %}>Sessions</a>
   <a class="tabs__tab" href="{% url 'diagnostics:reports' %}"{% if tab == 'reports' %} aria-current="page"{% endif %}>Crash &amp; hang reports</a>

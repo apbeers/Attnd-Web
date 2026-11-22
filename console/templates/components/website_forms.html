@@ -1,0 +1,9 @@
+{% load console_tags %}{# website_forms: what visitors sent through the website's forms, CSV, Delete an entry (asks). #}<div class="stack component component--website_forms" id="website-forms">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "mail" %} {{ d.name }}</h3>{% else %}<h2 class="title-3">Form entries</h2>{% endif %}
+  {% for f in d.forms %}<section class="stack stack--tight">
+    <div class="cluster"><strong class="grow">{{ f.name }} · {{ f.count }}</strong><a class="button button--outline button--small" href="{{ f.csv }}">{% icon "download" %} CSV</a></div>
+    <ul class="list list--boxed">{% for r in f.recent %}<li class="cluster"><span class="small muted">{{ r.when }}</span>
+      <span class="grow small">{% for v in r.values %}{% if v %}{{ v|truncatechars:60 }}{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}</span>
+      {% include 'components/_actions.html' with actions=r.actions %}</li>{% endfor %}</ul></section>
+  {% empty %}<p class="small muted">No form entries yet. Ask Studio for a sign-up or vendor form.</p>{% endfor %}
+</div>

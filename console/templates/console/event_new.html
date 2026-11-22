@@ -4,41 +4,6 @@
 {% block content %}
 <div class="column">
 <h1>New event</h1>
-<div class="tabs" role="tablist" data-tabs>
-  <button class="tabs__tab" role="tab" type="button" data-tab-target="#ai" aria-selected="{% if mode != 'blank' %}true{% else %}false{% endif %}">{% icon "stars" %} Build it with AI</button>
-  <button class="tabs__tab" role="tab" type="button" data-tab-target="#blank" aria-selected="{% if mode == 'blank' %}true{% else %}false{% endif %}">Start from scratch</button>
+<div class="panel panel--roomy">{% component "event_new_form" ai_form=ai_form blank_form=blank_form %}</div>
 </div>
-<div>
-  <div class="panel panel--roomy" id="ai" role="tabpanel" {% if mode == 'blank' %}hidden{% endif %}>
-    <p class="muted">Give the AI anything that describes your event. It creates a <strong>draft</strong> with locations and a schedule that you can review and edit before attendees see it.</p>
-    <form method="post" enctype="multipart/form-data" data-background data-busy-label="Building your event…">{% csrf_token %}
-      <input type="hidden" name="mode" value="ai"><input type="hidden" name="browser_tz" id="browser_tz">
-      {% for err in ai_form.non_field_errors %}<div class="notice notice--error notice--compact">{{ err }}</div>{% endfor %}
-      {% for field in ai_form %}{% include 'console/_field.html' %}{% endfor %}
-      {% if studio_staff %}<input type="hidden" name="studio_import_shown" value="1">
-        <label class="check field" for="studio_import"><input type="checkbox" id="studio_import" name="studio_import" value="1" checked>
-        Also rebuild the website in Attnd Studio <span class="badge badge--neutral badge--pill">Beta</span>
-        <span class="field__help">Studio copies every page, image, font and PDF of the website and the AI builds a matching site. Open Studio to watch it.</span></label>{% endif %}
-      <div class="cluster">
-        <button class="button button--primary button--large">{% icon "stars" %} Build my event</button>
-        <span class="muted small">Usually takes under a minute. You can keep working: it runs in the background and shows up in the corner.</span>
-      </div>
-    </form>
-  </div>
-  <div class="panel panel--roomy" id="blank" role="tabpanel" {% if mode != 'blank' %}hidden{% endif %}>
-    <form method="post">{% csrf_token %}<input type="hidden" name="mode" value="blank">
-      {% for field in blank_form %}{% include 'console/_field.html' %}{% endfor %}
-      <button class="button button--primary">Create draft</button>
-    </form>
-  </div>
-</div>
-</div>
-{% endblock %}
-{% block scripts %}
-<script nonce="{{ csp_nonce }}">
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  document.getElementById('browser_tz').value = tz;
-  const sel = document.getElementById('id_blank-timezone');
-  if (sel && !{{ blank_form.is_bound|yesno:"true,false" }} && [...sel.options].some(o => o.value === tz)) sel.value = tz;
-</script>
 {% endblock %}

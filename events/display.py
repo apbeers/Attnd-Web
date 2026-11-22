@@ -15,8 +15,33 @@ from math import asin, cos, radians, sin, sqrt
 SCHEMA_VERSION = 1
 
 PRESETS = ['auto', 'intimate', 'standard', 'festival']
-TABS = ['map', 'locations', 'schedule', 'flyer', 'notifications']
+# 'home' (API-024): a tab made of the `home` layout's sections; only for apps that send X-Attnd-Sections ≥ 1,
+# never in the automatic tabs (organizers turn it on).
+TABS = ['home', 'map', 'locations', 'schedule', 'flyer', 'notifications']
+MAX_TABS = 5
 LOCATIONS_STYLES = ['cards', 'list', 'grouped']
+TAB_LIMIT_NOTE = 'The apps show at most 5 tabs, Home included. Turn one off first.'
+EDITABLE_TABS = [t for t in TABS if t != 'home']  # Home is always on (first, the default); organizers pick the rest
+
+
+def fit_tabs(tabs):
+    """(kept, dropped): at most MAX_TABS (iOS shows five, Home counts as one). Over it (old saved lists, Home on top
+    of five) the flyer goes first, then Places when the Map is there (the map lists them too), then the Map when
+    Places stays; Home and Updates are never dropped (owner, Nov 21, 2026)."""
+    kept, dropped = list(tabs), []
+    for tab in ('flyer', 'locations', 'map', 'schedule'):
+        if len(kept) <= MAX_TABS:
+            break
+        if tab == 'locations' and 'map' not in kept:
+            continue
+        if tab in kept:
+            kept.remove(tab)
+            dropped.append(tab)
+    while len(kept) > MAX_TABS:  # whatever else, never Home or Updates
+        tab = next(t for t in reversed(kept) if t not in ('home', 'notifications'))
+        kept.remove(tab)
+        dropped.append(tab)
+    return kept, dropped
 SCHEDULE_STYLES = ['timeline', 'by_day', 'by_location', 'now_next']
 SECONDARY_PANES = ['locations', 'schedule', 'now_next', 'none']
 
@@ -46,6 +71,7 @@ LABELS = {
         'none': 'Nothing (map fills the screen)',
     },
     'tabs': {
+        'home': 'Home',
         'map': 'Map',
         'locations': 'Locations',
         'schedule': 'Schedule',
@@ -120,19 +146,54 @@ def spread_km(points):
 
 def event_stats(event, locations=None):
     """`locations`: the event's visible locations when the caller has them already (saves a query)."""
+    from events.content import models_q_visible_location
     if locations is not None:
         locations = [(loc.latitude, loc.longitude, loc.category) for loc in locations]
     else:
         locations = list(event.location_set.filter(hidden=False).values_list('latitude', 'longitude', 'category'))
-    item_count = event.scheduleditem_set.filter(hidden=False).count()
+    # What the apps actually list: visible items whose location (if any) is visible too (ended items count), and
+    # the sent notifications; one query with two counting subqueries.
+    from django.db.models import Count, IntegerField, OuterRef, Subquery
+
+    from events.models import Event, Notification, ScheduledItem
+
+    def counted(qs):
+        return Subquery(qs.order_by().values('event').annotate(n=Count('pk')).values('n')[:1],
+                        output_field=IntegerField())
+    row = Event.objects.filter(pk=event.pk).annotate(
+        items=counted(ScheduledItem.objects.filter(event=OuterRef('pk'), hidden=False)
+                      .filter(models_q_visible_location())),
+        sent=counted(Notification.objects.filter(event=OuterRef('pk'), sent=True)),
+    ).values('items', 'sent').first() or {}
+    item_count, sent_count = row.get('items') or 0, row.get('sent') or 0
     categories = sorted({c for _, _, c in locations if c})
     return {
         'location_count': len(locations),
+        'mappable_count': sum(1 for lat, lng, _ in locations if lat is not None and lng is not None
+                              and not (abs(float(lat)) < 1e-6 and abs(float(lng)) < 1e-6)),
+        'sent_count': sent_count,
         'item_count': item_count,
         'spread_km': spread_km((lat, lng) for lat, lng, _ in locations),
         'category_count': len(categories),
         'has_flyer': bool(event.flyer),
     }
+
+
+def empty_tabs(stats):
+    """Tabs that would show nothing: Schedule without visible items, Places without visible locations, the Map
+    without a location that has coordinates, the Flyer without a flyer, Updates without a sent notification."""
+    out = set()
+    if not stats.get('item_count'):
+        out.add('schedule')
+    if not stats.get('location_count'):
+        out.add('locations')
+    if not stats.get('mappable_count', stats.get('location_count')):
+        out.add('map')
+    if not stats.get('has_flyer'):
+        out.add('flyer')
+    if not stats.get('sent_count', 1):
+        out.add('notifications')
+    return out
 
 
 def auto_preset(stats):
@@ -171,7 +232,9 @@ def clean_overrides(raw):
     return out
 
 
-def resolve_display(event, stats=None):
+def resolve_display(event, stats=None, sections=0):
+    """`sections`: the layout catalogue version the app draws (X-Attnd-Sections, API-024); below 1 the Home tab
+    is left out, so older apps never see it."""
     stats = stats or event_stats(event)
     overrides = clean_overrides(event.display_config)
     preset = overrides.get('preset', 'auto')
@@ -192,16 +255,29 @@ def resolve_display(event, stats=None):
         cfg['default_tab'] = 'locations'
     if stats['category_count'] >= 3 and stats['location_count'] > 12:
         cfg['group_by_category'] = True
-    if stats['item_count'] == 0:
-        cfg['tabs'] = [t for t in cfg['tabs'] if t != 'schedule']
-        if cfg['secondary_pane'] in ('schedule', 'now_next'):
-            cfg['secondary_pane'] = 'locations'
+    if stats['item_count'] == 0 and cfg['secondary_pane'] in ('schedule', 'now_next'):
+        cfg['secondary_pane'] = 'locations'
+    # Automatic tabs (owner, Nov 21, 2026): Home first and the default for apps that draw it (X-Attnd-Sections), and
+    # no tab with nothing to show. An organizer's own tab list (App layout) wins; the console notes empty ones.
+    cfg['tabs'] = ['home'] + [t for t in cfg['tabs'] if t not in empty_tabs(stats)]
+    auto_default, cfg['default_tab'] = cfg['default_tab'], 'home'
 
     cfg.update({k: v for k, v in overrides.items() if k != 'preset'})
 
-    # Flyer tab only makes sense with a flyer
-    if not stats['has_flyer']:
-        cfg['tabs'] = [t for t in cfg['tabs'] if t != 'flyer']
+    # Tabs with nothing to show are left out, also from an organizer's own list (batch 7 Q2: "unticked
+    # automatically"); the saved list keeps them, so they come back by themselves once there is something to show.
+    empty = empty_tabs(stats)
+    cfg['tabs'] = [t for t in cfg['tabs'] if t not in empty]
+    if sections and sections >= 1:
+        # Home is always on for apps that draw it: first and the default tab, whatever the saved list says (owner,
+        # Nov 21, 2026, batch 7 Q1; P0 #3: the same tabs from every path, so the App Clip's Home never comes and goes).
+        cfg['tabs'] = ['home'] + [t for t in cfg['tabs'] if t != 'home']
+        cfg['default_tab'] = 'home'
+    else:
+        cfg['tabs'] = [t for t in cfg['tabs'] if t != 'home']
+        if cfg['default_tab'] == 'home' and 'default_tab' not in overrides:
+            cfg['default_tab'] = auto_default
+    cfg['tabs'], _dropped = fit_tabs(cfg['tabs'])  # the apps show at most five (never a "More" tab)
     if not cfg['tabs']:
         cfg['tabs'] = ['map', 'notifications']
     if cfg['default_tab'] not in cfg['tabs']:
@@ -213,7 +289,14 @@ def resolve_display(event, stats=None):
         'resolved_preset': resolved_preset,
         'reason': reason,
         'accent_color': event.accent_color or None,
-        'logo_url': event.logo_url or None,
+        'logo_url': _logo(event),
         'stats': stats,
     })
     return cfg
+
+
+def _logo(event):
+    """Our self-hosted copy of the logo when there is one, at the apps' logo width (attnd/images.py)."""
+    from attnd.images import event_logo_url
+    from events.content import app_image_url
+    return app_image_url(event_logo_url(event), 'logo') or None

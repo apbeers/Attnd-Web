@@ -1,0 +1,22 @@
+{% load console_tags attnd_images %}{# location_row: one location in the list (drag handle on the page and the full-screen canvas; Hide/Delete buttons in the chat). The whole row opens the location for editing (the title link stretches over it; buttons and the handle sit above). #}<li class="component component--location_row row-link{% if d.hidden %} is-hidden{% endif %}" data-id="{{ d.id }}">
+  <div class="row-link__inner">
+      {% icon "grip" "drag-handle icon--lg row-link__above" %}
+      {% if d.image_url %}{% img d.image_src 48 48 crop=True cls="thumb" %}
+      {% else %}<div class="thumb thumb--empty">{% icon "pin" %}</div>{% endif %}
+      <div class="grow row-link__text">
+        <a href="{{ d.url }}" class="title-link row-link__target" aria-label="Edit {{ d.name }}{% if d.category %} ({{ d.category }}){% endif %}">{{ d.name }}</a>
+        {% if d.category %}<span class="badge badge--neutral">{{ d.category }}</span>{% endif %}
+        {% if d.hidden %}<span class="badge badge--muted">Hidden</span>{% endif %}
+        {% if d.locked %}{% icon "lock" "lock small" %}{% endif %}
+        <div class="small muted">{{ d.summary }}</div>
+        {% if d.tags %}<div class="cluster cluster--tight">{% for t in d.tags %}<span class="badge badge--neutral">{{ t }}</span>{% endfor %}</div>{% endif %}
+        {% if surface == 'chat' %}<div class="cluster cluster--tight component__actions row-link__above">{% include 'components/_actions.html' with actions=d.actions %}</div>{% endif %}
+      </div>
+      <div class="row-link__side">
+        {% if not d.has_pin %}<span class="badge badge--warning" title="Not on the map yet">{% icon "pin" %} No pin</span>{% endif %}
+        {% if d.likes %}<span class="small nowrap hearts" title="Net likes from attendees">{% icon "heart" "tone-danger" %} {{ d.likes }}</span>{% endif %}
+        <span class="small muted nowrap">{{ d.items }} item{{ d.items|pluralize }}</span>
+        <span class="row-link__chevron" aria-hidden="true"><span class="row-link__edit">Edit</span>{% icon "chevron-right" %}</span>
+      </div>
+  </div>
+    </li>

@@ -1,0 +1,1 @@
+{# amenities: restrooms, water, first aid… and where they are #}<p class="pv-heading">{{ s.title|default:"Amenities" }}</p>{% for a in x.context.amenities|slice:":3" %}<p class="pv-row">{{ a.name }}</p>{% endfor %}

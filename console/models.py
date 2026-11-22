@@ -7,7 +7,9 @@ from events.models import Event
 class Order(models.Model):
     order_date = models.DateTimeField(auto_now_add=True)
     order_id = models.CharField(max_length=256)
-    event = models.OneToOneField(Event, on_delete=models.DO_NOTHING)
+    # Legacy v1 in-app purchase (2019 builds); kept for the record. SET_NULL: DO_NOTHING made deleting the event
+    # fail on the foreign key (docs/db_review.md §3).
+    event = models.OneToOneField(Event, on_delete=models.SET_NULL, null=True, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     refunded = models.BooleanField(default=False)
 
@@ -53,6 +55,9 @@ class SignInSecurity(models.Model):
     email_code_hash = models.CharField(max_length=64, blank=True)
     email_code_expires_at = models.DateTimeField(null=True, blank=True)
     passkey_prompt_dismissed = models.BooleanField(default=False)
+    # Browsers this account has signed in from (SHA-256 of their long-lived attnd_device cookie, newest last, ≤ 30):
+    # a sign-in from any other one emails "New sign-in to Attnd" (console/user_sessions.py).
+    known_devices = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name = 'sign-in settings'
@@ -87,3 +92,140 @@ class Passkey(models.Model):
 
     def __str__(self):
         return f'Passkey “{self.name}” for {self.user.email or self.user.username}'
+
+
+class UndoEntry(models.Model):
+    """One change someone made (a Save, a delete, an Ask Attnd step), recorded row by row so exactly that change can
+    be undone for 24 hours without touching other people's later edits (console/undo.py).
+
+    operations = [{model, pk, op: create|update|delete, before: serialized row | None, after: {field: value},
+    fields: [changed field names], related: {...}}], in the order they happened."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='undo_entries', db_index=False)  # db_review §4
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True, related_name='+')
+    label = models.CharField(max_length=300)
+    operations = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    # The entry this one reverses (an undo is recorded too, so it can be redone).
+    reverses = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', '-created_at'])]
+
+    def __str__(self):
+        return f'Undo {self.pk}: {self.label[:60]}'
+
+
+class HistoryRecord(models.Model):
+    """What Attnd adds to one `django.contrib.admin.models.LogEntry` (the history of everything, the Django way;
+    console/history.py): the event it belongs to (also after the row is deleted), how it was made (console, Ask Attnd,
+    a chat card, an undo), the values before → after where the Undo capture had them, and the UndoEntry that can still
+    reverse it. The LogEntry itself is the record (the admin's History pages show it)."""
+    VIA_CONSOLE, VIA_AGENT, VIA_CHAT, VIA_UNDO = '', 'ask_attnd', 'chat', 'undo'
+    VIA_CHOICES = [(VIA_CONSOLE, 'Console'), (VIA_AGENT, 'Ask Attnd'), (VIA_CHAT, 'Ask Attnd chat card'),
+                   (VIA_UNDO, 'Undo')]
+
+    log_entry = models.OneToOneField('admin.LogEntry', on_delete=models.CASCADE, related_name='attnd')
+    event_id = models.IntegerField(null=True, blank=True, db_index=True)  # kept when the event or row is deleted
+    via = models.CharField(max_length=16, blank=True, choices=VIA_CHOICES)
+    values = models.JSONField(default=dict, blank=True)  # {field: [before, after]} (text trimmed)
+    undo = models.ForeignKey('UndoEntry', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def __str__(self):
+        return f'History {self.log_entry_id} ({self.via or "console"})'
+
+
+def chat_default_on():
+    """New accounts (and saved preferences that never touched the switch) open the console in the full-screen chat
+    (owner, Nov 21, 2026). CHAT_DEFAULT_ON: on everywhere; the test settings turn it off so page tests see pages."""
+    from django.conf import settings
+    return bool(getattr(settings, 'CHAT_DEFAULT_ON', True))
+
+
+class ConsolePreference(models.Model):
+    """Per-person console choices (owner, Nov 21, 2026): "Chat as my default view" opens signed-in landings
+    (/console/, an event's overview) in Ask Attnd's full-screen chat instead of the page."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='console_preference')
+    chat_default = models.BooleanField(default=chat_default_on)  # on by default since Nov 21, 2026 (settings)
+    # Stage I16: which organizer emails this person wants ({kind: bool}, console/organizer_mail.KINDS; all on).
+    notify = models.JSONField(default=dict, blank=True)
+    # Stage I17: the first-run walkthrough was finished or skipped (shown once).
+    walkthrough_done = models.BooleanField(default=False)
+    # What Ask Attnd should remember for this person (stage I11): [{id, text, event_id (or null = every event),
+    # created}], ≤ 30, learned from corrections ("always call it Main Stage"); shown and removable in Account.
+    agent_notes = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    MAX_NOTES = 30
+
+    @classmethod
+    def notes_for(cls, user, event_id=None):
+        pref = cls.objects.filter(user=user).first()
+        notes = pref.agent_notes if pref else []
+        return [n for n in notes if n.get('event_id') in (None, event_id)]
+
+    @classmethod
+    def remember(cls, user, text, event_id=None):
+        import uuid
+
+        from django.utils import timezone
+        pref, _ = cls.objects.get_or_create(user=user)
+        text = ' '.join(str(text).split())[:300]
+        notes = [n for n in pref.agent_notes if n.get('text', '').lower() != text.lower()]
+        notes.append({'id': uuid.uuid4().hex[:12], 'text': text, 'event_id': event_id,
+                      'created': timezone.now().isoformat()})
+        pref.agent_notes = notes[-cls.MAX_NOTES:]
+        pref.save(update_fields=['agent_notes', 'updated_at'])
+        return pref.agent_notes[-1]
+
+    @classmethod
+    def forget(cls, user, note_id):
+        pref = cls.objects.filter(user=user).first()
+        if pref is not None:
+            pref.agent_notes = [n for n in pref.agent_notes if n.get('id') != note_id]
+            pref.save(update_fields=['agent_notes', 'updated_at'])
+
+    def __str__(self):
+        return f'{self.user_id}: chat {"on" if self.chat_default else "off"}'
+
+    @classmethod
+    def chat_first(cls, user):
+        """Does a landing open on the chat? "Chat as my default view": one setting on every screen (Nov 22, 2026: the
+        phones' own setting, picked by user agent, was merged into it; screens differ by width, client-side only)."""
+        if not getattr(user, 'is_authenticated', False):
+            return False
+        return cls._prefs(user)[0]
+
+    @classmethod
+    def _prefs(cls, user):
+        """(chat_default, walkthrough_done), one query per request (cached on the user object)."""
+        cached = getattr(user, '_chat_prefs', None)
+        if cached is None:
+            row = cls.objects.filter(user=user).values_list('chat_default', 'walkthrough_done').first()
+            cached = row or (chat_default_on(), False)  # chat as the default view since Nov 21, 2026
+            user._chat_prefs = cached
+        return cached
+
+    @classmethod
+    def walkthrough_pending(cls, user):
+        return bool(getattr(user, 'is_authenticated', False)) and not cls._prefs(user)[1]
+
+
+class UserSession(models.Model):
+    """One signed-in browser of an account (console/user_sessions.py): Account → "Signed in on other devices" lists
+    them and signs them out. Linked to Django's session by key (updated when the key changes after the second step);
+    rows of ended sessions are purged by run_scheduled_tasks."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sign_in_sessions')
+    session_key = models.CharField(max_length=40, db_index=True)
+    device = models.CharField(max_length=64, blank=True, help_text='SHA-256 of the browser\'s attnd_device cookie')
+    user_agent = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_active = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-last_active']
+
+    def __str__(self):
+        return f'{self.user} · {self.user_agent[:40]}'

@@ -1,0 +1,23 @@
+{% load console_tags %}{% comment %} event_team: the owner, members with their roles and buttons, pending invitations and the invite
+form (all of them always ask in the chat). The Team page keeps its own layout; the canvas and chat draw this. {% endcomment %}<div class="stack component component--event_team">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "people" %} {{ d.name }}</h3>{% endif %}
+  <ul class="list list--boxed team-list">
+    <li class="team-row"><span class="team-row__who"><strong>{{ d.owner.name|default:d.owner.email|default:"No owner" }}</strong>{% if d.owner.you %} <span class="small muted">(you)</span>{% endif %}
+      {% if d.owner.email and d.owner.name != d.owner.email %}<span class="small muted">{{ d.owner.email }}</span>{% endif %}</span>
+      <span class="badge badge--dark">Owner</span></li>
+    {% for m in d.members %}<li class="team-row"><span class="team-row__who"><strong>{{ m.name }}</strong>{% if m.you %} <span class="small muted">(you)</span>{% endif %}
+      {% if m.name != m.email %}<span class="small muted">{{ m.email }}</span>{% endif %}</span>
+      <span class="badge badge--neutral">{{ m.role }}</span>
+      {% if m.actions %}<span class="cluster team-row__actions">{% include 'components/_actions.html' with actions=m.actions %}</span>{% endif %}</li>
+    {% endfor %}
+    {% for i in d.invites %}<li class="team-row"><span class="team-row__who"><strong>{{ i.email }}</strong><span class="small muted">Invited · hasn’t signed up yet</span></span>
+      <span class="badge badge--neutral">{{ i.role }}</span>
+      {% if i.actions %}<span class="cluster team-row__actions">{% include 'components/_actions.html' with actions=i.actions %}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% if d.invite %}<div class="stack stack--tight">
+    <h4 class="eyebrow">Invite someone</h4>
+    <p class="small muted">They get access as soon as they sign up with that email (invites work before they have an account).</p>
+    {% include 'components/_form.html' with form=d.invite %}
+  </div>{% endif %}
+</div>

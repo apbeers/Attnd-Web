@@ -1,0 +1,1 @@
+{# menu: the place's menu (API-018) #}<p class="pv-heading">{{ s.title|default:"Menu" }}</p>{% for m in x.context.menu|slice:":3" %}<p class="pv-row">{{ m.name }} <span class="pv-muted">{{ m.price }}</span></p>{% endfor %}

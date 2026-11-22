@@ -1,0 +1,1 @@
+{# updates: the latest organizer updates #}<p class="pv-heading">{{ s.title|default:"Latest updates" }}</p>{% for u in x.updates %}<p class="pv-row">{{ u }}</p>{% empty %}<p class="pv-muted">Sent notifications appear here</p>{% endfor %}

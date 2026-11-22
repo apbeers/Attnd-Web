@@ -112,6 +112,9 @@ def publish(site, version, user):
         site.published_by = user
         site.save(update_fields=['published', 'published_at', 'published_by'])
         apply_look(site, version)
+    _attendees_now(event)
+    from attnd import indexnow
+    indexnow.site_changed(site)
     return site
 
 
@@ -119,19 +122,33 @@ def unpublish(site):
     with transaction.atomic(), content.batch_changes(site.event):
         site.published = None
         site.save(update_fields=['published'])
+    _attendees_now(site.event)
+    from attnd import indexnow
+    indexnow.site_changed(site)  # gone: engines drop it sooner
     return site
+
+
+def _attendees_now(event):
+    """The website's address (bundle `event.website_url`) reaches attendees at once, without the app content's
+    Publish (§4: events.drafts overlays it live); its app look waits for Publish changes like other edits."""
+    from events import drafts
+    drafts.sync(event.pk)
 
 
 def suspend(site, reason):
     with content.batch_changes(site.event):
         site.suspended, site.suspended_reason = True, reason[:256]
         site.save(update_fields=['suspended', 'suspended_reason'])
+    _attendees_now(site.event)
+    from attnd import indexnow
+    indexnow.site_changed(site)
 
 
 def reinstate(site):
     with content.batch_changes(site.event):
         site.suspended, site.suspended_reason = False, ''
         site.save(update_fields=['suspended', 'suspended_reason'])
+    _attendees_now(site.event)
 
 
 def switch_plan(event, plan):
@@ -143,10 +160,12 @@ def switch_plan(event, plan):
 
 
 def website_url(event):
-    """For the bundle (API-016): the live site's URL or None."""
-    if event.plan != Event.PLAN_STUDIO:
-        return None  # no query for standard events
+    """For the bundle (API-016): the live site's URL or None (a site goes live only on the Studio plan or with the
+    owner's override, platform_admin.plans.can_go_live)."""
+    from platform_admin.plans import can_go_live
+    if not can_go_live(event):
+        return None
     site = Site.objects.filter(event=event).first()
-    if site is None or not site.published_id or site.suspended or event.plan != Event.PLAN_STUDIO:
+    if site is None or not site.is_live:  # published, not taken down, the event itself published (batch 7 §6)
         return None
     return hosting.site_url(site) or None

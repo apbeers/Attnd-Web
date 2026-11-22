@@ -59,6 +59,44 @@
   window.addEventListener('message', function (e) {
     if (e.source !== window.parent || CONSOLE.indexOf(e.origin) === -1 || !e.data) return;
     if (e.data.type === 'attnd-studio-select') { selecting = !!e.data.on; if (!selecting) outline(null); }
+    if (e.data.type === 'attnd-studio-edit') { editing = !!e.data.on; if (!editing) stopEditing(); }
   });
+  // Quick text edits: while editing, a click on an element that holds only text makes it editable; leaving it sends
+  // the old and new text to the console (studio:text_edit saves it as a version). Markup never changes here.
+  var editing = false, current = null, before = '';
+  function pagePath() {
+    var parts = location.pathname.split('/');
+    var i = parts.indexOf('_preview');
+    var rest = i >= 0 ? parts.slice(i + 2).join('/') : '';
+    if (!rest || rest.slice(-1) === '/') rest += 'index.html';
+    else if (rest.indexOf('.') === -1) rest += '.html';
+    return rest;
+  }
+  function textOnly(node) {
+    if (!node || node.nodeType !== 1 || node.closest('[data-attnd-host-footer],[data-attnd-app-banner],attnd-schedule,attnd-lineup,attnd-locations,attnd-map,attnd-updates,attnd-countdown,attnd-event,script,style')) return false;
+    return Array.prototype.every.call(node.childNodes, function (c) { return c.nodeType === 3 || (c.nodeType === 1 && /^(BR|B|STRONG|EM|I|SPAN)$/.test(c.tagName) && c.children.length === 0); }) && node.textContent.trim().length > 0;
+  }
+  function stopEditing() {
+    if (current) { current.removeAttribute('contenteditable'); current.style.outline = ''; current = null; }
+  }
+  document.addEventListener('click', function (e) {
+    if (!editing) return;
+    var node = e.target;
+    while (node && !textOnly(node) && node !== document.body) node = node.parentElement;
+    if (!node || node === document.body || node === current) return;
+    e.preventDefault(); e.stopPropagation();
+    stopEditing();
+    current = node; before = node.textContent;
+    node.setAttribute('contenteditable', 'plaintext-only');
+    node.style.outline = '2px dashed #7b4fd6';
+    node.focus();
+  }, true);
+  document.addEventListener('focusout', function (e) {
+    if (!editing || !current || e.target !== current) return;
+    var node = current, after = node.textContent;
+    stopEditing();
+    if (after.trim() !== before.trim()) post({ type: 'attnd-studio-text', page: pagePath(), old: before.trim(), new: after.trim() });
+  });
+
   post({ type: 'attnd-studio-ready', page: location.pathname });
 })();

@@ -11,7 +11,7 @@ from django.utils.dateparse import parse_datetime
 
 from events.models import UsageCount
 
-TABS = {'map', 'locations', 'schedule', 'flyer', 'notifications', 'options'}
+TABS = {'home', 'map', 'locations', 'schedule', 'flyer', 'notifications', 'options'}  # home: API-024
 
 # Metrics the apps may send, and what their `detail` may be.
 CLIENT_METRICS = {

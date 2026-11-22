@@ -1,0 +1,8 @@
+{# One form widget from field JSON `f` (console.components.field_json), the markup Django's widget would render. #}{% load console_tags %}{% if f.widget == 'textarea' %}<textarea name="{{ f.name }}" id="{{ uid }}{{ f.id }}"{{ f.attrs|html_attrs:uid }}>
+{{ f.value }}</textarea>{% elif f.widget == 'select' %}<select name="{{ f.name }}" id="{{ uid }}{{ f.id }}"{{ f.attrs|html_attrs:uid }}>{% for o in f.options %}
+  <option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>{% endfor %}
+</select>{% elif f.widget == 'file' %}{% if f.current %}{{ f.initial_text }}: <a href="{{ f.current.url }}">{{ f.current.name }}</a>{% if f.clear %}
+<input type="checkbox" name="{{ f.clear.name }}" id="{{ uid }}{{ f.clear.id }}">
+<label for="{{ uid }}{{ f.clear.id }}">{{ f.clear.label }}</label>{% endif %}<br>
+{{ f.input_text }}:{% endif %}
+<input type="{{ f.type }}" name="{{ f.name }}" id="{{ uid }}{{ f.id }}"{{ f.attrs|html_attrs:uid }}>{% else %}<input type="{{ f.type }}" name="{{ f.name }}"{% if f.value is not None %} value="{{ f.value }}"{% endif %} id="{{ uid }}{{ f.id }}"{{ f.attrs|html_attrs:uid }}>{% endif %}

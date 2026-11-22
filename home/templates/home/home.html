@@ -1,89 +1,106 @@
 {% load static %}<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-scheme="auto">
 <head>
   <meta charset="utf-8">
   {% include 'home/_icons.html' %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Attnd puts your event's map, schedule and live updates on every attendee's phone. Paste your event website and AI builds it for you in a minute.">
-  <title>Attnd — your event, in everyone's pocket</title>
+  <title>Attnd · Your event, in every attendee's pocket</title>
+  <meta name="description" content="Tell Attnd about your event, paste its website or drop a flyer. A minute later attendees have a live map, schedule and updates on their phones. Try it free on your own event.">
+  <link rel="canonical" href="{{ site_url }}/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Attnd">
+  <meta property="og:title" content="Attnd · Your event, in every attendee's pocket">
+  <meta property="og:description" content="A live map, schedule and updates for your event, built from your website or flyer in about a minute.">
+  <meta property="og:url" content="{{ site_url }}/">
+  <meta property="og:image" content="{{ site_url }}{% static 'home/img/og.png' %}">
+  <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#431f86">
+  <script type="application/ld+json" nonce="{{ csp_nonce }}">{{ structured_data|safe }}</script>
   <link rel="stylesheet" href="{% static 'home/site.css' %}">
+  <link rel="stylesheet" href="{% static 'home/onboarding.css' %}">
 </head>
-<body>
-
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></symbol>
-  <symbol id="i-stars" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M19 15l.8 1.7 1.7.8-1.7.8L19 20l-.8-1.7-1.7-.8 1.7-.8z"/></symbol>
-  <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
-  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4"/></symbol>
-  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4M9 12h6M9 16h6"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
-</svg>
+<body class="home">
 
 <nav class="site-nav">
   <div class="wrap">
-    <a class="brand" href="/">attnd<span>.</span></a>
+    <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
     <div class="site-nav__links">
+      <a href="#see-it-live">See it live</a>
       <a href="#features">Features</a>
-      {% if SIGNUPS_OPEN %}<a href="#try-it">Try it free</a>{% endif %}
-      <a href="#download">Download</a>
-      <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
-      {% if SIGNUPS_OPEN %}<a class="button button--primary button--small" href="{% url 'console:signup' %}">Create an event</a>
-      {% else %}<a class="button button--primary button--small" href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Invite only</a>{% endif %}
+      <a href="#download">Get the app</a>
+      {% if user.is_authenticated %}<a href="{% url 'console:dashboard' %}">Console</a>{% else %}<a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>{% endif %}
+      <a class="button button--primary button--small" href="#try">Try it on your event</a>
     </div>
     <details class="site-nav__menu">
       <summary>Menu</summary>
       <div class="site-nav__links">
+        <a href="#see-it-live">See it live</a>
         <a href="#features">Features</a>
-        {% if SIGNUPS_OPEN %}<a href="#try-it">Try it free</a>{% endif %}
-        <a href="#download">Download</a>
-        <a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>
-        {% if SIGNUPS_OPEN %}<a href="{% url 'console:signup' %}">Create an event</a>{% else %}<a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Invite only</a>{% endif %}
+        <a href="#download">Get the app</a>
+        {% if user.is_authenticated %}<a href="{% url 'console:dashboard' %}">Console</a>{% else %}<a href="{% url 'login' %}" data-passkey-immediate data-options-url="{% url 'passkey_auth_options' %}" data-verify-url="{% url 'passkey_auth' %}" data-next="{% url 'console:dashboard' %}">Sign in</a>{% endif %}
+        <a href="#try">Try it on your event</a>
       </div>
     </details>
   </div>
 </nav>
 
-<header class="hero">
-  <div class="wrap">
-    <div>
-      <h1>Your event's map, schedule and live updates — in everyone's pocket.</h1>
-      <p class="lead">Perfect for festivals, trade shows, outdoor events, concerts and conferences. Paste your event website and AI builds the whole thing in about a minute.</p>
-      <div class="cluster">
-        {% if SIGNUPS_OPEN %}
-        <a href="#try-it" class="button button--light">Try it free</a>
-        <a href="{% url 'console:signup' %}" class="button button--ghost">$299 per event, flat</a>
-        {% else %}
-        <a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}" class="button button--light">Invite only for now</a>
-        <a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}" class="button button--ghost">$299 per event, flat</a>
-        {% endif %}
-      </div>
+<main id="main">
+<header class="onb-hero" id="try">
+  <div class="wrap onb-hero__grid">
+    <div class="onb-hero__main">
+      <p class="onb-greeting"><span class="onb-mark" aria-hidden="true">a.</span> Hi! Tell me about your event.</p>
+      <h1>Your event, live on every attendee’s phone in a minute.</h1>
+      <p class="lead muted">Paste your website, drop a flyer or just describe it. Attnd builds the map, the schedule and
+        the updates, and you try it on your own phone right away.</p>
+      {% for m in messages %}<p class="notice notice--{% if m.tags == 'error' %}error{% else %}info{% endif %} small" role="alert">{{ m }}</p>{% endfor %}
+      {% include 'home/_composer.html' with cid='hero' %}
+      {% include 'home/_chips.html' %}
+      {% if not SIGNUPS_OPEN %}<p class="small muted">New organizer accounts are invite-only right now: sign in, or use the email your invite went to.</p>{% endif %}
+      <p class="onb-trust small muted">Free to try with up to {{ free_limit }} phones · No download on iPhone: attendees scan and the App Clip opens · Android too</p>
     </div>
-    <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-map.webp' %}" alt="The Attnd app showing an event map" width="768" height="1670" fetchpriority="high"></div></div>
+    {% include 'home/_phone.html' %}
   </div>
 </header>
+
+{% include 'home/_gallery.html' %}
 
 <section class="section" id="features">
   <div class="wrap">
     <div class="section-head">
-      <h2>Unlimited attendees, simple setup</h2>
-      <p class="muted">Everything attendees need in one place, and nothing for them to sign up for.</p>
+      <h2>Everything your attendees look for</h2>
+      <p class="muted">One link or QR code. Maps, times, what’s on now, and a nudge when it matters.</p>
     </div>
-    <div class="features-layout">
-      <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-locations.webp' %}" alt="The Attnd app showing a list of locations" width="768" height="1670" loading="lazy" decoding="async"></div></div>
-      <div class="grid grid--2">
-        <div class="feature"><svg class="icon"><use href="#i-stars"/></svg><h3>Built by AI, checked by you</h3>
-          <p class="muted">Point us at your website, flyer or program. We pull in every stage, booth and set time, and you review it before anyone sees it.</p></div>
-        <div class="feature"><svg class="icon"><use href="#i-refresh"/></svg><h3>Instant updates</h3>
-          <p class="muted">Change something at the last minute and every attendee's app updates. AI can even watch your site and suggest the edits.</p></div>
-        <div class="feature"><svg class="icon"><use href="#i-map"/></svg><h3>Fits any size of event</h3>
-          <p class="muted">A dozen art-walk stops or hundreds of festival vendors — the app picks the right layout, and you can fine-tune it.</p></div>
-        <div class="feature"><svg class="icon"><use href="#i-bell"/></svg><h3>Push notifications</h3>
-          <p class="muted">Send “doors open”, weather alerts and schedule changes straight to attendees' lock screens.</p></div>
-        <div class="feature"><svg class="icon"><use href="#i-phone"/></svg><h3>Fast mobile app</h3>
-          <p class="muted">Works in rural fields and packed arenas. Scan a QR code and you're in — on iPhone, foldables and Android.</p></div>
-        <div class="feature"><svg class="icon"><use href="#i-file"/></svg><h3>Your flyer, too</h3>
-          <p class="muted">Put a PDF or image of your flyer or map in the app to show anything you want.</p></div>
+    <div class="features">
+      <article class="feature-row">
+        <div class="feature-row__text">
+          <p class="eyebrow">Built by AI, checked by you</p>
+          <h3>From your website, flyer or spreadsheet to a finished event</h3>
+          <p class="muted">Attnd reads what you already have: stages, booths, vendors, set times. It finds photos of your
+            places, picks colours from your brand, and keeps watching your site for changes you can accept with a tap.</p>
+        </div>
+        <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-locations.webp' %}" alt="The Attnd app listing an event's places" width="768" height="1670" loading="lazy" decoding="async"></div></div>
+      </article>
+      <article class="feature-row feature-row--flip">
+        <div class="feature-row__text">
+          <p class="eyebrow">The app</p>
+          <h3>Scan and you’re in, even with no signal</h3>
+          <p class="muted">On iPhone the QR code opens an instant App Clip: nothing to install. On Android it opens
+            Google Play, and Attnd opens straight on the event once installed. Everything works offline once loaded, with walking times and directions between places.</p>
+        </div>
+        <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-map.webp' %}" alt="The Attnd app's event map with walking routes" width="768" height="1670" loading="lazy" decoding="async"></div></div>
+      </article>
+      <div class="feature-tiles">
+        <div class="feature-tile"><h3>Updates and urgent alerts</h3><p class="muted">Send “Doors open” or a weather change to every phone. Urgent ones break through, even on the lock screen.</p>
+          <div class="mock-notice" aria-hidden="true"><strong>Set time change</strong><span>The headliner moves to 8:30 PM on the North Stage.</span></div></div>
+        <div class="feature-tile"><h3>On the lock screen</h3><p class="muted">A Live Activity on iPhone and a Live Update on Android show what’s on now, what’s next and how far to walk.</p>
+          <div class="mock-live" aria-hidden="true"><span class="mock-live__now">Now · Delta Rose</span><span class="mock-live__bar"><i></i></span><span class="muted small">Next 7:00 · 4 min walk</span></div></div>
+        <div class="feature-tile"><h3>A planner for every attendee</h3><p class="muted">“Plan my Saturday around live music and BBQ.” The on-device AI builds a day, with walks and a lunch break, privately.</p>
+          <div class="mock-plan" aria-hidden="true"><span>11:00 Juniper Lane</span><span>12:00 Lunch break</span><span>13:00 Ana Morales Trio</span></div></div>
+        <div class="feature-tile"><h3>A website, too</h3><p class="muted">Attnd Studio designs and hosts an event website that stays in sync with the app.</p></div>
+        <div class="feature-tile"><h3>Live numbers</h3><p class="muted">See who joined, what people open and like, and the busiest hour, anonymously, while it happens.</p>
+          <div class="mock-bars" aria-hidden="true"><i style="--h:3"></i><i style="--h:5"></i><i style="--h:8"></i><i style="--h:6"></i><i style="--h:9"></i><i style="--h:12"></i><i style="--h:10"></i><i style="--h:7"></i></div></div>
+        <div class="feature-tile"><h3>Fits any size</h3><p class="muted">A dozen art-walk stops or a three-day festival: the layout adapts, and you choose what each screen shows.</p></div>
       </div>
     </div>
   </div>
@@ -91,113 +108,37 @@
 
 <section class="section section--band" id="how">
   <div class="wrap">
-    <div class="section-head"><h2>How it works</h2></div>
+    <div class="section-head"><h2>Free to try, live when you’re ready</h2>
+      <p class="muted">Every new event is a demo you can share with up to {{ free_limit }} phones: your team, a few friends, a dry run. When
+        it’s time for everyone, ask us to take it live: no attendee limit, and listed for people nearby.</p></div>
     <div class="grid grid--3">
-      <div class="step"><div class="step__num">1</div><h3>Import</h3><p class="muted">Paste your event site, upload a flyer, or type it in.</p></div>
-      <div class="step"><div class="step__num">2</div><h3>Review &amp; publish</h3><p class="muted">Edit anything, choose the app layout, then print your QR poster.</p></div>
-      <div class="step"><div class="step__num">3</div><h3>Stay current</h3><p class="muted">Attnd watches your own website and keeps the app in sync automatically, even during the event.</p></div>
+      <div class="step"><div class="step__num">1</div><h3>Describe it</h3><p class="muted">A link, a flyer, a sentence. Attnd does the typing.</p></div>
+      <div class="step"><div class="step__num">2</div><h3>Try it on your phone</h3><p class="muted">Scan the code, change anything in the console, watch your phone update in seconds.</p></div>
+      <div class="step"><div class="step__num">3</div><h3>Go live</h3><p class="muted">Tell us about your event and we lift the limit. Then print the poster.</p></div>
     </div>
   </div>
 </section>
 
-<section class="section" id="live">
+<section class="section center onb-again">
   <div class="wrap">
-    <div class="section-head"><h2>Edit on the web. Watch it change on your phone.</h2>
-      <p class="muted">Scan your event's QR code with your phone, keep the app open, and change anything in the console:
-        a stage time, a new food truck, the tabs or the colors. Your phone, and every attendee's, updates within seconds.
-        No app store, no re-publishing. On iPhone the code even opens an instant App Clip, so there's nothing to install.</p></div>
-    <div class="grid grid--3">
-      <div class="step"><div class="step__num">1</div><h3>Scan</h3><p class="muted">Point your camera at the QR code on your event's page in the console.</p></div>
-      <div class="step"><div class="step__num">2</div><h3>Edit</h3><p class="muted">Change anything on the web, or just update your own event website.</p></div>
-      <div class="step"><div class="step__num">3</div><h3>Watch</h3><p class="muted">The app on your phone updates live, a few seconds later.</p></div>
-    </div>
+    <h2>What’s your event?</h2>
+    <p class="muted">Start with whatever you have. You can change everything afterwards.</p>
+    {% include 'home/_composer.html' with cid='again' %}
   </div>
 </section>
-
-{% if TRIAL_IMPORT_OPEN %}
-<section class="section" id="try-it">
-  <div class="wrap">
-    <div class="section-head">
-      <h2>Already have an event? See it in the app.</h2>
-      <p class="muted">Paste your event website. We'll pull in the locations, times and descriptions and give you a code to open in the app — no account needed.</p>
-    </div>
-    <div class="panel">
-      <div id="scrape-form">
-        <div class="field">
-          <label for="event-url" class="field__label">Your event website</label>
-          <div class="cluster">
-            <input type="url" id="event-url" placeholder="https://yourevent.com" autocomplete="off">
-            <button class="button button--primary" id="scrape-button" type="button">Build my event</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="scrape-loading" class="center" aria-live="polite" hidden>
-        <div class="spinner" role="status"></div>
-        <p class="muted tight">Reading your event site… this usually takes 30–90 seconds.</p>
-        <p class="muted small" id="scrape-progress"></p>
-      </div>
-
-      <div id="scrape-success" class="center" hidden>
-        <svg class="success-icon"><use href="#i-check"/></svg>
-        <h3>Your event is ready!</h3>
-        <p class="muted tight">Scan with your phone to get the app and jump straight in:</p>
-        <img id="result-qr" class="qr" src="" alt="QR code to join the event">
-        <p class="muted small tight">Or open Attnd and enter this code:</p>
-        <div id="result-code" class="result-code"></div>
-        <p id="result-summary" class="muted small"></p>
-        <button class="button button--ghost button--small" id="scrape-again-button" type="button">Try another URL</button>
-        <hr>
-        <p class="strong tight">Like what you see?</p>
-        <p class="muted small">Create a free account to claim this event, edit everything, choose the layout and send notifications.</p>
-        <a id="claim-account-button" href="{% url 'console:signup' %}" class="button button--primary">Claim this event →</a>
-      </div>
-
-      <div id="scrape-error" class="notice notice--error" role="alert" hidden><span id="error-message"></span></div>
-    </div>
-  </div>
-</section>
-{% else %}
-<section class="section" id="invite-only">
-  <div class="wrap">
-    <div class="panel center">
-      <h2>Attnd is invite-only right now</h2>
-      <p class="muted">We aren't taking new organizers yet. If you were invited, create your account with the email
-        address the invite was sent to.</p>
-      <div class="cluster cluster--center">
-        <a href="{% url 'console:signup' %}" class="button button--primary">I have an invite</a>
-        <a href="{% url 'login' %}" class="button button--ghost">Sign in</a>
-      </div>
-      <p class="muted small">Going to an event? You don't need an invite: get the free app below and scan the event's QR code.</p>
-    </div>
-  </div>
-</section>
-{% endif %}
 
 <section class="section section--dark center" id="download">
   <div class="wrap">
-    <h2>Get the app</h2>
-    <p class="muted-on-dark">Free for attendees on iPhone and Android.</p>
+    <h2>Going to an event?</h2>
+    <p class="muted-on-dark">The app is free for attendees on iPhone and Android.</p>
     <div class="store-badges">
-      <a href="{{ IOS_APP_STORE_URL }}"><img src="{% static 'home/img/app-store-badge.svg' %}" alt="Download on the App Store"></a>
-      <a href="{{ ANDROID_PLAY_STORE_URL }}"><img src="{% static 'home/img/google-play-badge.svg' %}" alt="Get it on Google Play"></a>
+      <a href="{{ IOS_APP_STORE_URL }}"><img src="{% static 'home/img/app-store-badge.svg' %}" alt="Download on the App Store" width="135" height="40" loading="lazy"></a>
+      <a href="{{ ANDROID_PLAY_STORE_URL }}"><img src="{% static 'home/img/google-play-badge.svg' %}" alt="Get it on Google Play" width="135" height="40" loading="lazy"></a>
     </div>
   </div>
 </section>
 
-<section class="section center">
-  <div class="wrap">
-    {% if SIGNUPS_OPEN %}
-    <h2>Create your event for free.</h2>
-    <p class="muted">Pay only when your event goes live.</p>
-    <a href="{% url 'console:signup' %}" class="button button--primary">Get started</a>
-    {% else %}
-    <h2>Organizing an event?</h2>
-    <p class="muted">Attnd is invite-only right now and isn't taking new organizers yet.</p>
-    <p><a href="{% if TRIAL_IMPORT_OPEN %}{% url 'console:signup' %}{% else %}#invite-only{% endif %}">Have an invite?</a></p>
-    {% endif %}
-  </div>
-</section>
+</main>
 
 <footer>
   <div class="wrap">
@@ -208,7 +149,8 @@
 
 {# CSRF token for the passkey sign-in from the "Sign in" links (console/static/console/passkeys.js). #}
 <div hidden>{% csrf_token %}</div>
-{% if TRIAL_IMPORT_OPEN %}<script src="{% static 'home/home.js' %}"></script>{% endif %}
-<script src="{% static 'console/passkeys.js' %}"></script>
+<script src="{% static 'home/home.js' %}" defer></script>
+<script src="{% static 'console/tz.js' %}" defer></script>
+<script src="{% static 'console/passkeys.js' %}" defer></script>
 </body>
 </html>

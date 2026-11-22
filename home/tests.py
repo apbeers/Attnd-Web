@@ -64,3 +64,10 @@ class SiteIconTests(TestCase):
     def test_webmanifest_content_type(self):
         from django.conf import settings
         self.assertEqual('application/manifest+json', settings.WHITENOISE_MIMETYPES['.webmanifest'])
+
+
+class RootFileCacheTests(TestCase):
+    def test_icons_cache_for_a_day_and_robots_for_an_hour(self):
+        icon = self.client.get('/favicon.ico')
+        self.assertIn('max-age=86400', icon['Cache-Control'])
+        self.assertIn('max-age=3600', self.client.get('/robots.txt')['Cache-Control'])

@@ -13,5 +13,5 @@ def store_links(request):
 
 def signups(request):
     """SIGNUPS_OPEN for templates (sign-up links become the invite-only notice while it is off)."""
-    from console.signups import signups_open, trial_import_open
-    return {'SIGNUPS_OPEN': signups_open(), 'TRIAL_IMPORT_OPEN': trial_import_open(request)}
+    from console.signups import signups_open
+    return {'SIGNUPS_OPEN': signups_open()}

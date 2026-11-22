@@ -3,88 +3,9 @@
 {% block title %}App layout · {{ event.name }}{% endblock %}
 {% block event_content %}
 <div class="split">
-  <form method="post" id="display-form" class="split__main stack stack--loose">{% csrf_token %}
-    <div class="panel panel--roomy">
-      <h2>Layout style</h2>
-      <p class="small muted">Your event has {{ stats.location_count }} location{{ stats.location_count|pluralize }} and {{ stats.item_count }} schedule item{{ stats.item_count|pluralize }}{% if stats.spread_km %}, spread over {{ stats.spread_km }} km{% endif %}. Automatic picks a style to match and adjusts as your event grows.</p>
-      <div class="choices">{% for radio in form.preset %}
-        <label class="check" for="{{ radio.id_for_label }}">{{ radio.tag }} {{ radio.choice_label }}</label>
-      {% endfor %}</div>
-      <div class="notice notice--neutral small" id="resolved-reason">Currently using <strong>{{ resolved.resolved_preset|capfirst }}</strong> — {{ resolved.reason }}.</div>
-    </div>
-
-    <div class="panel panel--roomy">
-      <h2>Tabs</h2>
-      <label class="check field" for="{{ form.customize_tabs.id_for_label }}">{{ form.customize_tabs }} {{ form.customize_tabs.label }}</label>
-      <ul class="list list--boxed field" id="tab-list">
-        {% for cb in form.tabs %}
-        <li class="cluster" data-tab="{{ cb.data.value }}">
-          {% icon "grip" "drag-handle" %}<label class="check" for="{{ cb.id_for_label }}">{{ cb.tag }} {{ cb.choice_label }}</label>
-        </li>{% endfor %}
-      </ul>
-      {{ form.tab_order }}
-      <div class="field field--small field--bare"><label class="field__label" for="{{ form.default_tab.id_for_label }}">Opens on</label>{{ form.default_tab }}</div>
-    </div>
-
-    <div class="panel panel--roomy">
-      <h2>Details</h2>
-      <div class="grid grid--2">
-        <div class="field field--small field--bare"><label class="field__label" for="{{ form.locations_style.id_for_label }}">Locations list</label>{{ form.locations_style }}</div>
-        <div class="field field--small field--bare"><label class="field__label" for="{{ form.schedule_style.id_for_label }}">Schedule</label>{{ form.schedule_style }}</div>
-        <div class="field field--small field--bare"><label class="field__label" for="{{ form.secondary_pane.id_for_label }}">{{ form.secondary_pane.label }}</label>{{ form.secondary_pane }}
-          <div class="field__help">Unfolded foldable phones — iPhone Duo and Android foldables.</div></div>
-        <div class="field field--small field--bare"><label class="field__label" for="{{ form.map_clustering.id_for_label }}">{{ form.map_clustering.label }}</label>{{ form.map_clustering }}</div>
-        <div class="field field--small field--bare"><label class="field__label" for="{{ form.map_fit_all.id_for_label }}">{{ form.map_fit_all.label }}</label>{{ form.map_fit_all }}</div>
-        <div class="field field--small field--bare"><label class="field__label" for="{{ form.show_location_images.id_for_label }}">{{ form.show_location_images.label }}</label>{{ form.show_location_images }}</div>
-        <div class="field field--small field--bare"><label class="field__label" for="{{ form.enable_search.id_for_label }}">{{ form.enable_search.label }}</label>{{ form.enable_search }}</div>
-        <div class="field field--small field--bare"><label class="field__label" for="{{ form.group_by_category.id_for_label }}">{{ form.group_by_category.label }}</label>{{ form.group_by_category }}</div>
-        <div class="field field--small field--bare"><label class="field__label" for="id_accent_color">Accent color</label>
-          <div class="cluster"><input type="color" name="accent_color" id="id_accent_color" value="{{ event.accent_color|default:'#431f86' }}">
-            <label class="check small" for="accent_default"><input type="checkbox" name="accent_default" id="accent_default" {% if not event.accent_color %}checked{% endif %}> Use Attnd default</label></div></div>
-      </div>
-    </div>
-    <div class="cluster cluster--loose">
-      <button class="button button--primary">Save layout</button>
-      <span id="autosave-status" class="small muted grow">Changes save automatically and appear in the app within seconds.</span>
-    </div>
-  </form>
+  <div class="split__main panel panel--roomy">{% component "app_layout" event=event form=form %}</div>
   <div class="split__aside sticky">{% include 'console/_live_phone.html' %}</div>
 </div>
-{% endblock %}
-{% block scripts %}
-<script nonce="{{ csp_nonce }}">
-(function () {
-  const form = document.getElementById('display-form');
-  const list = document.getElementById('tab-list');
-  const custom = document.getElementById('{{ form.customize_tabs.id_for_label }}');
-  const orderInput = form.querySelector('input[name=tab_order]');
-  const syncOrder = () => orderInput.value = [...list.querySelectorAll('[data-tab]')].map(li => li.dataset.tab).join(',');
-  // Restore saved order
-  const saved = (orderInput.value || '').split(',').filter(Boolean);
-  saved.forEach(t => { const li = list.querySelector(`[data-tab="${t}"]`); if (li) list.appendChild(li); });
-  const toggleTabs = () => list.querySelectorAll('input').forEach(i => i.disabled = !custom.checked);
-  custom.addEventListener('change', toggleTabs); toggleTabs();
-  makeSortable(list, {handle: '.drag-handle', onEnd: () => { syncOrder(); refresh(); }});
-  syncOrder();
-  // Auto-save: every change is saved right away, so a phone with the event open updates live.
-  let timer;
-  const status = document.getElementById('autosave-status');
-  async function refresh() {
-    syncOrder();
-    status.innerHTML = '<span class="spinner"></span>Saving…';
-    try {
-      const r = await fetch(form.action || location.href, {method: 'POST', body: new FormData(form),
-                                                          headers: {Accept: 'application/json'}});
-      if (!r.ok) throw new Error();
-      const d = await r.json();
-      document.getElementById('resolved-reason').innerHTML =
-        `Currently using <strong>${d.resolved.resolved_preset[0].toUpperCase() + d.resolved.resolved_preset.slice(1)}</strong> — ${d.resolved.reason}.`;
-      status.textContent = 'Saved. Open apps update within a few seconds.';
-    } catch (e) {
-      status.innerHTML = '<span class="tone-danger">Couldn’t save. Check your connection and try again.</span>';
-    }
-  }
-  form.addEventListener('change', () => { clearTimeout(timer); timer = setTimeout(refresh, 300); });
-})();
-</script>
+<div class="panel panel--roomy section" id="screens">{% component "app_screens" event=event %}</div>
+<div class="panel panel--roomy section" id="live-activity">{% component "live_activity_settings" event=event %}</div>
 {% endblock %}

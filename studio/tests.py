@@ -83,30 +83,34 @@ class StudioTestCase(TestCase):
 
 class AccessTests(StudioTestCase):
     def test_who_has_access(self):
-        """Admins only: staff and superusers, plus the explicit STUDIO_BETA_EMAILS override."""
-        self.assertTrue(has_studio_access(self.owner))  # STUDIO_BETA_EMAILS (this class's override)
+        """Every signed-in organizer designs (D1); publishing is plan-gated (can_publish)."""
+        self.assertTrue(has_studio_access(self.owner))
         other = User.objects.create_user('o', 'Other@Example.com', 'pw')
-        self.assertFalse(has_studio_access(other))
-        staff = User.objects.create_user('s', 's@example.com', 'pw', is_staff=True)
-        self.assertTrue(has_studio_access(staff))
-        superuser = User.objects.create_user('su', 'su@example.com', 'pw', is_superuser=True)
-        self.assertTrue(has_studio_access(superuser))
+        self.assertTrue(has_studio_access(other))
+        from django.contrib.auth.models import AnonymousUser
+        self.assertFalse(has_studio_access(AnonymousUser()))
 
     def test_default_setting_is_empty(self):
         import attnd.settings as module  # the real default, not this class's override
         self.assertEqual(module.STUDIO_BETA_EMAILS, [])
 
-    def test_without_access_everything_is_404_and_hidden(self):
+    def test_every_team_member_designs_but_publishing_needs_studio(self):
         member = User.objects.create_user('m', 'member@example.com', 'pw')
         EventMember.objects.create(event=self.event, user=member, role=EventMember.ROLE_ADMIN)
         client = Client()
         client.force_login(member)
-        for name in ('editor', 'state', 'code', 'app_preview'):
-            self.assertEqual(client.get(reverse(f'studio:{name}', args=[self.event.pk])).status_code, 404, name)
-        self.assertEqual(client.post(reverse('studio:chat', args=[self.event.pk]), {'text': 'hi'}).status_code, 404)
-        overview = client.get(reverse('console:event', args=[self.event.pk]))
-        self.assertNotContains(overview, reverse('studio:editor', args=[self.event.pk]))
-        self.assertNotContains(client.get(reverse('console:event_new')), 'studio_import')
+        self.assertEqual(client.get(reverse('studio:editor', args=[self.event.pk])).status_code, 200)
+        from agent import registry as agent_registry
+        from console import components as C
+        self.assertIn('design_website', agent_registry.writes_for(member))
+        self.assertIn('website_overview', C.for_user(member))
+        from studio.access import can_publish
+        self.assertTrue(can_publish(self.event, member))  # this event is on the Studio plan
+        event = Event.objects.create(name='Market', event_code='MKT9', user=self.owner, start_time=timezone.now())
+        self.assertFalse(can_publish(event, self.owner))  # free: Upgrade to publish
+        stranger = User.objects.create_user('x2', 'x2@example.com', 'pw')
+        client.force_login(stranger)
+        self.assertEqual(client.get(reverse('studio:editor', args=[self.event.pk])).status_code, 404)
 
     def test_access_user_sees_the_entry_points(self):
         overview = self.client.get(reverse('console:event', args=[self.event.pk]))
@@ -132,37 +136,24 @@ class AccessTests(StudioTestCase):
         self.assertEqual(client.get('/console/studio/access/').status_code, 404)
         dashboard = client.get(reverse('console:dashboard'))
         self.assertNotContains(dashboard, '/console/studio/access/')
-        self.assertContains(dashboard, reverse('studio:reports'))
+        from platform_admin import areas  # Studio reports is a Platform sub-tab (Nov 22, 2026)
+        self.assertContains(client.get(areas.first_url(staff)), reverse('studio:reports'))
 
-    def test_switching_an_event_to_studio(self):
+    def test_a_new_event_goes_straight_to_the_empty_state(self):
         event = Event.objects.create(name='Market', event_code='MKT1', user=self.owner, start_time=timezone.now())
-        url = reverse('studio:editor', args=[event.pk])
-        page = self.client.get(url)
-        self.assertContains(page, 'Use Studio for this event')
-        self.assertFalse(Site.objects.filter(event=event).exists())
-        self.assertEqual(self.client.get(reverse('studio:state', args=[event.pk])).status_code, 404)
-        version = event.content_version
-        self.client.post(url, {'action': 'switch'})
-        event.refresh_from_db()
-        self.assertEqual(event.plan, Event.PLAN_STUDIO)
-        self.assertGreater(event.content_version, version)
+        page = self.client.get(reverse('studio:editor', args=[event.pk]))
+        self.assertNotContains(page, 'Use Studio for this event')
+        self.assertContains(page, 'No website yet')
+        self.assertContains(page, 'Start from scratch')
         self.assertTrue(Site.objects.filter(event=event).exists())
-        self.assertContains(self.client.get(url), 'Assistant')
+        event.refresh_from_db()
+        self.assertEqual(event.plan, Event.PLAN_STANDARD)
 
-    def test_contributor_cannot_switch_or_publish(self):
-        event = Event.objects.create(name='Market', event_code='MKT2', user=self.owner, start_time=timezone.now())
+    def test_contributor_cannot_publish(self):
         helper = User.objects.create_user('h', 'helper@example.com', 'pw')
-        self.enterContext(override_settings(STUDIO_BETA_EMAILS=['owner@example.com', 'helper@example.com']))
-        EventMember.objects.create(event=event, user=helper, role=EventMember.ROLE_CONTRIBUTOR)
         EventMember.objects.create(event=self.event, user=helper, role=EventMember.ROLE_CONTRIBUTOR)
         client = Client()
         client.force_login(helper)
-        page = client.get(reverse('studio:editor', args=[event.pk]))
-        self.assertContains(page, 'Ask the event')
-        client.post(reverse('studio:editor', args=[event.pk]), {'action': 'switch'})
-        event.refresh_from_db()
-        self.assertEqual(event.plan, Event.PLAN_STANDARD)
-        # On a Studio event a contributor edits drafts but can't publish.
         self.assertEqual(client.get(reverse('studio:editor', args=[self.event.pk])).status_code, 200)
         saved = client.post(reverse('studio:code', args=[self.event.pk]),
                             {'files': json.dumps({'index.html': PAGE + '<!-- x -->'})}).json()
@@ -176,8 +167,9 @@ class SitesHostTests(StudioTestCase):
     def test_only_site_routes_exist_on_the_sites_host(self):
         self.publish()
         for path in ('/console/', f'/{settings.ADMIN_URL_PATH}', '/api/v2/events/lookup/?q=ARTS1', '/accounts/login/',
-                     '/static/console/console.css', '/favicon.ico', '/join/ARTS1/', '/', '/health/'):
+                     '/static/console/console.css', '/favicon.ico', '/join/ARTS1/', '/health/'):
             self.assertEqual(self.sites(path).status_code, 404, path)
+        self.assertEqual(self.sites('/').status_code, 301)  # the bare root → Attnd's home page
 
     def test_no_cookies_csp_and_framing(self):
         self.publish()
@@ -351,7 +343,11 @@ class DataTests(StudioTestCase):
     def test_draft_event_leaks_nothing(self):
         Event.objects.filter(pk=self.event.pk).update(status=Event.STATUS_DRAFT)
         self.publish()
-        data = self.sites(f'/{self.site.slug}/_attnd/data.json').json()
+        # Publish limits (batch 7 §6): a draft event's site is preview-only; the preview's data leaks nothing either.
+        self.assertEqual(self.sites(f'/{self.site.slug}/_attnd/data.json').status_code, 404)
+        self.site.refresh_from_db()
+        token = hosting.make_preview_token(self.site)
+        data = self.sites(f'/{self.site.slug}/_preview/{token}/_attnd/data.json').json()
         self.assertEqual(data['event']['name'], 'Arts Fair')
         self.assertEqual((data['schedule'], data['locations'], data['updates']), ([], [], []))
 
@@ -429,7 +425,7 @@ class FormTests(StudioTestCase):
         self.assertIn('submitted_at,page,name,email', text)
         self.assertIn("'=HYPERLINK", text)
         entry = FormSubmission.objects.get()
-        self.client.post(reverse('studio:form_delete', args=[self.event.pk, entry.pk]))
+        self.client.post(reverse('studio:form_delete', args=[self.event.pk]), {'entry': entry.pk})
         self.assertFalse(FormSubmission.objects.exists())
 
 
@@ -479,13 +475,13 @@ class AssetTests(StudioTestCase):
         with self.captureOnCommitCallbacks(execute=False):
             asset = create_asset(self.event, png_bytes(), 'photo.png')
         result = {'description': 'A red square', 'alt': 'Red square', 'tags': ['Logo', 'red'], 'colors': ['#ff0000', 'bad']}
-        with mock.patch.dict('os.environ', {'OPENAI_API_KEY': 'k'}), \
-                mock.patch('studio.ai.describe_image', return_value=(result, {'model': 'gpt-5-mini', 'input': 1000,
-                                                                              'output': 100})):
+        from attnd.testing import fake_claude
+        with fake_claude(result) as claude:
             describe(asset.pk)
+        self.assertEqual(claude.last['messages'][0]['content'][0]['type'], 'image')  # Claude Haiku's vision
         asset.refresh_from_db()
         self.assertEqual((asset.description, asset.tags, asset.colors), ('A red square', ['logo', 'red'], ['#ff0000']))
-        self.assertEqual(StudioUsage.objects.get().kind, 'describe')
+        self.assertEqual((StudioUsage.objects.get().kind, StudioUsage.objects.get().provider), ('describe', 'anthropic'))
 
     def test_edit_delete_and_flyer(self):
         from studio.assets import create_asset
@@ -498,7 +494,9 @@ class AssetTests(StudioTestCase):
         number = self.client.post(reverse('studio:flyer', args=[self.event.pk]), {'asset_id': asset.pk}).json()['number']
         self.site.refresh_from_db()
         self.assertEqual((self.site.draft.number, self.site.draft.flyer_asset_id), (number, asset.pk))
-        self.assertEqual(self.client.post(url, {'action': 'delete'}).status_code, 400)  # it's the draft's flyer
+        delete = reverse('studio:asset_delete', args=[self.event.pk])
+        self.client.post(delete, {'asset': str(asset.pk)})
+        self.assertTrue(type(asset).objects.filter(pk=asset.pk).exists())  # it's the draft's flyer
         self.publish()
         event = Event.objects.get(pk=self.event.pk)
         self.assertTrue(event.flyer.name)
@@ -524,7 +522,7 @@ class VersionTests(StudioTestCase):
         self.assertEqual((self.site.draft.number, self.site.draft.files), (4, self.v2.files))
         self.assertEqual(self.site.draft.source, SiteVersion.SOURCE_RESTORE)
         v3 = self.site.versions.get(number=3)
-        self.client.post(reverse('studio:restore', args=[self.event.pk, v3.pk]))
+        self.client.post(reverse('studio:restore', args=[self.event.pk]), {'version': v3.pk})
         self.site.refresh_from_db()
         self.assertEqual(self.site.draft.files, {'index.html': '<p>v3</p>'})
 
@@ -539,7 +537,7 @@ class VersionTests(StudioTestCase):
         self.assertEqual(event.display_config.get('default_tab'), 'schedule')
         self.assertNotIn('bogus', event.display_config)
         # Publish an older version: the live site rolls back, the draft stays.
-        self.client.post(reverse('studio:publish_version', args=[self.event.pk, self.v2.pk]))
+        self.client.post(reverse('studio:publish_version', args=[self.event.pk]), {'version': self.v2.pk})
         self.site.refresh_from_db()
         self.assertEqual((self.site.published, self.site.draft), (self.v2, version))
         self.client.post(reverse('studio:unpublish', args=[self.event.pk]))
@@ -572,16 +570,30 @@ class VersionTests(StudioTestCase):
         self.assertEqual(unique_slug('!!'), 'event')
         self.assertEqual(unique_slug('Console'), 'console-2')
 
-    def test_editor_renders(self):
+    def test_website_page_and_components(self):
+        """The Website page draws the same components as the chat's Website tab (no Studio chat of its own)."""
         page = self.client.get(reverse('studio:editor', args=[self.event.pk]))
-        self.assertContains(page, 'studio-state-json')
-        self.assertContains(page, 'sandbox="allow-scripts allow-forms allow-popups')
+        self.assertContains(page, 'component--website_overview')
+        self.assertContains(page, 'sandbox="allow-scripts allow-forms allow-popups"')
         self.assertNotContains(page, 'allow-same-origin')
         self.assertNotContains(page, '<h1>Fair</h1>')  # site HTML never rendered on attnd.app
-        state = self.client.get(reverse('studio:state', args=[self.event.pk])).json()
-        self.assertEqual(state['pages'], ['about.html', 'index.html'])
-        self.assertTrue(state['preview'].startswith(f'https://{SITES}/'))
-        self.assertIn('phone-preview', self.client.get(reverse('studio:app_preview', args=[self.event.pk])).json()['html'])
+        self.assertNotContains(page, 'studio.js')
+        from console import components as C
+        data = C.load(self.owner, 'website_overview', {'event_id': self.event.pk})
+        self.assertTrue(data['preview'].startswith(f'https://{SITES}/'))
+        self.assertEqual(data['draft'], self.site.draft.number)
+        self.assertIn('publish_website', [a['name'] for a in data['actions']])
+        versions = C.load(self.owner, 'website_versions', {'event_id': self.event.pk})
+        self.assertTrue(any(a['name'] == 'restore_website_version' for r in versions['rows'] for a in r['actions']))
+        # Publish and the status sit above the preview; Full screen preview opens a dialog with Desktop | Mobile and
+        # Publish too (owner, Nov 21, 2026).
+        html = page.content.decode()
+        self.assertLess(html.index('Not published'), html.index('<iframe'))
+        self.assertLess(html.index('Publish'), html.index('<iframe'))
+        self.assertIn('Full screen preview', html)
+        dialog = html[html.index('data-site-full'):]
+        self.assertIn('data-site-size="mobile"', dialog)
+        self.assertIn('Publish', dialog[:dialog.index('</dialog>')])
 
 
 class ReportTests(StudioTestCase):
@@ -615,24 +627,169 @@ class ReportTests(StudioTestCase):
         self.assertEqual(self.sites(url, 'post', data={'reason': 'spam'}).status_code, 429)
 
 
-class ChatEndpointTests(StudioTestCase):
-    def test_chat_creates_a_run(self):
+class WebsiteTabTests(StudioTestCase):
+    """Owner feedback on the Website tab (Nov 21, 2026): no design box of its own (the chat is the one place to ask),
+    an empty state with Build from your current website / Start from scratch, a preview that works, and no address
+    while the site isn't published."""
+
+    def test_the_preview_url_answers_200_for_a_built_draft(self):
+        from console import components as C
+        data = C.load(self.owner, 'website_overview', {'event_id': self.event.pk})
+        self.assertTrue(data['built'])
+        path = data['preview'].split(SITES, 1)[1]
+        response = self.sites(path)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Fair')
+        self.assertEqual(data['public_url'], '')  # not published: no address shown
+        page = self.client.get(reverse('studio:editor', args=[self.event.pk]))
+        self.assertNotContains(page, 'What should change on the website?')
+        self.assertNotContains(page, 'Bring your current website into Studio')
+        self.assertNotContains(page, SITES + '/' + self.site.slug + '/<')  # no raw address before publishing
+        self.publish()
+        self.assertTrue(C.load(self.owner, 'website_overview', {'event_id': self.event.pk})['public_url'])
+
+    def test_an_empty_draft_shows_the_placeholder_not_an_iframe(self):
+        from console import components as C
+        publishing.new_version(self.site, self.owner, files={}, summary='Empty')
+        self.event.source_urls = ['https://www.artsfair.example/']
+        self.event.save()
+        data = C.load(self.owner, 'website_overview', {'event_id': self.event.pk})
+        self.assertFalse(data['built'])
+        self.assertEqual(data['preview'], '')
+        labels = [f['submit'][0]['label'] for f in data['starts']]
+        self.assertEqual(labels, ['Build from your current website', 'Start from scratch'])
+        page = self.client.get(reverse('studio:editor', args=[self.event.pk]))
+        self.assertContains(page, 'No website yet')
+        self.assertNotContains(page, '<iframe')
+        # Start from scratch: a design run from the event's own details, as a task (the chat's live card).
+        with self.captureOnCommitCallbacks(execute=False):
+            response = self.client.post(reverse('studio:start', args=[self.event.pk]), HTTP_ACCEPT='application/json')
+        self.assertEqual(response.status_code, 202)
+        run = StudioRun.objects.get()
+        self.assertIn(self.event.name, run.prompt)
+        self.assertEqual(response.json()['task']['id'], f'studio-{run.pk}')
+        # While it works the empty state shows the progress, not the buttons.
+        self.assertEqual(C.load(self.owner, 'website_overview', {'event_id': self.event.pk})['starts'], [])
+        from agent import registry as agent_registry
+        self.assertIn('start_website_from_scratch', agent_registry.writes_for(self.owner))
+
+
+class DesignWebsiteTests(StudioTestCase):
+    """Ask Attnd is the one chat: design_website starts Studio's engine in the background and answers a task (the
+    chat's live card); the canvas has a Website tab for people with Studio access."""
+
+    def test_design_creates_a_run_and_a_task(self):
         with self.captureOnCommitCallbacks(execute=False) as callbacks:
-            response = self.client.post(reverse('studio:chat', args=[self.event.pk]), {
-                'text': 'Make it bold', 'selection': json.dumps({'selector': 'h1', 'tag': 'h1', 'text': 'Fair'})})
+            response = self.client.post(reverse('studio:design', args=[self.event.pk]), {'instruction': 'Make it bold'})
         self.assertEqual(response.status_code, 202)
         self.assertEqual(len(callbacks), 1)  # the background thread starts after commit
         run = StudioRun.objects.get()
-        self.assertEqual((run.prompt, run.selection['selector']), ('Make it bold', 'h1'))
-        busy = self.client.post(reverse('studio:chat', args=[self.event.pk]), {'text': 'Again'})
+        self.assertEqual(run.prompt, 'Make it bold')
+        task = response.json()['task']
+        self.assertEqual((task['id'], task['status'], task['kind']), (f'studio-{run.pk}', 'queued', 'website'))
+        busy = self.client.post(reverse('studio:design', args=[self.event.pk]), {'instruction': 'Again'})
         self.assertEqual(busy.status_code, 409)
-        status = self.client.get(reverse('studio:run', args=[self.event.pk, run.pk])).json()['run']
-        self.assertEqual(status['status'], 'queued')
-        self.assertTrue(status['preview'].startswith(f'https://{SITES}/'))
+        feed = self.client.get(f'/console/tasks/?ids=studio-{run.pk}').json()['tasks']
+        self.assertIn(f'studio-{run.pk}', [t['id'] for t in feed])
+        # The agent step's JSON answer becomes a live task card.
+        from agent.models import AgentRun, AgentStep
+        from agent.views import step_json
+        agent_run = AgentRun.objects.create(user=self.owner, goal='make the hero bigger')
+        step = AgentStep.objects.create(run=agent_run, seq=1, tool='design_website', result=response.content.decode())
+        self.assertEqual(step_json(step)['task'], f'studio-{run.pk}')
 
     def test_spend_cap(self):
         StudioUsage.objects.create(event=self.event, kind='chat', provider='openai', model='x',
                                    cost_usd=settings.STUDIO_DAILY_SPEND_CAP_USD + 1)
-        response = self.client.post(reverse('studio:chat', args=[self.event.pk]), {'text': 'Hi'})
+        response = self.client.post(reverse('studio:design', args=[self.event.pk]), {'instruction': 'Hi'})
         self.assertEqual(response.status_code, 429)
         self.assertFalse(StudioRun.objects.exists())
+
+    def test_actions_and_canvas_tab(self):
+        from agent import loop, registry as agent_registry
+        writes = agent_registry.writes_for(self.owner)
+        for name in ('design_website', 'publish_website', 'unpublish_website', 'restore_website_version',
+                     'bring_into_studio'):
+            self.assertIn(name, writes)
+        for name in ('publish_website', 'unpublish_website', 'restore_website_version'):
+            self.assertTrue(writes[name].confirm, name)
+        self.assertFalse(writes['design_website'].confirm)
+        # "make the hero bigger" names no area: design_website is always among the tools for Studio users.
+        run = type('R', (), {'goal': 'make the hero bigger', 'page_url': ''})()
+        self.assertIn('design_website', {t['name'] for t in loop.tools_for(self.owner, run)})
+        page = self.client.get(reverse('console:assistant') + f'?event={self.event.pk}&tab=website')
+        self.assertContains(page, 'data-tab="Website"')
+        self.assertContains(page, 'component--website_overview')
+
+
+class SitesDomainMoveTests(StudioTestCase):
+    """attnd.site (owner, Nov 21, 2026): the old herokuapp.com sites host only redirects site paths to the new host."""
+
+    def setUp(self):
+        super().setUp()
+        self.enterContext(override_settings(
+            SITES_HOST='dev.attnd.site', OLD_SITES_HOST='attnd-dev-7ab893f37020.herokuapp.com',
+            ALLOWED_HOSTS=['testserver', 'dev.attnd.site', 'attnd-dev-7ab893f37020.herokuapp.com']))
+
+    def old(self, path):
+        return Client().get(path, HTTP_HOST='attnd-dev-7ab893f37020.herokuapp.com', secure=True)
+
+    def test_old_host_redirects_site_paths_and_nothing_else(self):
+        response = self.old(f'/{self.site.slug}/about.html?x=1')
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response['Location'], f'https://dev.attnd.site/{self.site.slug}/about.html?x=1')
+        for path in ('/console/', '/api/v2/app-status/', '/accounts/login/', '/static/console/console.css', '/'):
+            self.assertEqual(self.old(path).status_code, 404, path)
+        self.assertNotIn('Set-Cookie', response)
+
+    @override_settings(SITE_URL='https://dev.attnd.app')
+    def test_bare_sites_root_goes_to_attnd_home_and_unknown_slugs_stay_404(self):
+        new = Client()
+        response = new.get('/', HTTP_HOST='dev.attnd.site', secure=True)
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response['Location'], 'https://dev.attnd.app/home/')
+        self.assertNotIn('Set-Cookie', response)
+        self.assertEqual(new.get('/no-such-site/', HTTP_HOST='dev.attnd.site', secure=True).status_code, 404)
+
+    def test_addresses_follow_the_sites_host(self):
+        from studio import publishing
+        self.publish()
+        self.assertEqual(self.site.public_url(), f'https://dev.attnd.site/{self.site.slug}/')
+        self.assertEqual(publishing.website_url(self.event), f'https://dev.attnd.site/{self.site.slug}/')
+        from io import StringIO
+
+        from django.core.management import call_command
+        version = Event.objects.get(pk=self.event.pk).content_version
+        call_command('refresh_site_addresses', stdout=StringIO())
+        self.assertGreater(Event.objects.get(pk=self.event.pk).content_version, version)
+
+
+class ProgressStepTests(StudioTestCase):
+    """A progress step is one row that counts up, then one ✓ with its done text (owner, Nov 21, 2026)."""
+
+    def test_progress_updates_in_place(self):
+        from studio.agent import Workspace
+        from studio.models import StudioRun
+        from studio.views import run_task
+        run = StudioRun.objects.create(site=self.site, created_by=self.owner, kind=StudioRun.KIND_IMPORT,
+                                       status=StudioRun.RUNNING, prompt='x')
+        ws = Workspace.__new__(Workspace)
+        ws.run = run
+        for n in (25, 29, 34):
+            ws.step(f'Copied {n} of 52 images, fonts and PDFs…', key='copy', done=f'Copied {n} images, fonts and PDFs')
+        self.assertEqual([s['text'] for s in run_task(run)['steps']], ['Copied 34 of 52 images, fonts and PDFs…'])
+        ws.step('Copied 52 of 52 images, fonts and PDFs…', key='copy', done='Copied 52 images, fonts and PDFs')
+        ws.step('Rebuilding the pages')
+        steps = run_task(run)['steps']
+        self.assertEqual([(s['text'], s['state']) for s in steps],
+                         [('Copied 52 images, fonts and PDFs', 'done'), ('Rebuilding the pages', 'running')])
+
+
+class SitesSeoTests(StudioTestCase):
+    def test_canonical_and_the_sites_sitemap(self):
+        self.publish()
+        body = self.sites(f'/{self.site.slug}/').content.decode()
+        self.assertIn(f'<link rel="canonical" href="https://{SITES}/{self.site.slug}/">', body)
+        sitemap = self.sites('/sitemap.xml').content.decode()
+        self.assertIn(f'<loc>https://{SITES}/{self.site.slug}/</loc>', sitemap)
+        self.assertIn('Sitemap:', self.sites('/robots.txt').content.decode())

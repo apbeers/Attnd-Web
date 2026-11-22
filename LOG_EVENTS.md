@@ -91,6 +91,7 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 | `lifecycle.deep_link` | `lifecycle` | info | **`kind`** (`join`/`open`/`live`/`referrer`/`shortcut`), `target` (template, no code) | the app was opened by a link |
 | `lifecycle.event.joined` | `lifecycle` | notice | **`event_id`**, `via` (`qr`/`link`/`search`/`nearby`/`referrer`/`rejoin`) | an event was joined |
 | `lifecycle.event.left` | `lifecycle` | notice | **`event_id`**, `reason` (`user`/`switch`/`404`) | the event was left or forgotten |
+| `lifecycle.server_switch` | `lifecycle` | notice | `to` (`production`/`dev`) | iOS TestFlight/Xcode installs: Options → Test server chose another server for the next launch |
 
 ### net
 
@@ -235,8 +236,9 @@ Fields in **bold** are required. `ms` = a duration in milliseconds (integer); `b
 
 | Event | Category | Level | Fields | When |
 |-------|----------|-------|--------|------|
-| `perf.signpost` | `perf` | debug | **`name`** (`launch`/`bundle_fetch`/`bundle_decode`/`planner`/`map_first_render`/`search_index`), **`ms`** | an `OSSignposter` interval / Android `Trace` section ended |
+| `perf.signpost` | `perf` | debug | **`name`** (`launch`/`bundle_fetch`/`bundle_decode`/`bundle_apply`/`bundle_save`/`planner`/`map_first_render`/`search_index`), **`ms`** | an `OSSignposter` interval / Android `Trace` section ended |
 | `perf.metric` | `perf` | debug | **`name`** (an API-014 metric, e.g. `perf_bundle_fetch`), **`bucket`** | a value went into the anonymous perf counts |
+| `perf.hang` | `perf` | warning | **`ms`**, `signpost` (the interval running, if any) | Debug/Dev builds (iOS): the main thread didn't answer for > 100 ms |
 | `perf.frame_drops` | `perf` | debug | **`screen`**, **`dropped`**, `ms` | janky frames on a screen (when measured) |
 
 ### auth

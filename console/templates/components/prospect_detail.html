@@ -1,0 +1,48 @@
+{% load console_tags %}{# prospect_detail: one prospect with contacts and activity (staff only; the Prospects detail page too). Attnd never emails prospects. #}<div class="stack component component--prospect_detail">
+  {% if surface == 'chat' %}<div class="cluster"><h3 class="title-3 grow">{{ d.name }}</h3><span class="badge badge--info">Fit {{ d.fit }}</span></div>{% endif %}
+  <div class="split">
+  <div class="split__main stack">
+    <section class="stack stack--tight">
+      {% if d.summary %}<p>{{ d.summary }}</p>{% endif %}
+      <p class="small muted">{{ d.dates|default:"Dates unknown" }}{% if d.city %} · {{ d.city }}{% endif %}{% if d.venue %} · {{ d.venue }}{% endif %}{% if d.organizer %} · {{ d.organizer }}{% endif %}</p>
+      {% if d.reasons %}<div><h4 class="eyebrow">Why it fits</h4><ul class="small">{% for r in d.reasons %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if d.links %}<div class="stack stack--tight small">{% for u in d.links %}<a href="{{ u }}" target="_blank" rel="noopener noreferrer nofollow">{{ u|truncatechars:80 }}</a>{% endfor %}</div>{% endif %}
+    </section>
+    <section class="stack stack--tight">
+      <h4 class="eyebrow">{% icon "people" %} Contacts</h4>
+      <p class="small muted">Attnd never emails prospects. Whoever reaches out identifies themselves, includes a mailing address and an opt-out, and never contacts anyone marked do not contact.</p>
+      {% if d.contacts %}<ul class="list list--boxed">{% for c in d.contacts %}<li class="team-row">
+        <span class="team-row__who"><strong>{{ c.name }}</strong><span class="small muted">{{ c.role }}{% if c.role and c.organization %} · {% endif %}{{ c.organization }}</span>
+          {% if c.dnc %}<span class="badge badge--danger">Do not contact</span>{% else %}
+          <span class="cluster small">{% if c.email %}<span class="mono">{{ c.email }}</span><button type="button" class="button button--ghost button--small" data-copy="{{ c.email }}">Copy email</button>{% endif %}
+            {% if c.phone %}<span class="mono">{{ c.phone }}</span><button type="button" class="button button--ghost button--small" data-copy="{{ c.phone }}">Copy phone</button>{% endif %}
+            {% if c.website %}<a href="{{ c.website }}" target="_blank" rel="noopener noreferrer nofollow">Website</a>{% endif %}
+            {% if c.profile %}<a href="{{ c.profile }}" target="_blank" rel="noopener noreferrer nofollow">Profile</a>{% endif %}</span>{% endif %}
+          <span class="small muted">Found on <a href="{{ c.source }}" target="_blank" rel="noopener noreferrer nofollow">{{ c.source|truncatechars:70 }}</a></span></span>
+        <span class="cluster team-row__actions">{% include 'components/_actions.html' with actions=c.actions %}</span></li>{% endfor %}</ul>
+      {% else %}<p class="small muted">No organizer contacts were published on the pages that were read.</p>{% endif %}
+    </section>
+    {% if d.activity %}<section><h4 class="eyebrow">{% icon "history" %} Activity</h4><ul class="list list--inset small">{% for a in d.activity %}<li>{{ a.when }} · {{ a.text }} <span class="muted">({{ a.who }})</span></li>{% endfor %}</ul>
+      {% if d.first_run %}<p class="small muted">First found by <a href="{{ d.first_run_url }}">run {{ d.first_run }}</a>.</p>{% endif %}</section>{% endif %}
+  </div>
+  <aside class="split__aside stack">
+    <form method="post" action="{{ d.save_url }}" class="stack stack--tight"{% if surface == 'chat' %} data-component-form{% endif %}>{% csrf_token %}
+      <input type="hidden" name="action" value="save">
+      <label class="field"><span class="field__label">Status</span><select name="status">{% for s in d.statuses %}<option value="{{ s.value }}"{% if s.value == d.status %} selected{% endif %}>{{ s.label }}</option>{% endfor %}</select></label>
+      <label class="field"><span class="field__label">Notes</span><textarea name="notes" rows="5">{{ d.notes }}</textarea></label>
+      <div><button class="button button--primary button--small">Save</button></div>
+    </form>
+    <section class="stack stack--tight">
+      <h4 class="eyebrow">{% icon "phone" %} Test event</h4>
+      {% if d.event_name %}<p><a class="strong" href="{{ d.event_url }}">{{ d.event_name }}</a></p>
+        <p class="small">Event code <span class="mono strong">{{ d.event_code }}</span> <button type="button" class="button button--ghost button--small" data-copy="{{ d.event_code }}">Copy</button></p>
+        {% if d.can_see_qr %}<img class="two-factor-qr" src="{{ d.qr_url }}" alt="QR code to open {{ d.event_name }} in the app" width="180" height="180" loading="lazy">{% endif %}
+        <p class="muted small">Published but unlisted: open it in the app with the code or the QR. Never in nearby search or watched.</p>
+      {% elif d.importing_url %}<p class="small"><span class="spinner"></span> Importing… <a href="{{ d.importing_url }}">Follow the import</a></p>
+      {% else %}{% if d.import_error %}<div class="notice notice--error small">The last import failed: {{ d.import_error }}</div>{% endif %}
+        <p class="muted small">The AI import reads {{ d.link_count }} link(s) and makes a published, unlisted Demo event owned by you, for testing only. Nobody is invited or emailed.</p>
+        <div class="cluster">{% include 'components/_actions.html' with actions=d.actions|named:"create_test_event" %}</div>{% endif %}
+    </section>
+  </aside>
+  </div>
+</div>

@@ -1,0 +1,10 @@
+{% load console_tags %}{% comment %} event_new_form: create an event with the AI import (a background task: the corner tray shows
+its steps and opens the event when it's done) or as an empty draft. {% endcomment %}<div class="stack component component--event_new_form">
+  {% if surface == 'chat' %}<h3 class="title-4">{% icon "stars" %} Create with AI</h3>{% endif %}
+  <p class="small muted">Give the event’s website, paste details or attach a flyer. Attnd reads it in the background and builds the locations and schedule; you can keep working meanwhile.</p>
+  {% include 'components/_form.html' with form=d.ai %}
+  <details class="panel">
+    <summary class="strong">Or start with an empty event</summary>
+    <div class="details-body">{% include 'components/_form.html' with form=d.blank %}</div>
+  </details>
+</div>

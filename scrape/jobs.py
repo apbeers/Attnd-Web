@@ -14,7 +14,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.mail import send_mail
 from django.db import close_old_connections, connection, transaction
 from django.utils import timezone
 
@@ -107,12 +106,61 @@ def recover_stale():
 # Running
 # ---------------------------------------------------------------------------
 
-def _progress(job, text):
-    job.progress = text[:256]
-    job.save(update_fields=['progress'])
+class Steps:
+    """Friendly steps for the task tray (`IngestJob.steps`): "Reading 3 web pages", "Found 12 locations and 34
+    schedule items", "Waiting for your review". Calling it starts a step (the previous one is done, shown with its
+    `done` text); `update` changes the running step's text. `job.progress` keeps the running step's text."""
+
+    def __init__(self, job):
+        self.job = job
+
+    def _save(self):
+        running = next((s['text'] for s in reversed(self.job.steps) if s['state'] == 'running'), '')
+        self.job.progress = running[:256]
+        IngestJob.objects.filter(pk=self.job.pk).update(steps=self.job.steps, progress=self.job.progress)
+
+    def _close(self, state='done'):
+        for step in self.job.steps:
+            if step['state'] == 'running':
+                step['state'] = state
+                if state == 'done' and step.get('done'):
+                    step['text'] = step['done']
+                step.pop('done', None)
+
+    def __call__(self, text, done=None):
+        self._close()
+        self.job.steps = [*self.job.steps, {'text': text[:200], 'state': 'running', 'done': (done or '')[:200],
+                                            'at': timezone.now().isoformat()}][-20:]
+        self._save()
+
+    def update(self, text, done=None):
+        for step in reversed(self.job.steps):
+            if step['state'] == 'running':
+                step['text'] = text[:200]
+                if done:
+                    step['done'] = done[:200]
+                break
+        else:
+            return self(text, done)
+        self._save()
+
+    def finish(self, text='', state='done'):
+        """Close the running step and add a last one (done, or `waiting` for the person)."""
+        self._close()
+        if text:
+            self.job.steps = [*self.job.steps, {'text': text[:200], 'state': state, 'at': timezone.now().isoformat()}]
+        self.job.progress = ''
+
+    def failed(self):
+        self._close('failed')
+
+
+def _progress(job, text, done=None):
+    Steps(job)(text, done)
 
 
 def _fail(job, message):
+    Steps(job).failed()
     job.status = IngestJob.FAILED
     job.error = message[:2000]
     job.progress = ''
@@ -121,15 +169,32 @@ def _fail(job, message):
     job.save()
 
 
+JOB_FEATURES = {IngestJob.KIND_CREATE: 'import', IngestJob.KIND_REFRESH: 'refresh', IngestJob.KIND_THEME: 'theme'}
+
+
 def run_job(job_id, already_claimed=False):
     job = IngestJob.objects.get(pk=job_id) if already_claimed else claim(job_id)
     if job is None:
         return None
+    from credit import ledger
+    feature = 'paste' if job.trigger == IngestJob.TRIGGER_PASTE else JOB_FEATURES.get(job.kind, 'import')
+    background = job.trigger in (IngestJob.TRIGGER_WATCH, IngestJob.TRIGGER_SCHEDULE)
+    exempt = job.trigger == IngestJob.TRIGGER_PROSPECT  # staff prospect test copies
+    with ledger.spend_context(user=job.created_by, event=job.event, feature=feature, background=background,
+                              exempt=exempt):
+        return _run_job(job)
+
+
+def _run_job(job):
     try:
         if job.kind == IngestJob.KIND_CREATE:
             _run_create(job)
         elif job.kind == IngestJob.KIND_REFRESH:
             _run_refresh(job)
+        elif job.kind == IngestJob.KIND_THEME:
+            _run_theme(job)
+        elif job.kind == IngestJob.KIND_DETAILS:
+            _run_details(job)
         else:  # e.g. an old 'tickets' draft job (ticketing is parked on git branch parked/tickets)
             raise ValueError('This kind of job is no longer supported.')
     except ValueError as exc:
@@ -147,27 +212,43 @@ def _attachments(job):
     return []
 
 
+def _plural(n, word):
+    return f'{n} {word}{"" if n == 1 else "s"}'
+
+
 def _run_create(job):
-    _progress(job, 'Reading your event…')
+    steps = Steps(job)
     data = scrape_event(
         urls=job.urls, text=job.text, attachments=_attachments(job), instructions=job.instructions,
-        google_api_key=getattr(settings, 'GOOGLE_PLACES_API_KEY', ''),
+        google_api_key=getattr(settings, 'GOOGLE_PLACES_API_KEY', ''), progress=steps,
     )
-    _progress(job, 'Saving locations and schedule…')
+    n_loc, n_items = len(data.get('locations') or []), len(data.get('schedule') or [])
+    steps(f'Saving {_plural(n_loc, "location")} and {_plural(n_items, "schedule item")}…',
+          done=f'Found {_plural(n_loc, "location")} and {_plural(n_items, "schedule item")}')
     is_trial = job.created_by is None
     owner = trial_user() if is_trial else job.created_by
     event, notes = diff.create_event_from_extraction(
         data, owner,
-        # Trial events are joinable by code/QR straight away but stay out of nearby search until claimed.
-        status=Event.STATUS_PUBLISHED if is_trial else Event.STATUS_DRAFT,
+        # Trial events are joinable by code/QR straight away but stay out of nearby search until claimed; so are
+        # staff test copies of prospects' events (testing_only).
+        status=Event.STATUS_PUBLISHED if is_trial or job.testing_only else Event.STATUS_DRAFT,
         public=False,
         fallback_tz=job.timezone or 'UTC',
         source_urls=job.urls,
         source_text=job.text,
     )
+    if job.testing_only:
+        # Unlisted Demo copy for staff testing: never in nearby search, never website-watched, no Studio.
+        Event.objects.filter(pk=event.pk).update(testing_only=True, public=False, paid=False,
+                                                 refresh_schedule=Event.REFRESH_OFF)
+        event.refresh_from_db()
     from scrape import watch
     watch.sync_pages(event, discovered=data.get('source_pages', []))
+    steps('Picking colours for the event…', done='Picked colours for the event')
+    _pick_theme(event, data.get('page_colors') or [])
     job.event = event
+    steps.finish(f'Created “{event.name[:80]}” as a draft: check it, then publish' if event.status == Event.STATUS_DRAFT
+                 else f'Created “{event.name[:80]}”')
     job.status = IngestJob.DONE
     job.progress = ''
     job.finished_at = timezone.now()
@@ -181,8 +262,80 @@ def _run_create(job):
         'notes': ' '.join(filter(None, [data.get('notes', '')] + notes)),
     }
     job.save()
-    if job.studio_import and job.urls and job.created_by_id:
+    if job.created_by_id and job.trigger == IngestJob.TRIGGER_CONSOLE and not job.testing_only:
+        from console import organizer_mail  # stage I16: "your event is ready" (each person can turn it off)
+        organizer_mail.import_done(job, event)
+    if job.studio_import and job.urls and job.created_by_id and not job.testing_only:
         _bring_into_studio(job, event)
+    if job.testing_only:
+        try:
+            from prospects.testing import job_finished
+            job_finished(job)
+        except Exception:
+            logger.exception('Could not link test event %s to its prospect', event.pk)
+        # The home page card's cover (events/covers.py), after the place images had their chance.
+        from django.db import transaction
+
+        from events import covers
+        transaction.on_commit(lambda: covers.schedule(event.pk, delay=covers.AFTER_IMPORT_SECONDS))
+
+
+def _pick_theme(event, page_colors, instruction='', force=False):
+    """API-023: the new event's colour theme (Claude Haiku from its website's colours and logo, else a fallback).
+    Never fails the import."""
+    try:
+        from events import theme_ai
+        return theme_ai.apply(event, page_colors=page_colors, instruction=instruction, force=force)
+    except Exception:
+        logger.exception('Could not pick colours for event %s', event.pk)
+        return None
+
+
+def _run_theme(job):
+    """Generate with AI on the theme card (or Ask Attnd's generate_event_theme): a person asked, so a locked theme is
+    replaced too."""
+    steps = Steps(job)
+    event = job.event
+    steps('Picking colours for the event…', done='Picked colours for the event')
+    from events import theme_ai
+    theme = theme_ai.apply(event, instruction=job.instructions, force=True)  # (the import's website colours)
+    source = (theme or {}).get('source')
+    steps.finish('The AI wasn’t available: kept Attnd’s colours' if source == 'default' else
+                 'Used your website’s colours' if source == 'site' else '')
+    job.status = IngestJob.DONE
+    job.progress = ''
+    job.finished_at = timezone.now()
+    job.result = {'event_id': event.id, 'event_name': event.name, 'theme_source': source or ''}
+    job.save()
+
+
+def _run_details(job):
+    """"Fill in details" (batch 7 A1): read the event's websites again and give every item and place with an empty,
+    unlocked assistant context one (scrape.detail_fill); nothing a person wrote is touched."""
+    from scrape import detail_fill
+    from scrape.service import gather_sources
+    event = job.event
+    urls = job.urls or event.source_urls
+    if not urls:
+        raise ValueError('This event has no website to read details from. Add its website first.')
+    steps = Steps(job)
+    read = []
+
+    def on_page(url):
+        read.append(url)
+        steps.update(f'Reading web pages: {len(read)} so far…', done=f'Read {_plural(len(read), "web page")}')
+    steps('Reading the website…', done='Read the website')
+    content = gather_sources(urls, on_page=on_page)
+    if not content.strip():
+        raise ValueError('Could not read the website. Check that it is up and try again.')
+    steps('Adding details for the schedule and places…', done='Added details')
+    done = detail_fill.fill_event(event, content, steps)
+    steps.finish(detail_fill.done_text(done))
+    job.status = IngestJob.DONE
+    job.progress = ''
+    job.finished_at = timezone.now()
+    job.result = {'event_id': event.pk, 'details_items': done['items'], 'details_places': done['places']}
+    job.save()
 
 
 def _bring_into_studio(job, event):
@@ -190,12 +343,11 @@ def _bring_into_studio(job, event):
     organizer can untick it on the import form): the whole site is crawled, its files copied and the AI rebuilds it.
     Only for staff and superusers (checked again here, when the job runs)."""
     from studio.access import is_staff
-    if not is_staff(job.created_by):
+    if not is_staff(job.created_by) or event.testing_only:
         return
     try:
         from studio import importer, publishing
-        publishing.switch_plan(event, Event.PLAN_STUDIO)
-        site = publishing.ensure_site(event, job.created_by)
+        site = publishing.ensure_site(event, job.created_by)  # building is free; publishing needs the Studio plan
         importer.start_import(site, job.urls[0], job.created_by)
         job.result = {**job.result, 'studio_import': True}
         job.save(update_fields=['result'])
@@ -205,31 +357,48 @@ def _bring_into_studio(job, event):
 
 def _run_refresh(job):
     event = job.event
-    urls = job.urls or event.source_urls
+    pasted = job.trigger == IngestJob.TRIGGER_PASTE  # only what was pasted or dropped (stage I3)
+    urls = job.urls if pasted else (job.urls or event.source_urls)
     text = job.text or ''
     if not urls and not text and not job.upload_data:
         raise ValueError('This event has no sources to refresh from. Add a website or upload a flyer.')
     watched = job.trigger == IngestJob.TRIGGER_WATCH
-    _progress(job, 'Reading the pages that changed…' if watched else 'Reading the latest information…')
+    steps = Steps(job)
+    if watched:
+        steps(f'Reading the {_plural(len(urls), "page")} that changed…', done=f'Read the {_plural(len(urls), "page")} that changed')
     data = scrape_event(
         urls=urls, text=text, attachments=_attachments(job), instructions=job.instructions,
         current=diff.current_state(event), google_api_key='',  # geocode only what changes, below
-        crawl=not watched,  # the watcher re-reads only the pages that changed
+        crawl=not (watched or pasted),  # the watcher re-reads only the pages that changed
+        progress=None if watched else steps,
+        details=not watched,  # the detail-fill pass on full refreshes and pastes, not on every watched change
     )
-    _progress(job, 'Comparing with your event…')
+    steps('Comparing with your event…', done='Compared with your event')
     changes = diff.compute_changes(event, data)
+    if pasted:  # a flyer or a sheet rarely lists everything: never suggest removing what it doesn't mention
+        changes = [c for c in changes if c.get('op') != Change.OP_DELETE]
+    if any(c['entity'] == 'location' and c['op'] == 'create' for c in changes) and getattr(settings, 'GOOGLE_PLACES_API_KEY', ''):
+        steps('Checking addresses on the map…', done='Checked addresses on the map')
     _geocode_new_locations(event, changes)
     cs = diff.save_changeset(event, job, changes, notes=data.get('notes', ''))
 
-    auto_applied = 0
-    if event.update_mode != Event.UPDATE_REVIEW and cs.status == ChangeSet.PENDING:
+    auto_applied, joined_draft = 0, False
+    if event.update_mode != Event.UPDATE_REVIEW and cs.status == ChangeSet.PENDING and not pasted:
         decisions = diff.default_decisions(cs, minor_only=event.update_mode == Event.UPDATE_MINOR)
         # Even in automatic mode, removals wait for a person (default_decisions already leaves out
         # fields someone edited by hand).
         decisions = {cid: d for cid, d in decisions.items()
                      if cs.changes.filter(pk=cid).exclude(op=Change.OP_DELETE).exists()}
         if decisions:
+            # §4: automatic mode keeps publishing straight to attendees only while the event has no unpublished
+            # changes of a person; otherwise the website's changes join that draft and wait for their Publish.
+            from events import drafts
+            straight = drafts.enabled(event) and drafts.published(event) is not None and not drafts.has_changes(event)
             auto_applied = diff.apply_changeset(cs, decisions, user=None, partial_ok=True)
+            if auto_applied and straight:
+                drafts.publish(Event.objects.get(pk=event.pk))
+            elif auto_applied and drafts.enabled(event):
+                joined_draft = True
 
     from scrape import watch
     if watched:
@@ -239,11 +408,19 @@ def _run_refresh(job):
         watch.forget_fingerprints(event)
 
     Event.objects.filter(pk=event.pk).update(last_refreshed_at=timezone.now())
+    pending = cs.changes.filter(status='pending').count()
+    if auto_applied:
+        steps(f'Applying {_plural(auto_applied, "change")}…',
+              done=f'Applied {_plural(auto_applied, "change")} automatically'
+              + (': they joined your unpublished changes (Publish to send them)' if joined_draft else ''))
+    if pending:
+        steps.finish(f'Found {_plural(pending, "change")}: waiting for your review', state='waiting')
+    else:
+        steps.finish('Everything is up to date' if not auto_applied else '')
     job.status = IngestJob.DONE
     job.progress = ''
     job.finished_at = timezone.now()
     job.upload_data = None
-    pending = cs.changes.filter(status='pending').count()
     job.result = {'changeset_id': cs.id, 'summary': cs.summary, 'pending': pending, 'auto_applied': auto_applied}
     job.save()
     if pending and job.trigger in (IngestJob.TRIGGER_SCHEDULE, IngestJob.TRIGGER_WATCH):
@@ -274,22 +451,8 @@ def _geocode_new_locations(event, changes):
 
 
 def _email_owner(event, changeset, pending):
-    """Tell the owner and event admins that AI updates are waiting for review."""
-    from events.models import EventMember
-    recipients = [u.email for u in ([event.user] if event.user else []) if u.email]
-    recipients += list(event.members.filter(role=EventMember.ROLE_ADMIN).exclude(user__email='')
-                       .values_list('user__email', flat=True))
-    from django.urls import reverse
-    from console.mail import email_enabled, site_url
-    if not recipients or not email_enabled():
-        return
-    try:
-        send_mail(
-            subject=f'{pending} suggested update(s) for {event.name}',
-            message=(f'Attnd checked your event sources and found: {changeset.summary}.\n\n'
-                     f'Review them: {site_url(reverse("console:changeset", args=[changeset.id]))}\n'),
-            from_email=None,
-            recipient_list=sorted(set(recipients)),
-        )
-    except Exception:
-        logger.exception('Could not email %s', recipients)
+    """Tell the owner and event admins that AI updates are waiting for review (each can turn it off, stage I16)."""
+    from console import organizer_mail
+    organizer_mail.review_waiting(event, changeset, pending)
+
+

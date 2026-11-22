@@ -1,36 +1,15 @@
 {% extends 'console/base.html' %}
 {% load console_tags %}
 {% block title %}{% if item.pk %}{{ item.name }}{% else %}New schedule item{% endif %} · {{ event.name }}{% endblock %}
+{% block crumb_back %}{% url 'console:schedule' event.id %}{% endblock %}
+{% block crumbs_more %}<li><a href="{% url 'console:schedule' event.id %}">Schedule</a></li><li><span aria-current="page">{% if item.pk %}{{ item.name }}{% else %}New schedule item{% endif %}</span></li>{% endblock %}
 {% block event_content %}
-<a href="{% url 'console:schedule' event.id %}" class="back-link">← Schedule</a>
 <h2 class="title-2">{% if item.pk %}{{ item.name }}{% else %}New schedule item{% endif %}</h2>
 <div class="stack">
 <div class="panel panel--roomy">
-  <form method="post">{% csrf_token %}
-    {% with locked=item.locked_fields %}
-    {% include 'console/_field.html' with field=form.name %}
-    <div class="grid grid--2">
-      {% include 'console/_field.html' with field=form.start_time %}
-      {% include 'console/_field.html' with field=form.end_time %}
-    </div>
-    {% include 'console/_field.html' with field=form.location %}
-    {% include 'console/_field.html' with field=form.description %}
-    {% include 'console/_field.html' with field=form.tags_text %}
-    {% include 'console/_event_tags.html' %}
-    {% include 'console/_field.html' with field=form.hidden %}
-    {% include 'console/_assistant_context.html' %}
-    {% endwith %}
-    <div class="cluster">
-      <button class="button button--primary">Save</button>
-      <button class="button button--outline" name="save_add" value="1">Save &amp; add another</button>
-    </div>
-  </form>
+  {% component "schedule_item_form" event=event item=item form=form part="form" %}
 </div>
-{% if item.pk %}
-<form method="post" action="{% url 'console:item_action' event.id item.pk %}" class="cluster">{% csrf_token %}
-  {% if item.locked_fields %}<button name="action" value="unlock" class="button button--secondary button--small">{% icon "unlock" %} Let AI update it again</button>{% endif %}
-  <button name="action" value="delete" class="button button--danger button--small" data-confirm="Delete this item?">Delete</button>
-</form>
-{% endif %}
+{% component "schedule_item_form" event=event item=item form=form part="actions" %}
+{% if item.pk %}<div class="panel">{% component "object_history" event=event item=item %}</div>{% endif %}
 </div>
 {% endblock %}

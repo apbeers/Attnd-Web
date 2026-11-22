@@ -1,0 +1,8 @@
+{% load console_tags %}{# ai_limit_overrides: people with their own AI credit (staff). Setting and removing always ask. #}<div class="stack component component--ai_limit_overrides">
+  <h2 class="title-4">{% icon "team" %} {{ d.name }}</h2>
+  <p class="small muted">Everyone else gets ${{ d.default }} a month.</p>
+  {% if d.rows %}<ul class="list list--boxed">{% for r in d.rows %}<li class="cluster"><span class="grow"><strong>{{ r.email }}</strong> · {{ r.limit }}<br><span class="small muted">${{ r.used }} used this month{% if r.note %} · {{ r.note }}{% endif %}</span></span>{% include 'components/_actions.html' with actions=r.actions %}</li>{% endfor %}</ul>
+  {% else %}<p class="small muted">No overrides yet.</p>{% endif %}
+  <h3 class="eyebrow">Give someone their own credit</h3>
+  {% include 'components/_form.html' with form=d.form %}
+</div>
