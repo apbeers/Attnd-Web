@@ -39,16 +39,28 @@ resume note is under "Running when paused" below.
 
 ## Running when paused (resume from each one's note)
 
-- **Web: Lighthouse pass on staff pages.** Main fixes pushed (`03f83fc`). The last piece was the Components gallery
-  (`platform_admin/views_gallery.py`), then the after-scores.
+- **Web: Lighthouse pass on staff pages.** Stopped; everything is pushed (`e9c8ab9`, `03f83fc`, `2630af5`).
+  - **Results:** staff lists paged 50 at a time, Customers 51 → 10 queries, a Diagnostics session draws 200 rows
+    instead of 1,500, gallery 258 → 183 queries.
+  - **Scores so far (phone):** Diagnostics 74 → 100, Prospects 73 → 98.
+  - **Next:** finish the after-scores and run `scratchpad/lh/staff/cmp.py` for the table. Note: the scratchpad is
+    session-only, so re-measure in a new session.
+  - **Not measured:** the platform-admin and superuser pages (the test account is staff only).
+  - **Cleanup:** remove the seeded rows with `python manage.py seed_staff_volume --clean`.
 - **Android phase 4:** tabs (Home first, ≤ 5), Options placement, the search sheet, swipe-to-dismiss banners, the
   update banner, the Permissions section.
 - **Android phase 6a:** the assistant domain, the router rules from the eval, the JSON tool protocol, and the
   Android eval runner. Told to skip the Plan ↔ My schedule sync code because of the one-list change.
 - **Android phase 8:** Live Update and per-entry reminders, matching iOS.
-- **iOS one-list change** (owner-approved): My schedule is the only stored list; the planner proposes edits to it;
-  one preview / Apply / Undo flow; walks and timelines are derived; the old plan is migrated once; "My plan" gets a
-  new name. Spec: `docs/specs/one_list_spec.md`.
+- **iOS one-list change** (owner-approved): the spec is pushed, `docs/specs/one_list_spec.md` (`4c708d0`). The
+  button and chat become **"Ask Attnd"**. The planner diffs its result against My schedule and proposes adds and
+  removes with reasons; it only removes its own entries unless asked to. No API change. **No iOS code written yet.**
+  Next:
+  1. In `MySchedule.swift`, add `source`, `reason` and the preferences record.
+  2. Rewrite `PlanStore.swift` so `Plan` is only an in-memory value (the planner rules and fixture numbers stay)
+     and My schedule is the only thing saved. Remove `apply(plan:)`, `reconcile` and `onApply`.
+  3. Run `scripts/linux_harness.sh` with `MyScheduleTests` added to `HARNESS_TESTS`.
+  4. Keep router mode at 242/247 or better.
 
 ## Next after those
 
