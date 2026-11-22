@@ -887,7 +887,7 @@ hosts the site.
   sub-tab). Every admin tool is a Platform sub-tab gated by its own permission (`{% platform_nav "<key>" %}` at the
   top of each area page; their URLs are unchanged, so old links work): Health, Customers, Upgrade requests, Pricing,
   Overrides (platform admins), AI spend, Diagnostics, Prospects, Claims, Studio reports (staff), App usage (platform
-  admins), plus the actions **Preview onboarding** and **Django admin** (superusers). Architecture, App options and Brand are sub-tabs (batch 7); Emails joins when built. The full-screen canvas likewise has one **Platform** tab (Health, AI spend,
+  admins), plus the actions **Preview onboarding** and **Django admin** (superusers). Architecture, App options, Brand and Emails are sub-tabs (batch 7). The full-screen canvas likewise has one **Platform** tab (Health, AI spend,
   Prospects sections, each only with its permission; toolbar AI limits / Overrides / Discovery settings / CSV).
   `platform_admin/tests_nav.py` asserts the top bar and the canvas tabs of an organizer and of staff / a superuser
   differ only by Platform. A new admin tool = a row in `areas.AREAS` + the nav tag on its page, never a top-bar link.
