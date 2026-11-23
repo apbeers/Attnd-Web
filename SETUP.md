@@ -705,7 +705,7 @@ Live DNS (Namecheap, DNSSEC on), checked through dns.google:
 
 | Record | Value | Why |
 |---|---|---|
-| TXT `_dmarc` | `v=DMARC1; p=none; sp=reject; rua=mailto:andrew@attnd.app` (Nov 23, 2026) | `mg.attnd.app` stays **reject** (`sp`); the root is `none` while Workspace mail is checked, then back to `p=reject`. Daily reports go to andrew@attnd.app. |
+| TXT `_dmarc` | `v=DMARC1; p=reject; sp=reject; rua=mailto:andrew@attnd.app` (Nov 23, 2026) | Receivers **reject** mail claiming to be `@attnd.app` / `@mg.attnd.app` that fails SPF/DKIM (also what Apple Branded Mail needs). Daily reports go to andrew@attnd.app. |
 | ALIAS `@` | `shaped-azalea-5pxzgryltw7n3rbhtqo1q8iw.herokudns.com` | Heroku (was a CNAME until Nov 23, 2026, which hid the root's MX / TXT from some resolvers). |
 | MX `@` | `smtp.google.com`, priority 1 | Google Workspace (`andrew@attnd.app`). |
 | TXT `@` | `v=spf1 include:_spf.google.com ~all` | Only Google Workspace sends as `@attnd.app` (alongside `google-site-verification`, `apple-domain-verification`, `openai-business-profile`). |
@@ -716,13 +716,12 @@ Live DNS (Namecheap, DNSSEC on), checked through dns.google:
 | CAA `@` | `0 issue "letsencrypt.org"` | Only Let's Encrypt may issue HTTPS certificates (Heroku ACM uses it for attnd.app and www). |
 
 > **Google Workspace for `andrew@attnd.app`** (re-activated Nov 23, 2026; DNS done the same day, table above). Open: press
-> Start authentication in Admin → Gmail → Authenticate email, check a test mail says SPF / DKIM / DMARC PASS, then set
-> `_dmarc` back to `p=reject` (keep `sp=reject`). What was changed: switch `@` from a
+> Start authentication in Admin → Gmail → Authenticate email, then check a test mail says SPF / DKIM / DMARC PASS.
+> What was changed: switch `@` from a
 > CNAME to an ALIAS (`shaped-azalea-5pxzgryltw7n3rbhtqo1q8iw.herokudns.com`: a CNAME on `@` hides the root MX / TXT
 > records from some resolvers), MX `@` → `smtp.google.com` priority 1, **edit** the root SPF to
 > `v=spf1 include:_spf.google.com ~all`, TXT `google._domainkey` = the key from Admin → Gmail → Authenticate email,
-> then Start authentication; **edit** `_dmarc` to `v=DMARC1; p=none; sp=reject; rua=mailto:<owner>` (`sp=reject` keeps
-> `mg.attnd.app` strict for Apple Branded Mail) and back to `p=reject` once Workspace mail passes. Never add a second
+> then Start authentication; **edit** `_dmarc` to `v=DMARC1; p=reject; sp=reject; rua=mailto:andrew@attnd.app`. Never add a second
 > SPF or DMARC record (both then fail). Keep the root `google-site-verification` and `apple-domain-verification` TXTs.
 
 > **Adding any service that sends email as `@attnd.app` or a subdomain** (Google Workspace, Stripe receipts from your domain, a newsletter tool, another app): set up its SPF and DKIM records *before* it sends. With `p=reject`, its mail is otherwise refused from the first message. Hosting must also stay on Let's Encrypt (CAA) unless the CAA record is updated first.
