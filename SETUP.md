@@ -27,9 +27,9 @@ Do these steps once, in order. Each step says which values go where. For any sin
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
 - [x] IndexNow on production (step 22): `INDEXNOW_KEY` set on attnd-web by Claude (Nov 22, 2026, release v122; `/<key>.txt` answers 200).
-- [ ] Google Workspace admin (attnd.app email works since Nov 23, 2026, §11b; these are later): enforce 2-Step
-      Verification and add a passkey to `andrew@attnd.app` (the super admin); super admin recovery phone / email +
-      backup codes; aliases `admin@`, `support@`, `billing@`, `dev@` (LLC_MIGRATION §2); a Gmail filter for the DMARC
+- [x] Google Workspace protection (owner, Nov 23, 2026): 2-Step Verification enforced with a passkey on
+      `andrew@attnd.app` (the super admin), super admin recovery phone / email + backup codes.
+- [ ] Google Workspace admin, the rest (later): aliases `admin@`, `support@`, `billing@`, `dev@` (LLC_MIGRATION §2); a Gmail filter for the DMARC
       reports; Postmaster Tools for `attnd.app` and `mg.attnd.app`; add `andrew@attnd.app` as owner in Search Console
       and Google Cloud; optional MTA-STS / TLS reporting (`mta-sts.attnd.app`, Claude can set it up).
 - [ ] Maps Static API on the browser key (Lighthouse, Nov 22, 2026): Google Cloud console → APIs & Services → enable
