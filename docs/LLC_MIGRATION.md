@@ -17,8 +17,9 @@ sales tax on the $299/$499 tiers and ticketing).
 2. Registered agent with a Texas street address (yourself at a Texas address, or a registered-agent service so your
    home address isn't public).
 3. File the **Certificate of Formation – LLC (Form 205)** with the Texas Secretary of State on SOSDirect ($300).
-   Member-managed, single member. **Done: accepted by Texas (owner, Nov 23, 2026).** Next: 4, 5, 6, then Stripe.
-4. **EIN** from the IRS (free, online, minutes) once the Certificate of Formation is accepted.
+   Member-managed, single member. **Done: accepted by Texas (owner, Nov 23, 2026).** Next: 5, 6, then Stripe.
+4. **EIN** from the IRS (free, online, minutes) once the Certificate of Formation is accepted. **Done (owner, Nov 23, 2026)**;
+   the number and the CP 575 letter stay with the owner, never in the repo.
 5. **Company agreement** (operating agreement, not filed): single-member, keeps the LLC separate from you.
 6. **Business bank account** + business card in the LLC's name (EIN + certificate). Never mix personal money in.
 7. **Texas Comptroller**: franchise tax account (annual report due May 15; below the no-tax-due revenue threshold you
