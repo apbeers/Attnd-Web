@@ -716,8 +716,8 @@ Live DNS (Namecheap, DNSSEC on), checked through dns.google:
 | CAA `@` | `0 issue "letsencrypt.org"` | Only Let's Encrypt may issue HTTPS certificates (Heroku ACM uses it for attnd.app and www). |
 
 > **Google Workspace for `andrew@attnd.app`** (re-activated Nov 23, 2026; DNS done the same day, table above). Sending and
-> receiving tested both ways with iCloud (Nov 23, 2026). Open: press Start authentication in Admin → Gmail →
-> Authenticate email (DKIM), then check "Show original" says DKIM PASS.
+> receiving tested both ways with iCloud (Nov 23, 2026). DKIM authentication started in Admin → Gmail →
+> Authenticate email the same day. Email setup for `attnd.app` is complete.
 > What was changed: switch `@` from a
 > CNAME to an ALIAS (`shaped-azalea-5pxzgryltw7n3rbhtqo1q8iw.herokudns.com`: a CNAME on `@` hides the root MX / TXT
 > records from some resolvers), MX `@` → `smtp.google.com` priority 1, **edit** the root SPF to
