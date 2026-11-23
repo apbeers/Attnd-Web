@@ -712,6 +712,14 @@ Live DNS (Namecheap, DNSSEC on), checked through dns.google:
 | MX `mg` | `mxa`/`mxb.mailgun.org`, priority 10 | Bounces; iCloud rejects senders without MX. |
 | CAA `@` | `0 issue "letsencrypt.org"` | Only Let's Encrypt may issue HTTPS certificates (Heroku ACM uses it for attnd.app and www). |
 
+> **Google Workspace for `andrew@attnd.app`** (re-activated Nov 23, 2026; in progress at Namecheap): switch `@` from a
+> CNAME to an ALIAS (`shaped-azalea-5pxzgryltw7n3rbhtqo1q8iw.herokudns.com`: a CNAME on `@` hides the root MX / TXT
+> records from some resolvers), MX `@` → `smtp.google.com` priority 1, **edit** the root SPF to
+> `v=spf1 include:_spf.google.com ~all`, TXT `google._domainkey` = the key from Admin → Gmail → Authenticate email,
+> then Start authentication; **edit** `_dmarc` to `v=DMARC1; p=none; sp=reject; rua=mailto:<owner>` (`sp=reject` keeps
+> `mg.attnd.app` strict for Apple Branded Mail) and back to `p=reject` once Workspace mail passes. Never add a second
+> SPF or DMARC record (both then fail). Keep the root `google-site-verification` and `apple-domain-verification` TXTs.
+
 > **Adding any service that sends email as `@attnd.app` or a subdomain** (Google Workspace, Stripe receipts from your domain, a newsletter tool, another app): set up its SPF and DKIM records *before* it sends. With `p=reject`, its mail is otherwise refused from the first message. Hosting must also stay on Let's Encrypt (CAA) unless the CAA record is updated first.
 
 ## 12. Admin sign-in security (5 min, after the next deploy)

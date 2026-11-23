@@ -33,9 +33,9 @@ sales tax on the $299/$499 tiers and ticketing).
 
 ## 2. Identity and email first (everything else hangs off these)
 1. **Google Workspace** on `attnd.app` (Business Starter is enough), billed to the LLC card. An older Workspace
-   already exists on `attnd.app`: admin access recovered Nov 16, 2026 (admin user `andrew@attnd.app`), **no active
-   subscription yet** (nothing works until one is started). Reuse it rather than creating a new one: subscribe
-   (billed to the LLC), then add the shared aliases below. Mailboxes/aliases:
+   already exists on `attnd.app`: admin access recovered Nov 16, 2026 (admin user `andrew@attnd.app`), subscription
+   re-activated by the owner Nov 23, 2026 (`andrew@attnd.app` is a Workspace mailbox; DNS: SETUP.md §11b). Move its
+   billing to the LLC, then add the shared aliases below. Mailboxes/aliases:
    `admin@`, `support@`, `billing@`, `dev@` (shared aliases rather than personal ones, so services aren't tied to a
    person). DNS at Namecheap: Workspace MX + SPF/DKIM/DMARC; Mailgun keeps `mg.attnd.app` (no conflict).
 2. This also creates a **Google Cloud organization** (attnd.app) for §3.
