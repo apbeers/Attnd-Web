@@ -715,8 +715,9 @@ Live DNS (Namecheap, DNSSEC on), checked through dns.google:
 | MX `mg` | `mxa`/`mxb.mailgun.org`, priority 10 | Bounces; iCloud rejects senders without MX. |
 | CAA `@` | `0 issue "letsencrypt.org"` | Only Let's Encrypt may issue HTTPS certificates (Heroku ACM uses it for attnd.app and www). |
 
-> **Google Workspace for `andrew@attnd.app`** (re-activated Nov 23, 2026; DNS done the same day, table above). Open: press
-> Start authentication in Admin → Gmail → Authenticate email, then check a test mail says SPF / DKIM / DMARC PASS.
+> **Google Workspace for `andrew@attnd.app`** (re-activated Nov 23, 2026; DNS done the same day, table above). Sending and
+> receiving tested both ways with iCloud (Nov 23, 2026). Open: press Start authentication in Admin → Gmail →
+> Authenticate email (DKIM), then check "Show original" says DKIM PASS.
 > What was changed: switch `@` from a
 > CNAME to an ALIAS (`shaped-azalea-5pxzgryltw7n3rbhtqo1q8iw.herokudns.com`: a CNAME on `@` hides the root MX / TXT
 > records from some resolvers), MX `@` → `smtp.google.com` priority 1, **edit** the root SPF to
