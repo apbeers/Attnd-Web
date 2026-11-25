@@ -253,7 +253,7 @@ def status():
 # The diagram (server-drawn SVG: layered columns)
 # ---------------------------------------------------------------------------
 
-NODE_W, NODE_H, GAP_X, GAP_Y, PAD = 190, 46, 90, 14, 30
+NODE_W, NODE_H, GAP_X, GAP_Y, PAD = 220, 46, 90, 14, 30
 
 
 def layout(nodes):

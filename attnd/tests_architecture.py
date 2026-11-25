@@ -79,6 +79,20 @@ class PlatformTabsTests(TestCase):
         self.assertEqual(self.get(self.staff, 'platform:architecture').status_code, 404)
         self.assertEqual(self.get(self.staff, 'platform:app_options').status_code, 404)
 
+    def test_diagram_fills_the_page_at_readable_size(self):
+        # Nov 25, 2026: inside the 860px column the ~1,500-unit diagram was drawn at a third of its size (unreadable
+        # labels) next to a 22rem panel. Now it is full width with a fixed-height canvas the script pans and zooms
+        # at real size, and a node's details float over the canvas.
+        import re
+        html = self.get(self.root, 'platform:architecture').content.decode()
+        self.assertNotIn('class="column stack stack--loose arch"', html)
+        svg = re.search(r'<svg [^>]*data-arch-svg[^>]*>', html).group(0)
+        self.assertIn('data-width=', svg)
+        self.assertNotRegex(svg, r'\swidth="')  # sized by CSS (100% of the canvas), not its natural width
+        canvas = html[html.index('class="arch-stage"'):html.index('class="small arch-list"')]
+        self.assertIn('data-arch-zoom="0"', canvas)
+        self.assertIn('data-arch-panel', canvas)
+
     def test_app_options_and_brand(self):
         self.assertContains(self.get(self.root, 'platform:app_options'), 'catalogue')
         brand = self.get(self.staff, 'platform:brand')

@@ -3,7 +3,7 @@
 {% block title %}Architecture{% endblock %}
 {% block head %}<link rel="stylesheet" href="{% static 'platform_admin/architecture.css' %}">{% endblock %}
 {% block content %}
-<div class="column stack stack--loose arch">
+<div class="stack stack--loose arch">
   {% platform_nav "architecture" %}
   <div class="cluster">
     <nav class="tabs grow" aria-label="Architecture views">
@@ -27,39 +27,47 @@
     </article>{% endfor %}</div>
   </section>
   {% else %}
-  <div class="arch-layout">
-    <div class="stack stack--tight">
+  <div class="stack stack--tight arch-layout">
       <div class="cluster arch-controls">
         <label class="grow"><span class="visually-hidden">Search the diagram</span><input type="search" placeholder="Search: a service, app, env var…" data-arch-search></label>
         {% for t in tags %}<label class="chip"><input type="checkbox" checked data-arch-layer="{{ t }}"> {{ t }}</label>{% endfor %}
-        <button type="button" class="button button--ghost button--small" data-arch-zoom="1.25" aria-label="Zoom in">+</button>
-        <button type="button" class="button button--ghost button--small" data-arch-zoom="0.8" aria-label="Zoom out">−</button>
-        <button type="button" class="button button--ghost button--small" data-arch-zoom="0" aria-label="Fit">Fit</button>
       </div>
       {% if tab == 'flows' %}<div class="cluster" role="group" aria-label="Flows">{% for f in flows %}<button type="button" class="chip" data-arch-flow="{{ f.id }}">{{ f.label }}</button>{% endfor %}
         <button type="button" class="button button--outline button--small" data-arch-next hidden>Next step</button></div>
       <ol class="small arch-steps" data-arch-steps aria-live="polite"></ol>{% endif %}
+      <div class="arch-stage">
       <div class="arch-canvas" data-arch-canvas>
-        <svg viewBox="0 0 {{ diagram.width }} {{ diagram.height }}" width="{{ diagram.width }}" height="{{ diagram.height }}" role="img" aria-label="Architecture diagram" data-arch-svg xmlns="http://www.w3.org/2000/svg">
+        <div class="arch-zoom" role="group" aria-label="Zoom">
+          <button type="button" class="button button--outline button--small" data-arch-zoom="1.25" aria-label="Zoom in" title="Zoom in">+</button>
+          <button type="button" class="button button--outline button--small" data-arch-zoom="0.8" aria-label="Zoom out" title="Zoom out">−</button>
+          <button type="button" class="button button--outline button--small" data-arch-zoom="1" data-arch-fit="width" title="Actual size">1:1</button>
+          <button type="button" class="button button--outline button--small" data-arch-zoom="0" title="Show everything">Fit</button>
+        </div>
+        <p class="arch-hint small muted">Drag to move · scroll to pan · ⌘/Ctrl + scroll or pinch to zoom</p>
+        <svg viewBox="0 0 {{ diagram.width }} {{ diagram.height }}" data-width="{{ diagram.width }}" data-height="{{ diagram.height }}" role="img" aria-label="Architecture diagram" data-arch-svg xmlns="http://www.w3.org/2000/svg">
           <defs><marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
           {% for c in diagram.columns %}<text class="arch-col" x="{{ c.x }}" y="24">{{ c.label }}</text>{% endfor %}
           <g class="arch-edges">{% for e in diagram.edges %}<path d="{{ e.d }}" data-from="{{ e.from }}" data-to="{{ e.to }}" marker-end="url(#arch-arrow)"><title>{{ e.label }}</title></path>{% endfor %}</g>
           {% for n in diagram.nodes %}<g class="arch-node arch-node--{{ n.layer }}{% if n.state %} arch-node--{{ n.state }}{% endif %}" data-node="{{ n.id }}" data-tags="{{ n.tags_text }}" tabindex="0" role="button" aria-label="{{ n.label }}">
             <rect x="{{ n.x }}" y="{{ n.y }}" width="{{ n.w }}" height="{{ n.h }}" rx="10"/>
-            <text x="{{ n.x|add:12 }}" y="{{ n.y|add:28 }}">{{ n.label|truncatechars:24 }}</text>
-            {% if n.state %}<circle class="arch-dot" cx="{{ n.x|add:176 }}" cy="{{ n.y|add:14 }}" r="5"/>{% endif %}</g>{% endfor %}
+            <text x="{{ n.x|add:12 }}" y="{{ n.y|add:28 }}">{{ n.label|truncatechars:27 }}<title>{{ n.label }}</title></text>
+            {% if n.state %}<circle class="arch-dot" cx="{{ n.x|add:n.w|add:-14 }}" cy="{{ n.y|add:14 }}" r="5"/>{% endif %}</g>{% endfor %}
         </svg>
+      </div>
+        <aside class="panel stack stack--tight arch-panel" data-arch-panel aria-live="polite" hidden>
+          <button type="button" class="button button--ghost button--small arch-panel__close" data-arch-close aria-label="Close">✕</button>
+          <div class="stack stack--tight" data-arch-panel-body></div>
+        </aside>
       </div>
       <details class="small arch-list"><summary>As a list (keyboard / screen reader friendly)</summary>
         <ul>{% for n in diagram.nodes %}<li><button type="button" class="link-button" data-arch-open="{{ n.id }}">{{ n.label }}</button> · {{ n.layer }}</li>{% endfor %}</ul></details>
-    </div>
-    <aside class="panel stack stack--tight arch-panel" data-arch-panel aria-live="polite">
-      <p class="muted small">Pick a node to see what it is, its code, env vars (set or missing), endpoints and live status.</p>
+    <section class="panel stack stack--tight arch-summary" aria-label="Summary">
+      <p class="muted small">Pick a box to see what it is, its code, env vars (set or missing), hosts and live status.</p>
       <dl class="small"><dt>Django apps</dt><dd>{{ apps|join:", " }}</dd><dt>API v2 endpoints</dt><dd>{{ endpoints|length }}</dd>
         <dt>Push types</dt><dd>{% for k in push_types %}{{ k }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
         <dt>Ask Attnd</dt><dd>{{ agent.writes }} writes ({{ agent.always_ask }} always ask), {{ agent.reads }} reads</dd>
         <dt>URL namespaces</dt><dd>{% for ns, n in namespaces %}{{ ns }} {{ n }}{% if not forloop.last %} · {% endif %}{% endfor %}</dd></dl>
-    </aside>
+    </section>
   </div>
   {{ panel|json_script:"arch-panel-data" }}
   {{ flows|json_script:"arch-flows-data" }}
