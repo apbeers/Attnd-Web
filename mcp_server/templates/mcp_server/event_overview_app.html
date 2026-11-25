@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event overview — Attnd</title>
+<style>{{ css|safe }}</style>
+<style>
+  body { margin: 0; padding: 12px; background: var(--color-bg, #fff); }
+  form, button, .button, [data-confirm], .action-bar { display: none !important; }
+  #attnd-app[aria-busy="true"]::before { content: "Loading the event…"; color: var(--color-muted, #666); }
+  .attnd-app__footer { margin-top: 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+<main id="attnd-app" class="stack" aria-busy="true" aria-live="polite"></main>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  'use strict';
+  // MCP Apps (io.modelcontextprotocol/ui): JSON-RPC over postMessage with the host. The tool result carries
+  // structuredContent.html, our own server-rendered (escaped) component template; we only place it.
+  var root = document.getElementById('attnd-app');
+  var nextId = 1, pending = {};
+  function send(msg) { window.parent.postMessage(Object.assign({ jsonrpc: '2.0' }, msg), '*'); }
+  function request(method, params) {
+    var id = nextId++;
+    send({ id: id, method: method, params: params || {} });
+    return new Promise(function (resolve) { pending[id] = resolve; });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  function resize() { notify('ui/notifications/size-changed', { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }); }
+  function theme(ctx) {
+    var t = ctx && (ctx.theme || (ctx.hostContext && ctx.hostContext.theme));
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  }
+  function draw(result) {
+    var data = result && (result.structuredContent || (result.result && result.result.structuredContent));
+    if (!data || typeof data.html !== 'string') return;
+    root.innerHTML = data.html;
+    if (data.console_url) {
+      var p = document.createElement('p');
+      p.className = 'attnd-app__footer';
+      var a = document.createElement('a');
+      a.href = data.console_url; a.textContent = 'Open in the Attnd console';
+      p.appendChild(a); root.appendChild(p);
+    }
+    root.setAttribute('aria-busy', 'false');
+    resize();
+  }
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    e.preventDefault();
+    request('ui/open-link', { url: a.href });
+  });
+  window.addEventListener('message', function (e) {
+    var msg = e.data;
+    if (!msg || msg.jsonrpc !== '2.0') return;
+    if (msg.id != null && pending[msg.id]) { var done = pending[msg.id]; delete pending[msg.id]; done(msg.result); return; }
+    if (typeof msg.method !== 'string') return;
+    if (msg.method.indexOf('tool-result') !== -1) draw(msg.params);
+    else if (msg.method.indexOf('host-context-changed') !== -1) theme(msg.params);
+  });
+  request('ui/initialize', { appInfo: { name: 'Attnd event overview', version: '1' }, appCapabilities: {},
+                             protocolVersion: '2026-01-26' }).then(function (result) {
+    theme(result);
+    notify('ui/notifications/initialized');
+  });
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(document.body);
+})();
+</script>
+</body>
+</html>

@@ -281,7 +281,8 @@ def _first_message(run):
     events_text = components.events_json(run.user)
     earlier = []
     since = timezone.now() - timedelta(hours=48)
-    previous = list(AgentRun.objects.filter(user=run.user, created_at__gte=since).exclude(pk=run.pk)
+    previous = list(AgentRun.objects.filter(user=run.user, created_at__gte=since, source=AgentRun.SOURCE_CHAT)
+                    .exclude(pk=run.pk)
                     .order_by('-created_at')[:6])
     for old in previous:
         earlier.insert(0, f'- Request: {old.goal[:300]} → {old.status}: {(old.summary or old.error)[:400]}')

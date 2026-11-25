@@ -13,6 +13,8 @@ PUBLIC = {
     'app_status', 'symbols', 'symbolicate', 'attest-nonce', 'attest-ios', 'attest-android',
     # join links, shared plans, well-known files
     'join_event', 'join_qr', 'shared_plan_qr', 'shared_plan', 'aasa', 'android_asset_links',
+    # the MCP server's OAuth (clients call these; the consent page itself needs a sign-in)
+    'oauth_server_metadata', 'oauth_resource_metadata', 'oauth_resource_metadata_path', 'token', 'revoke-token',
     # onboarding (Nov 21, 2026): the composer, the page's anonymous counts, the approximate "near you" cards; Claim it asks for a sign-in itself
     # (login_required)
     'start', 'metric', 'near', 'claim',

@@ -69,8 +69,8 @@ attnd-web is the coordinating repo for all three. Any feature that touches the A
 
 Avoid third-party libraries. Use Django and the Python standard library first; the organizer console uses
 its own small design system (`console/static/console/console.css`, see Console UX), inline SVG icons
-(`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. The MCP server (`mcp/`, `docs/mcp_plan.md`) and its OAuth server (`oauth/`) use the official MCP Python SDK
-`mcp` and `django-oauth-toolkit`, approved exceptions, always the latest version, pinned in `uv.lock`, bumped with
+(`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. The MCP server (`mcp_server/`, `docs/mcp_plan.md`) uses the official MCP Python SDK
+`mcp` and `django-oauth-toolkit` (its OAuth server), approved exceptions, always the latest version, pinned in `uv.lock`, bumped with
 `scripts/upgrade_deps.py`. Existing server dependencies are kept where the standard
 library has no equivalent (Postgres driver, Pillow, the official Anthropic SDK `anthropic` (every AI call, stage C),
 the OpenAI SDK (Studio's images only), Google auth, HTTP/2 for APNs via
@@ -855,6 +855,45 @@ on Save does; there is no second copy of any business logic.
   one-day events schedule without asking, multi-day ones ask with day chips; the SDK is mocked, never called) and
   `agent/tests_fullscreen.py` (the full-screen page, `from` / `event` checks, follow-up chips, stage texts).
 
+## MCP server (staff; `mcp_server/`, docs/mcp_plan.md)
+
+Claude (web, Desktop, mobile, Cowork, Claude Code) and other assistants run Attnd's tools as a staff member over
+MCP. Dev (`https://dev.attnd.app/mcp`, `MCP_ENABLED=1`) and production (`https://attnd.app/mcp`, off until the owner
+signs off) are separate servers with separate clients, tokens and data; everything derives from `SITE_URL`.
+- **Layers (no duplicated logic)**: the chat and MCP are parallel entry points over the same pieces. Tool definitions
+  live in `agent/tools.py` (`tools_for` for the chat, `mcp_tools_for` for MCP: the chat's reads, `search_everything`,
+  `get_component`, and registry writes marked `@agent_action(..., mcp=True)`); every MCP call runs through the chat's
+  own dispatcher (`agent.tools.run_tool` → `agent.loop._call` → `agent/internal.py` → the real views), as an Ask
+  Attnd run with `source='mcp'` (left out of the chat's lists; shown on Platform → Connected apps). A new MCP tool =
+  `mcp=True` on its registry action, nothing else. The protocol layer (`mcp_server/server.py`) only translates
+  between the SDK's types and `mcp_server/service.py` (plain sync Django).
+- **OAuth** (django-oauth-toolkit, `OAUTH2_PROVIDER` in settings): authorization code + PKCE S256 only, Client ID
+  Metadata Documents from `MCP_CIMD_HOSTS` (claude.ai, claude.com; no open registration), Claude's callback
+  `https://claude.ai/api/mcp/auth_callback` and Claude Code's loopback on any port, `resource` = `MCP_RESOURCE_URL`
+  only (RFC 8707), every RFC 9700 flag on (tokens stored as checksums, `iss` in the redirect). Access tokens 1 h;
+  refresh tokens rotate on every use with reuse protection (30 s grace) and expire after `MCP_GRANT_IDLE_DAYS` idle.
+  Endpoints: `/oauth/authorize/` (consent, staff only, 404 for others), `/oauth/token/` (rate limited),
+  `/oauth/revoke/`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource[/mcp]`.
+- **Grants** (`McpGrant`, `mcp_server/grants.py`): the code exchange (`oauth.Validator._create_refresh_token`) starts
+  one per connection with **its own Django session** signed in as the person (two-factor done, no recent sign-in),
+  so it outlives the browser (owner: connect once). Checked on every call and refresh: active, `mcp_server.use_mcp`
+  (Staff role), the session still theirs (a password change or sign-out everywhere ends it), younger than
+  `MCP_GRANT_MAX_DAYS`; otherwise revoked. Platform admins have `mcp_server.manage_mcp` (everyone's connections).
+- **`/mcp`** (`attnd/asgi.py` → `mcp_server.server.Router`, before Django's middleware; not served under WSGI): auth
+  first (401 + `WWW-Authenticate: Bearer resource_metadata=…, scope="mcp"`), then the SDK's stateless Streamable HTTP
+  handler with JSON responses (every protocol version the SDK serves), host / origin checks, Django work in worker
+  threads that give their connection back. The person reaches the handlers through a context variable.
+- **Always-ask actions** never run from MCP: the call returns a link to `/console/mcp/confirm/<step>/`, where the
+  person confirms or cancels in the browser (the chat's gate, `agent.loop.confirm`, as the browser's session, so
+  guarded actions get their recent sign-in there).
+- **MCP Apps**: `show_event_overview` returns the `event_overview` component's JSON as text and its HTML (the same
+  template) for the `ui://attnd/event-overview.html` app (`text/html;profile=mcp-app`, console.css inline; read
+  only: links open through the host, forms hidden). The server advertises `io.modelcontextprotocol/ui`.
+- **Prospects** (staff): the pipeline tools are `mcp=True` (status, notes, do-not-contact, test events and claim
+  decisions; the last two always ask). Discovery runs and settings aren't offered yet; there is no send tool.
+- Tests: `mcp_server/tests.py` (the OAuth dance, rotation and reuse, the grant's end, metadata, the tool list,
+  confirm page, MCP App, Connected apps, the protocol over ASGI with the SDK).
+
 ## Attnd Studio (every organizer designs, publishing needs the Studio plan; `studio/`, spec `docs/specs/studio_spec.md`)
 
 A second tier (`Event.plan`: `standard` = import/manage, `studio` = Studio; no checkout yet, Stripe later): an AI
@@ -1475,6 +1514,9 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
 | `AGENT_EFFORT` | No | Ask Attnd's reasoning effort, one for every call of a run and the whole conversation (so the prompt cache holds), default `medium`. Replaces `AGENT_PLANNING_EFFORT` (still read as a fallback) and `AGENT_STEP_EFFORT` (ignored) |
 | `AGENT_MAX_ATTACHMENT_MB` | No | Files attached in the Ask Attnd chat, default `15` |
+| `MCP_ENABLED` | No | The MCP server and its OAuth endpoints (docs/mcp_plan.md): on in DEBUG and tests; `1` on dev.attnd.app; production off until the owner signs off |
+| `MCP_GRANT_MAX_DAYS` / `MCP_GRANT_IDLE_DAYS` | No | An MCP connection's maximum age (90) / how long an unused refresh token lasts (30) |
+| `MCP_CIMD_HOSTS` | No | Hosts whose Client ID Metadata Documents may identify an MCP client, default `claude.ai,claude.com` |
 | `TASKS_BACKEND` | No | `threads` (default) or `database` (django.tasks on the Postgres queue, F5; scale the `tasks` dyno or rely on the scheduler) |
 | `DB_POOL` / `DB_POOL_MAX` | No | psycopg 3 connection pool on (default `1`) / its size per process (default `8`) |
 | `CACHE_BACKEND` | No | `database` (default, the `attnd_cache` table) or `locmem` |

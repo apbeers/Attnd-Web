@@ -44,6 +44,12 @@ class AgentRun(models.Model):
     session_key = models.CharField(max_length=64, blank=True)
     host = models.CharField(max_length=255, blank=True)
     secure = models.BooleanField(default=True)
+    # Where the run came from: the in-app chat, or one MCP tool call (mcp_server/: no model, the client is e.g. Claude).
+    # MCP runs stay out of the chat's own lists; the Platform's Connected apps page shows them.
+    SOURCE_CHAT, SOURCE_MCP = 'chat', 'mcp'
+    source = models.CharField(max_length=8, choices=[(SOURCE_CHAT, 'Ask Attnd chat'), (SOURCE_MCP, 'MCP client')],
+                              default=SOURCE_CHAT)
+    client = models.CharField(max_length=120, blank=True)  # the MCP client's name ("Claude"), for the run list
     created_at = models.DateTimeField(default=timezone.now)
     started_at = models.DateTimeField(null=True, blank=True)  # last (re)start of the loop, for the time cap
     finished_at = models.DateTimeField(null=True, blank=True)

@@ -1,0 +1,34 @@
+{% extends 'console/base.html' %}
+{% block title %}Connect an assistant{% endblock %}
+{% block content %}
+<div class="column stack stack--loose prose">
+  {% if start_here %}
+    <h1 class="title-2">Connect an assistant</h1>
+    <p>Start from the assistant: in Claude, add a custom connector with the server URL <code class="mono">{{ server }}</code>. Claude then brings you here to approve it.</p>
+    <p><a class="button button--secondary" href="{% url 'platform:connected_apps' %}">Connected apps</a></p>
+  {% elif error %}
+    <h1 class="title-2">This connection can't be made</h1>
+    <div class="notice notice--error"><p><strong>{{ error.error }}</strong>{% if error.description %}: {{ error.description }}{% endif %}</p></div>
+    <p>Go back to the assistant and try connecting again.</p>
+  {% else %}
+    <h1 class="title-2">Connect {{ application.name|default:"this assistant" }} to Attnd?</h1>
+    {% if dev %}<div class="notice notice--warning"><p>This is the <strong>dev server</strong> ({{ server }}). Its events and accounts are separate from attnd.app.</p></div>{% endif %}
+    <div class="panel stack">
+      <p>It will be able to use Attnd as <strong>{{ request.user.email }}</strong>: read your events and the platform pages you can open, and ask to make changes.</p>
+      <ul class="stack stack--tight">
+        <li>Changes that Attnd always asks about (publishing, sending notifications, deleting, test events…) wait for you to confirm them here in the console.</li>
+        <li>It stays connected until you revoke it on the Platform's <strong>Connected apps</strong> page, change your password or sign out everywhere, or after {{ max_days|default:"90" }} days.</li>
+      </ul>
+      <p class="small">After you approve, you go back to <strong class="mono">{{ redirect_host|default:"the assistant" }}</strong>.</p>
+      {% if loopback %}<div class="notice notice--warning"><p>This sends you back to a program on this computer ({{ redirect_host }}). Only continue if you just started connecting from Claude Code or another assistant on this computer.</p></div>{% endif %}
+    </div>
+    <form method="post" class="cluster">
+      {% csrf_token %}
+      {% for field in form %}{% if field.is_hidden %}{{ field }}{% endif %}{% endfor %}
+      {{ form.non_field_errors }}
+      <button class="button button--primary" type="submit" name="allow" value="Authorize">Connect</button>
+      <button class="button button--secondary" type="submit">Cancel</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

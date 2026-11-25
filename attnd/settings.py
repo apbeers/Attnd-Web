@@ -67,6 +67,8 @@ INSTALLED_APPS = [
     'agent.apps.AgentConfig',
     'credit.apps.CreditConfig',
     'platform_admin.apps.PlatformAdminConfig',  # superusers: prices, customers, upgrades, overrides (D2)
+    'oauth2_provider',  # django-oauth-toolkit: the MCP server's OAuth authorization server (docs/mcp_plan.md)
+    'mcp_server.apps.McpServerConfig',  # the MCP server for Claude and other assistants (staff)
 ]
 
 MIDDLEWARE = [
@@ -263,6 +265,8 @@ RATE_LIMITS = {
     'place_photo_ip': _rate('place_photo_ip', '300/600'),  # live Google place photos per IP, 10 minutes (API-031)  # the home page's approximate "near you" lookups per IP, 10 minutes
     'pending_import_ip': _rate('pending_import_ip', '10/3600'),  # home composer submissions per IP, an hour
     'claim_user': _rate('claim_user', '5/86400'),  # "Claim this event" requests per person, a day
+    'mcp_token_ip': _rate('mcp_token_ip', '60/600'),  # OAuth token requests per IP, 10 minutes
+    'mcp_calls_user': _rate('mcp_calls_user', '600/600'),  # MCP tool calls per person, 10 minutes
     'agent_contact_user': _rate('agent_contact_user', '3/3600'),  # "Talk to a person" messages per person, an hour  # Ask Attnd requests started per person, 10 minutes
 }
 # Heroku's router appends the connecting IP to X-Forwarded-For; the last entry is the one to trust.
@@ -340,6 +344,54 @@ GITHUB_SYMBOLICATE_REF = os.getenv('GITHUB_SYMBOLICATE_REF', 'main')
 
 # Public base URL of this deployment, for links in emails (dev: https://dev.attnd.app).
 SITE_URL = os.getenv('SITE_URL', 'https://attnd.app').rstrip('/')
+
+# --- MCP server (docs/mcp_plan.md): Claude and other assistants run Attnd's tools as a staff member, through OAuth.
+# Off unless MCP_ENABLED is set (on for dev.attnd.app; production stays off until the owner signs off). Every URL is
+# derived from SITE_URL, so dev and production are separate servers with separate clients, tokens and data.
+MCP_ENABLED = bool(os.getenv('MCP_ENABLED')) or DEBUG or (len(sys.argv) > 1 and sys.argv[1] == 'test')
+MCP_RESOURCE_URL = SITE_URL + '/mcp'
+MCP_GRANT_MAX_DAYS = int(os.getenv('MCP_GRANT_MAX_DAYS', '90'))  # then the client connects again
+MCP_GRANT_IDLE_DAYS = int(os.getenv('MCP_GRANT_IDLE_DAYS', '30'))  # a refresh token unused this long expires
+# Client ID Metadata Documents (how Claude identifies itself): only these hosts may be client ids.
+MCP_CIMD_HOSTS = [h.strip() for h in os.getenv('MCP_CIMD_HOSTS', 'claude.ai,claude.com').split(',') if h.strip()]
+OAUTH2_PROVIDER_APPLICATION_MODEL = 'oauth2_provider.Application'
+OAUTH2_PROVIDER = {
+    'OAUTH2_VALIDATOR_CLASS': 'mcp_server.oauth.Validator',
+    'SCOPES': {'mcp': 'Use Attnd from an AI assistant', 'offline_access': 'Stay connected'},
+    'DEFAULT_SCOPES': ['mcp'],
+    'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,
+    'REFRESH_TOKEN_EXPIRE_SECONDS': MCP_GRANT_IDLE_DAYS * 86400,  # each refresh issues a new one: an idle limit
+    'AUTHORIZATION_CODE_EXPIRE_SECONDS': 60,
+    'ROTATE_REFRESH_TOKEN': True,
+    'REFRESH_TOKEN_REUSE_PROTECTION': True,  # a reused refresh token revokes its whole family
+    'REFRESH_TOKEN_GRACE_PERIOD_SECONDS': 30,  # a retry right after a lost response doesn't count as reuse
+    'PKCE_REQUIRED': True,
+    'REQUEST_APPROVAL_PROMPT': 'force',
+    'ALLOWED_REDIRECT_URI_SCHEMES': ['https', 'http'],  # http only for Claude Code's loopback redirect
+    'ALLOW_LOCALHOST_LOOPBACK': True,  # Claude Code: localhost on any port, like 127.0.0.1
+    'CIMD_ENABLED': True,
+    'CIMD_REGISTRATION_PERMISSION_CLASSES': ('oauth2_provider.cimd.HostAllowlistCIMDPermission',),
+    'CIMD_ALLOWED_HOSTS': MCP_CIMD_HOSTS,
+    'DCR_ENABLED': False,  # no open registration: Claude uses CIMD
+    'OAUTH2_RESPONSE_TYPES_SUPPORTED': ['code'],
+    'OAUTH2_GRANT_TYPES_SUPPORTED': ['authorization_code', 'refresh_token'],
+    'OAUTH2_TOKEN_ENDPOINT_AUTH_METHODS_SUPPORTED': ['none', 'client_secret_post', 'client_secret_basic'],
+    'OAUTH2_PROTECTED_RESOURCE_IDENTIFIER': MCP_RESOURCE_URL,
+    'OAUTH2_PROTECTED_RESOURCE_AUTHORIZATION_SERVERS': [SITE_URL],
+    'OAUTH2_PROTECTED_RESOURCE_NAME': 'Attnd',
+    'OIDC_ISS_ENDPOINT': SITE_URL,
+    # RFC 9700 (OAuth 2.0 security best practice): every compliant behaviour on.
+    'COMPLIANT_BCP_RFC9700_IMPLICIT_GRANT': True,
+    'COMPLIANT_BCP_RFC9700_PASSWORD_GRANT': True,
+    'COMPLIANT_BCP_RFC9700_PKCE_METHOD': True,
+    'COMPLIANT_BCP_RFC9700_ACCESS_TOKEN_TRANSPORT': True,
+    'COMPLIANT_BCP_RFC9700_AUTHZ_RESPONSE_ISS': True,
+    'COMPLIANT_BCP_RFC9700_TOKEN_STORAGE': True,  # tokens stored as SHA-256 checksums only
+    'COMPLIANT_BCP_RFC9700_REFRESH_TOKEN': True,
+    'COMPLIANT_BCP_RFC9700_REDIRECT_URI_SCHEME': True,
+    'COMPLIANT_BCP_RFC9700_REDIRECT_URI_MATCHING': True,
+    'COMPLIANT_BCP_RFC9700_PKCE_REQUIRED': True,
+}
 
 # Passkeys (WebAuthn, console.webauthn). A passkey belongs to one domain (the relying party ID): passkeys
 # made on the dev app (dev.attnd.app) don't work on attnd.app and the other way round.

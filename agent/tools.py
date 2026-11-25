@@ -79,3 +79,47 @@ def tools_for(user, run=None):
     from agent.proposals import TOOL as PROPOSE_TOOL
     from agent.search_tool import TOOL as SEARCH_TOOL
     return FIXED_TOOLS + [PROPOSE_TOOL, SEARCH_TOOL] + components.tool_definitions(user) + [registry.tool_definition(a) for a in writes]
+
+
+# ---------------------------------------------------------------------------
+# MCP clients (mcp_server/): the same tools, chosen on purpose
+# ---------------------------------------------------------------------------
+
+# Ask Attnd's own reads that make sense without the chat (no ask_user / finish / show / fill_form / remember /
+# propose_changes: those talk to the person in the chat).
+MCP_FIXED = ('list_events', 'search_events', 'read_page', 'list_pages', 'platform_help')
+MCP_COMPONENT_TOOLS = ('get_component',)
+
+
+def mcp_tools_for(user):
+    """The tool definitions an MCP client may call as this person: the chat's reads above, the full-text search,
+    component data, and the registry's writes marked ``mcp=True`` that this person may run."""
+    from agent import components
+    from agent.search_tool import TOOL as SEARCH_TOOL
+    fixed = [t for t in FIXED_TOOLS if t['name'] in MCP_FIXED]
+    comps = [t for t in components.tool_definitions(user) if t['name'] in MCP_COMPONENT_TOOLS]
+    writes = [registry.tool_definition(a) for a in registry.writes_for(user).values() if a.mcp]
+    return fixed + [SEARCH_TOOL] + comps + writes
+
+
+def run_tool(run, name, args, call_id):
+    """Run one tool for a runner without a model (MCP): exactly the chat's dispatcher (agent/loop.py), so steps,
+    permissions, history and gates are the same. Returns (text, waiting step or None). An always-ask action doesn't
+    run: its step waits for the person's Confirm (a button step, which runs without the model once confirmed)."""
+    from types import SimpleNamespace
+
+    from agent import loop
+    from agent.models import AgentRun, AgentStep
+    call = SimpleNamespace(name=name, args=args if isinstance(args, dict) else {}, id=call_id)
+    try:
+        return loop._call(run, call), None
+    except loop.Pause as pause:
+        step = pause.step
+        if step.confirm_state != AgentStep.CONFIRM_PENDING:
+            return 'That needs a reply in the chat; MCP clients can\'t answer it.', None
+        step.kind = AgentStep.KIND_BUTTON  # confirmed through loop.confirm → _run_button, no model to resume
+        step.save(update_fields=['kind'])
+        AgentRun.objects.filter(pk=run.pk).update(status=AgentRun.WAITING_CONFIRMATION)
+        return step.confirm_summary, step
+    except loop.Finished as done:
+        return done.summary, None

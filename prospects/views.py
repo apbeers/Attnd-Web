@@ -86,13 +86,13 @@ def _filtered(request):
 
 @agent_action('create_test_events', 'Import selected prospects as testing-only events (AI import).', confirm=True,
               summary=S.create_test_events, fixed={'action': 'create_test_events'},
-              params={'ids': P('array', 'prospect ids', items={'type': 'integer'})}, title='Started test event imports')
+              params={'ids': P('array', 'prospect ids', items={'type': 'integer'})}, title='Started test event imports', mcp=True)
 @agent_action('set_prospects_status', 'Set the pipeline status of selected prospects.', fixed={'action': 'status'},
               params={'ids': P('array', 'prospect ids', items={'type': 'integer'}),
                       'status': P('string', 'the new status', enum=['new', 'reviewing', 'test_event_created',
                                                                     'contacted', 'interested', 'won', 'lost',
                                                                     'dismissed'])},
-              title='Set prospect statuses')
+              title='Set prospect statuses', mcp=True)
 @agent_action('prospects_list', 'The prospects pipeline (filters as ?q=, ?status=, ?sort=).', kind='read')
 @staff_required
 def prospect_list(request):
@@ -159,12 +159,12 @@ def _bulk(request):
                                   enum=['new', 'reviewing', 'test_event_created', 'contacted', 'interested', 'won',
                                         'lost', 'dismissed']),
                       'notes': P('string', 'notes (replaces them)', nullable=True)},
-              title='Saved a prospect')
+              title='Saved a prospect', mcp=True)
 @agent_action('create_test_event', 'Import one prospect as a testing-only event (AI import).', confirm=True,
-              summary=S.create_test_event, fixed={'action': 'create_test_event'}, title='Started a test event import')
+              summary=S.create_test_event, fixed={'action': 'create_test_event'}, title='Started a test event import', mcp=True)
 @agent_action('toggle_prospect_contact_dnc', 'Mark a prospect contact do-not-contact, or contactable again.',
               fixed={'action': 'dnc'}, params={'contact': P('integer', 'the contact id')},
-              title='Changed do-not-contact')
+              title='Changed do-not-contact', mcp=True)
 @agent_action('delete_prospect_contact', 'Remove a prospect contact.', confirm=True, fixed={'action': 'delete_contact'},
               params={'contact': P('integer', 'the contact id')}, title='Removed a contact')
 @agent_action('prospect_page', 'One prospect: details, contacts, activity.', kind='read')
@@ -294,9 +294,9 @@ def export_csv(request):
 
 @agent_action('approve_event_claim', 'Hand a prospect test event to the person who claimed it (owner = them; the '
               'free limit stays until paid).', confirm=True, fixed={'action': 'approve'},
-              params={'claim': P('integer', 'The claim id')}, title='Approved a claim')
+              params={'claim': P('integer', 'The claim id')}, title='Approved a claim', mcp=True)
 @agent_action('decline_event_claim', 'Decline a claim of a prospect test event.', fixed={'action': 'decline'},
-              params={'claim': P('integer', 'The claim id')}, title='Declined a claim')
+              params={'claim': P('integer', 'The claim id')}, title='Declined a claim', mcp=True)
 @agent_action('prospect_claims', 'Claims of prospect test events from the home page, waiting first.', kind='read')
 @staff_required
 def claims_view(request):

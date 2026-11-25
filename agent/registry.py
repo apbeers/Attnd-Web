@@ -24,6 +24,8 @@ Every console view is either registered here (with ``@agent_action`` on the view
 * ``confirm=True``: always ask. The run pauses and the person sees ``summary(ctx)`` with Confirm / Cancel; nothing
   runs until they click. Required for every button with ``data-confirm`` and for anything that reaches people
   outside the team or can't be undone (tests check the ``data-confirm`` ones).
+* ``mcp=True``: also offered to MCP clients (Claude through mcp_server/). Off by default: every tool an outside
+  assistant can run is chosen on purpose. Always-ask tools still wait for a Confirm in the browser.
 * ``audience``: who sees the tool / page: ``all`` (default for console and Studio-plan pages, the views' own checks
   still apply), ``studio`` (Studio access), ``staff`` (diagnostics, prospects, Studio reports), ``superuser``.
 """
@@ -85,6 +87,7 @@ EXCLUDED = {
     'agent:component_batch': 'Ask Attnd\'s own endpoints (several components in one request).',
     'agent:component_pick': 'Ask Attnd\'s own endpoints (the chat\'s components).',
     'agent:component_act': 'Ask Attnd\'s own endpoints (only the person\'s click confirms).',
+    'mcp:confirm': 'Where the person confirms a change an MCP client asked for: only their click confirms.',
 }
 
 # Console views whose source handles POST but that have no write action, with the reason.
@@ -94,6 +97,7 @@ POST_EXCLUDED = {
     'console:location_fill': EXCLUDED['console:location_fill'],
     'console:walkthrough_skip': EXCLUDED['console:walkthrough_skip'],
     'console:stripe_webhook': EXCLUDED['console:stripe_webhook'],
+    'mcp:confirm': EXCLUDED['mcp:confirm'],
 }
 
 NAMESPACE_AUDIENCE = {'diagnostics': 'staff', 'prospects': 'staff', 'studio': 'studio', 'credit': 'staff',
@@ -127,6 +131,7 @@ class Action:
     permission: str = ''  # the permission it needs (default: what its view declares, attnd.permissions)
     exclude_fields: tuple = ()
     title: str = ''  # what the step list says ("Edited a location")
+    mcp: bool = False  # offered to MCP clients too (mcp_server/, docs/mcp_plan.md); off unless chosen
     # Filled in by the registry:
     view: object = None
     route: str = ''

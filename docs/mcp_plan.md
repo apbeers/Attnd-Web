@@ -1,6 +1,8 @@
 # MCP server for the platform (plan)
 
-Status: phase 1 in progress (Nov 25, 2026). Decided with the owner; open items are marked.
+Status: built and on develop (Nov 25, 2026): OAuth, grants, /mcp, confirm page, Connected apps, the event overview
+MCP App and the Prospects tools. Dev has `MCP_ENABLED=1`; production stays off until the owner signs off. The
+current architecture is in CLAUDE.md → MCP server; this file keeps the decisions.
 
 ## Goal
 
@@ -64,7 +66,8 @@ with OAuth. Staff only at first. Dev and prod each get their own server, connect
 | `/oauth/authorize/` | Consent after sign-in | Signed in |
 | `/oauth/token/` | Code exchange, refresh | Client authentication |
 | `/oauth/revoke/` | Revocation | Client authentication |
-| `/mcp` | MCP endpoint (POST JSON; GET returns 405 in phase 3) | Bearer token |
+| `/mcp` | MCP endpoint (stateless Streamable HTTP, JSON responses; ASGI only) | Bearer token |
+| `/console/mcp/confirm/<step>/` | The person confirms or cancels an always-ask action | Signed in |
 
 All are declared public for `LoginRequiredMiddleware` and listed in `attnd/tests_public.py`. Token and MCP endpoints
 are CSRF-exempt. Rate limits apply to the token endpoint and per token on `/mcp`.
@@ -85,10 +88,10 @@ Domain      events · scrape · studio · credit · prospects
 
 ## Phases
 
-1. **Shared layer.** Tool list in `agent/tools.py` (done: moved, re-exported from `agent/loop.py`, no behaviour change).
-   Runner accepts a principal (next).
-2. **OAuth** (`oauth/`): DOT, PKCE, rotation, revocation, metadata, consent page, client metadata documents.
-3. **MCP server** (`mcp/`): initialise, tools, ping, 401 with `WWW-Authenticate`. Text results only.
+1. **Shared layer.** Tool list in `agent/tools.py` (done). The runner needed no change: each grant gets its own
+   Django session, which the runner uses like the chat uses the browser's.
+2. **OAuth** (`mcp_server/`, one app with the MCP server; the SDK's top-level package is also called `mcp`): DOT, PKCE, rotation, revocation, metadata, consent page, client metadata documents.
+3. **MCP server** (`mcp_server/server.py`): initialise, tools, ping, 401 with `WWW-Authenticate`. Text results only.
 4. **Runs and confirm:** `AgentRun.source` (`chat` / `mcp`), migration, MCP writes waiting for confirmation in Ask Attnd.
 5. **Connected apps** (Platform sub-tab, staff): grants, revoke (asks), clients (platform admins), the `mcp` tool list,
    recent MCP runs. Each one is a component, so the chat and page parity test covers them.
@@ -111,5 +114,7 @@ Domain      events · scrape · studio · credit · prospects
 ## Open items
 
 - Confirm the idle (30 days) and maximum (90 days) grant lifetimes.
-- Check the current MCP Apps spec and Claude's support before phase 6.
-- Read the `mcp` 2.3.0 API before phase 3 (major version).
+- The MCP App's host bridge (ui/initialize, tool-result notifications) is written from the MCP Apps spec and untested
+  in Claude itself: check it with the dev connector.
+- Production: set `MCP_ENABLED=1` on attnd-web after the owner signs off.
+- Later: more tools (event writes, discovery runs), more MCP Apps (schedule, Prospects pipeline).

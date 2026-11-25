@@ -26,6 +26,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
+- [ ] MCP on dev (step 23): add the **Attnd (dev)** connector in Claude with `https://dev.attnd.app/mcp`, connect, try a few requests. Then tell Claude whether to turn production on.
 - [x] IndexNow on production (step 22): `INDEXNOW_KEY` set on attnd-web by Claude (Nov 22, 2026, release v122; `/<key>.txt` answers 200).
 - [x] Google Workspace protection (owner, Nov 23, 2026): 2-Step Verification enforced with a passkey on
       `andrew@attnd.app` (the super admin), super admin recovery phone / email + backup codes.
@@ -1150,3 +1151,20 @@ is set (dev never sends). A random key, then nothing else (the key file is serve
 heroku config:set -a attnd-web INDEXNOW_KEY=$(openssl rand -hex 16)
 ```
 Check after the next deploy: Diagnostics → Endpoints → IndexNow shows "0 waiting" and the counts per day.
+
+## 23. MCP server: Claude connectors (dev first; docs/mcp_plan.md)
+
+Staff run Attnd from Claude through MCP with OAuth. Dev and production are separate servers, so they are two
+connectors in Claude, each signing in to its own site with its own passkeys and staff account.
+
+1. **Dev** (`MCP_ENABLED=1` on attnd-dev, set by Claude through the Platform API): in Claude, Settings → Connectors →
+   **Add custom connector**, name **Attnd (dev)**, URL `https://dev.attnd.app/mcp`. Claude opens dev.attnd.app to
+   sign in (your dev staff account, its second step) and asks you to **Connect**. Leave the OAuth client fields empty:
+   Claude identifies itself with its Client ID Metadata Document.
+2. Try it: "list my Attnd events", "show the event overview of DEMO", "set the Deep Ellum prospect to reviewing".
+   Anything Attnd always asks about comes back as a link to confirm in the console.
+3. **Production** (later, after you sign off): Claude sets `MCP_ENABLED=1` on attnd-web; add a second connector
+   **Attnd**, URL `https://attnd.app/mcp`.
+4. Revoke a connection on Platform → **Connected apps**. A password change or "sign out everywhere" ends every
+   connection; otherwise one lasts until it's unused for 30 days or is 90 days old.
+

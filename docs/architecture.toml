@@ -20,6 +20,17 @@ edges = [{ to = "heroku_router", label = "API v2 (bundle, join, usage)", protoco
          { to = "apns", label = "device + Live Activity tokens", protocol = "APNs", auth = "Apple" }]
 
 [[node]]
+id = "claude_mcp"
+label = "Claude (MCP client)"
+layer = "clients"
+tags = ["ai"]
+description = "Claude on the web, Desktop, mobile, Cowork and Claude Code, connected as a staff member through OAuth (docs/mcp_plan.md). Identifies itself with a Client ID Metadata Document on claude.ai; the hosted apps come back on claude.ai/api/mcp/auth_callback."
+docs = "https://claude.com/docs/connectors/building/authentication.md"
+code = ["mcp_server/server.py", "mcp_server/oauth.py"]
+hosts = ["claude.ai", "claude.com"]
+edges = [{ to = "heroku_router", label = "/mcp (tools, MCP Apps) + /oauth/", protocol = "MCP Streamable HTTP", auth = "OAuth bearer" }]
+
+[[node]]
 id = "app_clip"
 label = "App Clip"
 layer = "clients"
@@ -245,6 +256,17 @@ code = ["agent/"]
 env = ["ANTHROPIC_API_KEY", "AGENT_ANTHROPIC_MODEL", "AGENT_REFUSAL_MODEL", "AGENT_EFFORT", "AGENT_PLANNING_EFFORT",
        "AGENT_DAILY_SPEND_CAP_USD", "AGENT_MAX_STEPS", "AGENT_RUN_MAX_MINUTES", "AGENT_MAX_ATTACHMENT_MB"]
 edges = [{ to = "anthropic", label = "Messages API (Haiku)", protocol = "SDK", auth = "API key" }]
+
+[[node]]
+id = "mcp_server"
+label = "mcp_server (MCP + OAuth)"
+layer = "apps"
+tags = ["ai"]
+description = "The MCP server for Claude and other assistants (staff): django-oauth-toolkit (PKCE, CIMD, rotated refresh tokens), grants with their own session, /mcp through the official SDK (stateless JSON), Ask Attnd's tools run by the chat's dispatcher, the event overview MCP App, Platform → Connected apps."
+code = ["mcp_server/", "platform_admin/views_mcp.py", "agent/tools.py"]
+env = ["MCP_ENABLED", "MCP_GRANT_MAX_DAYS", "MCP_GRANT_IDLE_DAYS", "MCP_CIMD_HOSTS"]
+edges = [{ to = "agent", label = "tools via the chat's dispatcher", protocol = "Python", auth = "the grant's session" },
+         { to = "postgres", label = "grants, tokens (hashed), runs", protocol = "SQL", auth = "DATABASE_URL" }]
 
 [[node]]
 id = "background"
@@ -539,3 +561,12 @@ steps = [["console_browser", "Any AI action (Ask Attnd, import, Studio)"],
          ["credit", "The month's credit and the daily caps are checked"],
          ["anthropic", "The call"],
          ["postgres", "Its cost goes into the AiSpend ledger"]]
+
+[[flow]]
+id = "mcp"
+label = "Claude → MCP (OAuth)"
+steps = [["claude_mcp", "Claude calls /mcp without a token: 401 with the resource metadata URL"],
+         ["mcp_server", "Claude reads the metadata, then opens /oauth/authorize/ (sign-in, two-factor, Connect)"],
+         ["mcp_server", "The code exchange starts a grant with its own session; tokens rotate on every refresh"],
+         ["agent", "Each tool call runs through Ask Attnd's dispatcher as the person (a run with source mcp)"],
+         ["mcp_server", "An always-ask action waits: the person confirms it at /console/mcp/confirm/<step>/"]]

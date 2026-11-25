@@ -150,6 +150,11 @@ Legal/policy surface (to re-issue in the LLC's name):
   `checkout.session.completed`), Customer Portal settings. Create the account in the LLC's name; invoices say "Attnd"
   (`platform_admin/billing.py SELLER`): add the LLC's legal name and address there once it exists.
 
+- MCP server (Nov 25, 2026, docs/mcp_plan.md): staff connect Claude to `https://dev.attnd.app/mcp` (and later
+  `https://attnd.app/mcp`) as custom connectors on their own Claude accounts. Nothing to move but the people: when
+  the LLC has a Claude organization, reconnect from it. No keys or client secrets (Claude uses a Client ID Metadata
+  Document); grants live in each environment's database and can be revoked on Platform → Connected apps.
+
 ## 5. Order of operations (when it's time)
 1. Form the LLC, EIN, bank account, D-U-N-S, insurance (§1).
 2. Workspace + password vault; re-point every account's email (§2).
