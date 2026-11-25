@@ -159,8 +159,10 @@ Router mode runs on the JVM over the same files (Attnd-Android, Nov 22, 2026):
   `ATTND_ASSISTANT_EVAL=router`); the report is `app/build/assistant-eval/assistant-eval-android-router-<time>.json`
   (`ATTND_ASSISTANT_EVAL_OUT` moves it), the summary is in the test's stdout; `ATTND_ASSISTANT_EVAL_ONLY` narrows it.
   Same report shape as iOS (`platform: "android"`).
-- Model mode (Gemini Nano through the JSON tool protocol, `domain/AssistantTools.kt`) needs a phone: not built yet
-  (an instrumented test after the chat UI, phase 6b).
+- **Model mode** (phase 6b, Nov 25, 2026): Gemini Nano through the JSON tool protocol (`domain/AssistantTools.kt`,
+  `OnDeviceAssistant.toolRound`) as an instrumented test on a phone with AICore (`AssistantEvalModelTest`, the runner
+  shared with the JVM through `app/src/evalShared`; skipped where the model isn't AVAILABLE). Not run yet: it needs a
+  Gemini Nano phone.
 
 ## Runs
 
