@@ -203,7 +203,10 @@ class ServiceTests(McpTestCase):
         self.assertFalse(names & {'ask_user', 'finish', 'show', 'fill_form', 'remember', 'propose_changes',
                                   'run_prospect_discovery', 'delete_event', 'send_notification'})
         app = next(t for t in service.tools(self.staff) if t['name'] == 'show_event_overview')
-        self.assertEqual(app['_meta'], {'ui': {'resourceUri': service.OVERVIEW_URI}})
+        self.assertEqual(app['_meta'], {'ui': {'resourceUri': service.CARD_URI}})
+        cards = next(t for t in service.tools(self.staff) if t['name'] == 'show_component')
+        self.assertEqual(cards['_meta'], {'ui': {'resourceUri': service.CARD_URI}})
+        self.assertIn('event_tile', cards['inputSchema']['properties']['component']['enum'])
 
     def test_a_read_runs_as_the_person_and_is_logged_as_an_mcp_run(self):
         out = service.call(self.principal, 'list_events', {})
@@ -260,6 +263,36 @@ class ServiceTests(McpTestCase):
         html = service.read_resource(service.OVERVIEW_URI)
         self.assertEqual(html['mimeType'], 'text/html;profile=mcp-app')
         self.assertIn('ui/initialize', html['text'])
+        self.assertIn('https://tile.openstreetmap.org', service.read_resource(service.CARD_URI)['_meta']['ui']['csp']
+                      ['resourceDomains'])
+
+    def test_cards_work_inside_a_sandboxed_iframe(self):
+        # Nov 25, 2026 (tested from a Claude chat on dev): the QR images and links were relative console addresses
+        # (no Attnd origin and no cookies in the client's iframe), the map stayed blank and times were in UTC.
+        import re
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from events.models import Location
+        chicago = ZoneInfo('America/Chicago')
+        Event.objects.filter(pk=self.event.pk).update(
+            timezone='America/Chicago', start_time=datetime(2026, 11, 25, 19, 15, tzinfo=chicago),
+            end_time=datetime(2026, 11, 25, 23, 0, tzinfo=chicago), latitude=32.75, longitude=-97.33)
+        Location.objects.create(event=self.event, name='Main Stage', latitude=32.751, longitude=-97.331)
+        Location.objects.create(event=self.event, name='Taco Row', latitude=32.752, longitude=-97.329)
+        html = service.call(self.principal, 'show_event_overview', {'event_id': self.event.pk})['structured']['html']
+        self.assertNotRegex(html, r'(src|href|action)="/(?!/)')  # every address absolute
+        self.assertNotIn('qr.png"', html.replace('qr.png?download', ''))  # the QR is inline…
+        self.assertIn('src="data:image/png;base64,', html)
+        self.assertIn('target="_blank"', html)
+        self.assertNotIn('data-event-map', html)  # …and the map a static picture with its two pins
+        self.assertEqual(len(re.findall(r'<title>(Main Stage|Taco Row)</title>', html)), 2)
+        self.assertIn('tile.openstreetmap.org/', html)
+        self.assertNotIn('Thu Nov 26', html)  # 7:15 PM Central, not 1:15 AM UTC
+        out = service.call(self.principal, 'show_component', {'component': 'event_tile', 'items': [{}]})
+        self.assertFalse(out['is_error'], out['text'])
+        self.assertIn('component--event_tile', out['structured']['html'])
+        self.assertIn('Wed Nov 25, 2026', out['structured']['html'])
+        self.assertTrue(service.call(self.principal, 'show_component', {'component': 'nope', 'items': [{}]})['is_error'])
 
     def test_connected_apps_page(self):
         client = TwoFactorClient()

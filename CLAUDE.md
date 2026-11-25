@@ -886,9 +886,15 @@ signs off) are separate servers with separate clients, tokens and data; everythi
 - **Always-ask actions** never run from MCP: the call returns a link to `/console/mcp/confirm/<step>/`, where the
   person confirms or cancels in the browser (the chat's gate, `agent.loop.confirm`, as the browser's session, so
   guarded actions get their recent sign-in there).
-- **MCP Apps**: `show_event_overview` returns the `event_overview` component's JSON as text and its HTML (the same
-  template) for the `ui://attnd/event-overview.html` app (`text/html;profile=mcp-app`, console.css inline; read
-  only: links open through the host, forms hidden). The server advertises `io.modelcontextprotocol/ui`.
+- **MCP Apps**: `show_event_overview` (event_id) and `show_component` (any chat component the person may see, e.g.
+  `event_tile`, `location_row`; ≤ 12 id sets) return the component's JSON as text and its HTML (the same template)
+  for the `ui://attnd/card.html` app (`text/html;profile=mcp-app`, console.css inline; the old
+  `ui://attnd/event-overview.html` still reads; read only: forms hidden, links open through the host in a new tab).
+  `mcp_server/cards.py` makes the HTML work in the client's sandboxed iframe (no cookies, no Attnd origin, Nov 25,
+  2026): the event's time zone is active while loading and drawing, the join / preview QR codes are inline `data:`
+  PNGs, every address is absolute (`SITE_URL`), and the event map is a static SVG of OpenStreetMap tiles with the
+  pins; the resource's `_meta.ui.csp.resourceDomains` lists the image hosts. The server advertises
+  `io.modelcontextprotocol/ui`.
 - **Prospects** (staff): the pipeline tools are `mcp=True` (status, notes, do-not-contact, test events and claim
   decisions; the last two always ask). Discovery runs and settings aren't offered yet; there is no send tool.
 - Tests: `mcp_server/tests.py` (the OAuth dance, rotation and reuse, the grant's end, metadata, the tool list,

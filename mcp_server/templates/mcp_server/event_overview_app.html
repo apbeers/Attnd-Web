@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Event overview — Attnd</title>
+<title>Attnd</title>
 <style>{{ css|safe }}</style>
 <style>
   body { margin: 0; padding: 12px; background: var(--color-bg, #fff); }
-  form, button, .button, [data-confirm], .action-bar { display: none !important; }
-  #attnd-app[aria-busy="true"]::before { content: "Loading the event…"; color: var(--color-muted, #666); }
+  /* Read only: forms and their buttons go through tools and confirmations; links (Edit, Poster…) open the console. */
+  form, button, [data-confirm], .action-bar { display: none !important; }
+  #attnd-app[aria-busy="true"]::before { content: "Loading…"; color: var(--color-muted, #666); }
   .attnd-app__footer { margin-top: 12px; font-size: 13px; }
 </style>
 </head>
@@ -61,7 +62,7 @@
     if (msg.method.indexOf('tool-result') !== -1) draw(msg.params);
     else if (msg.method.indexOf('host-context-changed') !== -1) theme(msg.params);
   });
-  request('ui/initialize', { appInfo: { name: 'Attnd event overview', version: '1' }, appCapabilities: {},
+  request('ui/initialize', { appInfo: { name: 'Attnd', version: '2' }, appCapabilities: {},
                              protocolVersion: '2026-01-26' }).then(function (result) {
     theme(result);
     notify('ui/notifications/initialized');

@@ -467,12 +467,12 @@ hosts = ["commons.wikimedia.org", "upload.wikimedia.org"]
 
 [[node]]
 id = "nominatim"
-label = "OpenStreetMap Nominatim"
+label = "OpenStreetMap (Nominatim, tiles)"
 layer = "external"
 tags = ["data"]
-description = "Address search when Google isn't configured."
-code = ["console/places.py"]
-hosts = ["nominatim.openstreetmap.org"]
+description = "Address search when Google isn't configured; map tiles for the MCP cards' static event map (loaded by the client's iframe)."
+code = ["console/places.py", "mcp_server/cards.py"]
+hosts = ["nominatim.openstreetmap.org", "tile.openstreetmap.org"]
 
 [[node]]
 id = "indexnow"
