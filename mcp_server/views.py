@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from django.conf import settings
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.csp import csp_override, csp_report_only_override
 from django.views.decorators.csrf import csrf_exempt
 from oauth2_provider import views as oauth_views
 
@@ -72,7 +73,19 @@ class Authorize(oauth_views.AuthorizationView):
         return context
 
 
-authorize = enabled(declare(grants.PERMISSION)(Authorize.as_view()))
+def _consent_csp(policy):
+    """The site's policy, but the consent form may send the person back to the assistant: browsers apply
+    `form-action` to the redirect after a POST too (Nov 25, 2026: Safari blocked the redirect to claude.ai, so Connect
+    did nothing). Only the hosts whose clients we accept, and Claude Code's loopback on any port."""
+    if not policy:
+        return policy
+    back = [f'https://{host}' for host in settings.MCP_CIMD_HOSTS] + ['http://localhost:*', 'http://127.0.0.1:*']
+    return {**policy, 'form-action': [*policy.get('form-action', []), *back]}
+
+
+authorize = enabled(declare(grants.PERMISSION)(
+    csp_report_only_override(_consent_csp(settings.SECURE_CSP_REPORT_ONLY))(
+        csp_override(_consent_csp(settings.SECURE_CSP))(Authorize.as_view()))))
 token = public(enabled(csrf_exempt(limited('mcp_token_ip', client_ip)(oauth_views.TokenView.as_view()))))
 revoke_token = public(enabled(csrf_exempt(oauth_views.RevokeTokenView.as_view())))
 server_metadata = public(enabled(oauth_views.OAuthServerMetadataView.as_view()))
