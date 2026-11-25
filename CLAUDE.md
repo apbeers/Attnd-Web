@@ -69,7 +69,9 @@ attnd-web is the coordinating repo for all three. Any feature that touches the A
 
 Avoid third-party libraries. Use Django and the Python standard library first; the organizer console uses
 its own small design system (`console/static/console/console.css`, see Console UX), inline SVG icons
-(`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. Existing server dependencies are kept where the standard
+(`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. The MCP server (`mcp/`, `docs/mcp_plan.md`) and its OAuth server (`oauth/`) use the official MCP Python SDK
+`mcp` and `django-oauth-toolkit`, approved exceptions, always the latest version, pinned in `uv.lock`, bumped with
+`scripts/upgrade_deps.py`. Existing server dependencies are kept where the standard
 library has no equivalent (Postgres driver, Pillow, the official Anthropic SDK `anthropic` (every AI call, stage C),
 the OpenAI SDK (Studio's images only), Google auth, HTTP/2 for APNs via
 `httpx[http2]`, CBOR for App Attest and passkeys; `cryptography`, installed with google-auth, verifies App Attest and passkey signatures). The Stripe SDK `stripe` is the one addition (batch 7 billing, off until its keys exist). The public site (`home/`, `join/`) uses one hand-written

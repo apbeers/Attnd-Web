@@ -32,54 +32,7 @@ MAX_ARG_CHARS = 20_000
 CONTENT_URLS = {'console:event_edit', 'console:location_new', 'console:location_edit', 'console:location_action',
                 'console:locations_reorder', 'console:item_new', 'console:item_edit', 'console:item_action'}
 
-FIXED_TOOLS = [
-    {'name': 'read_page', 'description': 'Open a console page as the person and read it as text (headings, values, '
-                                         'tables, links with ids). Long pages continue with offset.',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['path', 'offset'], 'properties': {
-         'path': {'type': 'string', 'description': 'a console path, e.g. /console/events/12/schedule/'},
-         'offset': {'type': ['integer', 'null'], 'description': 'continue a long page from this character'}}},
-     'strict': True},
-    {'name': 'list_pages', 'description': 'The console pages you can open (for one event, or all).',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['event_id'], 'properties': {
-         'event_id': {'type': ['integer', 'null'], 'description': 'only this event\'s pages'}}}, 'strict': True},
-    {'name': 'list_events', 'description': 'The person\'s events (upcoming and past) with ids and codes.',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': [], 'properties': {}},
-     'strict': True},
-    {'name': 'search_events', 'description': 'Find the person\'s events by name or code.',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['query'], 'properties': {
-         'query': {'type': 'string'}}}, 'strict': True},
-    {'name': 'ask_user', 'description': 'Ask the person one short question and wait for the answer. Only when it '
-                                        'is truly ambiguous; pass the possible answers as options (tappable chips).',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['question', 'options'],
-                    'properties': {
-                        'question': {'type': 'string'},
-                        'options': {'type': ['array', 'null'], 'items': {'type': 'string'},
-                                    'description': '2-6 short answers the person can tap (e.g. the event days), or '
-                                                   'null for an open question'}}}, 'strict': True},
-    {'name': 'platform_help', 'description': 'How-to answers about Attnd (accounts, passwords, passkeys, team, '
-                                             'publishing, notifications, QR codes, imports, layout, history, Studio, '
-                                             'billing) with the exact console page links to give.',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': [], 'properties': {}},
-     'strict': True},
-    {'name': 'remember', 'description': 'Remember a lasting preference or correction of the person\'s for next time '
-                                        '("always call it Main Stage", "notifications short and friendly", "24-hour '
-                                        'times", "default category Food"). Only when they say it should apply from '
-                                        'now on, or correct you twice. Not facts about the event (those go in the '
-                                        'event), never secrets.',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['note', 'event_id'], 'properties': {
-         'note': {'type': 'string', 'description': 'one short sentence, e.g. "Call the big stage Main Stage"'},
-         'event_id': {'type': ['integer', 'null'], 'description': 'only for this event, or null for every event'}}},
-     'strict': True},
-    {'name': 'finish', 'description': 'End the run with a short summary for the person, and 2-4 follow-ups they '
-                                      'might tap next.',
-     'parameters': {'type': 'object', 'additionalProperties': False, 'required': ['summary', 'suggest'],
-                    'properties': {
-                        'summary': {'type': 'string'},
-                        'suggest': {'type': ['array', 'null'], 'items': {'type': 'string'},
-                                    'description': '2-4 short follow-up requests in the person\'s words (e.g. "Show '
-                                                   'the schedule", "Add a location", "Send a notification"), or null'}}},
-     'strict': True},
-]
+from agent.tools import ALWAYS_LOADED, AREAS, FIXED_TOOLS, tools_for  # noqa: F401 (re-exported)
 
 
 class Pause(Exception):
@@ -175,30 +128,6 @@ def _thread(run_id, resume):
 # Rarely used write tools (staff areas, Studio) load only when the request is about them (prompt size): the page is
 # in that area or the request names it. list_pages still lists every page.
 # design_website is always offered to people with Studio access ("make the hero bigger" names no area).
-ALWAYS_LOADED = {'design_website'}
-AREAS = {'studio': ('studio', 'website', ' site', 'hero', 'homepage', 'web page', 'landing page', 'sponsors page'), 'prospects': ('prospect',),
-         'diagnostics': ('diagnostic', 'crash', ' log')}
-
-
-def _areas_for(run):
-    if run is None:
-        return set(AREAS)
-    text = f' {(run.goal or "").lower()} '
-    page = run.page_url or ''
-    return {area for area, words in AREAS.items() if f'/{area}/' in page or any(w in text for w in words)}
-
-
-def tools_for(user, run=None):
-    from agent import components
-    areas = _areas_for(run)
-    writes = [a for a in registry.writes_for(user).values()
-              if (a.url_name or '').split(':')[0] not in AREAS or (a.url_name or '').split(':')[0] in areas
-              or a.name in ALWAYS_LOADED]
-    from agent.proposals import TOOL as PROPOSE_TOOL
-    from agent.search_tool import TOOL as SEARCH_TOOL
-    return FIXED_TOOLS + [PROPOSE_TOOL, SEARCH_TOOL] + components.tool_definitions(user) + [registry.tool_definition(a) for a in writes]
-
-
 def _provider(name=None, model=None):
     """Ask Attnd's provider (agent/providers.py): Claude Haiku 5.5 (Sonnet for the refusal fallback). `name` /
     `model` restore a paused run's provider."""

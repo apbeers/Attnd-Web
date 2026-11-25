@@ -21,4 +21,6 @@ dependencies = [
     "cryptography==50.0.2",
     "anthropic==2.12.0",
     "stripe>=17.1.0",
+    "mcp==2.3.0",
+    "django-oauth-toolkit==3.4.1",
 ]
