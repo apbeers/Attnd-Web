@@ -55,7 +55,7 @@ jobs:
       - name: Report
         if: always() && steps.key.outputs.run == 'true'
         run: test -f harness-report.json && cat harness-report.json >> "$GITHUB_STEP_SUMMARY" || true
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always() && steps.key.outputs.run == 'true'
         with:
           name: harness-report
