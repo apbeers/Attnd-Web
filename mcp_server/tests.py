@@ -41,13 +41,14 @@ class McpTestCase(TestCase):
         self.event = Event.objects.create(name='Prairie Fest', event_code='PRAIRIE', user=self.staff,
                                           start_time=timezone.now() + timedelta(days=3))
 
-    def connect(self, user=None, client=None, resource=None):
+    def connect(self, user=None, client=None, resource=None, client_id=None):
         """The whole OAuth dance as Claude does it: consent, then the code exchange. Returns the token JSON."""
         user = user or self.staff
         client = client or TwoFactorClient()
         client.force_login(user)
         verifier, challenge = pkce()
-        params = {'response_type': 'code', 'client_id': self.app.client_id, 'redirect_uri': CALLBACK,
+        client_id = client_id or self.app.client_id
+        params = {'response_type': 'code', 'client_id': client_id, 'redirect_uri': CALLBACK,
                   'scope': 'mcp offline_access', 'state': 'xyz', 'code_challenge': challenge,
                   'code_challenge_method': 'S256', 'resource': resource or settings.MCP_RESOURCE_URL}
         page = client.get(reverse('oauth2_provider:authorize'), params, secure=True)
@@ -61,7 +62,7 @@ class McpTestCase(TestCase):
         self.assertEqual(query['iss'], [settings.SITE_URL])  # RFC 9207
         tokens = Client().post(reverse('oauth2_provider:token'), {
             'grant_type': 'authorization_code', 'code': query['code'][0], 'redirect_uri': CALLBACK,
-            'client_id': self.app.client_id, 'code_verifier': verifier,
+            'client_id': client_id, 'code_verifier': verifier,
             'resource': resource or settings.MCP_RESOURCE_URL}, secure=True)
         self.assertEqual(tokens.status_code, 200, tokens.content[:500])
         return tokens.json()
@@ -85,6 +86,28 @@ class OAuthTests(McpTestCase):
         # Tokens are stored as checksums only (RFC 9700)
         from oauth2_provider.models import AccessToken
         self.assertFalse(AccessToken.objects.filter(token=tokens['access_token']).exists())
+
+    def test_claudes_client_metadata_document(self):
+        """Claude identifies itself with a metadata URL whose document also lists the jwt-bearer grant (Nov 25, 2026:
+        the toolkit refused it); only the grants we offer are kept, and the whole connection works."""
+        claude = 'https://claude.ai/oauth/mcp-oauth-client-metadata'
+        document = {'client_id': claude, 'client_name': 'Claude', 'client_uri': 'https://claude.ai',
+                    'redirect_uris': [CALLBACK], 'response_types': ['code'], 'token_endpoint_auth_method': 'none',
+                    'grant_types': ['authorization_code', 'refresh_token',
+                                    'urn:ietf:params:oauth:grant-type:jwt-bearer']}
+        with mock.patch('oauth2_provider.cimd.SafeMetadataFetcher.fetch', return_value=(document, 3600)):
+            tokens = self.connect(client_id=claude)
+        self.assertIsNotNone(grants.principal(tokens['access_token']))
+        self.assertEqual(McpGrant.objects.get().client_name, 'Claude')
+        # Another host's document is refused
+        client = TwoFactorClient()
+        client.force_login(self.staff)
+        other = 'https://evil.example/client.json'
+        with mock.patch('oauth2_provider.cimd.SafeMetadataFetcher.fetch', return_value=({**document, 'client_id': other}, 3600)):
+            response = client.get(reverse('oauth2_provider:authorize'), {
+                'response_type': 'code', 'client_id': other, 'redirect_uri': CALLBACK, 'code_challenge': 'x' * 43,
+                'code_challenge_method': 'S256'}, secure=True)
+        self.assertEqual(response.status_code, 400)
 
     def test_refresh_rotates_and_a_reused_token_ends_the_connection(self):
         tokens = self.connect()

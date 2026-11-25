@@ -370,6 +370,7 @@ OAUTH2_PROVIDER = {
     'ALLOWED_REDIRECT_URI_SCHEMES': ['https', 'http'],  # http only for Claude Code's loopback redirect
     'ALLOW_LOCALHOST_LOOPBACK': True,  # Claude Code: localhost on any port, like 127.0.0.1
     'CIMD_ENABLED': True,
+    'CIMD_METADATA_FETCHER': 'mcp_server.oauth.ClientMetadataFetcher',  # keeps only the grants we offer
     'CIMD_REGISTRATION_PERMISSION_CLASSES': ('oauth2_provider.cimd.HostAllowlistCIMDPermission',),
     'CIMD_ALLOWED_HOSTS': MCP_CIMD_HOSTS,
     'DCR_ENABLED': False,  # no open registration: Claude uses CIMD

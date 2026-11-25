@@ -7,6 +7,7 @@
 """
 
 from django.conf import settings
+from oauth2_provider.cimd import SafeMetadataFetcher
 from oauth2_provider.oauth2_validators import OAuth2Validator
 from oauthlib.oauth2.rfc6749 import errors
 
@@ -34,3 +35,20 @@ class Validator(OAuth2Validator):
         instance = getattr(request, 'refresh_token_instance', None)
         grant = grants.for_family(instance.token_family) if instance is not None else None
         return grant is not None and grants.usable(grant)
+
+
+SUPPORTED_GRANTS = ('authorization_code', 'refresh_token')
+
+
+class ClientMetadataFetcher(SafeMetadataFetcher):
+    """django-oauth-toolkit's SSRF-safe fetcher for Client ID Metadata Documents, keeping only the grant types we
+    offer. Claude's document (https://claude.ai/oauth/mcp-oauth-client-metadata) also lists the jwt-bearer grant (its
+    enterprise managed sign-in), and the toolkit refuses a document with more than one non-refresh grant (Nov 25,
+    2026: "Invalid client_id parameter value" on the consent page)."""
+
+    def fetch(self, client_id):
+        metadata, max_age = super().fetch(client_id)
+        grant_types = metadata.get('grant_types') if isinstance(metadata, dict) else None
+        if isinstance(grant_types, list):
+            metadata = {**metadata, 'grant_types': [g for g in grant_types if g in SUPPORTED_GRANTS]}
+        return metadata, max_age
