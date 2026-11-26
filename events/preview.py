@@ -59,13 +59,13 @@ def open_links(event, user):
 
     from django.conf import settings
 
-    from attnd.links import join_url
+    from attnd.links import ios_open_url, join_url
     token = quote(make_token(user, event), safe='')
     code = quote(event.event_code, safe='')
     fallback = f'{join_url(event)}?preview={token}'
     host = urlsplit(fallback).netloc
     package = getattr(settings, 'ANDROID_PACKAGE_NAME', '') or 'com.arcu.attnd'
-    return {'ios': f'attnd://join/{code}?preview={token}',
+    return {'ios': ios_open_url(f'/join/{code}/?preview={token}'),
             'android': (f'intent://{host}/join/{code}/?preview={token}#Intent;scheme=https;package={package};'
                         f'S.browser_fallback_url={quote(fallback, safe="")};end'),
             'fallback': fallback}

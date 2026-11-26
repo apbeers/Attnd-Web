@@ -21,7 +21,7 @@ ALLOWED_MEDIA = {'(max-width: 600px)', '(min-width: 601px)', '(max-width: 1023px
                  '(min-width: 1920px)', '(min-width: 2560px)'}  # ultra: the density steps (design/layout.css)
 SCREEN_JS = 'console/static/console/screen.js'
 UA_ALLOWED = {
-    'console/static/console/console.js',     # Open in Attnd: attnd:// on iPhone, intent:// on Android
+    'console/static/console/console.js',     # Open in Attnd: a www Universal Link on iPhone, intent:// on Android
     'home/static/home/home.js',              # the home page's App Store / Google Play buttons
     'console/static/console/passkeys.js',    # which passkey manager to name on Apple devices
     'console/passkeys.py', 'console/webauthn.py', 'console/views_auth.py', 'console/views.py',  # passkey names

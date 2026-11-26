@@ -501,6 +501,7 @@ content_updated = "silent: refetch bundle/ (jitter_ms, preview phones 0)"
 [ignore_hosts]
 "attnd.app" = "our own host"
 "dev.attnd.app" = "our own dev host"
+"www.attnd.app" = "our own host: redirects to attnd.app; iPhones open the app through it (attnd/links.py ios_open_url)"
 "attnd.site" = "our own sites host"
 "dev.attnd.site" = "our own dev sites host"
 "schema.org" = "JSON-LD @context, never fetched"

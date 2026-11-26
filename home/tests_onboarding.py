@@ -48,7 +48,8 @@ class HomePageTests(TestCase):
         self.assertIn('Fort Worth Fest', html)
         self.assertIn(reverse('join:join_qr', args=['SHOWFEST']), html)
         self.assertIn('data-kind-filter="Market"', html)
-        self.assertIn('attnd://join/SHOWFEST', html)
+        self.assertIn('https://www.attnd.app/join/SHOWFEST/', html)
+        self.assertNotIn('attnd://', html)  # Safari: "the address is invalid" without the app
 
     def test_map_view_has_a_pin_for_every_card(self):
         """P0 #6: the Map view drew nothing useful. Every card carries its code and numeric coordinates (home.js puts a

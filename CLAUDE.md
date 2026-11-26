@@ -1435,9 +1435,10 @@ Link origin (`attnd/links.py`, Nov 20, 2026): join and shared-plan links (QR cod
 
 **Open in Attnd** (Nov 21, 2026): on phones the console's QR card (`live_on_phone`, page and chat) shows an **Open in
 Attnd** button (people can't scan their own screen); the code and QR stay as they are. `attnd.links.open_in_app_links`:
-iPhone → `attnd://join/<code>` (iOS doesn't open a Universal Link to the domain Safari is showing; the iOS app, not the
-App Clip, registers the scheme) and, if the page is still visible ~1.5 s later (`visibilitychange`), the join page
-(App Store / App Clip); Android → Chrome's `intent://<host>/join/<code>/#Intent;scheme=https;package=<ANDROID_PACKAGE_NAME>;S.browser_fallback_url=<join link>;end`.
+iPhone → `https://www.attnd.app/join/<code>/` (`ios_open_url`; Nov 26, 2026: iOS doesn't open a Universal Link to
+the domain Safari is showing, and the old `attnd://` scheme made Safari say "the address is invalid" without the app;
+www is another host the app claims (`applinks:www.attnd.app`), so the app opens, and without it www redirects to the
+join page with the App Clip card; the dev server has no sibling host, so dev links are the join page); Android → Chrome's `intent://<host>/join/<code>/#Intent;scheme=https;package=<ANDROID_PACKAGE_NAME>;S.browser_fallback_url=<join link>;end`.
 `console.js` picks the platform from the User-Agent (`data-open-app`, `window.attndOpenApp` for chat cards); desktop
 shows no button.
 
