@@ -9,7 +9,8 @@ from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.db.models import Count, Prefetch, Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -210,6 +211,31 @@ def prospect_detail(request, pk):
         'tab': 'prospects', 'p': prospect, 'contacts': list(prospect.contacts.all()),
         'activity': list(prospect.activity.select_related('user')[:50]), 'statuses': Prospect.STATUS_CHOICES,
         'active_job': testing.active_job(prospect)})
+
+
+@agent_action('draft_prospect_pitch', 'Draft an outreach email to a prospect\'s organizer offering the free test event '
+              'Attnd made (with its join QR code). Only a draft: nothing is sent. CAN-SPAM: it names the sender, says '
+              'it is promotional, has an opt-out line and a mailing-address placeholder to fill in. Refused for '
+              'do-not-contact contacts and for prospects without a test event.',
+              params={'contact': P('integer', 'the contact id (default: the first contact with an email who isn\'t '
+                                              'do-not-contact)', nullable=True),
+                      'sender_name': P('string', 'the name to sign with (default: yours)', nullable=True)},
+              json=True, title='Drafted a pitch', mcp=True)
+@staff_required
+@require_POST
+def pitch(request, pk):
+    from prospects import pitch as pitches
+    prospect = get_object_or_404(Prospect.objects.select_related('event'), pk=pk)
+    contact = request.POST.get('contact') or None
+    try:
+        draft, links = pitches.draft(prospect, request.user, int(contact) if contact else None,
+                                     request.POST.get('sender_name', ''))
+    except (pitches.CannotDraft, ValueError) as exc:
+        return JsonResponse({'error': str(exc) or 'Not a contact id.'}, status=400)
+    return JsonResponse({'draft': {'id': draft.pk, 'to': draft.to, 'subject': draft.subject, 'body': draft.body,
+                                   **links, 'sent': False,
+                                   'note': 'Draft only: copy it into your own email, replace the mailing-address '
+                                           'placeholder, and send it yourself.'}})
 
 
 @agent_action('run_prospect_discovery', 'Start a prospect discovery run now (AI web search; costs up to the daily cap).',

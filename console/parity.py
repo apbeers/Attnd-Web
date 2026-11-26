@@ -13,6 +13,8 @@ from django.urls import NoReverseMatch, Resolver404, resolve
 # Writes the chat reaches only by asking (the model calls the registered tool); no card has a button for them, on
 # purpose. Each needs its reason.
 TOOL_ONLY = {
+    'draft_prospect_pitch': 'Asked for in Ask Attnd or over MCP ("draft a pitch for this prospect"); the drafts show '
+                            'on prospect_detail.',
     'design_website': 'Website changes are asked for in the chat (batch 5: no design box on the card); Ask Attnd '
                       'calls this tool.',
     'retry_studio_run': "The live task card's Retry for a failed Studio run (agent.js, from the task feed).",

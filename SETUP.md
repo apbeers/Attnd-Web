@@ -26,7 +26,7 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
-- [ ] MCP on dev (step 23): add the **Attnd (dev)** connector in Claude with `https://dev.attnd.app/mcp`, connect, try a few requests. Then tell Claude whether to turn production on.
+- [ ] MCP on production (step 23): after merging develop → main, add the **Attnd** connector in Claude with `https://attnd.app/mcp` and connect (production's `MCP_ENABLED=1` is already set).
 - [x] IndexNow on production (step 22): `INDEXNOW_KEY` set on attnd-web by Claude (Nov 22, 2026, release v122; `/<key>.txt` answers 200).
 - [x] Google Workspace protection (owner, Nov 23, 2026): 2-Step Verification enforced with a passkey on
       `andrew@attnd.app` (the super admin), super admin recovery phone / email + backup codes.
@@ -1163,8 +1163,9 @@ connectors in Claude, each signing in to its own site with its own passkeys and 
    Claude identifies itself with its Client ID Metadata Document.
 2. Try it: "list my Attnd events", "show the event overview of DEMO", "set the Deep Ellum prospect to reviewing".
    Anything Attnd always asks about comes back as a link to confirm in the console.
-3. **Production** (later, after you sign off): Claude sets `MCP_ENABLED=1` on attnd-web; add a second connector
-   **Attnd**, URL `https://attnd.app/mcp`.
+3. **Production** (owner, Nov 26, 2026: `MCP_ENABLED=1` set on attnd-web, release 126; it works once develop is merged
+   to main, which ships `mcp_server/`): add a second connector **Attnd**, URL `https://attnd.app/mcp`, and sign in
+   with your production staff account.
 4. Revoke a connection on Platform → **Connected apps**. A password change or "sign out everywhere" ends every
    connection; otherwise one lasts until it's unused for 30 days or is 90 days old.
 

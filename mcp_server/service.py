@@ -82,7 +82,7 @@ def tools(user):
     from agent.tools import mcp_tools_for
     out = [{'name': t['name'], 'description': t['description'], 'inputSchema': t['parameters']}
            for t in mcp_tools_for(user)]
-    return out + [_app_tool(), _component_tool(user)]
+    return out + [_app_tool(), _component_tool(user)] + _named_tools(user)
 
 
 def _run(principal, name, args):
@@ -115,6 +115,8 @@ def call(principal, name, args):
         return _overview(principal, args)
     if name == COMPONENT_TOOL:
         return _cards(principal, args)
+    if name in NAMED and name in {t['name'] for t in _named_tools(principal.user)}:
+        return _named(principal, name, args)
     if name not in {t['name'] for t in tools(principal.user)}:
         return {'text': f'Unknown tool “{name}”, or not available to you.', 'structured': None, 'is_error': True}
     run = _run(principal, name, args)
@@ -151,32 +153,81 @@ def _overview(principal, args):
 
 
 def _cards(principal, args, tool=COMPONENT_TOOL):
-    """Components drawn as the person for the MCP App (mcp_server/cards.py), with their data as text."""
+    """`show_component`: one component's cards for the given id sets."""
+    items = args.get('items') if isinstance(args.get('items'), list) else [{}]
+    items = [i for i in items if isinstance(i, dict)][:MAX_CARDS] or [{}]
+    return _show(principal, [(str(args.get('component') or ''), items)], tool)
+
+
+def _show(principal, parts, tool, title=''):
+    """Components drawn as the person for the MCP App (mcp_server/cards.py), with their data as text.
+    `parts` = [(component name, [id sets])]; the cards follow each other in that order."""
     from agent.models import AgentRun
     from console import components as C
     from mcp_server import cards
-    name = str(args.get('component') or '')
-    items = args.get('items') if isinstance(args.get('items'), list) else [{}]
-    items = [i for i in items if isinstance(i, dict)][:MAX_CARDS] or [{}]
-    run = _run(principal, tool, {'event_id': items[0].get('event_id')})
+    event_id = next((i.get('event_id') for _, items in parts for i in items if i.get('event_id')), None)
+    run = _run(principal, tool, {'event_id': event_id})
+    found = []
     try:
-        found = cards.render(principal.user, name, items)
+        for name, items in parts:
+            found += [(name, data, html) for _, data, html in cards.render(principal.user, name, items)]
     except ValueError as exc:
         _finish(run, AgentRun.FAILED, error=str(exc))
         return {'text': str(exc), 'structured': None, 'is_error': True}
     found = found[:60]
-    title = C.get(name).title
-    if len(found) == 1:
-        title = found[0][1].get('name') or title
+    first = parts[0][0]
+    if not title:
+        title = (found[0][1].get('name') if len(found) == 1 else '') or C.get(first).title
     html = ''.join(h for _, _, h in found)
     text = '\n'.join(C.model_json(data) for _, data, _ in found)
-    _finish(run, AgentRun.DONE, summary=f'{C.get(name).title}: {len(found)} shown')
-    event_id = items[0].get('event_id')
+    _finish(run, AgentRun.DONE, summary=f'{title}: {len(found)} shown')
     page = settings.SITE_URL + (reverse('console:event', kwargs={'event_id': event_id}) if event_id
                                 else reverse('console:dashboard'))
     return {'text': text, 'is_error': False,
-            'structured': {'component': name, 'title': title, 'count': len(found), 'html': html,
+            'structured': {'component': first, 'title': title, 'count': len(found), 'html': html,
                            'console_url': page}}
+
+
+# Named card tools (owner, Nov 26, 2026): what people ask for often, each a fixed set of console components.
+EVENT_ID = {'type': 'object', 'additionalProperties': False, 'required': ['event_id'],
+            'properties': {'event_id': {'type': 'integer', 'description': 'The event id'}}}
+NAMED = {
+    'show_event_usage': {
+        'title': 'Event usage', 'schema': EVENT_ID, 'card': 'event_metrics',
+        'description': "An event's numbers from the apps (anonymous counts): phones joined, active phones, "
+                       'iPhone / Android, notification opt-ins and reach, most liked and most viewed places and '
+                       'items, interactions by hour. As cards, with the data as text.',
+        'parts': lambda a: [('event_metrics', [{'event_id': a['event_id']}]),
+                            ('usage_answer', [{'event_id': a['event_id']}])]},
+    'show_event_billing': {
+        'title': 'Event billing', 'schema': EVENT_ID, 'card': 'event_billing',
+        'description': "An event's plan (Free / Standard / Studio), payments and invoices. Read only: no charges or "
+                       'Stripe changes from here.',
+        'parts': lambda a: [('event_billing', [{'event_id': a['event_id']}])]},
+    'show_billing_queue': {
+        'title': 'Upgrade requests and payments', 'card': 'billing_queue',
+        'schema': {'type': 'object', 'additionalProperties': False, 'properties': {}},
+        'description': 'Platform admins: pending upgrade and "remove the limit" requests and the latest payments '
+                       '(recorded by hand in Platform, or through Stripe). Read only.',
+        'parts': lambda a: [('billing_queue', [{}])]},
+}
+
+
+def _named_tools(user):
+    from console import components as C
+    out = []
+    for name, spec in NAMED.items():
+        if C.allowed(C.get(spec['card']), user):
+            out.append({'name': name, 'title': spec['title'], 'description': spec['description'],
+                        'inputSchema': spec['schema'], '_meta': {'ui': {'resourceUri': CARD_URI}}})
+    return out
+
+
+def _named(principal, name, args):
+    spec = NAMED[name]
+    if 'event_id' in spec['schema'].get('required', []) and not isinstance(args.get('event_id'), int):
+        return {'text': 'event_id is required (an integer).', 'structured': None, 'is_error': True}
+    return _show(principal, spec['parts'](args), name, title=spec['title'])
 
 
 @lru_cache(maxsize=1)

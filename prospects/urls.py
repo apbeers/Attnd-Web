@@ -7,6 +7,7 @@ urlpatterns = [
     path('', views.prospect_list, name='list'),
     path('export.csv', views.export_csv, name='export'),
     path('<int:pk>/', views.prospect_detail, name='detail'),
+    path('<int:pk>/pitch/', views.pitch, name='pitch'),
     path('runs/', views.runs, name='runs'),
     path('runs/<int:pk>/', views.run_detail, name='run'),
     path('settings/', views.settings_view, name='settings'),

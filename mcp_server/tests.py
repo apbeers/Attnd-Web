@@ -201,7 +201,11 @@ class ServiceTests(McpTestCase):
                          'show_event_overview', 'set_prospects_status', 'save_prospect', 'create_test_event',
                          'approve_event_claim'} <= names, names)
         self.assertFalse(names & {'ask_user', 'finish', 'show', 'fill_form', 'remember', 'propose_changes',
-                                  'run_prospect_discovery', 'delete_event', 'send_notification'})
+                                  'run_prospect_discovery', 'delete_event'})
+        # Editing (owner, Nov 26, 2026): writes run; sending and publishing come back as a confirmation link.
+        self.assertTrue({'add_location', 'edit_location', 'add_schedule_item', 'edit_schedule_item',
+                         'send_notification', 'publish_changes', 'draft_prospect_pitch', 'show_event_usage',
+                         'show_event_billing'} <= names, names)
         app = next(t for t in service.tools(self.staff) if t['name'] == 'show_event_overview')
         self.assertEqual(app['_meta'], {'ui': {'resourceUri': service.CARD_URI}})
         cards = next(t for t in service.tools(self.staff) if t['name'] == 'show_component')
@@ -368,3 +372,62 @@ class ProtocolTests(McpTestCase):
         self.assertIn('Prairie Fest', json.dumps(called['result']))
         self.assertFalse(called['result'].get('isError'))
         self.assertEqual(resource['result']['contents'][0]['mimeType'], 'text/html;profile=mcp-app')
+
+
+class McpToolsRoundTwoTests(McpTestCase):
+    """Owner, Nov 26, 2026: editing, usage, billing and prospect pitch drafts over MCP."""
+
+    def setUp(self):
+        super().setUp()
+        self.principal = grants.principal(self.connect()['access_token'])
+
+    def test_editing_runs_and_sending_waits_for_a_confirmation(self):
+        from events.models import Location
+        out = service.call(self.principal, 'add_location', {'event_id': self.event.pk, 'name': 'Taco Row'})
+        self.assertFalse(out['is_error'], out['text'])
+        self.assertTrue(Location.objects.filter(event=self.event, name='Taco Row').exists())
+        out = service.call(self.principal, 'send_notification',
+                           {'event_id': self.event.pk, 'title': 'Gates open', 'body': 'Come on in', 'when': 'now'})
+        self.assertFalse(out['is_error'], out['text'])
+        self.assertEqual(out['structured']['status'], 'waiting_for_confirmation')
+        self.assertIn('/console/mcp/confirm/', out['structured']['confirm_url'])
+        self.assertFalse(self.event.notification_set.filter(sent=True).exists())
+
+    def test_usage_and_billing_cards(self):
+        usage = service.call(self.principal, 'show_event_usage', {'event_id': self.event.pk})
+        self.assertFalse(usage['is_error'], usage['text'])
+        self.assertIn('component--event_metrics', usage['structured']['html'])
+        self.assertIn('component--usage_answer', usage['structured']['html'])
+        billing = service.call(self.principal, 'show_event_billing', {'event_id': self.event.pk})
+        self.assertFalse(billing['is_error'], billing['text'])
+        self.assertIn('component--event_billing', billing['structured']['html'])
+        names = {t['name'] for t in service.tools(self.staff)}
+        self.assertNotIn('show_billing_queue', names)  # platform admins only
+        self.staff.is_superuser = True
+        self.staff.save()
+        self.assertIn('show_billing_queue', {t['name'] for t in service.tools(self.staff)})
+
+    def test_pitch_drafts_follow_can_spam_and_never_reach_do_not_contact(self):
+        from prospects.models import PitchDraft, Prospect, ProspectContact
+        prospect = Prospect.objects.create(name='Riverside Fest', organizer='River Org', urls=['https://river.example/'])
+        blocked = ProspectContact.objects.create(prospect=prospect, name='Dee', email='dee@river.example',
+                                                 source_url='https://river.example/contact', do_not_contact=True)
+        out = service.call(self.principal, 'draft_prospect_pitch', {'pk': prospect.pk})
+        self.assertIn('test event first', out['text'])  # no event yet
+        prospect.event = self.event
+        prospect.save()
+        out = service.call(self.principal, 'draft_prospect_pitch', {'pk': prospect.pk})
+        self.assertIn('do not contact', out['text'])
+        out = service.call(self.principal, 'draft_prospect_pitch', {'pk': prospect.pk, 'contact': blocked.pk})
+        self.assertIn('do not contact', out['text'])
+        self.assertFalse(PitchDraft.objects.exists())
+        ok = ProspectContact.objects.create(prospect=prospect, name='Sam Lee', email='sam@river.example',
+                                            source_url='https://river.example/team')
+        out = service.call(self.principal, 'draft_prospect_pitch', {'pk': prospect.pk, 'sender_name': 'Andrew'})
+        self.assertFalse(out['is_error'], out['text'])
+        pitch = PitchDraft.objects.get()
+        self.assertEqual((pitch.contact, pitch.to), (ok, 'sam@river.example'))
+        for needed in ('Hi Sam,', f'/join/{self.event.event_code}/qr.svg', 'Andrew', 'promotional message',
+                       'unsubscribe', 'mailing address', 'https://river.example/team'):
+            self.assertIn(needed, pitch.body)
+        self.assertIn('not sent', prospect.activity.first().text)

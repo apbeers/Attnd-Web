@@ -495,7 +495,7 @@ def event_edit(request, event):
 
 
 @agent_action('publish_event', 'Publish an event so attendees can join it.', confirm=True, summary=S.publish_event,
-              fixed={'action': 'publish'}, title='Published the event')
+              fixed={'action': 'publish'}, title='Published the event', mcp=True)
 @agent_action('unpublish_event', 'Move an event back to draft (attendees can no longer open it).', confirm=True,
               summary=S.unpublish_event, fixed={'action': 'unpublish'}, title='Moved the event to draft')
 @agent_action('archive_event', 'Archive an event (attendees see it as ended).', confirm=True,
@@ -851,9 +851,9 @@ def locations(request, event):
 
 
 @agent_action('add_location', 'Add a location (stage, booth, vendor…) to an event.', form=LocationForm,
-              url_name='console:location_new', prefill=True, title='Added a location')
+              url_name='console:location_new', prefill=True, title='Added a location', mcp=True)
 @agent_action('edit_location', 'Edit a location. Only pass what should change.', form=LocationForm,
-              url_name='console:location_edit', prefill=True, title='Edited a location')
+              url_name='console:location_edit', prefill=True, title='Edited a location', mcp=True)
 @agent_action('new_location_page', 'The form for a new location.', kind='read', url_name='console:location_new')
 @agent_action('location_page', "A location's form with its current values and schedule.", kind='read',
               url_name='console:location_edit')
@@ -884,7 +884,7 @@ def location_edit(request, event, location_id=None):
 @agent_action('delete_location', 'Delete a location (its schedule items keep no location).', confirm=True,
               summary=S.delete_location, fixed={'action': 'delete'}, title='Deleted a location')
 @agent_action('toggle_location_hidden', 'Hide a location from attendees, or show it again.',
-              fixed={'action': 'toggle_hidden'}, title='Hid / showed a location')
+              fixed={'action': 'toggle_hidden'}, title='Hid / showed a location', mcp=True)
 @agent_action('unlock_location', 'Let AI refreshes update a location\'s hand-edited fields again.',
               fixed={'action': 'unlock'}, title='Unlocked a location')
 @agent_action('find_location_image', 'Look for a photo of a location (its venue website, the event\'s pages, Wikimedia '
@@ -973,9 +973,9 @@ def schedule(request, event):
 
 
 @agent_action('add_schedule_item', 'Add a schedule item (a set, talk, session…) to an event.',
-              form=ScheduledItemForm, url_name='console:item_new', prefill=True, title='Added a schedule item')
+              form=ScheduledItemForm, url_name='console:item_new', prefill=True, title='Added a schedule item', mcp=True)
 @agent_action('edit_schedule_item', 'Edit a schedule item. Only pass what should change.', form=ScheduledItemForm,
-              url_name='console:item_edit', prefill=True, title='Edited a schedule item')
+              url_name='console:item_edit', prefill=True, title='Edited a schedule item', mcp=True)
 @agent_action('new_schedule_item_page', 'The form for a new schedule item.', kind='read', url_name='console:item_new')
 @agent_action('schedule_item_page', "A schedule item's form with its current values.", kind='read',
               url_name='console:item_edit')
@@ -1015,7 +1015,7 @@ def _event_tags(event, limit=30):
 @agent_action('delete_schedule_item', 'Delete a schedule item.', confirm=True, summary=S.delete_item,
               fixed={'action': 'delete'}, title='Deleted a schedule item')
 @agent_action('toggle_schedule_item_hidden', 'Hide a schedule item from attendees, or show it again.',
-              fixed={'action': 'toggle_hidden'}, title='Hid / showed a schedule item')
+              fixed={'action': 'toggle_hidden'}, title='Hid / showed a schedule item', mcp=True)
 @agent_action('unlock_schedule_item', 'Let AI refreshes update a schedule item\'s hand-edited fields again.',
               fixed={'action': 'unlock'}, title='Unlocked a schedule item')
 @event_view
@@ -1041,7 +1041,7 @@ def item_action(request, event, item_id):
 
 @agent_action('send_notification', 'Send a notification (push + the app\'s Updates tab) to the attendees now, or '
               'schedule it. Urgent = for cancellations and safety only.', confirm=True, summary=S.send_notification,
-              form=NotificationForm, prefill=True, title='Sent / scheduled a notification')
+              form=NotificationForm, prefill=True, title='Sent / scheduled a notification', mcp=True)
 @agent_action('notifications_page', "An event's notifications (sent and scheduled) and how many devices they reach.",
               kind='read')
 @event_view
@@ -1080,7 +1080,7 @@ def notifications(request, event):
               summary=S.delete_notification, fixed={'action': 'delete'}, title='Deleted a scheduled notification')
 @agent_action('edit_scheduled_notification', "Change a scheduled (not yet sent) notification's title, text or send "
               'time. Pass only what changes.', form=NotificationEditForm, fixed={'action': 'edit'},
-              title='Edited a scheduled notification')
+              title='Edited a scheduled notification', mcp=True)
 @event_view
 @require_POST
 def notification_action(request, event, notification_id):
@@ -1184,7 +1184,7 @@ def event_changes(request, event):
 
 @agent_action('publish_changes', "Publish an event's unpublished changes to the attendees' phones (they see them "
               "within seconds). Notifications and the event's status never wait for this.", confirm=True,
-              summary=S.publish_changes, title='Published the changes')
+              summary=S.publish_changes, title='Published the changes', mcp=True)
 @event_view
 @require_POST
 def event_publish_changes(request, event):
@@ -1496,7 +1496,7 @@ def event_theme_generate(request, event):
 
 @agent_action('fill_in_details', "Read the event's websites again and add \"Details for the assistant\" (performers, "
               'bios, prices, menus, hours, links) to every schedule item and place that has none; never touches what '
-              'a person wrote. Runs in the background (a task card).', json=True, title='Started filling in details')
+              'a person wrote. Runs in the background (a task card).', json=True, title='Started filling in details', mcp=True)
 @event_view
 @require_POST
 @ai_credit_required
@@ -1518,7 +1518,7 @@ def event_fill_details(request, event):
 
 @agent_action('find_music_links', "Look up \"Listen on Apple Music\" links for the event's performers (API-030: only "
               "confident matches; links the organizer set or removed stay). Runs in the background.", json=True,
-              title='Looking up music links')
+              title='Looking up music links', mcp=True)
 @event_view
 @require_POST
 def event_music_links(request, event):

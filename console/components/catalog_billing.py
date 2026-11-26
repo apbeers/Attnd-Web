@@ -47,3 +47,32 @@ def event_billing(user, event_id=None, event=None):
             'stripe': billing.stripe_enabled(), 'invoices': invoices, 'receipt_form': receipt,
             'paid_total': f'{paid:,.2f}' if paid else '', 'actions': actions,
             'csv': reverse('console:event_invoices_csv', args=[event.pk])}
+
+
+@component('billing_queue', 'Upgrade requests and payments', 'Platform admins: pending upgrade and "remove the limit" '
+           'requests (event, plan, price, who asked) and the latest payments recorded by hand or through Stripe. Read '
+           'only; approve or decline on the Platform page.', ids=(), permission='platform_admin.change_platformsettings',
+           audience='superuser',
+           chat_only='The Platform page draws these lists itself; the chat and MCP show this read-only summary.')
+def billing_queue(user):
+    from django.http import Http404
+
+    from platform_admin import plans
+    from platform_admin.models import PaymentRecord, UpgradeRequest
+    if not user.has_perm('platform_admin.change_platformsettings'):
+        raise Http404
+    requests = []
+    for r in UpgradeRequest.objects.filter(status=UpgradeRequest.PENDING).select_related('event', 'requested_by')[:50]:
+        requests.append({'id': r.pk, 'event': r.event.name, 'event_id': r.event_id, 'code': r.event.event_code,
+                         'kind': r.get_kind_display(), 'price': f'{r.price_usd:,.2f}',
+                         'by': r.requested_by.email if r.requested_by_id else '',
+                         'when': fmt(r.created_at, 'M j, Y'), 'message': r.message[:300],
+                         'url': reverse('platform:event', args=[r.event_id])})
+    payments = []
+    for p in PaymentRecord.objects.select_related('event', 'recorded_by').order_by('-paid_at')[:20]:
+        payments.append({'event': p.event.name, 'event_id': p.event_id, 'plan': plans.LABELS.get(p.plan, p.plan),
+                         'amount': f'{p.amount_usd:,.2f}', 'when': fmt(p.paid_at, 'M j, Y'), 'note': p.note,
+                         'by': p.recorded_by.email if p.recorded_by_id else 'Stripe',
+                         'url': reverse('platform:event', args=[p.event_id])})
+    return {'name': 'Upgrade requests and payments', 'requests': requests, 'payments': payments,
+            'page': reverse('platform:home')}

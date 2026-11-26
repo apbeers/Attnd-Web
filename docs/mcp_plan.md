@@ -1,7 +1,7 @@
 # MCP server for the platform (plan)
 
 Status: built and on develop (Nov 25, 2026): OAuth, grants, /mcp, confirm page, Connected apps, the event overview
-MCP App and the Prospects tools. Dev has `MCP_ENABLED=1`; production stays off until the owner signs off. The
+MCP App and the Prospects tools. Dev and production both have `MCP_ENABLED=1` (production since Nov 26, 2026; it serves MCP once `mcp_server/` is on main). The
 current architecture is in CLAUDE.md → MCP server; this file keeps the decisions.
 
 ## Goal
@@ -116,5 +116,6 @@ Domain      events · scrape · studio · credit · prospects
 - Confirm the idle (30 days) and maximum (90 days) grant lifetimes.
 - The MCP App's host bridge (ui/initialize, tool-result notifications) is written from the MCP Apps spec and untested
   in Claude itself: check it with the dev connector.
-- Production: set `MCP_ENABLED=1` on attnd-web after the owner signs off.
+- Production: `MCP_ENABLED=1` on attnd-web (Nov 26, 2026, release 126).
+- Round two (Nov 26, 2026): editing tools, usage / billing card tools, prospect pitch drafts (CLAUDE.md → MCP server).
 - Later: more tools (event writes, discovery runs), more MCP Apps (schedule, Prospects pipeline).

@@ -858,8 +858,8 @@ on Save does; there is no second copy of any business logic.
 ## MCP server (staff; `mcp_server/`, docs/mcp_plan.md)
 
 Claude (web, Desktop, mobile, Cowork, Claude Code) and other assistants run Attnd's tools as a staff member over
-MCP. Dev (`https://dev.attnd.app/mcp`, `MCP_ENABLED=1`) and production (`https://attnd.app/mcp`, off until the owner
-signs off) are separate servers with separate clients, tokens and data; everything derives from `SITE_URL`.
+MCP. Dev (`https://dev.attnd.app/mcp`) and production (`https://attnd.app/mcp`; `MCP_ENABLED=1` on both, owner
+Nov 26, 2026: production serves it once `mcp_server/` is merged to main) are separate servers with separate clients, tokens and data; everything derives from `SITE_URL`.
 - **Layers (no duplicated logic)**: the chat and MCP are parallel entry points over the same pieces. Tool definitions
   live in `agent/tools.py` (`tools_for` for the chat, `mcp_tools_for` for MCP: the chat's reads, `search_everything`,
   `get_component`, and registry writes marked `@agent_action(..., mcp=True)`); every MCP call runs through the chat's
@@ -895,6 +895,18 @@ signs off) are separate servers with separate clients, tokens and data; everythi
   PNGs, every address is absolute (`SITE_URL`), and the event map is a static SVG of OpenStreetMap tiles with the
   pins; the resource's `_meta.ui.csp.resourceDomains` lists the image hosts. The server advertises
   `io.modelcontextprotocol/ui`.
+- **Tools** (owner, Nov 26, 2026): editing (`add_location`, `edit_location`, `add_schedule_item`, `edit_schedule_item`
+  with performers / prices / links in the item's details, hide / show, `fill_in_details`, `find_music_links`), and
+  `send_notification`, `edit_scheduled_notification`, `publish_changes`, `publish_event`, which always ask, so they come
+  back as the confirmation link (that is the notification draft). Named card tools (`NAMED` in `service.py`):
+  `show_event_usage` (`event_metrics` + `usage_answer`), `show_event_billing` (`event_billing`) and
+  `show_billing_queue` (`billing_queue`: pending upgrade / remove-the-limit requests and the latest payments; platform
+  admins). No Stripe reads or writes over MCP (Stripe reads wait for the LLC's live account).
+- **Pitch drafts** (`prospects/pitch.py`, `draft_prospect_pitch` = `prospects:pitch`, also Ask Attnd): an email to a
+  prospect's organizer offering its test event with the join link and its public QR (`/join/<code>/qr.svg`), signed
+  by the person, marked promotional, with an opt-out line, where the address was found and a mailing-address
+  placeholder (CAN-SPAM). Stored as `PitchDraft` (shown on the prospect, "not sent") and an activity line; refused for
+  do-not-contact contacts, prospects without a test event or dismissed / lost ones. Attnd never sends it.
 - **Prospects** (staff): the pipeline tools are `mcp=True` (status, notes, do-not-contact, test events and claim
   decisions; the last two always ask). Discovery runs and settings aren't offered yet; there is no send tool.
 - Tests: `mcp_server/tests.py` (the OAuth dance, rotation and reuse, the grant's end, metadata, the tool list,
