@@ -405,10 +405,9 @@ class BundleAndJoinTests(TestCase):
     @override_settings(SECURE_SSL_REDIRECT=False)
     def test_join_and_shared_plan_pages(self):
         html = Client().get('/join/PRAIRIE/', HTTP_USER_AGENT='Mozilla/5.0 (Macintosh)').content.decode()
-        self.assertIn('data-scheme="auto"', html)
         self.assertRegex(html, r'<style nonce="[^"]+" data-event-theme')
         self.assertIn('--brand-gradient:linear-gradient(135deg, #B23A1E', html)
-        self.assertIn(':root[data-scheme="auto"]{', html)
+        self.assertIn(':root:not([data-theme="light"]){', html)
         self.event.theme_web = False
         self.event.save()
         html = Client().get('/join/PRAIRIE/', HTTP_USER_AGENT='Mozilla/5.0 (Macintosh)').content.decode()

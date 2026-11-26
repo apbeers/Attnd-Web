@@ -51,7 +51,7 @@ class CoverageTests(TestCase):
     def test_event_routes_check_the_event(self):
         """A view whose URL names an event declares a per-event permission (or stays signed-in with its own
         check, listed here on purpose)."""
-        own_check = {'platform:event', 'platform:event_save', 'platform:record_payment'}  # Platform admin: every event
+        own_check = {'platform:event', 'platform:event_save', 'platform:record_payment', 'platform:send_invoice'}  # Platform admin: every event
         for route, name, p in checked_patterns():
             if '<int:event_id>' in route and name not in own_check and P.declared(p.callback) != P.PUBLIC:
                 self.assertIn(P.declared(p.callback), P.EVENT_PERMS, name)
@@ -465,6 +465,7 @@ LINT_ALLOWED = {
     ('studio/views.py', 'site_settings'): 'address uniqueness check, nothing is read back',
     ('studio/views.py', 'reports'): 'studio.view_sitereport (staff)',
     ('platform_admin/views.py', 'record_payment'): 'platform admins: any event (change_platformsettings)',
+    ('platform_admin/views.py', 'send_invoice'): 'platform admins: any event (change_platformsettings)',
     ('agent/views.py', 'start'): 'can_edit on the event right after (else no event)',
     ('agent/views.py', 'assistant_page'): 'can_edit on the event right after (else no event)',
     ('agent/views.py', '_wait_for_news'): 'the run was loaded for request.user',

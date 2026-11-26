@@ -13,6 +13,7 @@ from console import views_auth, views_passkeys
 from events.app_status import app_status_view, retired_api_view
 from home.sitemaps import EventSitemap, StaticSitemap
 from join import views as join_views
+from mcp_server import views as mcp_views
 from platform_admin import views_email
 
 sitemaps = {
@@ -33,6 +34,17 @@ urlpatterns = [
     path('csp-report/', public(attnd_views.csp_report), name='csp_report'),
     path('email/unsubscribe/<str:token>/', views_email.unsubscribe, name='email_unsubscribe'),  # RFC 8058
     path('email/mailgun/', views_email.mailgun_webhook, name='mailgun_webhook'),
+    # MCP server (docs/mcp_plan.md): OAuth for Claude and other assistants (staff). /mcp itself is served by attnd.asgi.
+    path('.well-known/oauth-authorization-server', mcp_views.server_metadata, name='oauth_server_metadata'),
+    path('.well-known/oauth-protected-resource', mcp_views.resource_metadata, name='oauth_resource_metadata'),
+    path('.well-known/oauth-protected-resource/<path:resource_path>', mcp_views.resource_metadata,
+         name='oauth_resource_metadata_path'),
+    path('oauth/', include(([
+        path('authorize/', mcp_views.authorize, name='authorize'),
+        path('token/', mcp_views.token, name='token'),
+        path('revoke/', mcp_views.revoke_token, name='revoke-token'),
+    ], 'oauth2_provider'))),
+    path('console/mcp/', include('mcp_server.urls')),
     path('console/diagnostics/', include('diagnostics.urls')),  # staff only (API-013)
     path('console/ai-spend/', include('credit.urls')),  # staff; also the Platform admin's AI spend tab
     path('console/platform/', include('platform_admin.urls')),  # superusers: prices, customers, upgrades (D2)  # staff only: AI spend, limits, overrides (credit/)

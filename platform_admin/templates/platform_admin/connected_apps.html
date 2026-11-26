@@ -1,0 +1,43 @@
+{% extends 'console/base.html' %}
+{% load console_tags platform_tags %}
+{% block title %}Connected apps{% endblock %}
+{% block content %}
+<div class="stack stack--loose">
+  {% platform_nav "connected_apps" %}
+  {% if dev %}<div class="notice notice--warning"><p>Dev server. Connections here are separate from attnd.app: add this server as its own connector (for example "Attnd (dev)").</p></div>{% endif %}
+  <section class="panel stack">
+    <h2 class="title-3">Connect Claude</h2>
+    {% if enabled %}
+      <p>In Claude, open Settings → Connectors → Add custom connector, and use this server URL:</p>
+      <p><code class="mono" data-copy="{{ server }}">{{ server }}</code></p>
+      <p class="small muted">Claude opens Attnd to sign in; you approve it once. Access tokens last an hour and renew on their own; a connection unused for {{ idle_days }} days, or older than {{ max_days }} days, has to connect again. Changes Attnd always asks about wait for your Confirm in the console.</p>
+    {% else %}
+      <p>The MCP server is off on this server (<code>MCP_ENABLED</code>).</p>
+    {% endif %}
+  </section>
+  <section class="stack">
+    <h2 class="title-3">Connections{% if manage %} (everyone){% endif %}</h2>
+    <div class="panel panel--flush table-scroll"><table class="data-table data-table--compact small"><thead><tr><th>Assistant</th>{% if manage %}<th>Person</th>{% endif %}<th>Connected</th><th>Last used</th><th>Returns to</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
+    {% for g in active %}<tr>
+      <td>{{ g.client_name }}</td>{% if manage %}<td class="mono">{{ g.user.email }}</td>{% endif %}
+      <td title="{{ g.created_at|date:'c' }}">{{ g.created_at|date:"M j, H:i" }}</td>
+      <td>{% if g.last_used_at %}{{ g.last_used_at|timesince }} ago{% else %}—{% endif %}</td>
+      <td class="mono">{{ g.redirect_host|default:"—" }}</td>
+      <td><form method="post" action="{% url 'platform:connected_app_revoke' %}">{% csrf_token %}<input type="hidden" name="grant_id" value="{{ g.pk }}"><button class="button button--small button--danger" data-confirm="Revoke {{ g.client_name }}’s connection for {{ g.user.email }}? It has to connect again." data-confirm-label="Revoke">Revoke</button></form></td>
+    </tr>{% empty %}<tr><td colspan="6" class="muted">No assistants connected.</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% if revoked %}<details><summary class="small">Recently ended ({{ revoked|length }})</summary><ul class="list small">{% for g in revoked %}<li>{{ g.client_name }}{% if manage %} · {{ g.user.email }}{% endif %} · ended {{ g.revoked_at|date:"M j, H:i" }} · {{ g.revoked_reason }}</li>{% endfor %}</ul></details>{% endif %}
+  </section>
+  <section class="stack">
+    <h2 class="title-3">Recent activity</h2>
+    <div class="panel panel--flush table-scroll"><table class="data-table data-table--compact small"><thead><tr><th>When</th>{% if manage %}<th>Person</th>{% endif %}<th>Assistant</th><th>Tool</th><th>Result</th></tr></thead><tbody>
+    {% for r in runs %}<tr>
+      <td title="{{ r.created_at|date:'c' }}">{{ r.created_at|date:"M j, H:i" }}</td>{% if manage %}<td class="mono">{{ r.user.email }}</td>{% endif %}
+      <td>{{ r.client|default:"—" }}</td><td class="mono">{{ r.goal }}</td>
+      <td>{% if r.status == 'waiting_confirmation' %}<span class="badge badge--warning">Waiting for confirmation</span>{% elif r.status == 'failed' %}<span class="badge badge--danger">Failed</span>{% else %}{{ r.summary|truncatechars:120 }}{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="5" class="muted">Nothing yet.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <details class="panel"><summary>Tools an assistant gets ({{ tools|length }})</summary><p class="small mono">{{ tools|join:", " }}</p></details>
+</div>
+{% endblock %}

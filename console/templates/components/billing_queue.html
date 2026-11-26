@@ -1,0 +1,11 @@
+{% load console_tags %}{# billing_queue: pending upgrade requests and recent payments (platform admins; read only). #}<div class="stack component component--billing_queue">
+  <section class="stack stack--tight"><h3 class="eyebrow">{% icon "tag" %} Waiting for a decision · {{ d.requests|length }}</h3>
+    {% if d.requests %}<ul class="list list--boxed small">{% for r in d.requests %}<li class="stack stack--tight">
+      <span><a href="{{ r.url }}" class="strong">{{ r.event }}</a> <span class="mono muted">{{ r.code }}</span> · {{ r.kind }} · ${{ r.price }}</span>
+      <span class="muted">{{ r.when }}{% if r.by %} · {{ r.by }}{% endif %}</span>{% if r.message %}<span>{{ r.message }}</span>{% endif %}</li>{% endfor %}</ul>
+    {% else %}<p class="small muted">No requests waiting.</p>{% endif %}</section>
+  <section class="stack stack--tight"><h3 class="eyebrow">Latest payments</h3>
+    {% if d.payments %}<ul class="list list--boxed small">{% for p in d.payments %}<li><a href="{{ p.url }}">{{ p.event }}</a> · {{ p.plan }} · ${{ p.amount }} · {{ p.when }} <span class="muted">({{ p.by }}{% if p.note %} · {{ p.note }}{% endif %})</span></li>{% endfor %}</ul>
+    {% else %}<p class="small muted">No payments recorded yet.</p>{% endif %}</section>
+  <p class="small"><a href="{{ d.page }}">Open Platform</a> to approve, decline or record a payment.</p>
+</div>

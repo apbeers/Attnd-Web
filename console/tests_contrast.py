@@ -9,7 +9,7 @@ from django.test import SimpleTestCase
 
 from studio.quality import contrast, _rgb
 
-CSS = Path(settings.BASE_DIR) / 'console' / 'static' / 'console' / 'console.css'
+
 PAIRS = (('--color-success', '--color-on-success'), ('--color-danger', '--color-on-danger'),
          ('--color-info', '--color-on-info'), ('--color-success-text', '--color-on-success'))
 
@@ -29,14 +29,16 @@ def _blocks(css):
 
 class FillContrastTests(SimpleTestCase):
     def test_text_on_status_fills_reads(self):
-        css = CSS.read_text()
+        from design.bundles import text
+        css = text('console')
         for mode, tokens in _blocks(css).items():
             for fill, on in PAIRS:
                 ratio = contrast(_rgb(tokens[fill]), _rgb(tokens[on]))
                 self.assertGreaterEqual(ratio, 4.5, f'{mode}: {on} on {fill} is {ratio:.2f}:1')
 
     def test_badges_and_buttons_use_the_on_tokens(self):
-        css = CSS.read_text()
+        from design.bundles import text
+        css = text('console')
         for selector in ('.badge--success', '.badge--danger', '.badge--info', '.button--success'):
             rule = re.search(re.escape(selector) + r'\s*\{([^}]*)\}', css).group(1)
             self.assertNotIn('#fff', rule, selector)

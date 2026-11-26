@@ -7,7 +7,7 @@
 <div class="grid grid--4 grid--stats panel">
   <div><div class="stat__value">{{ pager.paginator.count }}</div><div class="eyebrow">Sessions</div></div>
   <div><div class="stat__value">{{ used_mb|floatformat:1 }} MB</div><div class="eyebrow">Stored of {{ cap_mb|floatformat:0 }} MB ({{ used_pct }} %)</div>
-    <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ used_pct }}" aria-label="Storage used"><span style="width: {{ used_pct }}%"></span></div></div>
+    <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ used_pct }}" aria-label="Storage used"><span style="--value: {{ used_pct }}%"></span></div></div>
   <div><div class="stat__value">{{ report_groups|length }}</div><div class="eyebrow">Problem groups, 7 days</div></div>
   <div><div class="stat__value">{{ symbol_count }}</div><div class="eyebrow">Android mappings</div></div>
 </div>

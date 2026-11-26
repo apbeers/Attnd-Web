@@ -91,6 +91,8 @@ def prospect_detail(user, prospect_id=None, prospect=None):
     with timezone.override(timezone.get_current_timezone()):
         activity = [{'when': fmt(a.created_at, 'M j, g:i A'), 'text': a.text, 'who': a.user.email if a.user_id else 'Attnd'}
                     for a in p.activity.select_related('user')[:12]]
+        pitches = [{'when': fmt(d.created_at, 'M j, g:i A'), 'to': d.to, 'subject': d.subject, 'body': d.body}
+                   for d in p.pitch_drafts.all()[:3]]
     return {
         'event_code': p.event.event_code if p.event_id else '', 'can_see_qr': bool(p.event_id and (
             p.event.user_id == user.pk or user.is_superuser)),
@@ -106,6 +108,7 @@ def prospect_detail(user, prospect_id=None, prospect=None):
         'notes': p.notes, 'event_name': p.event.name if p.event_id else '',
         'event_url': reverse('console:event', args=[p.event_id]) if p.event_id else '',
         'save_url': reverse('prospects:detail', args=[p.pk]), 'contacts': contacts, 'activity': activity,
+        'pitches': pitches,
         'actions': actions,
     }
 

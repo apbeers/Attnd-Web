@@ -11,10 +11,11 @@
   </form>
   <a class="button button--primary" href="{% url 'console:item_new' event.id %}">{% icon "plus" %} Add item</a>
 </div>
+{% if days|length > 1 %}<div class="lanes section">{% endif %}
 {% for day, items in days %}
-<section class="section">
+<section class="{% if days|length == 1 %}section{% endif %}">
   <h2 class="eyebrow">{{ day|date:"l, F j" }}</h2>
-  <div class="panel panel--flush"><ul class="list">
+  <div class="panel panel--flush"><ul class="list{% if days|length == 1 %} flow{% endif %}">
   {% for it in items %}
     {% component "schedule_item_row" event=event item=it hearts=it.hearts %}
   {% endfor %}
@@ -23,4 +24,5 @@
 {% empty %}
   <div class="panel panel--empty">Nothing scheduled yet. Small events can skip this — the Schedule tab hides itself when it’s empty.</div>
 {% endfor %}
+{% if days|length > 1 %}</div>{% endif %}
 {% endblock %}

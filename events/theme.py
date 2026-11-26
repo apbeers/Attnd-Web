@@ -326,9 +326,9 @@ def from_page_colors(colors):
 
 
 def site_css(event):
-    """The public join / shared-plan pages (home/site.css, `<html data-scheme="auto">`): '' unless the event has a
-    theme and "Use custom theme on the website" is on."""
+    """The public join / shared-plan pages (the shared tokens, light and dark like the console): '' unless the event
+    has a theme and "Use custom theme on the website" is on."""
     if not getattr(event, 'theme_web', False):
         return ''
-    return css(event.theme, dark_selector=':root[data-scheme="auto"]', forced_dark='',
+    return css(event.theme,
                aliases={'--color-join-qr': '--color-brand-soft'})

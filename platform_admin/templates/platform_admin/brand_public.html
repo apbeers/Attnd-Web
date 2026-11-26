@@ -1,10 +1,10 @@
-{% load static %}<!DOCTYPE html>
-<html lang="en" data-scheme="auto">
+{% load static design %}<!DOCTYPE html>
+<html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Attnd brand</title><meta name="description" content="Attnd’s logo, app icon, colours, type and voice, with files to download.">{% include 'home/_icons.html' %}
   <link rel="canonical" href="{{ site_url }}/brand/">
-  <link rel="stylesheet" href="{% static 'home/site.css' %}"></head>
-<body><main class="page wrap stack stack--loose" style="padding:2rem 1rem">
+  {% stylesheets "site" %}</head>
+<body class="site"><main class="page stack stack--loose">
   <h1>Attnd brand</h1><p class="muted">Logos, colours and how we write. Questions: hello@attnd.app.</p>
   {% include 'platform_admin/_brand_body.html' %}
 </main></body></html>

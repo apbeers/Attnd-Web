@@ -110,7 +110,7 @@ def save_pricing(request):
 
 @agent_action('approve_upgrade_request', 'Approve an upgrade request (superusers): sets the plan and paid, records the '
               'payment at its price.', confirm=True, params={'request_id': P('integer', 'The upgrade request id')},
-              title='Approved an upgrade')
+              title='Approved an upgrade', mcp=True)
 @superuser_required
 @require_POST
 def approve_request(request):
@@ -124,7 +124,7 @@ def approve_request(request):
 
 
 @agent_action('decline_upgrade_request', 'Decline an upgrade request (superusers).', confirm=True,
-              params={'request_id': P('integer', 'The upgrade request id')}, title='Declined an upgrade')
+              params={'request_id': P('integer', 'The upgrade request id')}, title='Declined an upgrade', mcp=True)
 @superuser_required
 @require_POST
 def decline_request(request):
@@ -157,7 +157,7 @@ def _override_form(event, override, post=None):
 
 @agent_action('save_event_overrides', "Set one event's plan (free / standard / studio), free phone limit, website "
               "publishing, Studio AI cap, nearby listing, website watching, its owner's AI credit and notes "
-              '(superusers).', confirm=True, form=OverrideForm, prefill='platform:event', title='Changed an event\'s overrides')
+              '(superusers).', confirm=True, form=OverrideForm, prefill='platform:event', title='Changed an event\'s overrides', mcp=True)
 @superuser_required
 @require_POST
 def save_event(request, event_id):
@@ -227,10 +227,48 @@ def customers_csv(request):
     return response
 
 
+@agent_action('send_invoice', "Email an invoice for an event's plan (superusers): the event's open invoice for that plan, or "
+              'a new one at the current price (or `amount`), with its PDF. Always asks first.', confirm=True,
+              title='Sent an invoice', mcp=True,
+              params={'plan': P('string', 'standard or studio'), 'to': P('string', 'the email address to send it to'),
+                      'amount': P('number', 'USD (default: the plan\'s price)', nullable=True)})
+@superuser_required
+@require_POST
+def send_invoice(request, event_id):
+    from decimal import Decimal, InvalidOperation
+
+    from django.core.validators import validate_email
+    from django.core.exceptions import ValidationError
+
+    from events.models import Event
+    from platform_admin import billing
+    event = get_object_or_404(Event, pk=event_id)
+    kind, to = request.POST.get('plan'), (request.POST.get('to') or '').strip()
+    amount = None
+    if request.POST.get('amount'):
+        try:
+            amount = Decimal(request.POST['amount'])
+        except InvalidOperation:
+            amount = Decimal('-1')
+    try:
+        validate_email(to)
+    except ValidationError:
+        to = ''
+    if kind not in (plans.STANDARD, plans.STUDIO) or not to or (amount is not None and amount < 0):
+        messages.error(request, 'Pick a plan, an email address and (optionally) an amount.')
+    else:
+        invoice = billing.open_invoice(event, kind)
+        if invoice is None or (amount is not None and invoice.amount_usd != amount):
+            invoice = billing.issue(event, kind, request.user, amount=amount)
+        billing.send_receipt(invoice, to)
+        messages.success(request, f'Sent invoice {invoice.number} (${invoice.amount_usd:,.2f}) to {to}.')
+    return redirect('platform:event', event_id=event.pk)
+
+
 @agent_action('record_payment', "Record a payment for an event by hand (cheque, bank transfer): a paid invoice, the plan "
               'applied (superusers).', confirm=True, title='Recorded a payment',
               params={'plan': P('string', 'standard or studio'), 'amount': P('number', 'USD'),
-                      'note': P('string', 'how it was paid', nullable=True)})
+                      'note': P('string', 'how it was paid', nullable=True)}, mcp=True)
 @superuser_required
 @require_POST
 def record_payment(request, event_id):

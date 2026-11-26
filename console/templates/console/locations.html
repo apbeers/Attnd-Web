@@ -7,7 +7,7 @@
   <a class="button button--primary" href="{% url 'console:location_new' event.id %}">{% icon "plus" %} Add location</a>
 </div>
 <div class="panel panel--flush">
-  <ul class="list list--roomy" id="location-list">
+  <ul class="list list--roomy flow" id="location-list">
   {% for loc in locations %}
     {% component "location_row" event=event location=loc hearts=loc.hearts %}
   {% empty %}

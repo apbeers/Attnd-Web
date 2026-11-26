@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static design %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -8,19 +8,21 @@
   <title>Privacy Policy | Attnd</title>
   {# DRAFT (batch 7): not routed until the owner approves; docs/privacy_policy_draft.md #}
   <link rel="canonical" href="{{ site_url }}/privacy/">
-  <link rel="stylesheet" href="{% static 'home/site.css' %}">
+  {% stylesheets "site" %}
 </head>
-<body>
-<nav class="site-nav"><div class="wrap">
+<body class="site">
+<nav class="site-nav"><div class="gutter site-nav__bar">
   <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
   <div class="site-nav__links site-nav__links--always"><a href="/">Home</a><a href="{% url 'home:privacy' %}">Privacy</a></div>
 </div></nav>
-<main class="page">
+<main class="page" data-reading>
+<div class="text-page">
+<article class="prose">
   <h1>Privacy Policy</h1>
   <p class="muted">Effective date: {{ effective_date|default:"(not published yet)" }}</p>
   <p>Attnd helps people follow live events (maps, schedules, updates and a personal plan) and helps organizers run them. We collect as little as we can. Attendees never create an account, and we don't use advertising, tracking or third-party analytics. We don't sell personal information or share it for advertising.</p>
 
-  <h2>If you use the Attnd app or App Clip (attendees)</h2>
+  <h2 id="if-you-use-the-attnd-app-or-app-clip-attendees">If you use the Attnd app or App Clip (attendees)</h2>
   <p>The iPhone app and its App Clip (the instant version that opens from a QR code) work the same way.</p>
   <ul>
     <li><strong>A random app ID.</strong> On first launch the app creates a random identifier that isn't linked to your name, email, phone number or advertising ID. We use it to remember which event you joined, your notification setting, your device type and app version, and which version of the event's content the app last downloaded.</li>
@@ -36,14 +38,14 @@
   </ul>
   <p>If you are an organizer previewing your own event on your phone, that phone is linked to your account for up to 7 days so it shows your unpublished changes; it isn't counted as an attendee.</p>
 
-  <h2>If you visit our websites</h2>
+  <h2 id="if-you-visit-our-websites">If you visit our websites</h2>
   <ul>
     <li><strong>attnd.app</strong> (the home page, join and shared-plan pages): no tracking cookies. To show "Happening near you", your browser asks Google's Geolocation service for an approximate position based on your IP address, at most once a day, without asking for your precise location, and sends us that position rounded to about 10 km; we don't store or log it. We count taps on the home page per day, without any identifier.</li>
     <li><strong>If you start an event from the home page</strong> (the composer), the text and file you give us wait on our server for up to a day until you sign up, then go to our AI import.</li>
     <li><strong>Event websites built with Attnd Studio</strong> (on attnd.site): no cookies and no analytics from us. If a site has a form (for example a vendor sign-up), what you submit goes to the event's organizer, who decides what to do with it; we store it for them until they delete it. "Report this site" sends us your report and the page address.</li>
   </ul>
 
-  <h2>If you organize an event (the console)</h2>
+  <h2 id="if-you-organize-an-event-the-console">If you organize an event (the console)</h2>
   <ul>
     <li><strong>Account:</strong> your email address and a secure hash of your password (never the password). If you add a passkey or an authenticator app we keep its public key or secret; recovery codes only as hashes.</li>
     <li><strong>Security:</strong> each sign-in records the browser and a random cookie that recognises it (so "Signed in on other devices" works and we can email you about a sign-in from a new browser). Your IP address is used briefly to limit repeated attempts. Session, security (CSRF) and time-zone cookies only; no tracking cookies.</li>
@@ -55,7 +57,7 @@
     <li><strong>Emails we send you:</strong> account and security emails (always), and event emails such as "your import is ready" or "changes are waiting for review" (each can be turned off in Account).</li>
   </ul>
 
-  <h2>Service providers</h2>
+  <h2 id="service-providers">Service providers</h2>
   <p>Each gets only what its job needs:</p>
   <ul>
     <li><strong>Heroku (Salesforce):</strong> hosting and the database. <strong>Cloudinary:</strong> stores and resizes uploaded images and files.</li>
@@ -66,10 +68,10 @@
     <li><strong>Mailgun:</strong> delivers our emails. <strong>Stripe:</strong> payments, when used. <strong>GitHub:</strong> stores our code and crash symbol files (no personal data).</li>
   </ul>
 
-  <h2>Organizer contacts we research (Prospects)</h2>
+  <h2 id="organizer-contacts-we-research-prospects">Organizer contacts we research (Prospects)</h2>
   <p>To offer Attnd to events that could use it, our staff keep a list of upcoming public events and the organizer contact details those events publish on their own websites (with the page each came from). We never guess addresses, never email anyone automatically, and anyone can ask to be removed; we then mark the contact "do not contact" and keep only that. If you ask to claim an event listed on our site, we keep your request and our decision.</p>
 
-  <h2>How long we keep data</h2>
+  <h2 id="how-long-we-keep-data">How long we keep data</h2>
   <table class="data-table">
     <thead><tr><th>Data</th><th>Kept</th></tr></thead>
     <tbody>
@@ -88,21 +90,38 @@
   </table>
   <p>Deleting an organizer account doesn't delete its events if other team members use them; we can delete them on request.</p>
 
-  <h2>Your choices and rights</h2>
+  <h2 id="your-choices-and-rights">Your choices and rights</h2>
   <p>Attendees can turn off notifications, leave an event, stop following on the Lock Screen or delete the app at any time; deleting it removes the app ID from the phone and our record expires as above. Organizers can export and delete their events and ask us for a copy of, or to delete, their account data. Depending on where you live you may have further rights (access, correction, deletion, objection); contact us and we'll help.</p>
 
-  <h2>Children</h2>
+  <h2 id="children">Children</h2>
   <p>Attnd is not directed at children under 13, and we don't knowingly collect personal information from them.</p>
 
-  <h2>Changes</h2>
+  <h2 id="changes">Changes</h2>
   <p>If we change this policy, we'll update it here and change the effective date.</p>
 
-  <h2>Contact</h2>
+  <h2 id="contact">Contact</h2>
   {% if contact_email %}
   <p>Questions or requests about your data: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
   {% else %}
   <p>Questions or requests about your data: contact us through <a href="https://attnd.app">attnd.app</a>.</p>
   {% endif %}
+</article>
+  <nav class="sticky text-page__contents" aria-label="Contents">
+    <p class="eyebrow">Contents</p>
+    <ol>
+      <li><a href="#if-you-use-the-attnd-app-or-app-clip-attendees">If you use the Attnd app or App Clip (attendees)</a></li>
+      <li><a href="#if-you-visit-our-websites">If you visit our websites</a></li>
+      <li><a href="#if-you-organize-an-event-the-console">If you organize an event (the console)</a></li>
+      <li><a href="#service-providers">Service providers</a></li>
+      <li><a href="#organizer-contacts-we-research-prospects">Organizer contacts we research (Prospects)</a></li>
+      <li><a href="#how-long-we-keep-data">How long we keep data</a></li>
+      <li><a href="#your-choices-and-rights">Your choices and rights</a></li>
+      <li><a href="#children">Children</a></li>
+      <li><a href="#changes">Changes</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ol>
+  </nav>
+</div>
 </main>
 </body>
 </html>

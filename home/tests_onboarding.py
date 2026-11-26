@@ -48,7 +48,8 @@ class HomePageTests(TestCase):
         self.assertIn('Fort Worth Fest', html)
         self.assertIn(reverse('join:join_qr', args=['SHOWFEST']), html)
         self.assertIn('data-kind-filter="Market"', html)
-        self.assertIn('attnd://join/SHOWFEST', html)
+        self.assertIn('https://www.attnd.app/join/SHOWFEST/', html)
+        self.assertNotIn('attnd://', html)  # Safari: "the address is invalid" without the app
 
     def test_map_view_has_a_pin_for_every_card(self):
         """P0 #6: the Map view drew nothing useful. Every card carries its code and numeric coordinates (home.js puts a
@@ -452,3 +453,20 @@ class EventCoverTests(TestCase):
 def covers_decimal(value='0'):
     from decimal import Decimal
     return Decimal(value)
+
+
+class ShowcaseLocalHoursTests(TestCase):
+    def test_sets_and_closing_time_are_in_the_events_local_hours(self):
+        # Nov 26, 2026: laid out from UTC, Cedar County Fair had its goat show at 3 AM and ended at 5 AM local.
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        for hour in (2, 8, 13, 23):
+            now = datetime(2026, 11, 25, hour, 30, tzinfo=ZoneInfo('America/Chicago'))
+            for spec in showcase.SHOWCASE:
+                event = showcase.load(spec, now=now)
+                zone = ZoneInfo(spec['tz'])
+                self.assertLessEqual(event.start_time, now)
+                self.assertGreaterEqual(event.end_time, now + timedelta(hours=12))
+                self.assertEqual(event.end_time.astimezone(zone).hour, 22, spec['code'])
+                for item in event.scheduleditem_set.all():
+                    self.assertTrue(10 <= item.start_time.astimezone(zone).hour <= 21, (spec['code'], item.start_time))

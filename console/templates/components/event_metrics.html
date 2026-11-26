@@ -9,7 +9,7 @@
     <div class="panel stack stack--tight">
       <{% if surface == 'chat' %}h4{% else %}h2{% endif %} class="eyebrow">iOS and Android</{% if surface == 'chat' %}h4{% else %}h2{% endif %}>
       {% for p in d.platforms %}<div class="platform-row"><strong>{{ p.label }}</strong><span class="small muted">{{ p.devices|intcomma }} device{{ p.devices|pluralize }} · {{ p.activity|intcomma }} interaction{{ p.activity|pluralize }}</span>
-        <span class="meter" role="img" aria-label="{{ p.share }}% of the activity"><span style="width: {{ p.share }}%"></span></span></div>{% endfor %}
+        <span class="meter" role="img" aria-label="{{ p.share }}% of the activity"><span style="--value: {{ p.share }}%"></span></span></div>{% endfor %}
       <p class="small muted">Push notifications reach {{ d.push.reach }} device{{ d.push.reach|pluralize }} (urgent ones {{ d.push.urgent_reach }}).{% if d.busiest %} Busiest hour: {{ d.busiest }}.{% endif %}</p>
     </div>
     <div class="panel stack stack--tight">

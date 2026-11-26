@@ -6,7 +6,7 @@ Django 6.1 backend serving the REST API consumed by the iOS and Android apps, pl
 ## Branching (initial development)
 
 - `main` = production (default branch), `develop` = dev/beta. Pushing to `develop` deploys to the dev server / TestFlight / Play internal testing; pushing to `main` deploys to production.
-- **Run it yourself** (owner, Nov 22, 2026): set keys and run Heroku commands through the Heroku Platform API (`api.heroku.com`, token injected by the proxy) on dev and production instead of asking the owner; never print secret values (check them by name, shape or fingerprint; copying a value between apps is fine). Only a genuinely destructive command (deleting data, apps, add-ons, scaling to zero) still needs the owner's go-ahead. When something needs the owner's own machine or accounts (a file on their Mac, a web console), give a command to paste rather than click-by-click steps. Note: the first config-var `PATCH` of a session has twice come back without applying; always read the vars back and retry once.
+- **Run it yourself** (owner, Nov 22, 2026): set keys and run Heroku commands through the Heroku Platform API (`api.heroku.com`, token injected by the proxy) on dev and production instead of asking the owner; never print secret values (check them by name, shape or fingerprint; copying a value between apps is fine). Only a genuinely destructive command (deleting data, apps, add-ons, scaling to zero) still needs the owner's go-ahead. When something needs the owner's own machine or accounts (a file on their Mac, a web console), give a command to paste rather than click-by-click steps. Note: reading config vars right after a `PATCH` can return a stale cached copy (Nov 25, 2026: the change had applied; the release list showed it). Read them back with a cache-busting query (`?t=<now>`) and `Cache-Control: no-cache`, and check the release list, before retrying.
 - **docs/LLC_MIGRATION.md is the running list for moving Attnd to an LLC.** Whenever a feature adds an account, key, certificate, service, domain, store listing or legal text, add it to its inventory in the same commit.
 - **ROADMAP.md lists agreed future work** (things needed before release, and later features). Add items there when the user parks an idea; remove them once built.
 - **SETUP.md is the living setup checklist.** When the user reports completing a setup step, record it in SETUP.md (progress table and the step itself) instead of repeating instructions in chat. **At the start of each working session, remind the user of the unchecked "Open owner tasks" in SETUP.md.**
@@ -68,12 +68,14 @@ attnd-web is the coordinating repo for all three. Any feature that touches the A
 ## Dependency policy
 
 Avoid third-party libraries. Use Django and the Python standard library first; the organizer console uses
-its own small design system (`console/static/console/console.css`, see Console UX), inline SVG icons
-(`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. Existing server dependencies are kept where the standard
+its own design system (`design/`, docs/design_system.md, see Console UX), inline SVG icons
+(`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. The MCP server (`mcp_server/`, `docs/mcp_plan.md`) uses the official MCP Python SDK
+`mcp` and `django-oauth-toolkit` (its OAuth server), approved exceptions, always the latest version, pinned in `uv.lock`, bumped with
+`scripts/upgrade_deps.py`. Existing server dependencies are kept where the standard
 library has no equivalent (Postgres driver, Pillow, the official Anthropic SDK `anthropic` (every AI call, stage C),
 the OpenAI SDK (Studio's images only), Google auth, HTTP/2 for APNs via
-`httpx[http2]`, CBOR for App Attest and passkeys; `cryptography`, installed with google-auth, verifies App Attest and passkey signatures). The Stripe SDK `stripe` is the one addition (batch 7 billing, off until its keys exist). The public site (`home/`, `join/`) uses one hand-written
-stylesheet (`home/static/home/site.css`) — no vendored frameworks, icon fonts or web fonts.
+`httpx[http2]`, CBOR for App Attest and passkeys; `cryptography`, installed with google-auth, verifies App Attest and passkey signatures). The Stripe SDK `stripe` is the one addition (batch 7 billing, off until its keys exist). The public site (`home/`, `join/`) uses the same design system
+(its area file `home/static/home/site.css`) — no vendored frameworks, icon fonts or web fonts.
 Upgrade Python packages with `uv run python scripts/upgrade_deps.py` (also runs weekly in CI).
 
 ## Tech Stack
@@ -206,7 +208,24 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   `--color-overlay`, `--color-strong`, `--color-*-text`, `--select-arrow`). **Full width**: `.page` has no max width,
   only side padding (`--gutter`); long text and forms keep `--read-width` (46rem: `.prose`, `.field`, paragraphs in
   panels and stacks; fields in grids and clusters are free). Phones: the event sections are one scrolling row of pills.
-- **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs` (links use `aria-current="page"`), `data-table` (`--compact`), `code-block` (pre), `link-button`, `meter`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
+- **Design system** (owner, Nov 26, 2026: one centralised system, the whole screen at every width; full guide
+  `docs/design_system.md`): pages load CSS only through `{% load design %}{% stylesheets "console" %}` (or `"site"`,
+  plus the extras `"agent"`, `"onboarding"`, `"architecture"`): one bundle = the shared layers in `design/static/design/`
+  (`tokens.css` (every colour light + dark, spacing, radius, type, shadow, `--read-width`, `--density`), `base.css`,
+  `layout.css`, `components.css`, `motion.css`) + the area file (`console/console.css`, `home/site.css`; built by
+  `design.finders.BundleFinder`, read in tests with `design.bundles.text('console')`). **Layout**: pages use the full
+  width; extra width becomes more columns, never wider lines: `page` / `gutter`, `page--centered` (one card), `region`
+  (an event page's content, a canvas pane: `@container region`), `stack`, `cluster`, `grid` (`--cols × --density`:
+  1.5 from 1920px, 2 from 2560px; 1 inside a component), `dashboard` (tiles, `span-2`, `span-all`), `lanes` (a
+  schedule's days), `flow` (long lists in columns), `split`, `form-fields` / `form-columns`, `measure` / `prose`
+  (running text only), `narrow` (a short form inside a page). Components: `button`, `panel`, `list`, `notice`, `badge`
+  (`--live` + `live-dot`), `chip`, `field`, `tabs`, `data-table`, `meter` (`style="--value: 40%"`), `segmented`
+  (`segmented__option`, `aria-pressed`), `swatch` / `swatch-dot` (`--swatch`), `spinner`, `brand`. Text: `muted`,
+  `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`, `visually-hidden`. Form controls are styled by element.
+  JS hooks are `data-*` attributes. **Rules** (`design/tests.py`): colours only as tokens (no `#hex` / `rgb()` outside
+  tokens.css; app mock-ups use `--mock-*`), every `var()` defined, `style=""` only sets custom properties (emails
+  exempt), shared components defined once (an area adjusts them only inside its own scope, e.g. `.site .button`), no
+  fixed page widths (`.wrap`, `.column`), dark mode follows the system everywhere.
 - **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. The tray is a button (`aria-expanded`) that opens a panel of running and recent tasks; each task expands to its **friendly steps** (`IngestJob.steps`, written by `scrape.jobs.Steps`: "Read 3 web pages", "Understood the event", "Found 12 locations and 34 schedule items", "Checked addresses on the map", "Found 4 changes: waiting for your review"; states running / done / failed / waiting, with status marks and a spinner), updated live from the same feed (`task_json.steps`, `result_label`); a finished task links to its result ("Open the event" / "Review the changes"). On the full-screen chat the tray sits at the canvas's top-right (away from the composer) and opens downward, and result links open on the canvas (`window.attndCanvasOpen`); Esc closes it. Web app manifest at `/console/manifest.webmanifest`.
 - **Colour theme** (API-023, owner Nov 21, 2026; component `event_theme` in `catalog_more.py`, on the Overview page
   after the map, inside the `event_overview` composite (so the canvas Overview tab), and its own page
@@ -224,8 +243,7 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   pages (`event` + `section`, not Studio) and the full-screen chat with `?event=` (`agent_event`; another event's
   tile reloads the page, so the block follows); Your events, Account, Studio, Diagnostics, Prospects keep the purple.
   `--color-secondary` / `--color-tertiary` are new tokens (decorative; `--color-brand-mid` is the readable highlight).
-  The join and shared-plan pages (`join/landing.html`, `<html data-scheme="auto">`, the only pages with site.css's
-  dark mode) get `theme.site_css` (brand, `--brand-gradient` primary → tertiary, the QR panel from secondary).
+  The join and shared-plan pages (`join/landing.html`; light and dark like every page) get `theme.site_css` (brand, `--brand-gradient` primary → tertiary, the QR panel from secondary).
 - **Screens** (API-024, owner Nov 21, 2026; component `app_screens` in `console/components/catalog_screens.py`, on the
   App layout page under `#screens`): per app screen (Home tab, event info, schedule item, place, map, Options) the
   sections from `events/layout.py`'s catalogue in order, with on / off switches, the header's parts, an own heading and
@@ -304,10 +322,10 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   sticking out of their gallery frame, small tap targets and small fields; `ATTND_BROWSER_CHECKS=1 uv run python
   manage.py test console.tests_phone` runs it on the console's pages (skipped otherwise, so not in CI).
 - **One responsive codebase** (owner, Nov 22, 2026): layouts follow the width, never the device. **Three breakpoints**,
-  written once at the top of console.css: **phone** ≤ 600px `(max-width: 600px)`, **medium** 601–1023px, **wide**
-  ≥ 1024px `(min-width: 1024px)` (the only `@media` widths in the console's, Ask Attnd's and Platform's stylesheets;
-  `@media` can't read custom properties); components use container queries. JavaScript asks
-  `window.attndScreen.is('phone' | 'medium' | 'wide')` (`console/static/console/screen.js`, loaded first in `<head>`),
+  written once in design/static/design/layout.css: **phone** ≤ 600px `(max-width: 600px)`, **medium** 601–1023px,
+  **wide** ≥ 1024px `(min-width: 1024px)`, plus **ultra** ≥ 1920px / ≥ 2560px (the `--density` steps) (the only
+  `@media` widths in any of our stylesheets; `@media` can't read custom properties); components use container
+  queries. JavaScript asks `window.attndScreen.is('phone' | 'medium' | 'wide' | 'ultra')` (`console/static/console/screen.js`, loaded first in `<head>`),
   the only width check in JS. One preference opens the console in the chat (`ConsolePreference.chat_default`; the
   phones' own `phone_chat`, picked by user agent, was merged into it by migration 0016 and `is_phone` removed). The
   floating launcher's clearance is one set of tokens in console.css (`--fab-x` for wide sticky bars, `--fab-bar-y` for
@@ -350,8 +368,8 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   SVG of the pins), cards with cover or theme colours, dates, swatches and a join QR; phones get Open in Attnd), feature
   sections, a second composer, SEO (`schema.org` JSON-LD with the nonce, Open Graph + Twitter card, `og.png` from
   `scripts/make_og_image.py`) and anonymous counts of its own taps (`home.HomeMetric` per day: chip, submit, qr_view,
-  open_app, claim, gallery_filter; `POST /home/m/` by sendBeacon, no identifier). Works without JS. `<html
-  data-scheme="auto">` (dark mode).
+  open_app, claim, gallery_filter; `POST /home/m/` by sendBeacon, no identifier). Works without JS. Light and dark mode follow
+  the system (the shared tokens).
 - **The composer** (`POST /start/`, `home.onboarding.save_pending`, `pending_import_ip` 10/h): the text and file wait in
   a `home.PendingImport` (its id in the session; purged after a day by `run_scheduled_tasks`); signed out → sign-up
   (`?building=1`) or sign-in; the console's dashboard then `consume`s it: an `IngestJob` (`trigger='home'`, a demo event
@@ -364,7 +382,8 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
 - **Showcase events** (`events/showcase.py`, `manage.py load_showcase_events [--if-enabled] [--images]`): eight demo
   events (festival, farmers market, tech conference, 5K, art walk, food truck rally, holiday market, county fair) with
   places, schedule, details, a theme and two updates, `Event.showcase` (no free limit, never nearby, no usage counts),
-  kept happening now by `run_scheduled_tasks`; the release phase loads them where `SHOWCASE_EVENTS` is on (default:
+  kept happening now by `run_scheduled_tasks` in their own local hours (open 9:00–22:00 local, sets 10:00–21:00, at
+  least 12 h left after a load; `_times`); the release phase loads them where `SHOWCASE_EVENTS` is on (default:
   dev.attnd.app and DEBUG only). `--images` asks Studio's image model for covers (stored as the flyer). DEMO is
   unchanged and is one more card.
 - **Happening near <place>** (`home.onboarding.gallery`): published prospect test events (`testing_only`, linked to a
@@ -852,6 +871,78 @@ on Save does; there is no second copy of any business logic.
   shape, blocks passed back, cache reads, refusal → Sonnet, max_tokens / pause_turn, typed errors, the context block,
   one-day events schedule without asking, multi-day ones ask with day chips; the SDK is mocked, never called) and
   `agent/tests_fullscreen.py` (the full-screen page, `from` / `event` checks, follow-up chips, stage texts).
+
+## MCP server (staff; `mcp_server/`, docs/mcp_plan.md)
+
+Claude (web, Desktop, mobile, Cowork, Claude Code) and other assistants run Attnd's tools as a staff member over
+MCP. Dev (`https://dev.attnd.app/mcp`) and production (`https://attnd.app/mcp`; `MCP_ENABLED=1` on both, owner
+Nov 26, 2026: production serves it once `mcp_server/` is merged to main) are separate servers with separate clients, tokens and data; everything derives from `SITE_URL`.
+- **Layers (no duplicated logic)**: the chat and MCP are parallel entry points over the same pieces. Tool definitions
+  live in `agent/tools.py` (`tools_for` for the chat, `mcp_tools_for` for MCP: the chat's reads, `search_everything`,
+  `get_component`, and registry writes marked `@agent_action(..., mcp=True)`); every MCP call runs through the chat's
+  own dispatcher (`agent.tools.run_tool` → `agent.loop._call` → `agent/internal.py` → the real views), as an Ask
+  Attnd run with `source='mcp'` (left out of the chat's lists; shown on Platform → Connected apps). A new MCP tool =
+  `mcp=True` on its registry action, nothing else. The protocol layer (`mcp_server/server.py`) only translates
+  between the SDK's types and `mcp_server/service.py` (plain sync Django).
+- **OAuth** (django-oauth-toolkit, `OAUTH2_PROVIDER` in settings): authorization code + PKCE S256 only, Client ID
+  Metadata Documents from `MCP_CIMD_HOSTS` (claude.ai, claude.com; no open registration), Claude's callback
+  `https://claude.ai/api/mcp/auth_callback` and Claude Code's loopback on any port, `resource` = `MCP_RESOURCE_URL`
+  only (RFC 8707), every RFC 9700 flag on (tokens stored as checksums, `iss` in the redirect). Access tokens 1 h;
+  refresh tokens rotate on every use with reuse protection (30 s grace) and expire after `MCP_GRANT_IDLE_DAYS` idle.
+  Endpoints: `/oauth/authorize/` (consent, staff only, 404 for others), `/oauth/token/` (rate limited),
+  `/oauth/revoke/`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource[/mcp]`.
+- **Grants** (`McpGrant`, `mcp_server/grants.py`): the code exchange (`oauth.Validator._create_refresh_token`) starts
+  one per connection with **its own Django session** signed in as the person (two-factor done, no recent sign-in),
+  so it outlives the browser (owner: connect once). Checked on every call and refresh: active, `mcp_server.use_mcp`
+  (Staff role), the session still theirs (a password change or sign-out everywhere ends it), younger than
+  `MCP_GRANT_MAX_DAYS`; otherwise revoked. Platform admins have `mcp_server.manage_mcp` (everyone's connections).
+- **`/mcp`** (`attnd/asgi.py` → `mcp_server.server.Router`, before Django's middleware; not served under WSGI): auth
+  first (401 + `WWW-Authenticate: Bearer resource_metadata=…, scope="mcp"`), then the SDK's stateless Streamable HTTP
+  handler with JSON responses (every protocol version the SDK serves), host / origin checks, Django work in worker
+  threads that give their connection back. The person reaches the handlers through a context variable.
+- **Always-ask actions** never run from MCP: the call returns a link to `/console/mcp/confirm/<step>/`, where the
+  person confirms or cancels in the browser (the chat's gate, `agent.loop.confirm`, as the browser's session, so
+  guarded actions get their recent sign-in there).
+- **MCP Apps**: `show_event_overview` (event_id) and `show_component` (any chat component the person may see, e.g.
+  `event_tile`, `location_row`; ≤ 12 id sets) return the component's JSON as text and its HTML (the same template)
+  for the `ui://attnd/card.html` app (`text/html;profile=mcp-app`, console.css inline; the old
+  `ui://attnd/event-overview.html` still reads; read only: forms hidden, links open through the host in a new tab).
+  `mcp_server/cards.py` makes the HTML work in the client's sandboxed iframe (no cookies, no Attnd origin, Nov 25,
+  2026): the event's time zone is active while loading and drawing, the join / preview QR codes are inline `data:`
+  PNGs, every address is absolute (`SITE_URL`), and the event map is a static SVG of OpenStreetMap tiles with the
+  pins; the resource's `_meta.ui.csp.resourceDomains` lists the image hosts. The server advertises
+  `io.modelcontextprotocol/ui`.
+- **Tools** (owner, Nov 26, 2026): editing (`add_location`, `edit_location`, `add_schedule_item`, `edit_schedule_item`
+  with performers / prices / links in the item's details, hide / show, `fill_in_details`, `find_music_links`), and
+  `send_notification`, `edit_scheduled_notification`, `publish_changes`, `publish_event`, which always ask, so they come
+  back as the confirmation link (that is the notification draft). Named card tools (`NAMED` in `service.py`):
+  `show_event_usage` (`event_metrics` + `usage_answer`), `show_event_billing` (`event_billing`) and
+  `show_billing_queue` (`billing_queue`: pending upgrade / remove-the-limit requests and the latest payments; platform
+  admins). No Stripe reads or writes over MCP (Stripe reads wait for the LLC's live account).
+  `list_prospects` (staff: each prospect's pk, status, fit, test event, contacts with their do-not-contact flag and no
+  details for those, `can_pitch`; `prospects/summary.py`); `delete_location` / `delete_schedule_item` always ask.
+- **Running the business** (owner, Nov 26, 2026; `mcp_server/business.py`, read-only, per permission): `whats_new`
+  (since a time: new organizers, upgrade / remove-the-limit requests, joins per event, claims, failed AI jobs),
+  `list_organizers` (accounts + events, unassigned events), `list_support_messages` ("Talk to a person" messages,
+  now stored as `agent.SupportMessage` as well as emailed), `list_ai_reviews` (pending change sets with change ids),
+  `list_do_not_contact` (the one list to check before any send, or `email` → blocked?), `task_status` (an AI job or
+  `studio-<n>` build). Writes over MCP (registry `mcp=True`; the always-ask ones return the confirmation link):
+  approve / decline upgrade requests, `save_event_overrides` (remove the phone limit), `record_payment`,
+  `send_invoice` (new: `platform:send_invoice`, the open invoice or a new one, emailed with its PDF), `send_receipt`,
+  `mark_event_paid`, `assign_event_owner`, apply / discard AI changes, unpublish / archive, `design_website`,
+  `start_website_from_scratch`, `bring_into_studio`, `retry_studio_run`, `run_prospect_discovery`,
+  `mark_email_do_not_contact` (every contact with that address), `toggle_prospect_contact_dnc` (`value` on / off) and
+  `log_pitch` (a `PitchDraft`'s status draft / sent / replied / declined / bounced with its date; sent moves the
+  prospect to Contacted).
+- **Pitch drafts** (`prospects/pitch.py`, `draft_prospect_pitch` = `prospects:pitch`, also Ask Attnd): an email to a
+  prospect's organizer offering its test event with the join link and its public QR (`/join/<code>/qr.svg`), signed
+  by the person, marked promotional, with an opt-out line, where the address was found and a mailing-address
+  placeholder (CAN-SPAM). Stored as `PitchDraft` (shown on the prospect, "not sent") and an activity line; refused for
+  do-not-contact contacts, prospects without a test event or dismissed / lost ones. Attnd never sends it.
+- **Prospects** (staff): the pipeline tools are `mcp=True` (status, notes, do-not-contact, test events and claim
+  decisions; the last two always ask). Discovery runs and settings aren't offered yet; there is no send tool.
+- Tests: `mcp_server/tests.py` (the OAuth dance, rotation and reuse, the grant's end, metadata, the tool list,
+  confirm page, MCP App, Connected apps, the protocol over ASGI with the SDK).
 
 ## Attnd Studio (every organizer designs, publishing needs the Studio plan; `studio/`, spec `docs/specs/studio_spec.md`)
 
@@ -1344,9 +1435,10 @@ Link origin (`attnd/links.py`, Nov 20, 2026): join and shared-plan links (QR cod
 
 **Open in Attnd** (Nov 21, 2026): on phones the console's QR card (`live_on_phone`, page and chat) shows an **Open in
 Attnd** button (people can't scan their own screen); the code and QR stay as they are. `attnd.links.open_in_app_links`:
-iPhone → `attnd://join/<code>` (iOS doesn't open a Universal Link to the domain Safari is showing; the iOS app, not the
-App Clip, registers the scheme) and, if the page is still visible ~1.5 s later (`visibilitychange`), the join page
-(App Store / App Clip); Android → Chrome's `intent://<host>/join/<code>/#Intent;scheme=https;package=<ANDROID_PACKAGE_NAME>;S.browser_fallback_url=<join link>;end`.
+iPhone → `https://www.attnd.app/join/<code>/` (`ios_open_url`; Nov 26, 2026: iOS doesn't open a Universal Link to
+the domain Safari is showing, and the old `attnd://` scheme made Safari say "the address is invalid" without the app;
+www is another host the app claims (`applinks:www.attnd.app`), so the app opens, and without it www redirects to the
+join page with the App Clip card; the dev server has no sibling host, so dev links are the join page); Android → Chrome's `intent://<host>/join/<code>/#Intent;scheme=https;package=<ANDROID_PACKAGE_NAME>;S.browser_fallback_url=<join link>;end`.
 `console.js` picks the platform from the User-Agent (`data-open-app`, `window.attndOpenApp` for chat cards); desktop
 shows no button.
 
@@ -1473,6 +1565,9 @@ Test settings (`TESTING` in `attnd/settings.py`): WhiteNoise uses the finders (n
 | `AGENT_MAX_STEPS` / `AGENT_RUN_MAX_MINUTES` | No | Model calls per run (40) / wall clock per run while it works (15 min) |
 | `AGENT_EFFORT` | No | Ask Attnd's reasoning effort, one for every call of a run and the whole conversation (so the prompt cache holds), default `medium`. Replaces `AGENT_PLANNING_EFFORT` (still read as a fallback) and `AGENT_STEP_EFFORT` (ignored) |
 | `AGENT_MAX_ATTACHMENT_MB` | No | Files attached in the Ask Attnd chat, default `15` |
+| `MCP_ENABLED` | No | The MCP server and its OAuth endpoints (docs/mcp_plan.md): on in DEBUG and tests; `1` on dev.attnd.app; production off until the owner signs off |
+| `MCP_GRANT_MAX_DAYS` / `MCP_GRANT_IDLE_DAYS` | No | An MCP connection's maximum age (90) / how long an unused refresh token lasts (30) |
+| `MCP_CIMD_HOSTS` | No | Hosts whose Client ID Metadata Documents may identify an MCP client, default `claude.ai,claude.com` |
 | `TASKS_BACKEND` | No | `threads` (default) or `database` (django.tasks on the Postgres queue, F5; scale the `tasks` dyno or rely on the scheduler) |
 | `DB_POOL` / `DB_POOL_MAX` | No | psycopg 3 connection pool on (default `1`) / its size per process (default `8`) |
 | `CACHE_BACKEND` | No | `database` (default, the `attnd_cache` table) or `locmem` |

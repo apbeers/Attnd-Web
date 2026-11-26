@@ -1,8 +1,8 @@
 {% comment %} "See it live": real events to try on a phone, right under the hero. First the instant App Clip in three steps,
 then "Happening near <place>" (prospect test events: near the visitor's approximate position when home.js could get one
 from Google's Geolocation API without a prompt, else every one with the prospects region as the label), then the
-showcase events and DEMO. Category pills and Grid | Map; works without JS (every card, grid). {% endcomment %}<section class="section gallery" id="see-it-live" data-gallery data-near-url="{% url 'home:near' %}"{% if geo_key %} data-geo-key="{{ geo_key }}"{% endif %}>
-  <div class="wrap">
+showcase events and DEMO. Category pills and Grid | Map; works without JS (every card, grid). {% endcomment %}<section class="band gallery" id="see-it-live" data-gallery data-near-url="{% url 'home:near' %}"{% if geo_key %} data-geo-key="{{ geo_key }}"{% endif %}>
+  <div class="gutter">
     <div class="gallery__head">
       <div>
         <h2>{{ gallery_title|default:"See it live" }}</h2>
@@ -20,14 +20,14 @@ showcase events and DEMO. Category pills and Grid | Map; works without JS (every
       <ul class="event-grid" data-near-list>{% for c in near_you %}{% include 'home/_card.html' %}{% endfor %}</ul>
     </div>
     <div class="gallery__tools cluster">
-      <div class="pills" role="group" aria-label="Kind of event">
-        <button type="button" class="pill is-on" data-kind-filter="" aria-pressed="true">All</button>{% for k in categories %}
-        <button type="button" class="pill" data-kind-filter="{{ k }}" aria-pressed="false" data-metric="gallery_filter" data-detail="{{ k|slugify }}">{{ k }}</button>{% endfor %}
+      <div class="segmented" role="group" aria-label="Kind of event">
+        <button type="button" class="segmented__option is-on" data-kind-filter="" aria-pressed="true">All</button>{% for k in categories %}
+        <button type="button" class="segmented__option" data-kind-filter="{{ k }}" aria-pressed="false" data-metric="gallery_filter" data-detail="{{ k|slugify }}">{{ k }}</button>{% endfor %}
       </div>
       <span class="grow"></span>
-      <div class="pills" role="group" aria-label="View">
-        <button type="button" class="pill is-on" data-view="grid" aria-pressed="true">Grid</button>
-        <button type="button" class="pill" data-view="map" aria-pressed="false">Map</button>
+      <div class="segmented" role="group" aria-label="View">
+        <button type="button" class="segmented__option is-on" data-view="grid" aria-pressed="true">Grid</button>
+        <button type="button" class="segmented__option" data-view="map" aria-pressed="false">Map</button>
       </div>
     </div>
     {% if showcase %}<ul class="event-grid" data-showcase-list>{% for c in showcase %}{% include 'home/_card.html' %}{% endfor %}</ul>

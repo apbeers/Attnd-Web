@@ -26,7 +26,13 @@ Do these steps once, in order. Each step says which values go where. For any sin
 | 7. Production cleanup | ⏸ Deferred. Production still runs the old code, where deleting a user also deletes their events. After the first web release to `main`: list users and demo events, then delete them with a go-ahead (real events become unassigned). **Keep** DEMO and the App Review sample events FWFM2026, ATIS2026, DACN2026 (owner, Nov 19, 2026), and their owner account `fixtureuser`. |
 
 **Open owner tasks (remind the owner at the start of each working session until done):**
+- [ ] MCP on production (step 23): after merging develop → main, add the **Attnd** connector in Claude with `https://attnd.app/mcp` and connect (production's `MCP_ENABLED=1` is already set).
 - [x] IndexNow on production (step 22): `INDEXNOW_KEY` set on attnd-web by Claude (Nov 22, 2026, release v122; `/<key>.txt` answers 200).
+- [x] Google Workspace protection (owner, Nov 23, 2026): 2-Step Verification enforced with a passkey on
+      `andrew@attnd.app` (the super admin), super admin recovery phone / email + backup codes.
+- [ ] Google Workspace admin, the rest (later): aliases `admin@`, `support@`, `billing@`, `dev@` (LLC_MIGRATION §2); a Gmail filter for the DMARC
+      reports; Postmaster Tools for `attnd.app` and `mg.attnd.app`; add `andrew@attnd.app` as owner in Search Console
+      and Google Cloud; optional MTA-STS / TLS reporting (`mta-sts.attnd.app`, Claude can set it up).
 - [ ] Maps Static API on the browser key (Lighthouse, Nov 22, 2026): Google Cloud console → APIs & Services → enable
       **Maps Static API**, then add it to the **browser key**'s API restrictions (the key behind
       `GOOGLE_MAPS_BROWSER_KEY`). The event map now starts as a static image; without the API the image fails and the
@@ -705,12 +711,25 @@ Live DNS (Namecheap, DNSSEC on), checked through dns.google:
 
 | Record | Value | Why |
 |---|---|---|
-| TXT `_dmarc` | `v=DMARC1; p=reject; rua=mailto:<owner>` | Receivers **reject** mail claiming to be `@attnd.app` / `@mg.attnd.app` that fails SPF/DKIM. Daily reports go to the owner. |
-| TXT `@` | `v=spf1 -all` | The main domain never sends mail (alongside `google-site-verification`). |
+| TXT `_dmarc` | `v=DMARC1; p=reject; sp=reject; rua=mailto:andrew@attnd.app` (Nov 23, 2026) | Receivers **reject** mail claiming to be `@attnd.app` / `@mg.attnd.app` that fails SPF/DKIM (also what Apple Branded Mail needs). Daily reports go to andrew@attnd.app. |
+| ALIAS `@` | `shaped-azalea-5pxzgryltw7n3rbhtqo1q8iw.herokudns.com` | Heroku (was a CNAME until Nov 23, 2026, which hid the root's MX / TXT from some resolvers). |
+| MX `@` | `smtp.google.com`, priority 1 | Google Workspace (`andrew@attnd.app`). |
+| TXT `@` | `v=spf1 include:_spf.google.com ~all` | Only Google Workspace sends as `@attnd.app` (alongside `google-site-verification`, `apple-domain-verification`, `openai-business-profile`). |
+| TXT `google._domainkey` | 2048-bit RSA key | Workspace DKIM (Admin → Gmail → Authenticate email). |
 | TXT `mg` | `v=spf1 include:mailgun.org ~all` | Only Mailgun sends for `mg.attnd.app`. |
 | TXT `k2026._domainkey.mg` | 2048-bit RSA key | Active Mailgun DKIM key (selector `k2026`). The old 1024-bit `mailo` key is deactivated in Mailgun and its DNS record deleted. |
 | MX `mg` | `mxa`/`mxb.mailgun.org`, priority 10 | Bounces; iCloud rejects senders without MX. |
 | CAA `@` | `0 issue "letsencrypt.org"` | Only Let's Encrypt may issue HTTPS certificates (Heroku ACM uses it for attnd.app and www). |
+
+> **Google Workspace for `andrew@attnd.app`** (re-activated Nov 23, 2026; DNS done the same day, table above). Sending and
+> receiving tested both ways with iCloud (Nov 23, 2026). DKIM authentication started in Admin → Gmail →
+> Authenticate email the same day. Email setup for `attnd.app` is complete.
+> What was changed: switch `@` from a
+> CNAME to an ALIAS (`shaped-azalea-5pxzgryltw7n3rbhtqo1q8iw.herokudns.com`: a CNAME on `@` hides the root MX / TXT
+> records from some resolvers), MX `@` → `smtp.google.com` priority 1, **edit** the root SPF to
+> `v=spf1 include:_spf.google.com ~all`, TXT `google._domainkey` = the key from Admin → Gmail → Authenticate email,
+> then Start authentication; **edit** `_dmarc` to `v=DMARC1; p=reject; sp=reject; rua=mailto:andrew@attnd.app`. Never add a second
+> SPF or DMARC record (both then fail). Keep the root `google-site-verification` and `apple-domain-verification` TXTs.
 
 > **Adding any service that sends email as `@attnd.app` or a subdomain** (Google Workspace, Stripe receipts from your domain, a newsletter tool, another app): set up its SPF and DKIM records *before* it sends. With `p=reject`, its mail is otherwise refused from the first message. Hosting must also stay on Let's Encrypt (CAA) unless the CAA record is updated first.
 
@@ -1132,3 +1151,21 @@ is set (dev never sends). A random key, then nothing else (the key file is serve
 heroku config:set -a attnd-web INDEXNOW_KEY=$(openssl rand -hex 16)
 ```
 Check after the next deploy: Diagnostics → Endpoints → IndexNow shows "0 waiting" and the counts per day.
+
+## 23. MCP server: Claude connectors (dev first; docs/mcp_plan.md)
+
+Staff run Attnd from Claude through MCP with OAuth. Dev and production are separate servers, so they are two
+connectors in Claude, each signing in to its own site with its own passkeys and staff account.
+
+1. **Dev** (`MCP_ENABLED=1` on attnd-dev, set by Claude through the Platform API): in Claude, Settings → Connectors →
+   **Add custom connector**, name **Attnd (dev)**, URL `https://dev.attnd.app/mcp`. Claude opens dev.attnd.app to
+   sign in (your dev staff account, its second step) and asks you to **Connect**. Leave the OAuth client fields empty:
+   Claude identifies itself with its Client ID Metadata Document.
+2. Try it: "list my Attnd events", "show the event overview of DEMO", "set the Deep Ellum prospect to reviewing".
+   Anything Attnd always asks about comes back as a link to confirm in the console.
+3. **Production** (owner, Nov 26, 2026: `MCP_ENABLED=1` set on attnd-web, release 126; it works once develop is merged
+   to main, which ships `mcp_server/`): add a second connector **Attnd**, URL `https://attnd.app/mcp`, and sign in
+   with your production staff account.
+4. Revoke a connection on Platform → **Connected apps**. A password change or "sign out everywhere" ends every
+   connection; otherwise one lasts until it's unused for 30 days or is 90 days old.
+

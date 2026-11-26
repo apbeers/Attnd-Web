@@ -23,22 +23,17 @@ the map, colours, visibility and sharing; settings and history folded at the end
   <a class="button button--primary" href="{% url 'studio:editor' event.id %}">{% icon "brush" %} Open the website</a>
 </div>
 {% endif %}{% endwith %}{% endif %}
-<div class="split">
-  <div class="split__main stack stack--loose">
-    {% component "live_on_phone" event=event %}
-    {% component "needs_review" event=event %}
-    {% component "event_stats" event=event part="timing" %}
-    {% component "event_stats" event=event part="numbers" %}
-    <div class="panel">{% component "event_map" event=event %}</div>
-    <div class="panel" id="theme">{% component "event_theme" event=event %}</div>
-    <div class="panel stack">
-      <h2 class="eyebrow">Visibility</h2>
-      {% component "event_lifecycle" event=event %}
-    </div>
-  </div>
-
-  <div class="split__aside stack stack--loose">
-    <div class="panel stack"><h2 class="eyebrow">Share it</h2>{% component "sharing_kit" event=event %}</div>
+<div class="dashboard overview-tiles">
+  {% component "live_on_phone" event=event %}
+  {% component "needs_review" event=event %}
+  {% component "event_stats" event=event part="timing" %}
+  {% component "event_stats" event=event part="numbers" %}
+  <div class="panel span-2">{% component "event_map" event=event %}</div>
+  <div class="panel stack"><h2 class="eyebrow">Share it</h2>{% component "sharing_kit" event=event %}</div>
+  <div class="panel" id="theme">{% component "event_theme" event=event %}</div>
+  <div class="panel stack">
+    <h2 class="eyebrow">Visibility</h2>
+    {% component "event_lifecycle" event=event %}
   </div>
 </div>
 

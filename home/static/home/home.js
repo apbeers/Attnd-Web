@@ -85,23 +85,15 @@
     });
   });
 
-  // Phones get "Open in Attnd" (iPhone: the app's own scheme, then the join page; Android: Chrome's intent link).
+  // Phones get "Open in Attnd": iPhone a Universal Link on www.attnd.app (the app, or the join page with the App Clip
+  // card; never the attnd:// scheme, which made Safari show "the address is invalid" without the app); Android
+  // Chrome's intent link. Everyone else keeps the join page (href).
   const ua = navigator.userAgent || '';
+  const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'Ios' : '';
+  // On the click, so cards added later (Happening near you) get it too.
   document.addEventListener('click', (e) => {
-    const a = e.target.closest('[data-open-ios]');
-    if (!a) return;
-    if (/iPhone|iPad|iPod/.test(ua)) {
-      e.preventDefault();
-      const fallback = a.getAttribute('href');
-      let left = false;
-      const away = () => { if (document.visibilityState === 'hidden') left = true; };
-      document.addEventListener('visibilitychange', away);
-      window.location.href = a.dataset.openIos;
-      setTimeout(() => { document.removeEventListener('visibilitychange', away); if (!left) window.location.href = fallback; }, 1500);
-    } else if (/Android/.test(ua)) {
-      e.preventDefault();
-      window.location.href = a.dataset.openAndroid;
-    }
+    const a = os && e.target.closest('[data-open-ios]');
+    if (a && a.dataset['open' + os]) a.href = a.dataset['open' + os];
   });
 
   // QR codes counted once when they come into view (anonymous).
@@ -120,7 +112,7 @@
   const list = gallery.querySelector('[data-showcase-list]');
   const mapBox = gallery.querySelector('[data-gallery-map]');
   let kind = '';
-  const press = (group, button) => group.querySelectorAll('.pill').forEach((p) => {
+  const press = (group, button) => group.querySelectorAll('.segmented__option').forEach((p) => {
     const on = p === button; p.classList.toggle('is-on', on); p.setAttribute('aria-pressed', String(on));
   });
   gallery.querySelectorAll('[data-kind-filter]').forEach((b) => b.addEventListener('click', () => {

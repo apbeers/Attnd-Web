@@ -1,5 +1,5 @@
-{% load static tz %}<!DOCTYPE html>
-<html lang="en" data-scheme="auto">
+{% load static tz design %}<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   {% include 'home/_icons.html' %}
@@ -13,17 +13,17 @@
   <meta property="og:description" content="Map, schedule and live updates in the Attnd app. Event code {{ event.event_code }}.">
   {% if app_store_id %}<meta name="apple-itunes-app" content="app-id={{ app_store_id }}, app-clip-bundle-id={{ clip_bundle_id }}, app-clip-display=card">{% endif %}
   <meta name="theme-color" content="#431f86">
-  <link rel="stylesheet" href="{% static 'home/site.css' %}">
+  {% stylesheets "site" %}
   {% if theme_css %}<style nonce="{{ csp_nonce }}" data-event-theme="{{ event.id }}">{{ theme_css|safe }}</style>{% endif %}
 </head>
-<body>
-<main class="join-page">
+<body class="site">
+<main class="join-page" data-reading>
   <div class="join-card{% if kind == 'ios' %} join-card--single{% endif %}">
     <section class="join-info">
       <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
       {% with t=event.timing %}
-        {% if t == 'now' and event.status != 'archived' %}<div class="join-status"><span class="pill pill--live"><i></i>Happening now</span></div>
-        {% elif t == 'ended' or event.status == 'archived' %}<div class="join-status"><span class="pill">This event has ended</span></div>{% endif %}
+        {% if t == 'now' and event.status != 'archived' %}<div class="join-status"><span class="badge badge--live badge--pill"><span class="live-dot" aria-hidden="true"></span> Happening now</span></div>
+        {% elif t == 'ended' or event.status == 'archived' %}<div class="join-status"><span class="badge badge--ended badge--pill">This event has ended</span></div>{% endif %}
       {% endwith %}
       <h1>{{ event.name }}</h1>
       {% timezone event.timezone|default:"UTC" %}

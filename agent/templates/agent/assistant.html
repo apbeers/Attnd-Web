@@ -1,7 +1,7 @@
 {% extends 'console/base.html' %}
-{% load console_tags static %}
+{% load console_tags static design %}
 {% block title %}Ask Attnd{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'agent/agent.css' %}">{% endblock %}
+{% block head %}{% stylesheets "agent" %}{% endblock %}
 {% block content %}
 <div class="assistant">
   <section class="canvas" data-canvas data-routes="{{ canvas_routes }}" aria-label="What Ask Attnd shows">

@@ -248,7 +248,7 @@ def start(request):
         return _error('Write what you want Attnd to do.')
     if len(goal) > 4000:
         return _error('That is too long (4,000 characters at most).')
-    active = AgentRun.objects.filter(user=request.user, status=AgentRun.RUNNING).first()
+    active = AgentRun.objects.filter(user=request.user, status=AgentRun.RUNNING, source=AgentRun.SOURCE_CHAT).first()
     if active is not None:
         return JsonResponse({'error': 'Ask Attnd is still working on your last request. Wait a moment, or stop it.',
                              'run': run_json(active)}, status=409)
@@ -283,8 +283,8 @@ def start(request):
     # One chat (Nov 22, 2026): a new request supersedes an earlier one that only waits (for a confirmation or an
     # answer, maybe in another tab or a card scrolled out of view): it is stopped, its pending confirmations expire.
     # Refusing it made the chat swap the conversation on screen for that other run ("jumps to some other session").
-    for waiting in AgentRun.objects.filter(user=request.user, status__in=(AgentRun.WAITING_CONFIRMATION,
-                                                                        AgentRun.WAITING_REPLY)):
+    for waiting in AgentRun.objects.filter(user=request.user, source=AgentRun.SOURCE_CHAT,
+                                         status__in=(AgentRun.WAITING_CONFIRMATION, AgentRun.WAITING_REPLY)):
         loop.stop(waiting)
     run = loop.create_run(request, goal, page, event, attachments, target=target)
     return JsonResponse({'run': run_json(run), 'steps': []}, status=202)
@@ -293,7 +293,7 @@ def start(request):
 @signed_in
 @require_GET
 def runs(request):
-    recent = list(AgentRun.objects.filter(user=request.user).order_by('-created_at')[:10])
+    recent = list(AgentRun.objects.filter(user=request.user, source=AgentRun.SOURCE_CHAT).order_by('-created_at')[:10])
     out = {'runs': [{'id': r.pk, 'goal': r.goal[:200], 'status': r.status, 'active': r.active,
                      'summary': (r.summary or r.error)[:300], 'created_at': r.created_at.isoformat()}
                     for r in recent],
@@ -310,7 +310,8 @@ def runs(request):
             from datetime import timedelta
 
             from django.utils import timezone
-            last = AgentRun.objects.filter(user=request.user, created_at__gte=timezone.now() - timedelta(days=7))
+            last = AgentRun.objects.filter(user=request.user, source=AgentRun.SOURCE_CHAT,
+                                           created_at__gte=timezone.now() - timedelta(days=7))
             if str(request.GET.get('event') or '').isdigit():
                 last = last.filter(event_id=int(request.GET['event']))
             last = last.exclude(thread='').order_by('-created_at').first()
@@ -476,12 +477,16 @@ def contact(request):
     limit = RateLimit('agent_contact_user')
     if limit.hit(request.user.pk) > limit.limit:
         return _error('You’ve sent a few messages already; the team will reply by email.', status=429)
-    recipients = [email for _, email in settings.ADMINS]
-    if not recipients or not email_enabled():
-        return _error('Messages can’t be sent right now. Email support from the help page instead.', status=503)
     run = None
     if str(request.POST.get('run') or '').isdigit():
         run = AgentRun.objects.filter(pk=int(request.POST['run']), user=request.user).first()
+    from agent.models import SupportMessage
+    SupportMessage.objects.create(user=request.user, email=request.user.email, message=message, run=run,
+                                  page=(request.POST.get('page') or '')[:300])
+    recipients = [email for _, email in settings.ADMINS]
+    if not recipients or not email_enabled():
+        return JsonResponse({'sent': True, 'text': f'Saved for the Attnd team. We’ll reply to {request.user.email} '
+                                                   'by email.'})
     lines = [message, '', '—', f'From: {request.user.email}', f'Page: {(request.POST.get("page") or "")[:300]}']
     if run is not None:
         lines += [f'Ask Attnd run: {run.pk} ({run.status}, {run.created_at:%Y-%m-%d %H:%M} UTC)',

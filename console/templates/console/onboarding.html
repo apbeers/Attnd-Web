@@ -1,7 +1,7 @@
 {% extends 'console/base.html' %}
-{% load console_tags static %}
+{% load console_tags static design %}
 {% block title %}Welcome{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'home/onboarding.css' %}">{% endblock %}
+{% block head %}{% stylesheets "onboarding" %}{% endblock %}
 {% block content %}
 <div class="onb-console">
   {% if preview %}<p class="notice notice--info small">Preview: what an organizer with no events sees. Nothing you do here touches your own events unless you submit the composer.</p>{% endif %}

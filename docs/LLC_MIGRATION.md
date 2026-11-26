@@ -17,8 +17,9 @@ sales tax on the $299/$499 tiers and ticketing).
 2. Registered agent with a Texas street address (yourself at a Texas address, or a registered-agent service so your
    home address isn't public).
 3. File the **Certificate of Formation – LLC (Form 205)** with the Texas Secretary of State on SOSDirect ($300).
-   Member-managed, single member.
-4. **EIN** from the IRS (free, online, minutes) once the Certificate of Formation is accepted.
+   Member-managed, single member. **Done: accepted by Texas (owner, Nov 23, 2026).** Next: 5, 6, then Stripe.
+4. **EIN** from the IRS (free, online, minutes) once the Certificate of Formation is accepted. **Done (owner, Nov 23, 2026)**;
+   the number and the CP 575 letter stay with the owner, never in the repo.
 5. **Company agreement** (operating agreement, not filed): single-member, keeps the LLC separate from you.
 6. **Business bank account** + business card in the LLC's name (EIN + certificate). Never mix personal money in.
 7. **Texas Comptroller**: franchise tax account (annual report due May 15; below the no-tax-due revenue threshold you
@@ -33,9 +34,9 @@ sales tax on the $299/$499 tiers and ticketing).
 
 ## 2. Identity and email first (everything else hangs off these)
 1. **Google Workspace** on `attnd.app` (Business Starter is enough), billed to the LLC card. An older Workspace
-   already exists on `attnd.app`: admin access recovered Nov 16, 2026 (admin user `andrew@attnd.app`), **no active
-   subscription yet** (nothing works until one is started). Reuse it rather than creating a new one: subscribe
-   (billed to the LLC), then add the shared aliases below. Mailboxes/aliases:
+   already exists on `attnd.app`: admin access recovered Nov 16, 2026 (admin user `andrew@attnd.app`), subscription
+   re-activated by the owner Nov 23, 2026 (`andrew@attnd.app` is a Workspace mailbox; DNS: SETUP.md §11b). Move its
+   billing to the LLC, then add the shared aliases below. Mailboxes/aliases:
    `admin@`, `support@`, `billing@`, `dev@` (shared aliases rather than personal ones, so services aren't tied to a
    person). DNS at Namecheap: Workspace MX + SPF/DKIM/DMARC; Mailgun keeps `mg.attnd.app` (no conflict).
 2. This also creates a **Google Cloud organization** (attnd.app) for §3.
@@ -148,6 +149,11 @@ Legal/policy surface (to re-issue in the LLC's name):
   Heroku apps, the webhook endpoint `https://attnd.app/console/billing/stripe/webhook/` (event
   `checkout.session.completed`), Customer Portal settings. Create the account in the LLC's name; invoices say "Attnd"
   (`platform_admin/billing.py SELLER`): add the LLC's legal name and address there once it exists.
+
+- MCP server (Nov 25, 2026, docs/mcp_plan.md): staff connect Claude to `https://dev.attnd.app/mcp` (and later
+  `https://attnd.app/mcp`) as custom connectors on their own Claude accounts. Nothing to move but the people: when
+  the LLC has a Claude organization, reconnect from it. No keys or client secrets (Claude uses a Client ID Metadata
+  Document); grants live in each environment's database and can be revoked on Platform → Connected apps.
 
 ## 5. Order of operations (when it's time)
 1. Form the LLC, EIN, bank account, D-U-N-S, insurance (§1).

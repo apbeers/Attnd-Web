@@ -10,7 +10,8 @@ from django.test import SimpleTestCase
 from agent import canvas
 
 CSS = (Path(settings.BASE_DIR) / 'agent' / 'static' / 'agent' / 'agent.css').read_text()
-CONSOLE_CSS = (Path(settings.BASE_DIR) / 'console' / 'static' / 'console' / 'console.css').read_text()
+from design.bundles import text as _bundle  # noqa: E402
+CONSOLE_CSS = _bundle('console')
 TEMPLATE = (Path(settings.BASE_DIR) / 'agent' / 'templates' / 'agent' / 'assistant.html').read_text()
 
 
@@ -33,7 +34,7 @@ class CanvasWidthTests(SimpleTestCase):
         self.assertIn('.canvas__cards:has(> .agent__card:only-child) { grid-template-columns: minmax(0, 1fr); }', CSS)
         for tab in ('Notifications', 'Settings', 'Metrics', 'History', 'Website'):
             self.assertIn(f'[data-tab={tab}]', CSS, f'{tab}: its sections side by side on wide canvases')
-        self.assertIn('.canvas .component--event_team { display: grid;', CSS, 'Team: members beside the invite form')
+        self.assertIn('.component--event_team { display: grid;', CONSOLE_CSS, 'Team: members beside the invite form')
         # Every tab the canvas draws is known to the CSS rules above or holds one full-width list.
         multi = {'Notifications', 'Settings', 'Metrics', 'History', 'Website'}
         for label in canvas.ORDER:

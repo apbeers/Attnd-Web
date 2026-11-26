@@ -2,10 +2,10 @@
 {% load console_tags humanize %}
 {% block title %}Account{% endblock %}
 {% block content %}
-<div class="account">
+<div class="stack">
 <h1 class="title-2">Account</h1>
 <p class="muted">You sign in with your email. Changing it keeps your events, teams and history.</p>
-<div class="grid grid--2 grid--loose">
+<div class="dashboard">
   <div class="panel">
     <h2 class="title-4">Email</h2>
     <p class="small muted">Currently <strong>{{ user.email }}</strong></p>
@@ -19,12 +19,12 @@
       {% for field in password_form %}{% include 'console/_field.html' %}{% endfor %}
       <button class="button button--primary">Change password</button></form>
   </div>
-  {% if recovery_codes %}<div class="panel span-all">
+  {% if recovery_codes %}<div class="panel">
     <h2 class="title-4">{% icon "lock" %} Your recovery codes</h2>
     {% include 'console/_recovery_codes.html' %}
   </div>{% endif %}
 
-  <div class="panel span-all" data-passkey-scope>
+  <div class="panel span-2" data-passkey-scope>
     <h2 class="title-4" id="passkeys">{% icon "key" %} Passkeys</h2>
     <p class="small">Sign in with Face ID, Touch ID, Windows Hello or your phone’s screen lock instead of your password and a code.
       A passkey works only on this site{% if passkeys %}; you can still sign in with your password and a second step{% endif %}.</p>
@@ -101,7 +101,7 @@
   </div>
 
   {% if has_second_factor %}
-  <div class="panel span-all" id="recovery-codes">
+  <div class="panel" id="recovery-codes">
     <h2 class="title-4">{% icon "lock" %} Recovery codes</h2>
     {% if recovery_codes_left %}
     <p class="small">{{ recovery_codes_left }} recovery code{{ recovery_codes_left|pluralize }} left. Each one replaces the second step once, if you lose your phone or passkey. New codes replace the old ones.</p>
@@ -119,8 +119,8 @@
       <button class="button button--secondary button--small">{% if recovery_codes_left %}New recovery codes{% else %}Set up recovery codes{% endif %}</button></form>
   </div>
   {% endif %}
-  <div class="panel span-all" id="ai-credit">{% component "ai_credit_meter" %}</div>
-  <div class="panel span-all" id="sessions">
+  <div class="panel" id="ai-credit">{% component "ai_credit_meter" %}</div>
+  <div class="panel span-2" id="sessions">
     <h2 class="title-4">{% icon "phone" %} Signed in on other devices</h2>
     <p class="small muted">Every browser signed in to your account. Sign out any you don’t recognise, then change your password.</p>
     <ul class="list list--boxed">{% for s in sign_in_sessions %}<li class="cluster">
@@ -132,7 +132,7 @@
     {% if other_sessions %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="sessions_signout_others">
       <button class="button button--secondary button--small" data-confirm="Sign out every other device?">Sign out everywhere else</button></form>{% endif %}
   </div>
-  <div class="panel span-all" id="emails">
+  <div class="panel" id="emails">
     <h2 class="title-4">{% icon "mail" %} Email me when…</h2>
     <form method="post" class="stack stack--tight">{% csrf_token %}<input type="hidden" name="action" value="notify">
       {% for k in notify_kinds %}<label class="check" for="notify-{{ k.key }}"><input type="checkbox" id="notify-{{ k.key }}" name="{{ k.key }}"{% if k.on %} checked{% endif %}> {{ k.label }}</label>{% endfor %}
@@ -140,7 +140,7 @@
       <div><button class="button button--secondary button--small">Save</button></div>
     </form>
   </div>
-  <div class="panel span-all" id="ask-attnd-memory">
+  <div class="panel" id="ask-attnd-memory">
     <h2 class="title-4">{% icon "stars" %} What Ask Attnd remembers</h2>
     {% if agent_notes %}<p class="small muted">Ask Attnd follows these in every request (it learns them when you say something should always apply). Remove any you no longer want.</p>
     <ul class="list list--boxed">{% for n in agent_notes %}<li class="cluster">

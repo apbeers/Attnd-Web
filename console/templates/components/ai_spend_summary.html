@@ -9,7 +9,7 @@
     <div class="metric"><div class="stat__value">${{ d.visitors.cost }}</div><div class="eyebrow">{{ d.visitors.count }} visitor{{ d.visitors.count|pluralize }}</div></div>
   </div>
   {% if d.alert != '0' %}<p class="small muted">Alert at ${{ d.alert }} this month: {{ d.alert_percent }}% reached.</p>
-  <span class="meter{% if d.alert_percent >= 80 %} meter--warning{% endif %}" role="img" aria-label="{{ d.alert_percent }}% of the alert amount"><span style="width: {{ d.alert_percent }}%"></span></span>{% endif %}
+  <span class="meter{% if d.alert_percent >= 80 %} meter--warning{% endif %}" role="img" aria-label="{{ d.alert_percent }}% of the alert amount"><span style="--value: {{ d.alert_percent }}%"></span></span>{% endif %}
   <div class="grid grid--2">
     <div class="panel stack stack--tight"><h3 class="eyebrow">By feature</h3>
       {% if d.features %}<ul class="list list--inset small">{% for r in d.features %}<li class="cluster"><span class="grow">{{ r.label }}</span><span class="muted">{{ r.calls }} call{{ r.calls|pluralize }} · {{ r.share }}%</span><span class="nowrap">${{ r.cost }}</span></li>{% endfor %}</ul>{% else %}<p class="small muted">No AI calls this month.</p>{% endif %}</div>

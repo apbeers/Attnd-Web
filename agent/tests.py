@@ -215,6 +215,7 @@ class RegistryTests(AgentTestCase):
             ('platform_admin/home.html', 'platform:decline'): 'decline_upgrade_request',
             ('platform_admin/event.html', 'platform:event_save'): 'save_event_overrides',
             ('platform_admin/event.html', 'platform:record_payment'): 'record_payment',
+            ('platform_admin/connected_apps.html', ''): 'revoke_connected_app',
         }
         root = Path(settings.BASE_DIR)
         found = []

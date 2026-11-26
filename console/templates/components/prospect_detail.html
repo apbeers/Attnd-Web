@@ -22,6 +22,9 @@
         <span class="cluster team-row__actions">{% include 'components/_actions.html' with actions=c.actions %}</span></li>{% endfor %}</ul>
       {% else %}<p class="small muted">No organizer contacts were published on the pages that were read.</p>{% endif %}
     </section>
+    {% if d.pitches %}<section><{% if surface == 'chat' %}h4{% else %}h2{% endif %} class="eyebrow">{% icon "mail" %} Pitch drafts (not sent)</{% if surface == 'chat' %}h4{% else %}h2{% endif %}>
+      {% for x in d.pitches %}<details class="small"><summary>{{ x.when }} · to {{ x.to }} · {{ x.subject }}</summary><pre class="code-block">{{ x.body }}</pre></details>{% endfor %}
+      <p class="small muted">Drafts only: copy one into your own email, fill in the mailing address and send it yourself.</p></section>{% endif %}
     {% if d.activity %}<section><{% if surface == 'chat' %}h4{% else %}h2{% endif %} class="eyebrow">{% icon "history" %} Activity</{% if surface == 'chat' %}h4{% else %}h2{% endif %}><ul class="list list--inset small">{% for a in d.activity %}<li>{{ a.when }} · {{ a.text }} <span class="muted">({{ a.who }})</span></li>{% endfor %}</ul>
       {% if d.first_run %}<p class="small muted">First found by <a href="{{ d.first_run_url }}">run {{ d.first_run }}</a>.</p>{% endif %}</section>{% endif %}
   </div>

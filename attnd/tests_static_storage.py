@@ -20,7 +20,7 @@ class MinifyCssTests(SimpleTestCase):
         self.assertIn('calc(100% - 2px)', out)
 
     def test_our_stylesheets_keep_their_structure(self):
-        for name in ('console/static/console/console.css', 'agent/static/agent/agent.css', 'home/static/home/site.css',
+        for name in ('design/static/design/layout.css', 'console/static/console/console.css', 'agent/static/agent/agent.css', 'home/static/home/site.css',
                      'home/static/home/onboarding.css'):
             text = (Path(settings.BASE_DIR) / name).read_text()
             out = minify_css(text)

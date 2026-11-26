@@ -22,6 +22,7 @@ AREAS = [
     ('app_options', 'App options', 'platform:app_options', '', 'platform_admin.view_architecture'),
     ('brand', 'Brand', 'platform:brand', '', 'platform_admin.view_platformsettings'),
     ('emails', 'Emails', 'platform:emails', '', 'platform_admin.view_emaillog'),
+    ('connected_apps', 'Connected apps', 'platform:connected_apps', '', 'mcp_server.use_mcp'),
     ('site_styles', 'Site styles', 'platform:site_styles', '', 'platform_admin.view_platformsettings'),
     ('components', 'Components', 'platform:components', '', 'platform_admin.view_platformsettings'),
 ]

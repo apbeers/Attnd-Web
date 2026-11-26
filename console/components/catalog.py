@@ -38,6 +38,13 @@ def _tz(event):
     return tz_or_utc(event.timezone)
 
 
+def _local_date(event):
+    if not event.start_time:
+        return 'No date yet'
+    with timezone.override(_tz(event)):
+        return fmt(event.start_time, 'D M j, Y')
+
+
 def editable_event(user, event_id=None, event=None):
     """The event, when this person is on its team (like console.views_events.event_view); else Http404."""
     if event is not None:
@@ -168,7 +175,8 @@ def event_tile(user, event_id=None, event=None):
         'id': event.pk, 'name': event.name, 'url': reverse('console:event', args=[event.pk]),
         # The Your events section (Happening now / Upcoming / Past / Showcase & demo): canvas and chat group by it.
         'group': section, 'section': SECTION_LABELS[section],
-        'start': fmt(event.start_time, 'D M j, Y') if event.start_time else 'No date yet', 'code': event.event_code,
+        # The event's own date (its time zone), whatever zone the page or the MCP call runs in.
+        'start': _local_date(event), 'code': event.event_code,
         'badges': status_badges(event),
         'counts': {'locations': event.n_locations, 'items': event.n_items, 'joined': event.n_devices,
                    'to_review': event.n_pending},
@@ -259,7 +267,7 @@ def event_stats(user, event_id=None, event=None):
             {'value': audience['joined'], 'label': 'Attendees joined'},
             {'value': audience['active_today'], 'label': 'Active today'},
             {'value': audience['subscribed'], 'label': 'Get notifications'},
-            {'value': f'{audience["ios"]}/{audience["android"]}', 'label': 'iPhone / Android'},
+            {'value': f'{audience["ios"]:,} / {audience["android"]:,}', 'label': 'iPhone / Android'},
         ],
         'most_liked': liked, 'usage_url': reverse('console:usage', args=[event.pk]),
     }

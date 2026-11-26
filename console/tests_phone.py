@@ -5,8 +5,9 @@ the 26rem chat and on a wide canvas alike), the phone rules exist (16px fields, 
 Components draws every component at 360 / 768 / 1280 px for staff only.
 
 With a browser (ATTND_BROWSER_CHECKS=1, Chrome and the `playwright` npm package; not in CI): scripts/ci/phone_check.cjs
-opens the console's pages at 360, 768 and 1280 px and fails on a horizontal page scroll, a component sticking out of
-its gallery frame, a tap target under 44 × 44 px or a field under 16px at 360 px."""
+opens the console's pages and the public site at 360, 768, 1280, 2560 and 3440 px and fails on a horizontal page
+scroll, a component sticking out of its gallery frame, a tap target under 44 × 44 px or a field under 16px at 360 px,
+or content that leaves an ultra-wide screen unused (design/static/design/layout.css: more columns, never wider lines)."""
 import json
 import os
 import re
@@ -26,7 +27,8 @@ from console import components as C
 from console.testing import TwoFactorClient
 
 ROOT = Path(settings.BASE_DIR)
-CSS = (ROOT / 'console/static/console/console.css').read_text()
+from design.bundles import text as _bundle  # noqa: E402
+CSS = _bundle('console')
 
 
 class ComponentWidthTests(TestCase):
@@ -44,7 +46,7 @@ class ComponentWidthTests(TestCase):
         self.assertEqual(missing, [])
 
     def test_phone_rules(self):
-        block = CSS[CSS.index('/* Phones (batch 7 phone pass'):]
+        block = CSS[CSS.index('/* Phones (checked by scripts/ci/phone_check.cjs'):]
         self.assertIn('font-size: 16px', block)
         self.assertIn('min-height: 44px', block)
         self.assertIn('.component { container: component / inline-size; }', CSS)
@@ -78,7 +80,7 @@ def _playwright():
 
 @unittest.skipUnless(_playwright(), 'ATTND_BROWSER_CHECKS=1 with Chrome and the playwright npm package')
 class PhoneBrowserTests(StaticLiveServerTestCase):
-    def test_console_pages_at_three_widths(self):
+    def test_console_pages_from_phone_to_ultra_wide(self):
         user = User.objects.create_user('phone', 'phone@example.com', 'pw', is_staff=True)
         call_command('load_demo_event', '--owner', 'phone@example.com', stdout=open(os.devnull, 'w'))
         client = TwoFactorClient()
@@ -92,13 +94,13 @@ class PhoneBrowserTests(StaticLiveServerTestCase):
                  f'/console/events/{e}/team/', f'/console/events/{e}/edit/', f'/console/events/{e}/theme/',
                  f'/console/events/{e}/billing/', f'/console/events/{e}/history/', f'/console/events/{e}/usage/',
                  f'/console/assistant/?event={e}', '/console/account/', f'/console/platform/components/?event={e}',
-                 '/console/platform/emails/', '/console/platform/site-styles/']
+                 '/console/platform/emails/', '/console/platform/site-styles/', '/console/platform/brand/',
+                 '/home/', f'/join/{Event.objects.get(pk=e).event_code}/', '/privacy/']
         result = subprocess.run(['node', str(ROOT / 'scripts/ci/phone_check.cjs'), self.live_server_url, session, *paths],
                                 capture_output=True, text=True, timeout=600,
                                 env={**os.environ, 'NODE_PATH': _playwright()})
         self.assertEqual(result.returncode, 0, result.stderr[-2000:])
-        problems = [f"{r['width']} {r['path']}: {r.get('error') or ''}{r.get('overflow') or ''}{r.get('small') or ''}"
-                    f"{r.get('inputs') or ''}{r.get('frames') or ''}"
-                    for r in json.loads(result.stdout)
-                    if r.get('error') or r.get('overflow') or r.get('small') or r.get('inputs') or r.get('frames')]
+        keys = ('error', 'overflow', 'small', 'inputs', 'frames', 'narrow')
+        problems = [f"{r['width']} {r['path']}: " + ''.join(str(r.get(k) or '') for k in keys)
+                    for r in json.loads(result.stdout) if any(r.get(k) for k in keys)]
         self.assertEqual(problems, [])

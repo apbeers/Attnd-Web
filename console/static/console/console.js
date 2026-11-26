@@ -131,8 +131,8 @@
   showIf();
 
   // "Open in Attnd" on the QR card (<a data-open-app>): phones only, since people can't scan their own screen.
-  // iPhone: the app's own scheme (attnd://join/<code>; Safari won't open a Universal Link to the domain it shows),
-  // and if the page is still visible ~1.5 s later the app isn't installed: the join page (App Store / App Clip).
+  // iPhone: a Universal Link on www.attnd.app (attnd.links.ios_open_url: the app opens, or the join page with the
+  // App Clip card; no custom scheme, which made Safari say "the address is invalid" without the app).
   // Android: Chrome's intent:// URL with the join link as its fallback. Desktop: hidden.
   const ua = navigator.userAgent || '';
   const phoneOs = /Android/i.test(ua) ? 'android'
@@ -146,20 +146,6 @@
   }
   window.attndOpenApp = showOpenApp;
   showOpenApp();
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest('[data-open-app]');
-    if (!a || phoneOs !== 'ios') return;
-    e.preventDefault();
-    let left = false;
-    const away = () => { if (document.visibilityState === 'hidden') left = true; };
-    document.addEventListener('visibilitychange', away);
-    window.addEventListener('pagehide', away, { once: true });
-    window.location.href = a.dataset.ios;
-    setTimeout(() => {
-      document.removeEventListener('visibilitychange', away);
-      if (!left && document.visibilityState === 'visible') window.location.href = a.dataset.fallback;
-    }, 1500);
-  });
 
   // API-023: a changed colour theme applies at once (owner, Nov 21, 2026): after a save, a switch, Reset or a finished
   // Generate with AI, every <style data-event-theme="<id>"> on the page gets the new tokens and the compact card its

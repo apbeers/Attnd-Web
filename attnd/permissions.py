@@ -65,11 +65,13 @@ STAFF = frozenset({
     'events.view_showcase',  # the "Showcase & demo" section of Your events
     'platform_admin.view_platformsettings',  # the Platform page (its sub-tabs ask their own permissions)
     'platform_admin.view_emaillog',  # the Emails log (who got which email, its status; never the body)
+    'mcp_server.use_mcp',  # connect Claude or another assistant through MCP (docs/mcp_plan.md)
 })
 PLATFORM_ADMIN = STAFF | {
     'platform_admin.change_platformsettings',  # the Platform admin: prices, customers, upgrades, overrides
     'events.assign_event_owner',  # hand an unassigned event to someone
     'events.view_all_usage',  # usage across every event
+    'mcp_server.manage_mcp',  # everyone's MCP connections: see and revoke
 }
 ROLES = {STAFF_GROUP: STAFF, PLATFORM_ADMIN_GROUP: PLATFORM_ADMIN}
 PLATFORM_PERMS = PLATFORM_ADMIN

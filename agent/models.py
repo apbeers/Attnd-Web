@@ -2,6 +2,7 @@
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.conf import settings
 from django.utils import timezone
 
 
@@ -44,6 +45,12 @@ class AgentRun(models.Model):
     session_key = models.CharField(max_length=64, blank=True)
     host = models.CharField(max_length=255, blank=True)
     secure = models.BooleanField(default=True)
+    # Where the run came from: the in-app chat, or one MCP tool call (mcp_server/: no model, the client is e.g. Claude).
+    # MCP runs stay out of the chat's own lists; the Platform's Connected apps page shows them.
+    SOURCE_CHAT, SOURCE_MCP = 'chat', 'mcp'
+    source = models.CharField(max_length=8, choices=[(SOURCE_CHAT, 'Ask Attnd chat'), (SOURCE_MCP, 'MCP client')],
+                              default=SOURCE_CHAT)
+    client = models.CharField(max_length=120, blank=True)  # the MCP client's name ("Claude"), for the run list
     created_at = models.DateTimeField(default=timezone.now)
     started_at = models.DateTimeField(null=True, blank=True)  # last (re)start of the loop, for the time cap
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -155,3 +162,18 @@ class ChangeProposal(models.Model):
 
     def __str__(self):
         return f'{self.title} ({self.status})'
+
+
+class SupportMessage(models.Model):
+    """A "Talk to a person" message (agent:contact), kept so staff can read and answer them (MCP
+    `list_support_messages`, owner Nov 26, 2026); the email to ADMIN_EMAILS still goes out."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='+')
+    email = models.EmailField(max_length=254)
+    message = models.TextField()
+    page = models.CharField(max_length=300, blank=True)
+    run = models.ForeignKey(AgentRun, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    handled = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

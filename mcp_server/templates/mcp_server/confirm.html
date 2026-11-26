@@ -1,0 +1,24 @@
+{% extends 'console/base.html' %}
+{% block title %}Confirm a change{% endblock %}
+{% block content %}
+<div class="narrow stack stack--loose">
+  <h1 class="title-2">{% if pending %}Confirm a change from {{ run.client|default:"your assistant" }}{% else %}Change from {{ run.client|default:"your assistant" }}{% endif %}</h1>
+  {% if error %}<div class="notice notice--error"><p>{{ error }}</p></div>{% endif %}
+  <div class="panel stack">
+    <p class="strong">{{ step.confirm_summary }}</p>
+    {% if pending %}
+      <p class="small muted">Nothing happens until you press Confirm. It runs as you, from this browser.</p>
+      <form method="post" class="cluster">
+        {% csrf_token %}
+        <input type="hidden" name="hash" value="{{ step.confirm_hash }}">
+        <button class="button button--primary" type="submit" name="decision" value="confirm">Confirm</button>
+        <button class="button button--secondary" type="submit" name="decision" value="cancel">Cancel</button>
+      </form>
+    {% else %}
+      <p>{% if step.confirm_state == 'executed' %}{% if step.ok %}Done.{% else %}It didn't go through.{% endif %}{% elif step.confirm_state == 'cancelled' %}Cancelled. Nothing was changed.{% elif step.confirm_state == 'expired' %}This confirmation expired. Ask the assistant again.{% else %}{{ step.get_confirm_state_display }}{% endif %}</p>
+      {% if step.text %}<p class="small muted">{{ step.text }}</p>{% endif %}
+    {% endif %}
+  </div>
+  <p class="small"><a href="{% url 'platform:connected_apps' %}">Connected apps</a></p>
+</div>
+{% endblock %}

@@ -221,6 +221,14 @@ the branch, `TICKETS_ENABLED=1`):
   Sheets/CSV, Mailchimp import, calendar feeds), legal/compliance (ToS, privacy, data requests, WCAG for sites,
   moderation), help center + AI support for organizers.
 
+## MCP server follow-ups (docs/mcp_plan.md)
+
+- Turn production on (`MCP_ENABLED=1` on attnd-web) once the owner has tried the dev connector.
+- More tools: event writes (places, schedule items, notifications; always-ask ones keep the browser confirm),
+  Prospects discovery runs and settings (they cost AI credit).
+- More MCP Apps: the schedule, the Prospects pipeline; an interactive overview whose buttons call tools.
+- Organizers (not only staff), once the permission model and pricing say so.
+
 ## Ask Attnd (console agent) follow-ups
 Built Nov 20, 2026 (`agent/`, CLAUDE.md → Ask Attnd). Later:
 - Check the panel in real browsers (desktop, iPhone/Android bottom sheet, screen readers: VoiceOver, TalkBack, NVDA)

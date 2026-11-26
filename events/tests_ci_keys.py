@@ -181,6 +181,6 @@ class CiDeviceAudienceTests(TestCase):
         from console import components
         numbers = {n['label']: n['value'] for n in components.load(user, 'event_stats', {'event_id': event.pk})['numbers']}
         self.assertEqual(numbers['Attendees joined'], 1)  # the overview's event_stats component
-        self.assertEqual(numbers['iPhone / Android'], '1/0')
+        self.assertEqual(numbers['iPhone / Android'], '1 / 0')
         dash = self.client.get('/console/', secure=True)
         self.assertEqual(next(e for e in [e for s in dash.context['sections'] for e in s['events']] if e.pk == event.pk).n_devices, 1)
