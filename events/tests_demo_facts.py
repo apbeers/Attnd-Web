@@ -170,3 +170,13 @@ class DemoEventFactsTests(TestCase):
         urgent = next(n for n in b['notifications'] if n['priority'] == 'urgent')
         self.assertTrue(urgent['body'].startswith('Velvet Mesquite moves to '))
         self.assertIn('Trinity Stage', urgent['body'])
+
+
+class SeedTestDataTests(TestCase):
+    def test_app_review_sample_events_use_their_local_time_zone(self):
+        # Nov 26, 2026: the seeded Texas events kept the model's UTC default, so the apps and the MCP card showed
+        # "Thu 1:27 AM" for a Wednesday evening event.
+        call_command('seed_test_data', stdout=StringIO())
+        zones = set(Event.objects.filter(event_code__in=['FWFM2026', 'ATIS2026', 'DACN2026'])
+                    .values_list('timezone', flat=True))
+        self.assertEqual(zones, {'America/Chicago'})

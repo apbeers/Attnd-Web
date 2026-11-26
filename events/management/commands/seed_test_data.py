@@ -148,6 +148,9 @@ class Command(BaseCommand):
                     'longitude': event_data['longitude'],
                     'address': event_data['address'],
                     'start_time': start_time,
+                    # All three are in Texas (Nov 26, 2026: left at the model's UTC default, the apps and MCP cards
+                    # showed their times six hours off).
+                    'timezone': event_data.get('timezone', 'America/Chicago'),
                     'paid': event_data['paid'],
                     'public': event_data['public'],
                     'user': user,
