@@ -431,3 +431,35 @@ class McpToolsRoundTwoTests(McpTestCase):
                        'unsubscribe', 'mailing address', 'https://river.example/team'):
             self.assertIn(needed, pitch.body)
         self.assertIn('not sent', prospect.activity.first().text)
+
+
+class McpToolsRoundThreeTests(McpTestCase):
+    """Owner, Nov 26, 2026: prospects listed with their pk; deleting asks for a confirmation."""
+
+    def setUp(self):
+        super().setUp()
+        self.principal = grants.principal(self.connect()['access_token'])
+
+    def test_list_prospects_gives_pks_and_hides_do_not_contact_details(self):
+        from prospects.models import Prospect, ProspectContact
+        p = Prospect.objects.create(name='Riverside Fest', status='new', event=self.event)
+        ProspectContact.objects.create(prospect=p, name='Dee', email='dee@river.example',
+                                       source_url='https://river.example/', do_not_contact=True)
+        ProspectContact.objects.create(prospect=p, name='Sam', email='sam@river.example',
+                                       source_url='https://river.example/')
+        self.assertIn('list_prospects', {t['name'] for t in service.tools(self.staff)})
+        out = service.call(self.principal, 'list_prospects', {'q': 'river'})
+        row = out['structured']['prospects'][0]
+        self.assertEqual((row['pk'], row['can_pitch']), (p.pk, True))
+        dee = next(c for c in row['contacts'] if c['name'] == 'Dee')
+        self.assertTrue(dee['do_not_contact'])
+        self.assertNotIn('email', dee)
+        self.assertNotIn('dee@river.example', out['text'])
+
+    def test_deleting_a_schedule_item_waits_for_a_confirmation(self):
+        from events.models import ScheduledItem
+        item = ScheduledItem.objects.create(event=self.event, name='Test item', start_time=self.event.start_time)
+        out = service.call(self.principal, 'delete_schedule_item', {'event_id': self.event.pk, 'item_id': item.pk})
+        self.assertFalse(out['is_error'], out['text'])
+        self.assertEqual(out['structured']['status'], 'waiting_for_confirmation')
+        self.assertTrue(ScheduledItem.objects.filter(pk=item.pk).exists())

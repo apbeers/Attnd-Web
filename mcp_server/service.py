@@ -82,7 +82,10 @@ def tools(user):
     from agent.tools import mcp_tools_for
     out = [{'name': t['name'], 'description': t['description'], 'inputSchema': t['parameters']}
            for t in mcp_tools_for(user)]
-    return out + [_app_tool(), _component_tool(user)] + _named_tools(user)
+    out += [_app_tool(), _component_tool(user)] + _named_tools(user)
+    if user.has_perm('prospects.view_prospect'):
+        out.append(PROSPECTS_TOOL)
+    return out
 
 
 def _run(principal, name, args):
@@ -115,6 +118,11 @@ def call(principal, name, args):
         return _overview(principal, args)
     if name == COMPONENT_TOOL:
         return _cards(principal, args)
+    if name == PROSPECTS_TOOL['name'] and principal.user.has_perm('prospects.view_prospect'):
+        from prospects import summary
+        limit = args.get('limit') if isinstance(args.get('limit'), int) else 50
+        data = summary.rows(principal.user, str(args.get('q') or '')[:100], str(args.get('status') or ''), limit)
+        return {'text': as_text(data), 'structured': data, 'is_error': False}
     if name in NAMED and name in {t['name'] for t in _named_tools(principal.user)}:
         return _named(principal, name, args)
     if name not in {t['name'] for t in tools(principal.user)}:
@@ -210,6 +218,18 @@ NAMED = {
         'description': 'Platform admins: pending upgrade and "remove the limit" requests and the latest payments '
                        '(recorded by hand in Platform, or through Stripe). Read only.',
         'parts': lambda a: [('billing_queue', [{}])]},
+}
+
+
+PROSPECTS_TOOL = {
+    'name': 'list_prospects', 'title': 'Prospects',
+    'description': 'Staff: the prospects pipeline as data: each prospect\'s pk (what the prospect tools such as '
+                   'draft_prospect_pitch and save_prospect take), name, organizer, city, status, fit, its test event '
+                   'code, contacts (id, name, role, email; do-not-contact ones without their details) and can_pitch.',
+    'inputSchema': {'type': 'object', 'additionalProperties': False, 'properties': {
+        'q': {'type': 'string', 'description': 'Search name, organizer, city or contact'},
+        'status': {'type': 'string', 'description': 'A pipeline status, or "open" (not lost or dismissed)'},
+        'limit': {'type': 'integer', 'description': 'At most this many (default 50, max 200)'}}},
 }
 
 

@@ -137,11 +137,41 @@ def kind_of(event):
     return 'Event'
 
 
-def _times(now, days):
-    """Happening now: began an hour ago, ends `days` later (at least 10 hours from now)."""
-    start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
-    end = start + timedelta(days=max(days - 1, 0), hours=12)
-    return start, end
+OPEN_HOUR, CLOSE_HOUR = 9, 22  # local opening hours of every showcase day
+ITEM_FIRST, ITEM_LAST = 10, 21  # sets start between these local hours
+
+
+def _times(now, days, tz):
+    """Happening now, in the event's own clock (Nov 26, 2026: they were laid out from UTC, so a fair's goat show was at
+    3 AM local and it ended at 5 AM). Opens at 9:00 local today (yesterday before 9:00), closes at 22:00 local on its
+    last day, with days added until it ends at least 12 hours from now. Returns (start, end, [local day starts])."""
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+    zone = ZoneInfo(tz)
+    local = now.astimezone(zone)
+    first = local.date() if local.hour >= OPEN_HOUR else local.date() - timedelta(days=1)
+    count = max(days, 1)
+    while datetime.combine(first + timedelta(days=count - 1), time(CLOSE_HOUR), zone) < now + timedelta(hours=12):
+        count += 1
+    day_list = [first + timedelta(days=i) for i in range(count)]
+    start = datetime.combine(day_list[0], time(OPEN_HOUR), zone)
+    end = datetime.combine(day_list[-1], time(CLOSE_HOUR), zone)
+    return start, end, day_list
+
+
+def _item_times(day_list, n, tz):
+    """n set starts spread over the days, each day between ITEM_FIRST and ITEM_LAST local, on the quarter hour."""
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+    zone = ZoneInfo(tz)
+    out = []
+    per_day = -(-n // len(day_list)) if n else 0
+    for i in range(n):
+        day = day_list[min(i // max(per_day, 1), len(day_list) - 1)]
+        slot = i % max(per_day, 1)
+        minutes = round(slot * (ITEM_LAST - ITEM_FIRST) * 60 / max(per_day - 1, 1) / 15) * 15 if per_day > 1 else 0
+        out.append(datetime.combine(day, time(ITEM_FIRST), zone) + timedelta(minutes=minutes))
+    return out
 
 
 @transaction.atomic
@@ -149,7 +179,7 @@ def load(spec, now=None, owner=None):
     """Create or refresh one showcase event in place (same code and id); returns it."""
     from events.models import Event, Location, Notification, ScheduledItem
     now = now or timezone.now()
-    start, end = _times(now, spec['days'])
+    start, end, day_list = _times(now, spec['days'], spec['tz'])
     light = dict(zip(('primary', 'secondary', 'tertiary'), spec['theme']))
     event, _ = Event.objects.update_or_create(event_code=spec['code'], defaults=dict(
         name=spec['name'], description=spec['about'], timezone=spec['tz'], start_time=start, end_time=end,
@@ -168,9 +198,9 @@ def load(spec, now=None, owner=None):
             event=event, name=name, category=category, tags=tags, sort_order=i,
             latitude=spec['lat'] + 0.0009 * ((i % 3) - 1), longitude=spec['lng'] + 0.0012 * ((i // 3) - 0.5),
             description=f'{name} at {spec["name"]}.', context={'menu': menu} if menu else {}))
-    span = max((end - start).total_seconds() / 3600, 6)
+    starts = _item_times(day_list, len(spec['items']), spec['tz'])
     for i, (name, place) in enumerate(spec['items']):
-        begins = start + timedelta(hours=round(i * span / max(len(spec['items']), 1)))
+        begins = starts[i]
         ScheduledItem.objects.create(event=event, name=name, start_time=begins, end_time=begins + timedelta(minutes=50),
                                      location=places[place] if place is not None and place < len(places) else None,
                                      tags=list(places[place].tags[:2]) if place is not None and place < len(places) else ['general'])
@@ -189,7 +219,7 @@ def load_all(now=None, owner=None):
 
 
 def refresh(now=None):
-    """Keep them happening now (run_scheduled_tasks): reload one that ends within 12 hours."""
+    """Keep them happening now (run_scheduled_tasks): reload one that ends within 6 hours (a load leaves ≥ 12)."""
     from events.models import Event
     if not enabled():
         return 0
@@ -197,7 +227,7 @@ def refresh(now=None):
     done = 0
     for spec in SHOWCASE:
         event = Event.objects.filter(event_code=spec['code'], showcase=True).first()
-        if event is None or not event.end_time or event.end_time - now < timedelta(hours=12) or event.start_time > now:
+        if event is None or not event.end_time or event.end_time - now < timedelta(hours=6) or event.start_time > now:
             load(spec, now=now, owner=event.user if event else None)
             done += 1
     return done

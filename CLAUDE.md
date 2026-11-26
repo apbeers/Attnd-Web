@@ -366,7 +366,8 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
 - **Showcase events** (`events/showcase.py`, `manage.py load_showcase_events [--if-enabled] [--images]`): eight demo
   events (festival, farmers market, tech conference, 5K, art walk, food truck rally, holiday market, county fair) with
   places, schedule, details, a theme and two updates, `Event.showcase` (no free limit, never nearby, no usage counts),
-  kept happening now by `run_scheduled_tasks`; the release phase loads them where `SHOWCASE_EVENTS` is on (default:
+  kept happening now by `run_scheduled_tasks` in their own local hours (open 9:00–22:00 local, sets 10:00–21:00, at
+  least 12 h left after a load; `_times`); the release phase loads them where `SHOWCASE_EVENTS` is on (default:
   dev.attnd.app and DEBUG only). `--images` asks Studio's image model for covers (stored as the flyer). DEMO is
   unchanged and is one more card.
 - **Happening near <place>** (`home.onboarding.gallery`): published prospect test events (`testing_only`, linked to a
@@ -902,6 +903,8 @@ Nov 26, 2026: production serves it once `mcp_server/` is merged to main) are sep
   `show_event_usage` (`event_metrics` + `usage_answer`), `show_event_billing` (`event_billing`) and
   `show_billing_queue` (`billing_queue`: pending upgrade / remove-the-limit requests and the latest payments; platform
   admins). No Stripe reads or writes over MCP (Stripe reads wait for the LLC's live account).
+  `list_prospects` (staff: each prospect's pk, status, fit, test event, contacts with their do-not-contact flag and no
+  details for those, `can_pitch`; `prospects/summary.py`); `delete_location` / `delete_schedule_item` always ask.
 - **Pitch drafts** (`prospects/pitch.py`, `draft_prospect_pitch` = `prospects:pitch`, also Ask Attnd): an email to a
   prospect's organizer offering its test event with the join link and its public QR (`/join/<code>/qr.svg`), signed
   by the person, marked promotional, with an opt-out line, where the address was found and a mailing-address

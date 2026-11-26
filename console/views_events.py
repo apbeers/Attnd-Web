@@ -882,7 +882,7 @@ def location_edit(request, event, location_id=None):
 
 
 @agent_action('delete_location', 'Delete a location (its schedule items keep no location).', confirm=True,
-              summary=S.delete_location, fixed={'action': 'delete'}, title='Deleted a location')
+              summary=S.delete_location, fixed={'action': 'delete'}, title='Deleted a location', mcp=True)
 @agent_action('toggle_location_hidden', 'Hide a location from attendees, or show it again.',
               fixed={'action': 'toggle_hidden'}, title='Hid / showed a location', mcp=True)
 @agent_action('unlock_location', 'Let AI refreshes update a location\'s hand-edited fields again.',
@@ -1013,7 +1013,7 @@ def _event_tags(event, limit=30):
 
 
 @agent_action('delete_schedule_item', 'Delete a schedule item.', confirm=True, summary=S.delete_item,
-              fixed={'action': 'delete'}, title='Deleted a schedule item')
+              fixed={'action': 'delete'}, title='Deleted a schedule item', mcp=True)
 @agent_action('toggle_schedule_item_hidden', 'Hide a schedule item from attendees, or show it again.',
               fixed={'action': 'toggle_hidden'}, title='Hid / showed a schedule item', mcp=True)
 @agent_action('unlock_schedule_item', 'Let AI refreshes update a schedule item\'s hand-edited fields again.',

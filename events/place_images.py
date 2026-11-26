@@ -336,6 +336,19 @@ def _credit_for(candidate):
     return f'Photo: {host}'[:300] if host else ''
 
 
+def _attempt(**fields):
+    """Record a look. The location can be deleted while its photo is being looked for (a showcase reload, a person
+    deleting it; Nov 26, 2026: the task failed with a foreign key error); then there is nothing to record."""
+    from django.db import IntegrityError, transaction
+
+    from events.models import PlaceImageAttempt
+    try:
+        with transaction.atomic():
+            return PlaceImageAttempt.objects.create(**fields)
+    except IntegrityError:
+        return None
+
+
 def find_for(location, pages=None, force=False):
     """(AI credit: background work for the event, counted against its owner; paused while they are over their
     monthly limit unless a person asked for it.)"""
@@ -359,7 +372,7 @@ def _find_for(location, pages=None, force=False):
             use_google_photo(location)  # looked before API-031 and found nothing: the live Google photo now
         return 'skipped'  # looked already: backfills and retries never repeat the searches (a person's Find a photo does)
     if not enabled() or budget_left() <= 0:
-        PlaceImageAttempt.objects.create(location=location, event=location.event, result='skipped',
+        _attempt(location=location, event=location.event, result='skipped',
                                          detail='disabled or over the daily cap')
         return 'skipped'
     digests = image_digests(location)
@@ -382,10 +395,10 @@ def _find_for(location, pages=None, force=False):
                 tried.append(f'{candidate.source}: {why}')
                 continue
             store(location, jpeg, candidate, digest)
-            PlaceImageAttempt.objects.create(location=location, event=location.event, source=candidate.source,
+            _attempt(location=location, event=location.event, source=candidate.source,
                                              result='found', cost_usd=cost, detail=candidate.url[:500])
             return 'found'
-    PlaceImageAttempt.objects.create(location=location, event=location.event, result='none', cost_usd=cost,
+    _attempt(location=location, event=location.event, result='none', cost_usd=cost,
                                      detail='; '.join(tried)[:500])
     use_google_photo(location)
     if _expiring(location.image_url):  # a Google Places photo link from an older import: never kept
