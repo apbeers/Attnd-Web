@@ -150,7 +150,7 @@ def _start_design(request, event, text):
 
 @agent_action('start_website_from_scratch', "Start the event's website from scratch: Studio's designer builds a first "
               'version from the event\'s own details (background; a new draft version).', json=True,
-              title='Started a new website')
+              title='Started a new website', mcp=True)
 @studio_event_view
 @require_POST
 @ai_credit_required
@@ -163,7 +163,7 @@ def start_from_scratch(request, event):
               'is separate (publish_website). Use it for any request about the website ("make the hero bigger", '
               '"add a sponsors page").', json=True,
               params={'instruction': P('string', 'what to change on the website, in the person\'s words')},
-              title='Started working on the website')
+              title='Started working on the website', mcp=True)
 @studio_event_view
 @require_POST
 @ai_credit_required
@@ -177,7 +177,7 @@ def design(request, event):
     return _start_design(request, event, text)
 
 
-@agent_action('retry_studio_run', 'Retry a failed Studio AI run.', title='Retried a Studio run')
+@agent_action('retry_studio_run', 'Retry a failed Studio AI run.', title='Retried a Studio run', mcp=True)
 @studio_event_view
 @require_POST
 def run_retry(request, event, run_id):
@@ -532,7 +532,7 @@ def site_settings(request, event):
               'are copied and Studio\'s designer rebuilds the site (background, a few minutes). Without a url: the '
               "event's own website.", json=True,
               params={'url': P('string', 'the website address'), 'note': P('string', 'notes for the AI', nullable=True)},
-              title='Started bringing a website in')
+              title='Started bringing a website in', mcp=True)
 @studio_event_view
 @require_POST
 @ai_credit_required

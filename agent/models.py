@@ -2,6 +2,7 @@
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.conf import settings
 from django.utils import timezone
 
 
@@ -161,3 +162,18 @@ class ChangeProposal(models.Model):
 
     def __str__(self):
         return f'{self.title} ({self.status})'
+
+
+class SupportMessage(models.Model):
+    """A "Talk to a person" message (agent:contact), kept so staff can read and answer them (MCP
+    `list_support_messages`, owner Nov 26, 2026); the email to ADMIN_EMAILS still goes out."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='+')
+    email = models.EmailField(max_length=254)
+    message = models.TextField()
+    page = models.CharField(max_length=300, blank=True)
+    run = models.ForeignKey(AgentRun, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    handled = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at', '-id']

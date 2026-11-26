@@ -206,9 +206,14 @@ class PitchDraft(models.Model):
     copies it into their own mail and adds the business's mailing address (CAN-SPAM)."""
     prospect = models.ForeignKey(Prospect, on_delete=models.CASCADE, related_name='pitch_drafts')
     contact = models.ForeignKey(ProspectContact, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    DRAFT, SENT, REPLIED, DECLINED, BOUNCED = 'draft', 'sent', 'replied', 'declined', 'bounced'
+    STATUSES = [(DRAFT, 'Draft'), (SENT, 'Sent (by hand)'), (REPLIED, 'Replied'), (DECLINED, 'Declined'),
+                (BOUNCED, 'Bounced')]
     to = models.EmailField(max_length=254, blank=True)
     subject = models.CharField(max_length=200)
     body = models.TextField()
+    status = models.CharField(max_length=10, choices=STATUSES, default=DRAFT)
+    status_at = models.DateTimeField(null=True, blank=True, help_text='When it was sent, answered…')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(default=timezone.now)
 

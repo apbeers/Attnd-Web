@@ -85,7 +85,8 @@ def tools(user):
     out += [_app_tool(), _component_tool(user)] + _named_tools(user)
     if user.has_perm('prospects.view_prospect'):
         out.append(PROSPECTS_TOOL)
-    return out
+    from mcp_server import business
+    return out + business.definitions(user)
 
 
 def _run(principal, name, args):
@@ -123,6 +124,10 @@ def call(principal, name, args):
         limit = args.get('limit') if isinstance(args.get('limit'), int) else 50
         data = summary.rows(principal.user, str(args.get('q') or '')[:100], str(args.get('status') or ''), limit)
         return {'text': as_text(data), 'structured': data, 'is_error': False}
+    from mcp_server import business
+    data = business.run(principal.user, name, args)
+    if data is not None:
+        return {'text': as_text(data), 'structured': data, 'is_error': 'error' in data}
     if name in NAMED and name in {t['name'] for t in _named_tools(principal.user)}:
         return _named(principal, name, args)
     if name not in {t['name'] for t in tools(principal.user)}:

@@ -84,7 +84,7 @@ def invoices_csv(request, event):
 
 @agent_action('send_receipt', 'Email an invoice or receipt (with its PDF) to someone.', confirm=True,
               form=ReceiptForm, params={'invoice': P('string', 'the invoice number, e.g. ATT-2026-0001')},
-              summary=S.send_receipt, title='Sent a receipt')
+              summary=S.send_receipt, title='Sent a receipt', mcp=True)
 @event_view(perm=MANAGE)
 @require_POST
 def send_receipt(request, event):

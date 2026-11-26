@@ -477,12 +477,16 @@ def contact(request):
     limit = RateLimit('agent_contact_user')
     if limit.hit(request.user.pk) > limit.limit:
         return _error('You’ve sent a few messages already; the team will reply by email.', status=429)
-    recipients = [email for _, email in settings.ADMINS]
-    if not recipients or not email_enabled():
-        return _error('Messages can’t be sent right now. Email support from the help page instead.', status=503)
     run = None
     if str(request.POST.get('run') or '').isdigit():
         run = AgentRun.objects.filter(pk=int(request.POST['run']), user=request.user).first()
+    from agent.models import SupportMessage
+    SupportMessage.objects.create(user=request.user, email=request.user.email, message=message, run=run,
+                                  page=(request.POST.get('page') or '')[:300])
+    recipients = [email for _, email in settings.ADMINS]
+    if not recipients or not email_enabled():
+        return JsonResponse({'sent': True, 'text': f'Saved for the Attnd team. We’ll reply to {request.user.email} '
+                                                   'by email.'})
     lines = [message, '', '—', f'From: {request.user.email}', f'Page: {(request.POST.get("page") or "")[:300]}']
     if run is not None:
         lines += [f'Ask Attnd run: {run.pk} ({run.status}, {run.created_at:%Y-%m-%d %H:%M} UTC)',

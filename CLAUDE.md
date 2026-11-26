@@ -905,6 +905,19 @@ Nov 26, 2026: production serves it once `mcp_server/` is merged to main) are sep
   admins). No Stripe reads or writes over MCP (Stripe reads wait for the LLC's live account).
   `list_prospects` (staff: each prospect's pk, status, fit, test event, contacts with their do-not-contact flag and no
   details for those, `can_pitch`; `prospects/summary.py`); `delete_location` / `delete_schedule_item` always ask.
+- **Running the business** (owner, Nov 26, 2026; `mcp_server/business.py`, read-only, per permission): `whats_new`
+  (since a time: new organizers, upgrade / remove-the-limit requests, joins per event, claims, failed AI jobs),
+  `list_organizers` (accounts + events, unassigned events), `list_support_messages` ("Talk to a person" messages,
+  now stored as `agent.SupportMessage` as well as emailed), `list_ai_reviews` (pending change sets with change ids),
+  `list_do_not_contact` (the one list to check before any send, or `email` → blocked?), `task_status` (an AI job or
+  `studio-<n>` build). Writes over MCP (registry `mcp=True`; the always-ask ones return the confirmation link):
+  approve / decline upgrade requests, `save_event_overrides` (remove the phone limit), `record_payment`,
+  `send_invoice` (new: `platform:send_invoice`, the open invoice or a new one, emailed with its PDF), `send_receipt`,
+  `mark_event_paid`, `assign_event_owner`, apply / discard AI changes, unpublish / archive, `design_website`,
+  `start_website_from_scratch`, `bring_into_studio`, `retry_studio_run`, `run_prospect_discovery`,
+  `mark_email_do_not_contact` (every contact with that address), `toggle_prospect_contact_dnc` (`value` on / off) and
+  `log_pitch` (a `PitchDraft`'s status draft / sent / replied / declined / bounced with its date; sent moves the
+  prospect to Contacted).
 - **Pitch drafts** (`prospects/pitch.py`, `draft_prospect_pitch` = `prospects:pitch`, also Ask Attnd): an email to a
   prospect's organizer offering its test event with the join link and its public QR (`/join/<code>/qr.svg`), signed
   by the person, marked promotional, with an opt-out line, where the address was found and a mailing-address

@@ -11,6 +11,7 @@ urlpatterns = [
     path('events/<int:event_id>/', views.event_detail, name='event'),
     path('events/<int:event_id>/save/', views.save_event, name='event_save'),
     path('events/<int:event_id>/payment/', views.record_payment, name='record_payment'),
+    path('events/<int:event_id>/invoice/', views.send_invoice, name='send_invoice'),
     path('customers/<int:user_id>/', views.customer, name='customer'),
     path('customers.csv', views.customers_csv, name='customers_csv'),
     path('architecture/', views_arch.architecture, name='architecture'),

@@ -201,7 +201,7 @@ class ServiceTests(McpTestCase):
                          'show_event_overview', 'set_prospects_status', 'save_prospect', 'create_test_event',
                          'approve_event_claim'} <= names, names)
         self.assertFalse(names & {'ask_user', 'finish', 'show', 'fill_form', 'remember', 'propose_changes',
-                                  'run_prospect_discovery', 'delete_event'})
+                                  'delete_event'})
         # Editing (owner, Nov 26, 2026): writes run; sending and publishing come back as a confirmation link.
         self.assertTrue({'add_location', 'edit_location', 'add_schedule_item', 'edit_schedule_item',
                          'send_notification', 'publish_changes', 'draft_prospect_pitch', 'show_event_usage',
@@ -463,3 +463,85 @@ class McpToolsRoundThreeTests(McpTestCase):
         self.assertFalse(out['is_error'], out['text'])
         self.assertEqual(out['structured']['status'], 'waiting_for_confirmation')
         self.assertTrue(ScheduledItem.objects.filter(pk=item.pk).exists())
+
+
+class McpBusinessToolsTests(McpTestCase):
+    """Owner, Nov 26, 2026: running the business from chat."""
+
+    def setUp(self):
+        super().setUp()
+        self.staff.is_superuser = True
+        self.staff.save()
+        self.principal = grants.principal(self.connect()['access_token'])
+
+    def call(self, name, args=None):
+        out = service.call(self.principal, name, args or {})
+        self.assertFalse(out['is_error'], out['text'])
+        return out
+
+    def test_tool_list(self):
+        names = {t['name'] for t in service.tools(self.staff)}
+        self.assertTrue({'whats_new', 'list_organizers', 'list_support_messages', 'list_ai_reviews',
+                         'list_do_not_contact', 'task_status', 'approve_upgrade_request', 'decline_upgrade_request',
+                         'save_event_overrides', 'record_payment', 'send_invoice', 'assign_event_owner',
+                         'apply_ai_changes', 'discard_ai_changes', 'unpublish_event', 'archive_event',
+                         'design_website', 'start_website_from_scratch', 'run_prospect_discovery',
+                         'mark_email_do_not_contact', 'log_pitch', 'toggle_prospect_contact_dnc'} <= names,
+                        names)
+
+    def test_feed_organizers_and_support_messages(self):
+        from agent.models import SupportMessage
+        from django.contrib.auth.models import User
+        from events.models import Event
+        from platform_admin.models import UpgradeRequest
+        org = User.objects.create_user('org1', 'org1@example.com', 'pw-long-enough-9')
+        theirs = Event.objects.create(name='Org Fest', event_code='ORGFEST', user=org, start_time=timezone.now())
+        Event.objects.create(name='Nobody', event_code='NOBODY', start_time=timezone.now())
+        UpgradeRequest.objects.create(event=theirs, requested_by=org, kind='standard', price_usd=299)
+        SupportMessage.objects.create(user=org, email=org.email, message='Help with my map')
+        feed = self.call('whats_new')['structured']
+        self.assertIn('org1@example.com', [u['email'] for u in feed['new_organizers']])
+        self.assertEqual(feed['upgrade_requests'][0]['event'], 'Org Fest')
+        orgs = self.call('list_organizers', {'q': 'org1'})['structured']
+        self.assertEqual(orgs['organizers'][0]['events'][0]['code'], 'ORGFEST')
+        self.assertIn('NOBODY', [e['code'] for e in orgs['unassigned_events']])
+        self.assertEqual(self.call('list_support_messages')['structured']['messages'][0]['message'],
+                         'Help with my map')
+
+    def test_ai_reviews_and_confirmed_actions(self):
+        from scrape.models import Change, ChangeSet
+        cs = ChangeSet.objects.create(event=self.event, summary='1 new place')
+        Change.objects.create(changeset=cs, entity='location', op='create', label='Taco Row', data={'name': 'Taco Row'})
+        reviews = self.call('list_ai_reviews')['structured']['reviews']
+        self.assertEqual((reviews[0]['changeset_id'], reviews[0]['changes'][0]['label']), (cs.pk, 'Taco Row'))
+        for name, args in (('send_invoice', {'event_id': self.event.pk, 'plan': 'standard', 'to': 'a@b.example'}),
+                           ('archive_event', {'event_id': self.event.pk})):
+            out = self.call(name, args)
+            self.assertEqual(out['structured']['status'], 'waiting_for_confirmation', name)
+
+    def test_opt_outs_and_pitch_log(self):
+        from prospects.models import PitchDraft, Prospect, ProspectContact
+        p = Prospect.objects.create(name='Riverside Fest', event=self.event)
+        c = ProspectContact.objects.create(prospect=p, name='Sam', email='Sam@river.example',
+                                           source_url='https://river.example/')
+        self.assertFalse(self.call('list_do_not_contact', {'email': 'sam@river.example'})['structured']['do_not_contact'])
+        self.call('mark_email_do_not_contact', {'email': 'sam@river.example'})
+        c.refresh_from_db()
+        self.assertTrue(c.do_not_contact)
+        self.assertTrue(self.call('list_do_not_contact', {'email': 'SAM@river.example'})['structured']['do_not_contact'])
+        self.assertEqual(self.call('list_do_not_contact')['structured']['emails'], ['sam@river.example'])
+        self.call('toggle_prospect_contact_dnc', {'pk': p.pk, 'contact': c.pk, 'value': 'on'})
+        c.refresh_from_db()
+        self.assertTrue(c.do_not_contact)  # "on" sets, never flips
+        draft = PitchDraft.objects.create(prospect=p, to='x@river.example', subject='s', body='b')
+        self.call('log_pitch', {'pitch_id': draft.pk, 'status': 'sent', 'date': '2026-11-20'})
+        draft.refresh_from_db()
+        p.refresh_from_db()
+        self.assertEqual((draft.status, draft.status_at.date().isoformat(), p.status),
+                         ('sent', '2026-11-20', 'contacted'))
+
+    def test_task_status(self):
+        from scrape.models import IngestJob
+        job = IngestJob.objects.create(event=self.event, created_by=self.staff, kind=IngestJob.KIND_DETAILS)
+        self.assertIn('task', self.call('task_status', {'task_id': str(job.pk)})['structured'])
+        self.assertTrue(service.call(self.principal, 'task_status', {'task_id': 'nope'})['is_error'])

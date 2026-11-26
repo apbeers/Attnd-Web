@@ -497,9 +497,9 @@ def event_edit(request, event):
 @agent_action('publish_event', 'Publish an event so attendees can join it.', confirm=True, summary=S.publish_event,
               fixed={'action': 'publish'}, title='Published the event', mcp=True)
 @agent_action('unpublish_event', 'Move an event back to draft (attendees can no longer open it).', confirm=True,
-              summary=S.unpublish_event, fixed={'action': 'unpublish'}, title='Moved the event to draft')
+              summary=S.unpublish_event, fixed={'action': 'unpublish'}, title='Moved the event to draft', mcp=True)
 @agent_action('archive_event', 'Archive an event (attendees see it as ended).', confirm=True,
-              summary=S.archive_event, fixed={'action': 'archive'}, title='Archived the event')
+              summary=S.archive_event, fixed={'action': 'archive'}, title='Archived the event', mcp=True)
 @agent_action('list_event_nearby', 'List an event publicly in "Find nearby events".', confirm=True,
               summary=S.list_event, fixed={'action': 'list'}, title='Listed the event nearby')
 @agent_action('unlist_event', 'Stop listing an event nearby (people can still join with the code).',
@@ -605,7 +605,7 @@ def event_limit_request(request, event):
 @agent_action('mark_event_paid', 'Staff: mark an event paid (lifts the 20-phone free limit, allows nearby listing) '
               'or back to unpaid.', confirm=True, params={'paid': P('boolean', 'true = paid, false = back to unpaid')},
               summary=S.mark_paid,
-              title='Changed whether the event is paid')
+              title='Changed whether the event is paid', mcp=True)
 @event_view
 @require_POST
 def event_paid(request, event):
@@ -1580,9 +1580,9 @@ def changesets(request, event):
                                              items={'type': 'integer'}),
                       'replace_my_edits': P('boolean', 'Also take the AI value for fields edited by hand', nullable=True),
                       'notify_attendees': P('boolean', 'Also tell attendees their app was updated', nullable=True)},
-              title='Applied AI suggestions')
+              title='Applied AI suggestions', mcp=True)
 @agent_action('discard_ai_changes', 'Discard every pending AI suggestion of a review.', confirm=True,
-              summary=S.discard_changes, fixed={'action': 'discard'}, title='Discarded AI suggestions')
+              summary=S.discard_changes, fixed={'action': 'discard'}, title='Discarded AI suggestions', mcp=True)
 @agent_action('ai_changes_review', 'One AI review: the suggested changes with their ids.', kind='read')
 @signed_in
 def changeset_detail(request, changeset_id):
@@ -1718,7 +1718,7 @@ def history(request, event):
 @agent_action('assign_event_owner', 'Assign an owner to an event by email (site admins only).', confirm=True,
               summary=S.assign_owner, fixed={'action': 'assign_owner'}, audience='superuser',
               permission='events.assign_event_owner',
-              params={'email': P('string', 'the new owner\'s email')}, title='Assigned an owner')
+              params={'email': P('string', 'the new owner\'s email')}, title='Assigned an owner', mcp=True)
 @agent_action('team_page', "An event's team, roles and pending invitations, with ids.", kind='read')
 @event_view
 def team(request, event):

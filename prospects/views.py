@@ -163,8 +163,10 @@ def _bulk(request):
               title='Saved a prospect', mcp=True)
 @agent_action('create_test_event', 'Import one prospect as a testing-only event (AI import).', confirm=True,
               summary=S.create_test_event, fixed={'action': 'create_test_event'}, title='Started a test event import', mcp=True)
-@agent_action('toggle_prospect_contact_dnc', 'Mark a prospect contact do-not-contact, or contactable again.',
-              fixed={'action': 'dnc'}, params={'contact': P('integer', 'the contact id')},
+@agent_action('toggle_prospect_contact_dnc', 'Mark a prospect contact do-not-contact (value "on"), or contactable '
+              'again ("off"); without a value it flips.', fixed={'action': 'dnc'},
+              params={'contact': P('integer', 'the contact id'),
+                      'value': P('string', 'on = do not contact, off = contactable', nullable=True, enum=['on', 'off'])},
               title='Changed do-not-contact', mcp=True)
 @agent_action('delete_prospect_contact', 'Remove a prospect contact.', confirm=True, fixed={'action': 'delete_contact'},
               params={'contact': P('integer', 'the contact id')}, title='Removed a contact')
@@ -195,7 +197,8 @@ def prospect_detail(request, pk):
                 messages.error(request, str(exc))
         elif action == 'dnc':
             contact = get_object_or_404(ProspectContact, pk=request.POST.get('contact'), prospect=prospect)
-            contact.do_not_contact = not contact.do_not_contact
+            value = request.POST.get('value')
+            contact.do_not_contact = (value == 'on') if value in ('on', 'off') else not contact.do_not_contact
             contact.save(update_fields=['do_not_contact'])
             ProspectActivity.objects.create(
                 prospect=prospect, user=request.user,
@@ -238,8 +241,54 @@ def pitch(request, pk):
                                            'placeholder, and send it yourself.'}})
 
 
+@agent_action('mark_email_do_not_contact', 'Mark every prospect contact with this email address do not contact (e.g. '
+              'after an unsubscribe reply). Attnd keeps honouring it in every list and draft.',
+              params={'email': P('string', 'the email address')}, json=True, title='Marked do not contact',
+              mcp=True)
+@staff_required
+@require_POST
+def dnc_email(request):
+    from prospects import summary
+    email = (request.POST.get('email') or '').strip()
+    if '@' not in email:
+        return JsonResponse({'error': 'Give an email address.'}, status=400)
+    marked = summary.block_email(email, request.user)
+    return JsonResponse({'email': email, 'contacts_marked': marked,
+                         'text': f'{email} is do not contact ({marked} contact{"s" if marked != 1 else ""}).'})
+
+
+@agent_action('log_pitch', 'Log what happened to a pitch draft: sent (by hand), replied, declined or bounced, with '
+              'the date (default now).',
+              params={'status': P('string', 'the new status', enum=['draft', 'sent', 'replied', 'declined', 'bounced']),
+                      'date': P('string', 'YYYY-MM-DD (default today)', nullable=True)},
+              json=True, title='Logged a pitch', mcp=True)
+@staff_required
+@require_POST
+def pitch_status(request, pitch_id):
+    from prospects.models import PitchDraft
+    draft = get_object_or_404(PitchDraft.objects.select_related('prospect'), pk=pitch_id)
+    status = request.POST.get('status')
+    if status not in dict(PitchDraft.STATUSES):
+        return JsonResponse({'error': 'Pick draft, sent, replied, declined or bounced.'}, status=400)
+    when = timezone.now()
+    if request.POST.get('date'):
+        day = parse_date(request.POST['date'])
+        if day is None:
+            return JsonResponse({'error': 'The date must be YYYY-MM-DD.'}, status=400)
+        when = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time().replace(hour=12)))
+    draft.status, draft.status_at = status, (None if status == PitchDraft.DRAFT else when)
+    draft.save(update_fields=['status', 'status_at'])
+    ProspectActivity.objects.create(prospect=draft.prospect, user=request.user,
+                                    text=f'Pitch to {draft.to or "contact"}: {draft.get_status_display()}'[:512])
+    if status == PitchDraft.SENT and draft.prospect.status in ('new', 'reviewing', 'test_event_created'):
+        draft.prospect.status = 'contacted'
+        draft.prospect.save(update_fields=['status'])
+    return JsonResponse({'pitch': {'id': draft.pk, 'status': status,
+                                   'date': draft.status_at.date().isoformat() if draft.status_at else None}})
+
+
 @agent_action('run_prospect_discovery', 'Start a prospect discovery run now (AI web search; costs up to the daily cap).',
-              title='Started prospect discovery')
+              title='Started prospect discovery', mcp=True)
 @agent_action('prospect_runs', 'Prospect discovery runs and today\'s spend.', kind='read')
 @staff_required
 def runs(request):
