@@ -169,7 +169,7 @@ def _item_times(day_list, n, tz):
     for i in range(n):
         day = day_list[min(i // max(per_day, 1), len(day_list) - 1)]
         slot = i % max(per_day, 1)
-        minutes = round(slot * (ITEM_LAST - ITEM_FIRST) * 60 / max(per_day - 1, 1) / 15) * 15 if per_day > 1 else 0
+        minutes = round((slot + 0.5) / max(per_day, 1) * (ITEM_LAST - ITEM_FIRST) * 60 / 15) * 15  # centred in the day
         out.append(datetime.combine(day, time(ITEM_FIRST), zone) + timedelta(minutes=minutes))
     return out
 
