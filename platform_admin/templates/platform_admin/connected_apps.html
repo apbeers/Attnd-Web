@@ -2,7 +2,7 @@
 {% load console_tags platform_tags %}
 {% block title %}Connected apps{% endblock %}
 {% block content %}
-<div class="column stack stack--loose">
+<div class="stack stack--loose">
   {% platform_nav "connected_apps" %}
   {% if dev %}<div class="notice notice--warning"><p>Dev server. Connections here are separate from attnd.app: add this server as its own connector (for example "Attnd (dev)").</p></div>{% endif %}
   <section class="panel stack">

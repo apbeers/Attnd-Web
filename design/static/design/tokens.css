@@ -1,0 +1,129 @@
+/* 1. Tokens ----------------------------------------------------------------
+   Theme (Nov 21, 2026): a soft lavender tint on a light base (and a deep violet-grey dark mode, following the
+   system setting), large rounded cards with soft shadows, pill buttons and chips, bold section titles. The brand
+   purple #431f86 stays the accent. Light values here; dark ones under prefers-color-scheme (or data-theme). */
+:root {
+  color-scheme: light;
+  /* Colour */
+  --color-brand: #431f86;          /* fills: primary buttons, active chips (white text on it) */
+  --color-brand-dark: #32166a;
+  --color-brand-mid: #7b4fd6;
+  --color-brand-text: #431f86;     /* brand-coloured text and links */
+  --color-brand-soft: #f0eafc;     /* tinted backgrounds: hover, selected rows, assistant bubbles */
+  --color-brand-line: #d9ccf5;
+  --color-on-brand: #fff;
+  --color-secondary: #b79cf2;      /* API-023 event themes: the soft supporting colour (decorative only) */
+  --color-tertiary: #7b4fd6;       /* API-023 event themes: the highlight (decorative; --color-brand-mid is the readable one) */
+  --color-text: #1b1830;
+  --color-muted: #6b6880;
+  --color-border: #e6e2f0;
+  --color-control-border: #d6d1e4;
+  --color-bg: #f7f5fc;
+  --color-bg-tint: radial-gradient(1200px 600px at 100% -10%, #efe7ff 0%, rgba(239, 231, 255, 0) 60%), #f7f5fc;
+  --color-surface: #fff;
+  --color-surface-2: #fbfaff;      /* raised areas inside cards, tables' headers, inputs on tinted surfaces */
+  --color-subtle: #f2eff8;
+  --color-overlay: rgba(255, 255, 255, .82);
+  --color-strong: #120f22;         /* the darkest text (logo, current nav item) */
+  --color-success: #198754;  --color-success-soft: #e7f6ee; --color-success-line: #b9e3c9; --color-success-text: #146c43;
+  --color-danger: #c62828;   --color-danger-soft: #fdeeee;  --color-danger-line: #f5c7c7; --color-danger-text: #b11f1f;
+  --color-on-danger: #ffffff;  /* text on a danger fill (alert badges) */
+  --color-on-success: #ffffff; --color-on-info: #ffffff;  /* text on success / info fills (badges; ≥ 4.5:1) */
+  --color-warning: #f2b705;  --color-warning-soft: #fff7df; --color-warning-line: #f4e0a3; --color-warning-text: #8a6100;
+  --color-info: #0b75b8;     --color-info-soft: #e8f4fd;    --color-info-line: #bfe1f7; --color-info-text: #0a5f96;
+  --color-code: #a3195b;
+  --color-focus: rgba(67, 31, 134, .38);
+  --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%236b6880' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+
+
+  /* Public site: the brand gradient (heroes, the join page), the dark band and store buttons, the join card's QR side */
+  --brand-gradient: linear-gradient(135deg, #431f86 0%, #7b4fd6 100%);
+  --color-ink: #15171c; --color-on-ink: #fff; --color-play: #0f7a3d; --color-on-play: #fff;
+  --color-join-qr: #f6f3fd; --color-qr-plate: #fff;  /* QR codes always sit on white so every phone can scan them */
+  /* Mock-ups: pictures of the Attnd app (the home page's phone, feature tiles). They show the light app in both modes. */
+  --mock-frame: #0f0d16; --mock-frame-line: #2a2636; --mock-screen: #fff; --mock-text: #15171c; --mock-muted: #6b6f7a;
+  --mock-line: #eef0f3; --mock-map: #e8eef5; --mock-park: #dfe8d8; --mock-road: #fff; --mock-me: #1a73e8; --mock-live: #c62828;
+  --scrim: rgba(0, 0, 0, .55); --on-scrim: #fff;  /* text over photos (credits, kind labels) */
+  --mock-demo: #b26b00; --mock-accent: #ff5a1f;
+  --backdrop: rgba(20, 10, 40, .45);  /* behind dialogs */
+  --pin-shadow: drop-shadow(0 1px 2px rgba(0, 0, 0, .35));  /* map pins over tiles */
+  --color-on-warning: #1b1830;  /* text on the warning fill (the same yellow in both modes) */
+
+  /* Spacing */
+  --space-1: .25rem; --space-2: .5rem; --space-3: .75rem; --space-4: 1rem; --space-5: 1.5rem; --space-6: 2rem; --space-7: 3rem;
+  --gutter: clamp(1rem, 2.6vw, 2.5rem);   /* page side padding: the console uses the full width */
+
+  /* Radius */
+  --radius-sm: .5rem; --radius: .75rem; --radius-lg: 1.125rem; --radius-xl: 1.375rem; --radius-pill: 999px;
+
+  /* Type: the system font stack (no web fonts) */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --text-xs: .75rem; --text-sm: .875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.45rem; --text-2xl: 1.9rem;
+
+  /* Shadow: soft, slightly violet */
+  --shadow-sm: 0 1px 2px rgba(40, 20, 90, .05), 0 4px 14px rgba(40, 20, 90, .05);
+  --shadow: 0 1px 2px rgba(40, 20, 90, .06), 0 8px 24px rgba(40, 20, 90, .07);
+  --shadow-lg: 0 12px 44px rgba(30, 10, 60, .2);
+  --shadow-hover: 0 2px 4px rgba(40, 20, 90, .06), 0 12px 32px rgba(40, 20, 90, .11);
+
+  /* Reading widths: long text and forms only; everything else uses the full width */
+  --read-width: 46rem;
+  /* Maps (the location map): tiles as they are in light mode, dimmed and inverted in dark; other places muted */
+  --map-tile-filter: none; --map-other: #b9b2c9; --map-other-line: #8a829d; --map-label-bg: rgba(255, 255, 255, .92);
+}
+/* Dark mode: follows the system unless a page pins data-theme="light". */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-brand: #6f47d6; --color-brand-dark: #5a35bd; --color-brand-mid: #9b7bef; --color-brand-text: #c4b0ff;
+    --color-brand-soft: #2a2242; --color-brand-line: #45386b; --color-on-brand: #fff;
+    --color-secondary: #6f47d6; --color-tertiary: #9b7bef;
+    --brand-gradient: linear-gradient(135deg, #2a1757 0%, #4b2f96 100%); --color-ink: #000; --color-join-qr: #221d32;
+    --color-text: #ece9f6; --color-muted: #a49fbb; --color-border: #2f2a42; --color-control-border: #443d5c;
+    --color-bg: #110e1a; --color-bg-tint: radial-gradient(1200px 600px at 100% -10%, #261b45 0%, rgba(38, 27, 69, 0) 60%), #110e1a;
+    --color-surface: #1b1728; --color-surface-2: #221d32; --color-subtle: #262036; --color-overlay: rgba(27, 23, 40, .85);
+    --color-strong: #fff;
+    --color-success: #3fb47a; --color-success-soft: #15291f; --color-success-line: #22533a; --color-success-text: #79d6a3;
+    --color-danger: #ef5b5b;  --color-danger-soft: #2f1719;  --color-danger-line: #5d2629; --color-danger-text: #ff9b9b;
+    --color-on-danger: #1d0c0d; --color-on-success: #0c1d14; --color-on-info: #0b1826;
+    --color-warning: #f2b705; --color-warning-soft: #2c2412; --color-warning-line: #5a4815; --color-warning-text: #f2c94c;
+    --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b; --color-info-text: #8fd0f7;
+    --color-code: #ff8fc0;
+    --color-focus: rgba(196, 176, 255, .5);
+    --map-tile-filter: invert(.92) hue-rotate(180deg) saturate(.55) brightness(.9) contrast(.9);
+    --map-other: #5d5675; --map-other-line: #8f87a8; --map-label-bg: rgba(27, 23, 40, .92);
+    --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23a49fbb' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35); --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .25);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, .55); --shadow-hover: 0 2px 4px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .35);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-brand: #6f47d6; --color-brand-dark: #5a35bd; --color-brand-mid: #9b7bef; --color-brand-text: #c4b0ff;
+  --color-brand-soft: #2a2242; --color-brand-line: #45386b; --color-on-brand: #fff;
+  --color-secondary: #6f47d6; --color-tertiary: #9b7bef;
+  --brand-gradient: linear-gradient(135deg, #2a1757 0%, #4b2f96 100%); --color-ink: #000; --color-join-qr: #221d32;
+  --color-text: #ece9f6; --color-muted: #a49fbb; --color-border: #2f2a42; --color-control-border: #443d5c;
+  --color-bg: #110e1a; --color-bg-tint: radial-gradient(1200px 600px at 100% -10%, #261b45 0%, rgba(38, 27, 69, 0) 60%), #110e1a;
+  --color-surface: #1b1728; --color-surface-2: #221d32; --color-subtle: #262036; --color-overlay: rgba(27, 23, 40, .85);
+  --color-strong: #fff;
+  --color-success: #3fb47a; --color-success-soft: #15291f; --color-success-line: #22533a; --color-success-text: #79d6a3;
+  --color-danger: #ef5b5b;  --color-danger-soft: #2f1719;  --color-danger-line: #5d2629; --color-danger-text: #ff9b9b;
+  --color-warning: #f2b705; --color-warning-soft: #2c2412; --color-warning-line: #5a4815; --color-warning-text: #f2c94c;
+  --color-info: #4bb3f0;    --color-info-soft: #13253a;    --color-info-line: #22476b; --color-info-text: #8fd0f7;
+  --color-on-danger: #1d0c0d; --color-on-success: #0c1d14; --color-on-info: #0b1826;
+  --color-code: #ff8fc0;
+  --color-focus: rgba(196, 176, 255, .5);
+  --map-tile-filter: invert(.92) hue-rotate(180deg) saturate(.55) brightness(.9) contrast(.9);
+  --map-other: #5d5675; --map-other-line: #8f87a8; --map-label-bg: rgba(27, 23, 40, .92);
+  --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23a49fbb' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35); --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .25);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, .55); --shadow-hover: 0 2px 4px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .35);
+}
+
+/* Density: page grids may use --cols × --density columns (layout.css). Ultra-wide screens get more columns, never
+   wider lines. */
+:root { --density: 1; }
+@media (min-width: 1920px) { :root { --density: 1.5; } }
+@media (min-width: 2560px) { :root { --density: 2; } }

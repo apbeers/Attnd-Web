@@ -40,8 +40,8 @@
       <div class="site-full__bar cluster">
         <strong class="grow">Draft preview{% if d.draft %} · version {{ d.draft }}{% endif %}</strong>
         <div class="segmented" role="group" aria-label="Preview size">
-          <button type="button" class="segmented__button" data-site-size="desktop" aria-pressed="true">Desktop</button>
-          <button type="button" class="segmented__button" data-site-size="mobile" aria-pressed="false">Mobile</button>
+          <button type="button" class="segmented__option" data-site-size="desktop" aria-pressed="true">Desktop</button>
+          <button type="button" class="segmented__option" data-site-size="mobile" aria-pressed="false">Mobile</button>
         </div>
         {% if surface != 'chat' %}<button type="button" class="button button--outline button--small" data-site-edit-text aria-pressed="false" data-text-url="{% url 'studio:text_edit' d.event_id %}">{% icon "cursor" %} Edit text</button>{% endif %}
         {% if d.actions %}{% include 'components/_actions.html' with actions=d.actions %}{% endif %}

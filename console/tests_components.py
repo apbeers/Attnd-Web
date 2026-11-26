@@ -163,7 +163,8 @@ class RegistryTests(ComponentTestCase):
                 self.assertIn(f'aria-label="{label}"', html, (name, surface))
                 self.assertIn('row-link__target', html)
                 self.assertIn('row-link__chevron', html)
-        css = open('console/static/console/console.css').read()
+        from design.bundles import text
+        css = text('console')
         self.assertIn('.row-link__target::after', css)
         self.assertIn('cursor: pointer', css)
         # Narrow rows put the day and time on their own line instead of a fixed column the text runs into.
@@ -196,11 +197,13 @@ class RegistryTests(ComponentTestCase):
     def test_no_coloured_left_border_accents(self):
         # Owner, Nov 21, 2026: no rounded boxes with a coloured left border; status is a small leading mark.
         import re
-        for path in ('console/static/console/console.css', 'agent/static/agent/agent.css', 'home/static/home/site.css'):
+        for path in ('design/static/design/components.css', 'console/static/console/console.css', 'agent/static/agent/agent.css',
+                     'home/static/home/site.css'):
             css = open(path).read()
             self.assertIsNone(re.search(r'border-left(-color)?\s*:', css), path)
             self.assertIsNone(re.search(r'inset\s+\d+px\s+0\s+0', css), path)
-        self.assertIn('.status-mark--success', open('console/static/console/console.css').read())
+        from design.bundles import text
+        self.assertIn('.status-mark--success', text('console'))
 
     def test_list_components_expand_from_their_parent(self):
         Location.objects.create(event=self.event, name='Taco Booth', sort_order=2)

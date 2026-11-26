@@ -2,7 +2,7 @@
 {% load console_tags platform_tags %}
 {% block title %}App options{% endblock %}
 {% block content %}
-<div class="column stack stack--loose">
+<div class="stack stack--loose">
   {% platform_nav "app_options" %}
   <p class="muted">Every option the server sends the apps, with its values and defaults. Organizers change them per event under App layout; the catalogue version is what apps send as <span class="mono">X-Attnd-Sections</span>.</p>
   <div class="grid grid--2">
@@ -22,7 +22,7 @@
         <dt>Default</dt><dd class="mono">{{ o.live_activity.default }}</dd><dt>Stale text</dt><dd>≤ {{ o.live_activity.max_stale }} characters; urgent is always on</dd></dl>
       <h2 class="title-4">Colour theme</h2>
       <p class="small">Roles <span class="mono">{{ o.theme_roles|join:", " }}</span> × light / dark; Attnd's default:</p>
-      <div class="cluster">{% for mode, roles in o.theme_default.items %}{% for role, hex in roles.items %}<span class="chip"><span class="swatch" style="display:inline-block;width:1em;height:1em;border-radius:50%;background:{{ hex }}"></span> {{ mode }} {{ role }} <span class="mono">{{ hex }}</span></span>{% endfor %}{% endfor %}</div>
+      <div class="cluster">{% for mode, roles in o.theme_default.items %}{% for role, hex in roles.items %}<span class="chip"><span class="swatch-dot" style="--swatch: {{ hex }}"></span> {{ mode }} {{ role }} <span class="mono">{{ hex }}</span></span>{% endfor %}{% endfor %}</div>
     </section>
   </div>
   <section class="stack"><h2 class="title-3">Screen layouts · catalogue {{ o.catalogue_version }}</h2>

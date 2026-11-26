@@ -13,3 +13,4 @@ _set_heroku_env.command
 # Local env secrets — never commit
 .env
 requirements.txt.bak
+.design-build/

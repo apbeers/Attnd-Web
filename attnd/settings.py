@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'design.apps.DesignConfig',  # one design system: shared CSS layers and the bundles pages load
     'django.contrib.sitemaps',
     'background.apps.BackgroundConfig',  # django.tasks on our own database queue (F5)
     'django.contrib.humanize',  # naturaltime / intcomma in the console (F4)
@@ -167,6 +168,12 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# The CSS bundles (design/bundles.py) are generated files served by the last finder.
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+    'design.finders.BundleFinder',
+]
 WHITENOISE_ROOT = os.path.join(BASE_DIR, 'public')
 WHITENOISE_MIMETYPES = {'.webmanifest': 'application/manifest+json'}
 # Root files (H): icons a day with a week of stale-while-revalidate (their names never change, so not immutable);

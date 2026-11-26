@@ -16,8 +16,9 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 ROOT = Path(settings.BASE_DIR)
-CONSOLE_CSS_DIRS = ('console', 'agent', 'platform_admin', 'studio', 'diagnostics', 'credit', 'prospects')
-ALLOWED_MEDIA = {'(max-width: 600px)', '(min-width: 601px)', '(max-width: 1023px)', '(min-width: 1024px)'}
+CONSOLE_CSS_DIRS = ('design', 'console', 'agent', 'platform_admin', 'studio', 'diagnostics', 'credit', 'prospects', 'home')
+ALLOWED_MEDIA = {'(max-width: 600px)', '(min-width: 601px)', '(max-width: 1023px)', '(min-width: 1024px)',
+                 '(min-width: 1920px)', '(min-width: 2560px)'}  # ultra: the density steps (design/layout.css)
 SCREEN_JS = 'console/static/console/screen.js'
 UA_ALLOWED = {
     'console/static/console/console.js',     # Open in Attnd: attnd:// on iPhone, intent:// on Android
@@ -41,7 +42,7 @@ def _files(pattern):
 
 
 class BreakpointTests(SimpleTestCase):
-    def test_only_the_three_breakpoints_in_the_consoles_css(self):
+    def test_only_the_named_breakpoints_in_any_stylesheet(self):
         found = {}
         for rel, text in _files('*.css'):
             if not rel.startswith(CONSOLE_CSS_DIRS):
@@ -53,8 +54,8 @@ class BreakpointTests(SimpleTestCase):
         self.assertEqual(found, {})
 
     def test_the_breakpoints_are_documented_once(self):
-        head = (ROOT / 'console/static/console/console.css').read_text()[:2500]
-        for name in ('phone', 'medium', 'wide'):
+        head = (ROOT / 'design/static/design/layout.css').read_text()[:3000]
+        for name in ('phone', 'medium', 'wide', 'ultra'):
             self.assertIn(name, head)
         screen = (ROOT / SCREEN_JS).read_text()
         for query in ('(max-width: 600px)', '(min-width: 1024px)'):

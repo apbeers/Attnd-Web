@@ -68,14 +68,14 @@ attnd-web is the coordinating repo for all three. Any feature that touches the A
 ## Dependency policy
 
 Avoid third-party libraries. Use Django and the Python standard library first; the organizer console uses
-its own small design system (`console/static/console/console.css`, see Console UX), inline SVG icons
+its own design system (`design/`, docs/design_system.md, see Console UX), inline SVG icons
 (`console_tags.icon`) and vanilla JS (`console.js`) — no CSS/JS frameworks or CDNs. The MCP server (`mcp_server/`, `docs/mcp_plan.md`) uses the official MCP Python SDK
 `mcp` and `django-oauth-toolkit` (its OAuth server), approved exceptions, always the latest version, pinned in `uv.lock`, bumped with
 `scripts/upgrade_deps.py`. Existing server dependencies are kept where the standard
 library has no equivalent (Postgres driver, Pillow, the official Anthropic SDK `anthropic` (every AI call, stage C),
 the OpenAI SDK (Studio's images only), Google auth, HTTP/2 for APNs via
-`httpx[http2]`, CBOR for App Attest and passkeys; `cryptography`, installed with google-auth, verifies App Attest and passkey signatures). The Stripe SDK `stripe` is the one addition (batch 7 billing, off until its keys exist). The public site (`home/`, `join/`) uses one hand-written
-stylesheet (`home/static/home/site.css`) — no vendored frameworks, icon fonts or web fonts.
+`httpx[http2]`, CBOR for App Attest and passkeys; `cryptography`, installed with google-auth, verifies App Attest and passkey signatures). The Stripe SDK `stripe` is the one addition (batch 7 billing, off until its keys exist). The public site (`home/`, `join/`) uses the same design system
+(its area file `home/static/home/site.css`) — no vendored frameworks, icon fonts or web fonts.
 Upgrade Python packages with `uv run python scripts/upgrade_deps.py` (also runs weekly in CI).
 
 ## Tech Stack
@@ -208,7 +208,24 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   `--color-overlay`, `--color-strong`, `--color-*-text`, `--select-arrow`). **Full width**: `.page` has no max width,
   only side padding (`--gutter`); long text and forms keep `--read-width` (46rem: `.prose`, `.field`, paragraphs in
   panels and stacks; fields in grids and clusters are free). Phones: the event sections are one scrolling row of pills.
-- **Design system** (`console/static/console/console.css`; the public site's `home/static/home/site.css` uses the same names): CSS custom properties for colour (`--color-brand` `#431f86`, `--color-muted`, `--color-success/danger/warning/info` + `-soft`/`-line`), spacing (`--space-1`…`--space-7`), radius, type (`--text-xs`…`--text-2xl`) and shadow. Layout: `page`, `section`, `stack` (`--tight`/`--loose`), `cluster` (wrapping row), `grid` (`grid--2/3/4/cards/stats`: at most N columns, collapses by itself), `split` (`split__main` + `split__aside`), `event-shell` + `sidenav`, `grow`. Components: `button` (`--primary`, `--outline`, `--secondary`, `--danger`, `--success`, `--ghost`, `--small`, `--large`, `--block`), `panel` (`--roomy`, `--flush`, `--accent`, `--warning`, `--danger`, `--narrow`), `list`, `notice` (`--success/warning/error/info/neutral`), `badge`, `field` (`field__label`, `field__help`, `field__error`, `field--check`), `tabs` (links use `aria-current="page"`), `data-table` (`--compact`), `code-block` (pre), `link-button`, `meter`. Text: `muted`, `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`. Form controls are styled by element (`input`, `select`, `textarea`), so widgets need no classes (`StyledFormMixin` only rounds coordinates). JS hooks are `data-*` attributes (`data-dismiss`, `data-tabs`/`data-tab-target`, `data-confirm`, `data-copy`, `data-autosubmit`); no framework-style grid or utility classes.
+- **Design system** (owner, Nov 26, 2026: one centralised system, the whole screen at every width; full guide
+  `docs/design_system.md`): pages load CSS only through `{% load design %}{% stylesheets "console" %}` (or `"site"`,
+  plus the extras `"agent"`, `"onboarding"`, `"architecture"`): one bundle = the shared layers in `design/static/design/`
+  (`tokens.css` (every colour light + dark, spacing, radius, type, shadow, `--read-width`, `--density`), `base.css`,
+  `layout.css`, `components.css`, `motion.css`) + the area file (`console/console.css`, `home/site.css`; built by
+  `design.finders.BundleFinder`, read in tests with `design.bundles.text('console')`). **Layout**: pages use the full
+  width; extra width becomes more columns, never wider lines: `page` / `gutter`, `page--centered` (one card), `region`
+  (an event page's content, a canvas pane: `@container region`), `stack`, `cluster`, `grid` (`--cols × --density`:
+  1.5 from 1920px, 2 from 2560px; 1 inside a component), `dashboard` (tiles, `span-2`, `span-all`), `lanes` (a
+  schedule's days), `flow` (long lists in columns), `split`, `form-fields` / `form-columns`, `measure` / `prose`
+  (running text only), `narrow` (a short form inside a page). Components: `button`, `panel`, `list`, `notice`, `badge`
+  (`--live` + `live-dot`), `chip`, `field`, `tabs`, `data-table`, `meter` (`style="--value: 40%"`), `segmented`
+  (`segmented__option`, `aria-pressed`), `swatch` / `swatch-dot` (`--swatch`), `spinner`, `brand`. Text: `muted`,
+  `eyebrow`, `small`, `strong`, `mono`, `title-2…4`, `tone-*`, `visually-hidden`. Form controls are styled by element.
+  JS hooks are `data-*` attributes. **Rules** (`design/tests.py`): colours only as tokens (no `#hex` / `rgb()` outside
+  tokens.css; app mock-ups use `--mock-*`), every `var()` defined, `style=""` only sets custom properties (emails
+  exempt), shared components defined once (an area adjusts them only inside its own scope, e.g. `.site .button`), no
+  fixed page widths (`.wrap`, `.column`), dark mode follows the system everywhere.
 - **Background tasks:** forms with `data-background` (AI import, Check for updates) submit with fetch; `/console/tasks/` is the feed; `console/static/console/sw.js` (served at `/console/sw.js`, scope `/console/`) watches running tasks and notifies; a corner tray and button spinners show progress. The tray is a button (`aria-expanded`) that opens a panel of running and recent tasks; each task expands to its **friendly steps** (`IngestJob.steps`, written by `scrape.jobs.Steps`: "Read 3 web pages", "Understood the event", "Found 12 locations and 34 schedule items", "Checked addresses on the map", "Found 4 changes: waiting for your review"; states running / done / failed / waiting, with status marks and a spinner), updated live from the same feed (`task_json.steps`, `result_label`); a finished task links to its result ("Open the event" / "Review the changes"). On the full-screen chat the tray sits at the canvas's top-right (away from the composer) and opens downward, and result links open on the canvas (`window.attndCanvasOpen`); Esc closes it. Web app manifest at `/console/manifest.webmanifest`.
 - **Colour theme** (API-023, owner Nov 21, 2026; component `event_theme` in `catalog_more.py`, on the Overview page
   after the map, inside the `event_overview` composite (so the canvas Overview tab), and its own page
@@ -226,8 +243,7 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   pages (`event` + `section`, not Studio) and the full-screen chat with `?event=` (`agent_event`; another event's
   tile reloads the page, so the block follows); Your events, Account, Studio, Diagnostics, Prospects keep the purple.
   `--color-secondary` / `--color-tertiary` are new tokens (decorative; `--color-brand-mid` is the readable highlight).
-  The join and shared-plan pages (`join/landing.html`, `<html data-scheme="auto">`, the only pages with site.css's
-  dark mode) get `theme.site_css` (brand, `--brand-gradient` primary → tertiary, the QR panel from secondary).
+  The join and shared-plan pages (`join/landing.html`; light and dark like every page) get `theme.site_css` (brand, `--brand-gradient` primary → tertiary, the QR panel from secondary).
 - **Screens** (API-024, owner Nov 21, 2026; component `app_screens` in `console/components/catalog_screens.py`, on the
   App layout page under `#screens`): per app screen (Home tab, event info, schedule item, place, map, Options) the
   sections from `events/layout.py`'s catalogue in order, with on / off switches, the header's parts, an own heading and
@@ -306,10 +322,10 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   sticking out of their gallery frame, small tap targets and small fields; `ATTND_BROWSER_CHECKS=1 uv run python
   manage.py test console.tests_phone` runs it on the console's pages (skipped otherwise, so not in CI).
 - **One responsive codebase** (owner, Nov 22, 2026): layouts follow the width, never the device. **Three breakpoints**,
-  written once at the top of console.css: **phone** ≤ 600px `(max-width: 600px)`, **medium** 601–1023px, **wide**
-  ≥ 1024px `(min-width: 1024px)` (the only `@media` widths in the console's, Ask Attnd's and Platform's stylesheets;
-  `@media` can't read custom properties); components use container queries. JavaScript asks
-  `window.attndScreen.is('phone' | 'medium' | 'wide')` (`console/static/console/screen.js`, loaded first in `<head>`),
+  written once in design/static/design/layout.css: **phone** ≤ 600px `(max-width: 600px)`, **medium** 601–1023px,
+  **wide** ≥ 1024px `(min-width: 1024px)`, plus **ultra** ≥ 1920px / ≥ 2560px (the `--density` steps) (the only
+  `@media` widths in any of our stylesheets; `@media` can't read custom properties); components use container
+  queries. JavaScript asks `window.attndScreen.is('phone' | 'medium' | 'wide' | 'ultra')` (`console/static/console/screen.js`, loaded first in `<head>`),
   the only width check in JS. One preference opens the console in the chat (`ConsolePreference.chat_default`; the
   phones' own `phone_chat`, picked by user agent, was merged into it by migration 0016 and `is_phone` removed). The
   floating launcher's clearance is one set of tokens in console.css (`--fab-x` for wide sticky bars, `--fab-bar-y` for
@@ -352,8 +368,8 @@ brand/          # app-icon-1024.png: the source of every website icon (scripts/m
   SVG of the pins), cards with cover or theme colours, dates, swatches and a join QR; phones get Open in Attnd), feature
   sections, a second composer, SEO (`schema.org` JSON-LD with the nonce, Open Graph + Twitter card, `og.png` from
   `scripts/make_og_image.py`) and anonymous counts of its own taps (`home.HomeMetric` per day: chip, submit, qr_view,
-  open_app, claim, gallery_filter; `POST /home/m/` by sendBeacon, no identifier). Works without JS. `<html
-  data-scheme="auto">` (dark mode).
+  open_app, claim, gallery_filter; `POST /home/m/` by sendBeacon, no identifier). Works without JS. Light and dark mode follow
+  the system (the shared tokens).
 - **The composer** (`POST /start/`, `home.onboarding.save_pending`, `pending_import_ip` 10/h): the text and file wait in
   a `home.PendingImport` (its id in the session; purged after a day by `run_scheduled_tasks`); signed out → sign-up
   (`?building=1`) or sign-in; the console's dashboard then `consume`s it: an `IngestJob` (`trigger='home'`, a demo event

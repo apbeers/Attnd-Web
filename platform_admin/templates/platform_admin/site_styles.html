@@ -2,7 +2,7 @@
 {% load console_tags platform_tags %}
 {% block title %}Site styles{% endblock %}
 {% block content %}
-<div class="column stack stack--loose">
+<div class="stack stack--loose">
   {% platform_nav "site_styles" %}
   <p class="muted">Studio's site styles: a website started from scratch always lands on one of them (picked by what the event is: <span class="mono">studio/styles.py</span>), and the designer keeps to it. The previews are static (sample blocks stand in for the live <span class="mono">attnd.js</span> elements){% if event %}, in {{ event.name }}'s colours with its own names and times{% else %}, in Attnd's colours with a sample festival{% endif %}.</p>
   <form method="get" class="cluster"><label class="field"><span class="field__label">Show in an event's colours</span>

@@ -11,7 +11,7 @@
       {% for d in s.dots %}<line class="dot-{{ s.cls }}" x1="{{ d.x }}" y1="{{ d.y }}" x2="{{ d.x }}" y2="{{ d.y }}" vector-effect="non-scaling-stroke"/>{% endfor %}{% endfor %}
     {{ c.hover_svg }}
   </svg>
-  <div class="usage-ticks">{% for t in c.ticks %}<span style="left:{{ t.left }}%">{{ t.label }}</span>{% endfor %}</div>
+  <div class="usage-ticks">{% for t in c.ticks %}<span style="--x: {{ t.left }}%">{{ t.label }}</span>{% endfor %}</div>
   <figcaption class="small muted">Per {{ c.step }}. {% if c.series|length > 1 %}Each line has its own scale. {% endif %}Hover for values.</figcaption>
 </figure>
 {% else %}<p class="muted small">No data yet.</p>{% endif %}

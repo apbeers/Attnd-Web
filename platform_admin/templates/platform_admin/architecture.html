@@ -1,7 +1,7 @@
 {% extends 'console/base.html' %}
-{% load static console_tags platform_tags %}
+{% load static console_tags platform_tags design %}
 {% block title %}Architecture{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'platform_admin/architecture.css' %}">{% endblock %}
+{% block head %}{% stylesheets "architecture" %}{% endblock %}
 {% block content %}
 <div class="stack stack--loose arch">
   {% platform_nav "architecture" %}

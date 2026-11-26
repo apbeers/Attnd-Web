@@ -1,0 +1,4 @@
+/* 8. Motion -------------------------------------------------------------------- */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes live-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } .spinner { animation-duration: 2s; } }

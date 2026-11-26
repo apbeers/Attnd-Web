@@ -1,7 +1,7 @@
 {% extends 'console/base.html' %}
 {% block title %}Connect an assistant{% endblock %}
 {% block content %}
-<div class="column stack stack--loose prose">
+<div class="narrow stack stack--loose">
   {% if start_here %}
     <h1 class="title-2">Connect an assistant</h1>
     <p>Start from the assistant: in Claude, add a custom connector with the server URL <code class="mono">{{ server }}</code>. Claude then brings you here to approve it.</p>

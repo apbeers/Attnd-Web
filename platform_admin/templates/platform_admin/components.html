@@ -2,7 +2,7 @@
 {% load console_tags platform_tags %}
 {% block title %}Components{% endblock %}
 {% block content %}
-<div class="column stack stack--loose">
+<div class="stack stack--loose">
   {% platform_nav "components" %}
   <p class="muted">Every component as the chat and phones draw it (360 px) and as pages and the canvas draw it (768 and 1280 px). Each frame has its own width, so container queries decide the layout. Scroll a row sideways to see the wide frames.</p>
   {% if events %}<form method="get" class="cluster"><label class="field"><span class="field__label">Event</span>

@@ -85,7 +85,7 @@ class PlatformTabsTests(TestCase):
         # at real size, and a node's details float over the canvas.
         import re
         html = self.get(self.root, 'platform:architecture').content.decode()
-        self.assertNotIn('class="column stack stack--loose arch"', html)
+        self.assertNotIn('class="column', html)
         svg = re.search(r'<svg [^>]*data-arch-svg[^>]*>', html).group(0)
         self.assertIn('data-width=', svg)
         self.assertNotRegex(svg, r'\swidth="')  # sized by CSS (100% of the canvas), not its natural width

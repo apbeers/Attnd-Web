@@ -8,7 +8,7 @@
   <div class="phone-preview__body">
     {% if d.default_tab == 'map' %}
       <div class="phone-preview__map">
-        {% for loc in locations|slice:":8" %}<span class="phone-preview__pin" style="left:{% cycle 15 55 35 70 25 60 45 80 %}%;top:{% cycle 20 30 55 45 70 15 80 60 %}%">{% icon "pin-fill" %}</span>{% endfor %}
+        {% for loc in locations|slice:":8" %}<span class="phone-preview__pin" style="--x: {% cycle 15 55 35 70 25 60 45 80 %}%; --y: {% cycle 20 30 55 45 70 15 80 60 %}%">{% icon "pin-fill" %}</span>{% endfor %}
         {% if d.map_clustering %}<span class="badge badge--pill phone-preview__cluster">{{ d.stats.location_count }}</span>{% endif %}
       </div>
     {% elif d.default_tab == 'schedule' %}
@@ -22,10 +22,10 @@
       {% if d.group_by_category and categories %}<div class="cluster cluster--tight phone-preview__row">{% for c in categories %}<span class="badge badge--neutral badge--pill">{{ c }}</span>{% endfor %}</div>{% endif %}
       {% for loc in locations %}
         {% if d.locations_style == 'cards' %}
-          <div class="phone-preview__card">{% if d.show_location_images %}<div class="phone-preview__image"{% if loc.resolved_image_url %} style="background-image:url('{{ loc.resolved_image_url }}')"{% endif %}></div>{% endif %}
+          <div class="phone-preview__card">{% if d.show_location_images %}<div class="phone-preview__image"{% if loc.resolved_image_url %} style="--image: url('{{ loc.resolved_image_url }}')"{% endif %}></div>{% endif %}
             <div><div class="strong">{{ loc.name }}</div><div class="muted phone-preview__note">{{ loc.snippet|truncatechars:60 }}</div></div></div>
         {% else %}
-          <div class="cluster cluster--nowrap phone-preview__row">{% if d.show_location_images %}<div class="phone-preview__image phone-preview__image--small"{% if loc.resolved_image_url %} style="background-image:url('{{ loc.resolved_image_url }}')"{% endif %}></div>{% endif %}
+          <div class="cluster cluster--nowrap phone-preview__row">{% if d.show_location_images %}<div class="phone-preview__image phone-preview__image--small"{% if loc.resolved_image_url %} style="--image: url('{{ loc.resolved_image_url }}')"{% endif %}></div>{% endif %}
             <div><div class="strong">{{ loc.name }}</div>{% if d.locations_style == 'grouped' %}<div class="muted phone-preview__note">{{ loc.category }}</div>{% endif %}</div></div>
         {% endif %}
       {% empty %}<div class="muted">No locations</div>{% endfor %}

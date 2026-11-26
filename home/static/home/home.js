@@ -120,7 +120,7 @@
   const list = gallery.querySelector('[data-showcase-list]');
   const mapBox = gallery.querySelector('[data-gallery-map]');
   let kind = '';
-  const press = (group, button) => group.querySelectorAll('.pill').forEach((p) => {
+  const press = (group, button) => group.querySelectorAll('.segmented__option').forEach((p) => {
     const on = p === button; p.classList.toggle('is-on', on); p.setAttribute('aria-pressed', String(on));
   });
   gallery.querySelectorAll('[data-kind-filter]').forEach((b) => b.addEventListener('click', () => {

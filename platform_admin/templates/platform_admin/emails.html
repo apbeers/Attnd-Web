@@ -2,7 +2,7 @@
 {% load console_tags platform_tags %}
 {% block title %}Emails{% endblock %}
 {% block content %}
-<div class="column stack stack--loose">
+<div class="stack stack--loose">
   {% platform_nav "emails" %}
   <p class="muted">Every email Attnd sent in the last {{ retention_days }} days, one row per recipient. The body is never stored (it can hold sign-in codes and links).</p>
   <div class="cluster">

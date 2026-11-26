@@ -1,5 +1,5 @@
-{% load static %}<!DOCTYPE html>
-<html lang="en" data-scheme="auto">
+{% load static design %}<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   {% include 'home/_icons.html' %}
@@ -17,13 +17,12 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#431f86">
   <script type="application/ld+json" nonce="{{ csp_nonce }}">{{ structured_data|safe }}</script>
-  <link rel="stylesheet" href="{% static 'home/site.css' %}">
-  <link rel="stylesheet" href="{% static 'home/onboarding.css' %}">
+  {% stylesheets "site" "onboarding" %}
 </head>
-<body class="home">
+<body class="site home">
 
 <nav class="site-nav">
-  <div class="wrap">
+  <div class="gutter site-nav__bar">
     <a class="brand" href="{% url 'home:home_page' %}">attnd<span>.</span></a>
     <div class="site-nav__links">
       <a href="#see-it-live">See it live</a>
@@ -47,7 +46,7 @@
 
 <main id="main">
 <header class="onb-hero" id="try">
-  <div class="wrap onb-hero__grid">
+  <div class="gutter onb-hero__grid">
     <div class="onb-hero__main">
       <p class="onb-greeting"><span class="onb-mark" aria-hidden="true">a.</span> Hi! Tell me about your event.</p>
       <h1>Your event, live on every attendee’s phone in a minute.</h1>
@@ -65,15 +64,15 @@
 
 {% include 'home/_gallery.html' %}
 
-<section class="section" id="features">
-  <div class="wrap">
-    <div class="section-head">
+<section class="band" id="features">
+  <div class="gutter">
+    <div class="band__head">
       <h2>Everything your attendees look for</h2>
       <p class="muted">One link or QR code. Maps, times, what’s on now, and a nudge when it matters.</p>
     </div>
     <div class="features">
       <article class="feature-row">
-        <div class="feature-row__text">
+        <div class="feature-row__text measure">
           <p class="eyebrow">Built by AI, checked by you</p>
           <h3>From your website, flyer or spreadsheet to a finished event</h3>
           <p class="muted">Attnd reads what you already have: stages, booths, vendors, set times. It finds photos of your
@@ -82,7 +81,7 @@
         <div class="phone"><div class="screen"><img src="{% static 'home/img/demo-locations.webp' %}" alt="The Attnd app listing an event's places" width="768" height="1670" loading="lazy" decoding="async"></div></div>
       </article>
       <article class="feature-row feature-row--flip">
-        <div class="feature-row__text">
+        <div class="feature-row__text measure">
           <p class="eyebrow">The app</p>
           <h3>Scan and you’re in, even with no signal</h3>
           <p class="muted">On iPhone the QR code opens an instant App Clip: nothing to install. On Android it opens
@@ -106,9 +105,9 @@
   </div>
 </section>
 
-<section class="section section--band" id="how">
-  <div class="wrap">
-    <div class="section-head"><h2>Free to try, live when you’re ready</h2>
+<section class="band band--tint" id="how">
+  <div class="gutter">
+    <div class="band__head"><h2>Free to try, live when you’re ready</h2>
       <p class="muted">Every new event is a demo you can share with up to {{ free_limit }} phones: your team, a few friends, a dry run. When
         it’s time for everyone, ask us to take it live: no attendee limit, and listed for people nearby.</p></div>
     <div class="grid grid--3">
@@ -119,18 +118,18 @@
   </div>
 </section>
 
-<section class="section center onb-again">
-  <div class="wrap">
+<section class="band center onb-again">
+  <div class="gutter">
     <h2>What’s your event?</h2>
     <p class="muted">Start with whatever you have. You can change everything afterwards.</p>
     {% include 'home/_composer.html' with cid='again' %}
   </div>
 </section>
 
-<section class="section section--dark center" id="download">
-  <div class="wrap">
+<section class="band band--dark center" id="download">
+  <div class="gutter">
     <h2>Going to an event?</h2>
-    <p class="muted-on-dark">The app is free for attendees on iPhone and Android.</p>
+    <p class="muted">The app is free for attendees on iPhone and Android.</p>
     <div class="store-badges">
       <a href="{{ IOS_APP_STORE_URL }}"><img src="{% static 'home/img/app-store-badge.svg' %}" alt="Download on the App Store" width="135" height="40" loading="lazy"></a>
       <a href="{{ ANDROID_PLAY_STORE_URL }}"><img src="{% static 'home/img/google-play-badge.svg' %}" alt="Get it on Google Play" width="135" height="40" loading="lazy"></a>
@@ -140,8 +139,8 @@
 
 </main>
 
-<footer>
-  <div class="wrap">
+<footer class="site-footer">
+  <div class="gutter site-footer__bar">
     <span>&copy; Attnd {% now "Y" %}. All rights reserved.</span>
     <span><a href="{% url 'home:privacy' %}">Privacy</a>{% if release %} · <span class="small">release {{ release }}</span>{% endif %}</span>
   </div>

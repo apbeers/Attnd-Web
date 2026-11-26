@@ -1,11 +1,11 @@
-{% load static console_tags %}<!DOCTYPE html>
+{% load static console_tags design %}<!DOCTYPE html>
 <html lang="en">
 <head>
   {% include 'home/_icons.html' %}
   <meta charset="UTF-8">
   <meta name="robots" content="noindex, nofollow"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Set up two-factor sign-in — Attnd</title>
-  <link rel="stylesheet" href="{% static 'console/console.css' %}">
+  {% stylesheets "console" %}
 </head>
 <body>
 <main class="page page--centered">

@@ -1,0 +1,65 @@
+/* 2. Base elements ----------------------------------------------------------- */
+[hidden] { display: none !important; }
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font: 400 var(--text-md)/1.5 var(--font); color: var(--color-text); background: var(--color-bg-tint);
+  background-attachment: fixed; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { margin: 0 0 var(--space-2); font-weight: 650; line-height: 1.2; letter-spacing: -.01em; }
+h1 { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -.025em; }
+h2 { font-size: var(--text-lg); }
+h3, h4 { font-size: var(--text-md); }
+p { margin: 0 0 var(--space-4); }
+a { color: var(--color-brand-text); text-underline-offset: .15em; }
+a:hover { color: var(--color-brand-mid); }
+img { max-width: 100%; height: auto; vertical-align: middle; }
+hr { border: 0; border-top: 1px solid var(--color-border); margin: var(--space-4) 0; }
+ul, ol { margin: 0 0 var(--space-4); }
+small { font-size: .875em; }
+code { font-family: var(--font-mono); font-size: .875em; color: var(--color-code); overflow-wrap: anywhere; }
+details > summary { cursor: pointer; }
+.details-body { padding-top: var(--space-2); }
+figure { margin: 0; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.icon { width: 1em; height: 1em; vertical-align: -.125em; flex-shrink: 0; }
+
+/* Form controls are styled by element, so forms need no per-widget classes. */
+:where(input:not([type=checkbox], [type=radio], [type=hidden], [type=color], [type=file], [type=range]), select, textarea) {
+  display: block; width: 100%; padding: .55rem .85rem; font: inherit; color: var(--color-text);
+  background: var(--color-surface); border: 1px solid var(--color-control-border); border-radius: var(--radius);
+}
+:where(input[type=file]) { display: block; width: 100%; padding: .35rem; font: inherit; background: var(--color-surface);
+  border: 1px solid var(--color-control-border); border-radius: var(--radius); }
+:where(input[type=color]) { display: block; width: 3rem; height: 2.4rem; padding: .25rem; background: var(--color-surface);
+  border: 1px solid var(--color-control-border); border-radius: var(--radius); cursor: pointer; }
+:where(input, select, textarea):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 0; border-color: var(--color-brand-mid); }
+textarea { resize: vertical; }
+select:not([multiple]) { appearance: none; padding-right: 2rem;
+  background: var(--color-surface) var(--select-arrow) no-repeat right .8rem center / 12px; }
+input[type=checkbox], input[type=radio] { width: 1.05rem; height: 1.05rem; margin: 0; accent-color: var(--color-brand); flex-shrink: 0; }
+:is(input, select).small { padding-block: .25rem; padding-inline-start: .5rem; font-size: var(--text-sm); }
+input.mono { font-family: var(--font-mono); }
+select.small { width: auto; max-width: 100%; }
+
+/* 3. Text styles ------------------------------------------------------------- */
+.title-2 { font-size: var(--text-xl); font-weight: 800; letter-spacing: -.02em; }
+.title-3 { font-size: var(--text-lg); }
+.title-4 { font-size: var(--text-md); }
+.display-code { font: 700 var(--text-xl) var(--font-mono); margin: var(--space-2) 0 var(--space-1); }
+.eyebrow { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .05em; color: var(--color-muted); font-weight: 600; }
+h2.eyebrow, h3.eyebrow { margin-bottom: var(--space-3); }
+.muted { color: var(--color-muted); }
+.small { font-size: var(--text-sm); }
+.strong { font-weight: 600; }
+.mono { font-family: var(--font-mono); }
+.center { text-align: center; }
+.end { text-align: right; }
+.nowrap { white-space: nowrap; }
+.break { overflow-wrap: anywhere; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tone-brand { color: var(--color-brand-text); }
+.tone-success { color: var(--color-success); }
+.tone-danger { color: var(--color-danger); }
+.tone-warning { color: var(--color-warning-text); }
+.title-link { font-weight: 600; text-decoration: none; }
+.back-link { display: inline-block; margin-bottom: var(--space-1); color: var(--color-muted); text-decoration: none; font-size: var(--text-sm); }
+.back-link:hover { color: var(--color-brand-text); }

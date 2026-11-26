@@ -278,6 +278,14 @@ code = ["background/"]
 edges = [{ to = "postgres", label = "QueuedTask", protocol = "SQL", auth = "" }]
 
 [[node]]
+id = "design"
+label = "design"
+layer = "apps"
+tags = ["web"]
+description = "The one design system: shared CSS layers (tokens, base, layout, components, motion) and the bundles every page loads."
+code = ["design/", "docs/design_system.md"]
+
+[[node]]
 id = "platform_admin"
 label = "platform_admin"
 layer = "apps"

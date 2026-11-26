@@ -257,10 +257,11 @@ def _named(principal, name, args):
 
 @lru_cache(maxsize=1)
 def overview_app_html():
-    """The MCP App: console.css (the same look), and a small script that draws the tool result's HTML (our own
+    """The MCP App: the console's CSS bundle (the same look), and a small script that draws the tool result's HTML (our own
     template output) when the host sends it. Links open through the host; forms and buttons are hidden (read only:
     changes go through tools and their confirmations)."""
-    css = (Path(settings.BASE_DIR) / 'console' / 'static' / 'console' / 'console.css').read_text()
+    from design.bundles import text
+    css = text('console')
     return render_to_string('mcp_server/event_overview_app.html', {'css': css})
 
 

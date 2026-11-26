@@ -10,7 +10,7 @@ import re
 from django.core.files.base import ContentFile
 from whitenoise.storage import CompressedManifestStaticFilesStorage
 
-OWN_PREFIXES = ('console/', 'agent/', 'home/', 'diagnostics/', 'studio/', 'platform_admin/', 'prospects/', 'credit/')
+OWN_PREFIXES = ('design/', 'console/', 'agent/', 'home/', 'diagnostics/', 'studio/', 'platform_admin/', 'prospects/', 'credit/')
 _TOKEN = re.compile(r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')|(/\*!.*?\*/)|(/\*.*?\*/)|(\s+)', re.S)
 _AROUND = re.compile(r'\s*([{};,>])\s*')
 

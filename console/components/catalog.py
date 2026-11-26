@@ -267,7 +267,7 @@ def event_stats(user, event_id=None, event=None):
             {'value': audience['joined'], 'label': 'Attendees joined'},
             {'value': audience['active_today'], 'label': 'Active today'},
             {'value': audience['subscribed'], 'label': 'Get notifications'},
-            {'value': f'{audience["ios"]}/{audience["android"]}', 'label': 'iPhone / Android'},
+            {'value': f'{audience["ios"]:,} / {audience["android"]:,}', 'label': 'iPhone / Android'},
         ],
         'most_liked': liked, 'usage_url': reverse('console:usage', args=[event.pk]),
     }

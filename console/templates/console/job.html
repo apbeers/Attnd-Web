@@ -2,7 +2,7 @@
 {% load console_tags %}
 {% block title %}Working…{% endblock %}
 {% block content %}
-<div class="column column--small">
+<div class="narrow">
   <div class="panel panel--empty stack" id="job-card">
     {% if job.status == 'failed' %}
       <div>{% icon "warning" "icon--xl tone-danger" %}</div>

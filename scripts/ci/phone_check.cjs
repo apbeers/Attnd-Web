@@ -1,5 +1,8 @@
-// Phone usability check (batch 7 Track B): opens console pages in Chromium at 360, 768 and 1280 px and reports
+// Width check (batch 7 Track B; ultra-wide Nov 26, 2026): opens pages in Chromium at 360, 768, 1280, 2560 and 3440 px
+// (ATTND_WIDTHS overrides) and reports
 //  - horizontal page scroll (the page wider than the window) with the elements that stick out,
+//  - at ≥ 1920 px: content that doesn't use the screen (panels, cards and components spanning < 85% of the window;
+//    centred one-card pages, .page--centered, and pages marked data-reading are exempt), as `narrow`,
 //  - at 360 px: tap targets under 44 × 44 px (buttons, form controls, links that aren't inline in text),
 //  - at 360 px: text inputs under 16px (iOS zooms into them on focus).
 // Usage: node phone_check.cjs <base url> <session cookie value> <path> [<path> …]  → JSON on stdout.
@@ -7,7 +10,7 @@
 const { chromium } = require('playwright');
 
 const [base, session, ...paths] = process.argv.slice(2);
-const WIDTHS = [360, 768, 1280];
+const WIDTHS = (process.env.ATTND_WIDTHS || '360,768,1280,2560,3440').split(',').map(Number);
 
 function inPage() {
   const W = window.innerWidth;
@@ -47,6 +50,17 @@ function inPage() {
         break;
       }
     }
+  }
+  if (W >= 1920 && !document.querySelector('.page--centered, [data-reading]')) {
+    const root = document.querySelector('main') || document.body;
+    let L = Infinity, R = 0;
+    for (const el of root.querySelectorAll('h1, h2, p, li, img, svg, form, table, .panel, .component, [class*="card"], [class*="phone"]')) {
+      if (!visible(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.top > innerHeight * 2 || r.width >= W - 2) continue;
+      L = Math.min(L, r.left); R = Math.max(R, r.right);
+    }
+    if (R > 0 && (R - L) / W < 0.85) out.narrow = [`content spans ${Math.round((R - L) / W * 100)}% (${Math.round(L)}–${Math.round(R)})`];
   }
   if (W <= 400) {
     const sel = 'button, input:not([type=hidden]), select, textarea, summary, [role=button], a.button, a.tabs__tab, ' +
