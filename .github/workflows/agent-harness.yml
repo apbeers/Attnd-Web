@@ -1,11 +1,10 @@
 # Ask Attnd quality harness (stage I): every scripted request in agent/harness.py against the real Claude model, in a
-# throwaway Postgres (nothing touches dev or production data). Nightly and on demand. Needs the repository secret
-# ANTHROPIC_HARNESS_KEY (an Anthropic key; a few cents per run); without it the job says so and stops.
+# throwaway Postgres (nothing touches dev or production data). On demand only (owner, Nov 27, 2026: no nightly run,
+# it spends AI credits); Actions → Agent harness → Run workflow. Needs the repository secret ANTHROPIC_HARNESS_KEY
+# (an Anthropic key; a few cents per run); without it the job says so and stops.
 name: Agent harness
 
 on:
-  schedule:
-    - cron: '17 9 * * *'   # 3:17 AM America/Chicago (standard time)
   workflow_dispatch:
 
 permissions:

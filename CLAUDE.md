@@ -861,7 +861,7 @@ on Save does; there is no second copy of any business logic.
   with the tools a good run calls, the tools it must never call, the status it ends in (an always-ask action stops at
   the gate) and database checks; replies must not leak JSON or internal names. `agent/tests_harness.py` grades
   scripted runs (the checker) and, with `AGENT_HARNESS_LIVE=1` + `ANTHROPIC_API_KEY`, the real model in a throwaway
-  database (`.github/workflows/agent-harness.yml`, nightly + on demand, secret `ANTHROPIC_HARNESS_KEY`, JSON report).
+  database (`.github/workflows/agent-harness.yml`, on demand only since Nov 27, 2026 (no nightly run: AI credits), secret `ANTHROPIC_HARNESS_KEY`, JSON report).
   No 👍 / 👎 under answers since Nov 21, 2026 (owner: clutter); `agent:feedback` and `AgentRun.feedback` /
   `feedback_note` stay (admin filter) for older runs.
 - Tests: `agent/tests.py` (registry and coverage, pages, writes through the real views, the loop with a scripted
