@@ -6,6 +6,11 @@
    1. Site type  2. Nav and footer  3. Bands (full-bleed sections)  4. Home pieces  5. Join pages  6. Text pages
    ========================================================================== */
 
+/* 0. Width: the public pages are marketing and reading pages, so their content sits in a centred column (bands keep
+   their full-bleed backgrounds; only what's inside .gutter is limited). Pages say so with data-reading on <body>. */
+.site { --site-width: 76rem; }
+.site .gutter { --density: 1; max-width: calc(var(--site-width) + 2 * var(--gutter)); margin-inline: auto; }
+
 /* 1. Site type: larger than the console's working text */
 .site { font-size: 1.0625rem; line-height: 1.6; background: var(--color-surface); scroll-behavior: smooth; }
 .site h1 { font-size: clamp(2rem, 4.5vw, 3.2rem); line-height: 1.15; letter-spacing: -.02em; margin-bottom: .6em; }
